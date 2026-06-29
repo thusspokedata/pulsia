@@ -1,0 +1,10 @@
+{
+  "name": "pulsia",
+  "private": true,
+  "type": "module",
+  "workspaces": ["shared", "backend"],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bun run --filter '*' typecheck"
+  }
+}
