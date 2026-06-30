@@ -1,0 +1,14 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pulsia
+      POSTGRES_PASSWORD: pulsia
+      POSTGRES_DB: pulsia
+    ports:
+      - "5432:5432"
+    volumes:
+      - pulsia_pgdata:/var/lib/postgresql/data
+volumes:
+  pulsia_pgdata:
