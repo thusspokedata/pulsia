@@ -7,10 +7,10 @@ export const MuscleGroupSchema = z.enum([
 ]);
 
 export const CatalogExerciseSchema = z.object({
-  id: z.string(),
-  garminCategory: z.string(),
-  garminName: z.string(),
-  displayName: z.string(),
+  id: z.string().min(1),
+  garminCategory: z.string().min(1),
+  garminName: z.string().min(1),
+  displayName: z.string().min(1),
   primaryMuscles: z.array(MuscleGroupSchema).min(1),
   secondaryMuscles: z.array(MuscleGroupSchema).default([]),
   equipment: z.array(EquipmentSchema).min(1),

@@ -40,3 +40,23 @@ test("rechaza location inválida", () => {
     }),
   ).toThrow();
 });
+
+test("rechaza name vacío", () => {
+  expect(() =>
+    ProgramSchema.parse({
+      name: "",
+      weeks: [{ weekNumber: 1, workouts: [] }],
+    }),
+  ).toThrow();
+});
+
+test("rechaza catalogId vacío en un ejercicio", () => {
+  expect(() =>
+    ProgramSchema.parse({
+      name: "Plan",
+      weeks: [{ weekNumber: 1, workouts: [{ dayLabel: "d", location: "gym", focus: "chest", exercises: [
+        { catalogId: "", garminName: "Barbell Bench Press", sets: 3, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90, notes: "" },
+      ] }] }],
+    }),
+  ).toThrow();
+});

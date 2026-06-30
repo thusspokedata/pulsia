@@ -2,17 +2,17 @@ import { z } from "zod";
 import { MuscleGroupSchema } from "./catalog";
 
 export const ProgramExerciseSchema = z.object({
-  catalogId: z.string(),
-  garminName: z.string(),
+  catalogId: z.string().min(1),
+  garminName: z.string().min(1),
   sets: z.number().int().min(1).max(10),
-  reps: z.string(),
-  targetLoad: z.string(),
+  reps: z.string().min(1),
+  targetLoad: z.string().min(1),
   restSeconds: z.number().int().min(0).max(600),
   notes: z.string().default(""),
 });
 
 export const WorkoutSchema = z.object({
-  dayLabel: z.string(),
+  dayLabel: z.string().min(1),
   location: z.enum(["gym", "home"]),
   focus: MuscleGroupSchema,
   exercises: z.array(ProgramExerciseSchema),
@@ -24,7 +24,7 @@ export const WeekSchema = z.object({
 });
 
 export const ProgramSchema = z.object({
-  name: z.string(),
+  name: z.string().min(1),
   weeks: z.array(WeekSchema).min(1),
 });
 
