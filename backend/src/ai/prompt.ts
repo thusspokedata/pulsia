@@ -27,6 +27,7 @@ export function buildGenerationPrompt(profile: TrainingProfile): string {
     "2. Por cada día de gimnasio (location=gym) incluí también un día equivalente para casa (location=home) usando solo el equipamiento de casa.",
     "3. Aplicá progresión semana a semana (cargas/series/reps).",
     "4. Respetá las limitaciones del atleta.",
+    "5. Generá un programa de 2 semanas, con un máximo de 5 ejercicios por día.",
     "Devolvé el resultado llamando a la herramienta provista.",
   ].join("\n");
 }
