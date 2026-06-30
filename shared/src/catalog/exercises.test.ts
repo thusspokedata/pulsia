@@ -1,0 +1,31 @@
+import { test, expect } from "bun:test";
+import { CatalogExerciseSchema } from "../schemas/catalog";
+import { EXERCISE_CATALOG, getExerciseById, catalogForEquipment } from "./exercises";
+
+test("todas las entradas son válidas según el schema", () => {
+  for (const ex of EXERCISE_CATALOG) {
+    expect(() => CatalogExerciseSchema.parse(ex)).not.toThrow();
+  }
+});
+
+test("los ids son únicos", () => {
+  const ids = EXERCISE_CATALOG.map((e) => e.id);
+  expect(new Set(ids).size).toBe(ids.length);
+});
+
+test("cubre todos los grupos musculares principales", () => {
+  const covered = new Set(EXERCISE_CATALOG.flatMap((e) => e.primaryMuscles));
+  for (const m of ["chest", "back", "shoulders", "quads", "hamstrings", "glutes", "abs"]) {
+    expect(covered.has(m as any)).toBe(true);
+  }
+});
+
+test("getExerciseById devuelve la entrada correcta", () => {
+  expect(getExerciseById("barbell_bench_press")?.garminName).toBe("Barbell Bench Press");
+});
+
+test("catalogForEquipment filtra por equipamiento disponible", () => {
+  const home = catalogForEquipment(["bodyweight"]);
+  expect(home.every((e) => e.equipment.includes("bodyweight"))).toBe(true);
+  expect(home.length).toBeGreaterThan(0);
+});
