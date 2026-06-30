@@ -29,3 +29,8 @@ test("catalogForEquipment filtra por equipamiento disponible", () => {
   expect(home.every((e) => e.equipment.includes("bodyweight"))).toBe(true);
   expect(home.length).toBeGreaterThan(0);
 });
+
+test("el catálogo tiene un tamaño razonable (150-250)", () => {
+  expect(EXERCISE_CATALOG.length).toBeGreaterThanOrEqual(150);
+  expect(EXERCISE_CATALOG.length).toBeLessThanOrEqual(250);
+});
