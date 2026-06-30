@@ -1,13 +1,6 @@
 import { createApp } from "./app";
 import { createDb } from "./db/client";
-import type { AiClient } from "./ai/client";
-
-// TODO(PR5): replace with the real AnthropicAiClient once generation lands.
-const stubAiClient: AiClient = {
-  generateProgram: async () => {
-    throw new Error("Generación de programa aún no implementada (PR5)");
-  },
-};
+import { AnthropicAiClient } from "./ai/client";
 
 const { db } = createDb(process.env.DATABASE_URL!);
 const app = createApp({
@@ -16,7 +9,7 @@ const app = createApp({
     encryptionKey: process.env.ENCRYPTION_KEY!,
     defaultModel: "claude-sonnet-4-6",
   },
-  aiClient: stubAiClient,
+  aiClient: new AnthropicAiClient(),
 });
 
 const port = Number(process.env.PORT ?? 8787);
