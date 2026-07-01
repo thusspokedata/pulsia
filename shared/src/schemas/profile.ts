@@ -19,6 +19,10 @@ export const EquipmentSchema = z.enum([
 export const TrainingProfileSchema = z.object({
   experience: ExperienceSchema,
   goal: GoalSchema,
+  // Datos antropométricos opcionales: dan contexto a la IA (cargas relativas al peso, volumen/recuperación por edad).
+  age: z.number().int().min(12).max(100).optional(),
+  weightKg: z.number().min(30).max(300).optional(),
+  heightCm: z.number().int().min(120).max(250).optional(),
   daysPerWeek: z.number().int().min(1).max(7),
   sessionMinutes: z.number().int().min(15).max(180),
   gymEquipment: z.array(EquipmentSchema),
