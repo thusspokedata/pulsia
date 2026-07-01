@@ -11,7 +11,7 @@ export function programsRoutes(deps: AppDeps) {
 
   r.post("/generate", async (c) => {
     const parsed = TrainingProfileSchema.safeParse(await c.req.json());
-    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
 
     const row = await deps.db.query.settings.findFirst();
     if (!row?.aiApiKeyEncrypted) {
