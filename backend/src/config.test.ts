@@ -17,10 +17,10 @@ test("loadServerEnv devuelve la config a partir de un entorno válido", () => {
   expect(config.defaultModel).toBeTruthy();
 });
 
-test("SESSION_TTL_DAYS usa un valor por defecto si no está definido", () => {
+test("SESSION_TTL_DAYS usa el default (4) si no está definido", () => {
   const { SESSION_TTL_DAYS: _omit, ...rest } = validEnv;
   const { config } = loadServerEnv(rest);
-  expect(config.sessionTtlDays).toBeGreaterThan(0);
+  expect(config.sessionTtlDays).toBe(4);
 });
 
 test("falla si falta DATABASE_URL", () => {
@@ -38,8 +38,14 @@ test("falla si falta ENCRYPTION_KEY", () => {
   expect(() => loadServerEnv(rest)).toThrow(/ENCRYPTION_KEY/);
 });
 
-test("falla si ENCRYPTION_KEY no es hex de 32 bytes", () => {
-  expect(() => loadServerEnv({ ...validEnv, ENCRYPTION_KEY: "tooshort" })).toThrow(/ENCRYPTION_KEY/);
+test("falla si ENCRYPTION_KEY no es hexadecimal", () => {
+  // 64 caracteres pero con símbolos no-hex: cubre la rama del regex.
+  expect(() => loadServerEnv({ ...validEnv, ENCRYPTION_KEY: "g".repeat(64) })).toThrow(/ENCRYPTION_KEY/);
+});
+
+test("falla si ENCRYPTION_KEY es hex pero no mide 32 bytes", () => {
+  // Hex válido de 20 caracteres: cubre la rama de longitud.
+  expect(() => loadServerEnv({ ...validEnv, ENCRYPTION_KEY: "ab".repeat(10) })).toThrow(/ENCRYPTION_KEY/);
 });
 
 test("falla si SESSION_TTL_DAYS no es numérico", () => {

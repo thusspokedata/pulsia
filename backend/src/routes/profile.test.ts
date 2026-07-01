@@ -7,9 +7,15 @@ const validProfile = {
 };
 
 // Extrae el valor comparado en un `eq(columna, valor)` de drizzle para que el
-// fake pueda respetar el filtro `where` (aislamiento por usuario).
-function eqValue(where: any): string | undefined {
-  return where?.queryChunks?.find((c: any) => c?.constructor?.name === "Param")?.value;
+// fake pueda respetar el filtro `where` (aislamiento por usuario). Solo soporta
+// ese predicado: si el shape del AST de drizzle cambia, falla fuerte y visible
+// en vez de devolver undefined y dar falsos positivos.
+function eqValue(where: any): string {
+  const param = where?.queryChunks?.find((c: any) => c?.constructor?.name === "Param");
+  if (param?.value === undefined) {
+    throw new Error("fakeDb: solo soporta filtros eq(columna, valor); ¿cambió el AST de drizzle?");
+  }
+  return param.value;
 }
 
 // Fake keyeado por identidad: las sesiones por token y los perfiles por userId.
@@ -22,8 +28,8 @@ function fakeDb(profilesByUser: Record<string, any> = {}) {
   return {
     _profiles: profilesByUser,
     query: {
-      sessions: { findFirst: async ({ where }: any) => sessionsByToken[eqValue(where)!] },
-      profiles: { findFirst: async ({ where }: any) => profilesByUser[eqValue(where)!] ?? null },
+      sessions: { findFirst: async ({ where }: any) => sessionsByToken[eqValue(where)] },
+      profiles: { findFirst: async ({ where }: any) => profilesByUser[eqValue(where)] ?? null },
     },
     update: () => ({ set: () => ({ where: async () => {} }) }),
     delete: () => ({ where: async () => {} }),
