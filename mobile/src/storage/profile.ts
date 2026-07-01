@@ -6,8 +6,12 @@ const KEY = "pulsia.profile";
 export async function getProfile(): Promise<TrainingProfile | null> {
   const raw = await AsyncStorage.getItem(KEY);
   if (!raw) return null;
-  const parsed = TrainingProfileSchema.safeParse(JSON.parse(raw));
-  return parsed.success ? parsed.data : null;
+  try {
+    const parsed = TrainingProfileSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function setProfile(profile: TrainingProfile): Promise<void> {

@@ -71,9 +71,13 @@ export default function PerfilScreen() {
       setError("Revisá los datos: días 1-7, minutos 15-180.");
       return;
     }
-    await setProfile(parsed.data);
-    setSaved(parsed.data);
-    setError(null);
+    try {
+      await setProfile(parsed.data);
+      setSaved(parsed.data);
+      setError(null);
+    } catch {
+      setError("No se pudo guardar el perfil. Intentá de nuevo.");
+    }
   }
 
   const label = { color: colors.textMuted, marginBottom: spacing.xs } as const;
