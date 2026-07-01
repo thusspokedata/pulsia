@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import ConfiguracionScreen from "./configuracion";
+import ConfiguracionScreen from "../app/configuracion";
 
 beforeEach(async () => {
   await AsyncStorage.clear();
