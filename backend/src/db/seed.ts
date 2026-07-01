@@ -15,16 +15,24 @@ export function buildCatalogRows() {
   }));
 }
 
-if (import.meta.main) {
-  const { db, sql } = createDb(process.env.DATABASE_URL!);
-  // Usuario por defecto para el flujo single-user (todavía sin login). email/passwordHash
-  // son placeholders; se reemplazan cuando entre el auth real.
-  await db
-    .insert(users)
-    .values({ id: SINGLE_USER_ID, email: "default@pulsia.local", passwordHash: "unused" })
-    .onConflictDoNothing();
+// Usuario por defecto para el flujo single-user (todavía sin login). email/passwordHash
+// son placeholders; se reemplazan cuando entre el auth real.
+export function buildDefaultUserRow() {
+  return { id: SINGLE_USER_ID, email: "default@pulsia.local", passwordHash: "unused" };
+}
+
+// Inserta el usuario por defecto y el catálogo (idempotente). Devuelve la cantidad de
+// ejercicios sembrados. Recibe `db` para poder testear sin una DB real.
+export async function seed(db: ReturnType<typeof createDb>["db"]): Promise<number> {
+  await db.insert(users).values(buildDefaultUserRow()).onConflictDoNothing();
   const rows = buildCatalogRows();
   await db.insert(exerciseCatalog).values(rows).onConflictDoNothing();
-  console.log(`Seeded default user + ${rows.length} exercises`);
+  return rows.length;
+}
+
+if (import.meta.main) {
+  const { db, sql } = createDb(process.env.DATABASE_URL!);
+  const count = await seed(db);
+  console.log(`Seeded default user + ${count} exercises`);
   await sql.end();
 }
