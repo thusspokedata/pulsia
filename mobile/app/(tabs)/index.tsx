@@ -11,12 +11,17 @@ export default function ProgramaScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      let active = true;
       getStoredProgram().then((p) => {
+        if (!active) return;
         const serialized = p ? JSON.stringify(p) : null;
         if (serialized === lastLoaded.current) return;
         lastLoaded.current = serialized;
         setProgram(p);
       });
+      return () => {
+        active = false;
+      };
     }, []),
   );
 

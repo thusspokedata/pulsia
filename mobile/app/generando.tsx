@@ -14,27 +14,58 @@ const MESSAGES = [
   "Ajustando cargas y descansos…",
 ];
 
+interface ScreenError {
+  message: string;
+  button: string;
+  onPress: () => void;
+}
+
 export default function GenerandoScreen() {
   const [msgIndex, setMsgIndex] = useState(0);
-  const [error, setError] = useState<GenerationError | null>(null);
+  const [error, setError] = useState<ScreenError | null>(null);
   const started = useRef(false);
+  const mounted = useRef(true);
 
   useEffect(() => {
-    const t = setInterval(() => setMsgIndex((i) => (i + 1) % MESSAGES.length), 2500);
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (mounted.current) setMsgIndex((i) => (i + 1) % MESSAGES.length);
+    }, 2500);
     return () => clearInterval(t);
   }, []);
 
   async function run() {
     setError(null);
     const [url, profile] = await Promise.all([getBackendUrl(), getProfile()]);
-    if (!url) { setError(new GenerationError("network", "Configurá la URL del backend.")); return; }
-    if (!profile) { setError(new GenerationError("invalid", "Completá tu perfil primero.")); return; }
+    if (!mounted.current) return;
+    if (!url) {
+      setError({ message: "Configurá la URL del backend.", button: "Ir a Configuración", onPress: () => router.replace("/configuracion") });
+      return;
+    }
+    if (!profile) {
+      setError({ message: "Completá tu perfil primero.", button: "Ir a Perfil", onPress: () => router.replace("/perfil") });
+      return;
+    }
     try {
       const { program } = await generateProgram(url, profile);
+      if (!mounted.current) return;
       await setStoredProgram(program);
+      if (!mounted.current) return;
       router.replace("/");
     } catch (e) {
-      setError(e instanceof GenerationError ? e : new GenerationError("network", "Error inesperado."));
+      if (!mounted.current) return;
+      if (e instanceof GenerationError && e.code === "noApiKey") {
+        setError({ message: e.message, button: "Cargá tu API key en Configuración", onPress: () => router.replace("/configuracion") });
+      } else {
+        const message = e instanceof GenerationError ? e.message : "Error inesperado.";
+        setError({ message, button: "Reintentar", onPress: () => run() });
+      }
     }
   }
 
@@ -45,16 +76,15 @@ export default function GenerandoScreen() {
   }, []);
 
   if (error) {
-    const goConfig = error.code === "noApiKey";
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, padding: spacing.xl, gap: spacing.lg, justifyContent: "center" }}>
         <Text style={{ fontSize: 18, fontWeight: "500", color: colors.text }}>No se pudo generar</Text>
         <Text style={{ color: colors.textMuted }}>{error.message}</Text>
         <Pressable
           style={{ backgroundColor: colors.accent, borderRadius: radius.sm, padding: spacing.md, alignItems: "center" }}
-          onPress={() => (goConfig ? router.replace("/configuracion") : run())}
+          onPress={error.onPress}
         >
-          <Text style={{ color: "#fff" }}>{goConfig ? "Cargá tu API key en Configuración" : "Reintentar"}</Text>
+          <Text style={{ color: "#fff" }}>{error.button}</Text>
         </Pressable>
       </View>
     );

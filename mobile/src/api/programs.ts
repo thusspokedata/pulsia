@@ -27,7 +27,12 @@ export async function generateProgram(
   }
   if (res.status === 400) throw new GenerationError("noApiKey", "No hay API key de IA configurada.");
   if (!res.ok) throw new GenerationError("aiError", "La IA no pudo generar el programa. Reintentá.");
-  const body = await res.json();
+  let body: { id: string; program: unknown };
+  try {
+    body = await res.json();
+  } catch {
+    throw new GenerationError("invalid", "El backend devolvió una respuesta inválida.");
+  }
   const parsed = ProgramSchema.safeParse(body.program);
   if (!parsed.success) throw new GenerationError("invalid", "El programa recibido es inválido.");
   return { id: body.id, program: parsed.data };
