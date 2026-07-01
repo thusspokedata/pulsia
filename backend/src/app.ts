@@ -3,10 +3,13 @@ import type { Db } from "./db/client";
 import type { AiClient } from "./ai/client";
 import { settingsRoutes } from "./routes/settings";
 import { programsRoutes } from "./routes/programs";
+import { authRoutes } from "./routes/auth";
 
 export interface AppConfig {
   encryptionKey: string;
   defaultModel: string;
+  inviteCode: string;
+  sessionTtlDays: number;
 }
 
 export interface AppDeps {
@@ -20,5 +23,6 @@ export function createApp(deps: AppDeps) {
   app.get("/health", (c) => c.json({ status: "ok" }));
   app.route("/settings", settingsRoutes(deps));
   app.route("/programs", programsRoutes(deps));
+  app.route("/auth", authRoutes(deps));
   return app;
 }
