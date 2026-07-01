@@ -3,6 +3,7 @@ import type { Db } from "./db/client";
 import type { AiClient } from "./ai/client";
 import { settingsRoutes } from "./routes/settings";
 import { programsRoutes } from "./routes/programs";
+import { sessionsRoutes } from "./routes/sessions";
 
 export interface AppConfig {
   encryptionKey: string;
@@ -20,5 +21,6 @@ export function createApp(deps: AppDeps) {
   app.get("/health", (c) => c.json({ status: "ok" }));
   app.route("/settings", settingsRoutes(deps));
   app.route("/programs", programsRoutes(deps));
+  app.route("/sessions", sessionsRoutes(deps));
   return app;
 }
