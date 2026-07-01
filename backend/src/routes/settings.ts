@@ -15,7 +15,7 @@ export function settingsRoutes(deps: AppDeps) {
 
   r.post("/", async (c) => {
     const parsed = BodySchema.safeParse(await c.req.json());
-    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
     const encrypted = encryptSecret(parsed.data.aiApiKey, deps.config.encryptionKey);
     await deps.db
       .insert(settings)

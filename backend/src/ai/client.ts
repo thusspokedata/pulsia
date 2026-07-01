@@ -1,6 +1,6 @@
+import { z } from "zod";
 import type { Program, TrainingProfile } from "@pulsia/shared";
 import Anthropic from "@anthropic-ai/sdk";
-import { zodToJsonSchema } from "zod-to-json-schema";
 import { ProgramSchema } from "@pulsia/shared";
 import { buildGenerationPrompt } from "./prompt";
 
@@ -19,10 +19,12 @@ export class AnthropicAiClient implements AiClient {
     model: string;
   }): Promise<Program> {
     const client = new Anthropic({ apiKey });
+    // z.toJSONSchema agrega una key "$schema" (meta) que no necesita el tool de Anthropic.
+    const { $schema, ...inputSchema } = z.toJSONSchema(ProgramSchema) as Record<string, unknown>;
     const tool = {
       name: "return_program",
       description: "Devuelve el programa de entrenamiento generado.",
-      input_schema: zodToJsonSchema(ProgramSchema, { target: "openApi3" }) as any,
+      input_schema: inputSchema as any,
     };
     const res = await client.messages.create({
       model,
