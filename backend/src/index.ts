@@ -1,16 +1,13 @@
 import { createApp } from "./app";
 import { createDb } from "./db/client";
 import { AnthropicAiClient } from "./ai/client";
+import { loadServerEnv } from "./config";
 
-const { db } = createDb(process.env.DATABASE_URL!);
+const { databaseUrl, config } = loadServerEnv();
+const { db } = createDb(databaseUrl);
 const app = createApp({
   db,
-  config: {
-    encryptionKey: process.env.ENCRYPTION_KEY!,
-    defaultModel: "claude-sonnet-4-6",
-    inviteCode: process.env.INVITE_CODE!,
-    sessionTtlDays: Number(process.env.SESSION_TTL_DAYS ?? 4),
-  },
+  config,
   aiClient: new AnthropicAiClient(),
 });
 
