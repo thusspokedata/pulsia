@@ -5,7 +5,7 @@
   "workspaces": ["shared", "backend", "mobile"],
   "scripts": {
     "test": "bun test shared backend",
-    "test:mobile": "bun --filter @pulsia/mobile test",
+    "test:mobile": "bun run --filter @pulsia/mobile test",
     "typecheck": "bun run --filter '*' typecheck"
   }
 }
