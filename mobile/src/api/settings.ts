@@ -17,5 +17,6 @@ export async function saveSettings(baseUrl: string, input: SettingsInput): Promi
 
 export async function getSettings(baseUrl: string): Promise<SettingsStatus> {
   const res = await apiFetch(baseUrl, "/settings");
+  if (!res.ok) throw new Error("No se pudo obtener la configuración");
   return res.json();
 }

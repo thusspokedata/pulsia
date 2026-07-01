@@ -17,9 +17,13 @@ export default function ConfiguracionScreen() {
   }, []);
 
   async function onSaveUrl() {
-    await setBackendUrl(url);
-    const ok = await testConnection(url);
-    setStatus(ok ? "Conexión OK" : "No se pudo conectar");
+    try {
+      await setBackendUrl(url);
+      const ok = await testConnection(url);
+      setStatus(ok ? "Conexión OK" : "No se pudo conectar");
+    } catch {
+      setStatus("Error al guardar la URL");
+    }
   }
 
   async function onSaveKey() {
