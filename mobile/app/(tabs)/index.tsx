@@ -1,12 +1,17 @@
-import { useCallback, useRef, useState } from "react";
-import { View, Text } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { ScrollView, View, Text } from "react-native";
 import { Link, useFocusEffect } from "expo-router";
 import { getStoredProgram } from "../../src/storage/program";
 import type { Program } from "@pulsia/shared";
-import { colors, radius, spacing } from "../../src/theme/tokens";
+import { WeekTabs } from "../../src/components/WeekTabs";
+import { SegmentToggle } from "../../src/components/SegmentToggle";
+import { WorkoutDayCard } from "../../src/components/WorkoutDayCard";
+import { colors, spacing } from "../../src/theme/tokens";
 
 export default function ProgramaScreen() {
   const [program, setProgram] = useState<Program | null>(null);
+  const [week, setWeek] = useState(1);
+  const [location, setLocation] = useState("gym");
   const lastLoaded = useRef<string | null>(null);
 
   useFocusEffect(
@@ -18,12 +23,16 @@ export default function ProgramaScreen() {
         if (serialized === lastLoaded.current) return;
         lastLoaded.current = serialized;
         setProgram(p);
+        if (p && !p.weeks.some((w) => w.weekNumber === week)) setWeek(p.weeks[0]?.weekNumber ?? 1);
       });
       return () => {
         active = false;
       };
-    }, []),
+    }, [week]),
   );
+
+  const currentWeek = useMemo(() => program?.weeks.find((w) => w.weekNumber === week), [program, week]);
+  const days = useMemo(() => currentWeek?.workouts.filter((w) => w.location === location) ?? [], [currentWeek, location]);
 
   if (!program) {
     return (
@@ -36,17 +45,15 @@ export default function ProgramaScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, padding: spacing.xl, gap: spacing.md }}>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
       <Text style={{ fontSize: 20, fontWeight: "500", color: colors.text }}>{program.name}</Text>
-      <View style={{ flexDirection: "row", gap: spacing.sm }}>
-        <View style={{ backgroundColor: colors.accentSoft, borderRadius: radius.sm, paddingVertical: spacing.sm, paddingHorizontal: spacing.md }}>
-          <Text style={{ color: colors.accentText }}>{program.weeks.length} semanas</Text>
-        </View>
-        <View style={{ backgroundColor: colors.accentSoft, borderRadius: radius.sm, paddingVertical: spacing.sm, paddingHorizontal: spacing.md }}>
-          <Text style={{ color: colors.accentText }}>{program.weeks[0]?.workouts.length ?? 0} días/semana</Text>
-        </View>
-      </View>
-      <Text style={{ color: colors.textMuted }}>El viewer completo (días, ejercicios, gym/casa) llega en la próxima fase.</Text>
-    </View>
+      <WeekTabs weeks={program.weeks.map((w) => w.weekNumber)} selected={week} onSelect={setWeek} />
+      <SegmentToggle options={[{ value: "gym", label: "Gimnasio" }, { value: "home", label: "Casa" }]} value={location} onChange={setLocation} />
+      {days.length === 0 ? (
+        <Text style={{ color: colors.textMuted }}>No hay días para esta selección.</Text>
+      ) : (
+        days.map((w, i) => <WorkoutDayCard key={`${w.dayLabel}-${i}`} workout={w} />)
+      )}
+    </ScrollView>
   );
 }
