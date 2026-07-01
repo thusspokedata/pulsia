@@ -3,13 +3,13 @@ import { TrainingProfileSchema } from "@pulsia/shared";
 import { programs } from "../db/schema";
 import { decryptSecret } from "../crypto/secrets";
 import { generateProgramForProfile } from "../ai/generate";
-import { SINGLE_USER_ID } from "../constants";
 import type { AppDeps } from "../app";
 
 export function programsRoutes(deps: AppDeps) {
-  const r = new Hono();
+  const r = new Hono<{ Variables: { userId: string } }>();
 
   r.post("/generate", async (c) => {
+    const userId = c.get("userId");
     const parsed = TrainingProfileSchema.safeParse(await c.req.json());
     if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
 
@@ -29,7 +29,7 @@ export function programsRoutes(deps: AppDeps) {
 
     const inserted = await deps.db
       .insert(programs)
-      .values({ userId: SINGLE_USER_ID, name: program.name, data: program, profileSnapshot: parsed.data })
+      .values({ userId, name: program.name, data: program, profileSnapshot: parsed.data })
       .returning();
 
     return c.json({ id: inserted[0].id, program });
