@@ -2,7 +2,7 @@
   "name": "pulsia",
   "private": true,
   "type": "module",
-  "workspaces": ["shared", "backend"],
+  "workspaces": ["shared", "backend", "mobile"],
   "scripts": {
     "test": "bun test",
     "typecheck": "bun run --filter '*' typecheck"
