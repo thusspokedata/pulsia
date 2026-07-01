@@ -125,8 +125,22 @@ Guardar → Generar (~50s). La generación tarda ~50s (síncrona).
   expiradas en `validateSession`, validar config de auth al boot, test de aislamiento de perfil.
 - **[Deployment] Pi**: ver sección 9.
 - **[Backend] Import .FIT de Garmin** → autocompletar logs (Fase 3 del backend original).
+- **[Integración Garmin] Ingesta de datos pasivos** (idea del usuario, complementaria a "hacer todo
+  desde el teléfono"): traer de Garmin lo que el teléfono no mide — **sueño, composición corporal de
+  la balanza Garmin Index, HRV, FC en reposo** — vía **Garmin Health API** (OAuth; ⚠️ requiere
+  aprobación en el programa de desarrolladores de Garmin). Alternativa/complemento: import `.FIT`
+  para entrenamientos hechos en el reloj. Alimenta el estudio de rendimiento y el PT agent. Sub-proyecto
+  propio (dependencia externa) → NO bloquea el registro de entrenamiento (sub-proyecto A).
 - **[Backend] Registro de logs editable + memoria a largo plazo** (pgvector) + dashboard de gráficos.
-- **[Ajuste conversacional]** del programa por chat.
+- **[FEATURE] Sugerencia de peso inicial por ejercicio** (pedido del usuario): a medida que la app
+  acumule los kg reales por sesión, sugerir un peso de arranque por ejercicio a partir del historial
+  (progresión sobre la última vez). **Depende del registro de entrenamiento (sub-proyecto A)** — sin
+  kg registrados no hay de dónde sugerir. Escalonado: v1 regla determinista, v2 ajustar por
+  RPE/descanso/objetivo, v3 IA sobre el historial.
+- **[PT agent] Entrenador personal conversacional** (idea del usuario; versión ampliada del "ajuste
+  conversacional"): un agente sobre Claude que ajusta el plan según tus sesiones reales, sugiere
+  pesos, responde técnica y motiva. **Es bueno en la medida que tiene datos → se apoya en el registro
+  de entrenamiento (A)** + datos Garmin/ambientales. v-next después de A.
 - **[Cosmético] Ícono/logo de Pulsia** (hoy usa el placeholder de Expo). Idea: onda de pulso, coral.
 - **[Backend] max_tokens/alcance de generación**: hoy fijo en 2 semanas / 5 ej por día en el prompt;
   hacer configurable (nº de semanas en el perfil). La generación síncrona (~50s) debería pasar a
@@ -151,6 +165,8 @@ no es alcanzable desde afuera) → self-hosted runner o pull-based. **Es un sub-
 - `docs/superpowers/specs/2026-06-29-generador-rutinas-design.md` — spec v1 (generador backend).
 - `docs/superpowers/specs/2026-06-30-app-mobile-design.md` — spec app mobile.
 - `docs/superpowers/specs/2026-07-01-auth-multiusuario-design.md` — spec auth (pausado).
+- `docs/superpowers/specs/2026-07-01-registro-entrenamiento-design.md` — spec registro de
+  entrenamiento (sesión en vivo + logging, sub-proyecto A).
 - `docs/superpowers/plans/*` — planes de implementación (backend, mobile fases 1-3, auth backend).
 
 ## 11. Memoria persistente (fuera del repo)
