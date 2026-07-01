@@ -1,6 +1,7 @@
 import { Hono } from "hono";
+import { eq } from "drizzle-orm";
 import { TrainingProfileSchema } from "@pulsia/shared";
-import { programs } from "../db/schema";
+import { programs, settings } from "../db/schema";
 import { decryptSecret } from "../crypto/secrets";
 import { generateProgramForProfile } from "../ai/generate";
 import type { AppDeps } from "../app";
@@ -13,7 +14,7 @@ export function programsRoutes(deps: AppDeps) {
     const parsed = TrainingProfileSchema.safeParse(await c.req.json());
     if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
 
-    const row = await deps.db.query.settings.findFirst();
+    const row = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
     if (!row?.aiApiKeyEncrypted) {
       return c.json({ error: "No hay API key de IA configurada. Cargala en Configuración." }, 400);
     }
