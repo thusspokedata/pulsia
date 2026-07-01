@@ -15,6 +15,13 @@
       "when": 1782912735752,
       "tag": "0001_amused_grandmaster",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782939732688,
+      "tag": "0002_groovy_daredevil",
+      "breakpoints": true
     }
   ]
 }
