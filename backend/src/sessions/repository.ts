@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { WorkoutSession } from "@pulsia/shared";
 import type { Db } from "../db/client";
 import { workoutSession, sessionExercise, setLog } from "../db/schema";
@@ -64,9 +64,9 @@ export async function upsertSession(db: Db, userId: string, s: WorkoutSession): 
   });
 }
 
-export async function getSession(db: Db, id: string): Promise<WorkoutSession | null> {
+export async function getSession(db: Db, id: string, userId: string): Promise<WorkoutSession | null> {
   const row = await db.query.workoutSession.findFirst({
-    where: eq(workoutSession.id, id),
+    where: and(eq(workoutSession.id, id), eq(workoutSession.userId, userId)),
     with: { exercises: { orderBy: (e, { asc }) => [asc(e.orderIndex)], with: { sets: { orderBy: (s, { asc }) => [asc(s.setNumber)] } } } },
   });
   return row ? rowsToSession(row) : null;

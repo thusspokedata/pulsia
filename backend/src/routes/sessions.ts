@@ -17,7 +17,7 @@ export function sessionsRoutes(deps: AppDeps) {
   });
 
   r.get("/:id", async (c) => {
-    const session = await getSession(deps.db, c.req.param("id"));
+    const session = await getSession(deps.db, c.req.param("id"), SINGLE_USER_ID);
     if (!session) return c.json({ error: "sesión no encontrada" }, 404);
     return c.json(session);
   });
