@@ -33,7 +33,7 @@ gráficos, ajuste conversacional, generación async/streaming, perfil multi-disp
 
 ## 3. Arquitectura
 
-```
+```text
 ┌───────────────────────────────┐         ┌──────────────────────────────┐
 │  App mobile (Expo / RN / TS)  │  HTTP   │  Backend (Bun + Hono) en Pi   │
 │  - expo-router (tabs + stack) │ ──────▶ │  - POST /programs/generate    │
@@ -110,7 +110,7 @@ Formulario mapeado a `TrainingProfileSchema`:
 
 ## 6. Estructura de archivos (app)
 
-```
+```text
 mobile/
 ├── app/                      # expo-router
 │   ├── _layout.tsx           # stack raíz + provider de TanStack Query
@@ -140,6 +140,9 @@ mobile/
 - Error de IA (502) / timeout → estado de error con reintento.
 - Imagen de ejercicio sin match → fallback (ícono + datos de músculos/equipamiento igual).
 - Validación Zod de las respuestas del backend → error controlado, no crashea la UI.
+- **Request de generación larga (~50s):** el cliente usa un timeout amplio (ej. `AbortController`
+  con ≥120s) para no cortar la espera; si el backend está detrás de un reverse proxy, subir su
+  read/idle timeout en consecuencia. (Se resuelve de raíz cuando la generación pase a async.)
 
 ## 8. Testing
 - **Componentes** (React Native Testing Library): formulario de perfil (validación), viewer
