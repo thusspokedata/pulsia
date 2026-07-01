@@ -15,7 +15,8 @@ export const WorkoutSchema = z.object({
   dayLabel: z.string().min(1),
   location: z.enum(["gym", "home"]),
   focus: MuscleGroupSchema,
-  exercises: z.array(ProgramExerciseSchema),
+  // Cota de sanidad generosa (no fija el alcance del prompt): evita workouts desmadrados.
+  exercises: z.array(ProgramExerciseSchema).max(12),
 });
 
 export const WeekSchema = z.object({
@@ -25,7 +26,8 @@ export const WeekSchema = z.object({
 
 export const ProgramSchema = z.object({
   name: z.string().min(1),
-  weeks: z.array(WeekSchema).min(1),
+  // Cota de sanidad generosa; las semanas quedan configurables a futuro (no se fija en 2).
+  weeks: z.array(WeekSchema).min(1).max(12),
 });
 
 export type Program = z.infer<typeof ProgramSchema>;
