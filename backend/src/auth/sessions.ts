@@ -16,7 +16,10 @@ export async function createSession(db: Db, userId: string, ttlDays: number): Pr
 export async function validateSession(db: Db, token: string, ttlDays: number): Promise<string | null> {
   const row = await db.query.sessions.findFirst({ where: eq(sessions.token, token) });
   if (!row) return null;
-  if (row.expiresAt.getTime() < Date.now()) return null;
+  if (row.expiresAt.getTime() < Date.now()) {
+    await db.delete(sessions).where(eq(sessions.token, token));
+    return null;
+  }
   await db.update(sessions).set({ expiresAt: expiryFromNow(ttlDays) }).where(eq(sessions.token, token));
   return row.userId;
 }

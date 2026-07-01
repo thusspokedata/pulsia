@@ -62,6 +62,18 @@ test("validateSession devuelve null si la sesión ya expiró", async () => {
   expect(userId).toBeNull();
 });
 
+test("validateSession borra la fila de una sesión expirada", async () => {
+  const db = fakeDb({
+    token: "expired-token",
+    userId: "user-2",
+    expiresAt: new Date(Date.now() - 1000),
+  });
+
+  await validateSession(db as any, "expired-token", 4);
+
+  expect(db._row()).toBeUndefined();
+});
+
 test("deleteSession elimina la sesión", async () => {
   const db = fakeDb({
     token: "some-token",
