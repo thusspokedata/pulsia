@@ -8,7 +8,15 @@
     "userInterfaceStyle": "light",
     "scheme": "pulsia",
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true
