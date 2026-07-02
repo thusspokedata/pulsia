@@ -25,6 +25,14 @@ export default function SesionScreen() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const started = useRef(false);
   const setStartRef = useRef(Date.now());
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   function apply(next: WorkoutSession) {
     setSession(next);
@@ -36,16 +44,24 @@ export default function SesionScreen() {
     started.current = true;
     (async () => {
       const active = await getActiveSession();
+      if (!mounted.current) return;
       if (active) {
         setSession(active);
         return;
       }
       const program = await getStoredProgram();
+      if (!mounted.current) return;
       if (!program) {
         router.replace("/");
         return;
       }
-      const programId = (await getStoredProgramId()) ?? "00000000-0000-4000-8000-000000000000";
+      // Sin programId real la sesión no puede sincronizar (FK en el backend). Volvemos a la home.
+      const programId = await getStoredProgramId();
+      if (!mounted.current) return;
+      if (!programId) {
+        router.replace("/");
+        return;
+      }
       const s = startSession({
         program,
         programId,
@@ -118,7 +134,6 @@ export default function SesionScreen() {
 
   async function onFinish() {
     const done = finishSession(sess, { nowMs: Date.now() });
-    await setActiveSession(done);
     await enqueueSession(done);
     await clearActiveSession();
     const url = await getBackendUrl();

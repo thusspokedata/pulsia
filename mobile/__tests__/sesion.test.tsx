@@ -24,7 +24,8 @@ jest.mock("../src/sync/syncSessions", () => ({ syncPending: (...a: any[]) => moc
 
 jest.mock("../src/session/id", () => ({ newSessionId: () => "11111111-1111-4111-8111-111111111111" }));
 jest.mock("../src/storage/config", () => ({ getBackendUrl: async () => "http://backend.test" }));
-jest.mock("../src/storage/programId", () => ({ getStoredProgramId: async () => "22222222-2222-4222-8222-222222222222" }));
+let mockProgramId: string | null = "22222222-2222-4222-8222-222222222222";
+jest.mock("../src/storage/programId", () => ({ getStoredProgramId: async () => mockProgramId }));
 
 const program = {
   name: "Plan",
@@ -37,7 +38,7 @@ jest.mock("../src/storage/program", () => ({ getStoredProgram: async () => progr
 
 import SesionScreen from "../app/sesion";
 
-beforeEach(() => { mockActive = null; jest.clearAllMocks(); });
+beforeEach(() => { mockActive = null; mockProgramId = "22222222-2222-4222-8222-222222222222"; jest.clearAllMocks(); });
 
 test("arma la sesión del día y muestra el ejercicio actual", async () => {
   await render(<SesionScreen />);
@@ -58,6 +59,13 @@ test("terminar entrenamiento persiste a la cola y navega a home", async () => {
   await fireEvent.press(screen.getByTestId("finish"));
   await waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
   expect(mockReplace).toHaveBeenCalledWith("/");
+});
+
+test("sin programId guardado no arma sesión y vuelve a la home", async () => {
+  mockProgramId = null;
+  await render(<SesionScreen />);
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/"));
+  expect(screen.queryByText("Barbell Bench Press")).toBeNull();
 });
 
 test("permite corregir las reps de una serie ya terminada", async () => {
