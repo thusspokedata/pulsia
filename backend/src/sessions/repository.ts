@@ -41,7 +41,7 @@ export function rowsToSession(row: any): WorkoutSession {
 // --- Upsert idempotente: borrar (cascade) + reinsertar en una transacción ---
 export async function upsertSession(db: Db, userId: string, s: WorkoutSession): Promise<void> {
   await db.transaction(async (tx) => {
-    await tx.delete(workoutSession).where(eq(workoutSession.id, s.id));
+    await tx.delete(workoutSession).where(and(eq(workoutSession.id, s.id), eq(workoutSession.userId, userId)));
     await tx.insert(workoutSession).values({
       id: s.id, userId, programId: s.programId, weekNumber: s.weekNumber,
       dayLabel: s.dayLabel, location: s.location, startedAt: s.startedAt,

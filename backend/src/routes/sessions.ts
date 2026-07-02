@@ -9,7 +9,13 @@ export function sessionsRoutes(deps: AppDeps) {
 
   r.put("/:id", async (c) => {
     const id = c.req.param("id");
-    const parsed = WorkoutSessionSchema.safeParse(await c.req.json());
+    let raw: unknown;
+    try {
+      raw = await c.req.json();
+    } catch {
+      return c.json({ error: "JSON inválido" }, 400);
+    }
+    const parsed = WorkoutSessionSchema.safeParse(raw);
     if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
     if (parsed.data.id !== id) return c.json({ error: "el id de la URL no coincide con el del body" }, 400);
     await upsertSession(deps.db, SINGLE_USER_ID, parsed.data);

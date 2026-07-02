@@ -91,3 +91,11 @@ test("GET /sessions/:id inexistente devuelve 404", async () => {
   const res = await app.request(`/sessions/${SID}`);
   expect(res.status).toBe(404);
 });
+
+test("PUT con JSON malformado devuelve 400 (no 500)", async () => {
+  const app = createApp(deps(fakeDb()) as any);
+  const res = await app.request(`/sessions/${SID}`, {
+    method: "PUT", headers: { "content-type": "application/json" }, body: "{ not json",
+  });
+  expect(res.status).toBe(400);
+});
