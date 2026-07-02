@@ -1,17 +1,19 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { ScrollView, View, Text } from "react-native";
-import { Link, useFocusEffect } from "expo-router";
+import { ScrollView, View, Text, Pressable } from "react-native";
+import { Link, router, useFocusEffect } from "expo-router";
 import { getStoredProgram } from "../../src/storage/program";
+import { getActiveSession } from "../../src/storage/activeSession";
 import type { Program } from "@pulsia/shared";
 import { WeekTabs } from "../../src/components/WeekTabs";
 import { SegmentToggle } from "../../src/components/SegmentToggle";
 import { WorkoutDayCard } from "../../src/components/WorkoutDayCard";
-import { colors, spacing } from "../../src/theme/tokens";
+import { colors, spacing, radius } from "../../src/theme/tokens";
 
 export default function ProgramaScreen() {
   const [program, setProgram] = useState<Program | null>(null);
   const [week, setWeek] = useState(1);
   const [location, setLocation] = useState("gym");
+  const [hasActive, setHasActive] = useState(false);
   const lastLoaded = useRef<string | null>(null);
 
   useFocusEffect(
@@ -24,6 +26,9 @@ export default function ProgramaScreen() {
         lastLoaded.current = serialized;
         setProgram(p);
         if (p && !p.weeks.some((w) => w.weekNumber === week)) setWeek(p.weeks[0]?.weekNumber ?? 1);
+      });
+      getActiveSession().then((a) => {
+        if (active) setHasActive(!!a);
       });
       return () => {
         active = false;
@@ -47,12 +52,32 @@ export default function ProgramaScreen() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
       <Text style={{ fontSize: 20, fontWeight: "500", color: colors.text }}>{program.name}</Text>
+      {hasActive && (
+        <Pressable
+          testID="resume-banner"
+          onPress={() => router.push("/sesion")}
+          style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, padding: spacing.md }}
+        >
+          <Text style={{ color: colors.accentText }}>Entrenamiento en curso — continuar</Text>
+        </Pressable>
+      )}
       <WeekTabs weeks={program.weeks.map((w) => w.weekNumber)} selected={week} onSelect={setWeek} />
       <SegmentToggle options={[{ value: "gym", label: "Gimnasio" }, { value: "home", label: "Casa" }]} value={location} onChange={setLocation} />
       {days.length === 0 ? (
         <Text style={{ color: colors.textMuted }}>No hay días para esta selección.</Text>
       ) : (
-        days.map((w, i) => <WorkoutDayCard key={`${w.dayLabel}-${i}`} workout={w} />)
+        days.map((w, i) => (
+          <View key={`${w.dayLabel}-${i}`} style={{ gap: spacing.sm }}>
+            <WorkoutDayCard workout={w} />
+            <Pressable
+              testID={`start-${w.dayLabel}`}
+              onPress={() => router.push({ pathname: "/sesion", params: { week, dayLabel: w.dayLabel, location } })}
+              style={{ backgroundColor: colors.accent, borderRadius: radius.sm, padding: spacing.sm, alignItems: "center" }}
+            >
+              <Text style={{ color: "#fff", fontSize: 13 }}>Empezar entrenamiento</Text>
+            </Pressable>
+          </View>
+        ))
       )}
     </ScrollView>
   );

@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { getBackendUrl } from "../src/storage/config";
 import { getProfile } from "../src/storage/profile";
 import { setStoredProgram } from "../src/storage/program";
+import { setStoredProgramId } from "../src/storage/programId";
 import { generateProgram, GenerationError } from "../src/api/programs";
 import { colors, radius, spacing } from "../src/theme/tokens";
 
@@ -53,9 +54,10 @@ export default function GenerandoScreen() {
       return;
     }
     try {
-      const { program } = await generateProgram(url, profile);
+      const { id, program } = await generateProgram(url, profile);
       if (!mounted.current) return;
       await setStoredProgram(program);
+      await setStoredProgramId(id);
       if (!mounted.current) return;
       router.replace("/");
     } catch (e) {

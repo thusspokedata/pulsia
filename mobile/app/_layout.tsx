@@ -14,6 +14,7 @@ export default function RootLayout() {
             name="configuracion"
             options={{ headerShown: true, title: "Configuración", presentation: "modal" }}
           />
+          <Stack.Screen name="sesion" options={{ headerShown: true, title: "Entrenamiento" }} />
         </Stack>
       </SafeAreaProvider>
     </QueryClientProvider>
