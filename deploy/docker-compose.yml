@@ -7,7 +7,9 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: pulsia
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pulsia}
+      # Debe coincidir con la password en DATABASE_URL (deploy/app.env). Para cambiarla,
+      # editá AMBOS acá y en DATABASE_URL (el env_file no alcanza la interpolación del compose).
+      POSTGRES_PASSWORD: pulsia
       POSTGRES_DB: pulsia
     volumes:
       - pulsia_pgdata:/var/lib/postgresql/data

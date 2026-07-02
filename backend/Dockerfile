@@ -16,6 +16,10 @@ RUN bun install
 COPY shared shared
 COPY backend backend
 
+# Correr como usuario no-root (la imagen oven/bun trae el usuario "bun").
+RUN chown -R bun:bun /app
+USER bun
+
 WORKDIR /app/backend
 EXPOSE 8787
 
