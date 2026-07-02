@@ -25,3 +25,14 @@ test("lanza GenerationError con code aiError en 502", async () => {
   global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 502, json: async () => ({ error: "fuera del catálogo" }) }) as any;
   await expect(generateProgram(URL, profile)).rejects.toMatchObject({ code: "aiError" });
 });
+
+test("timeout (AbortError) da code timeout, no network", async () => {
+  const abort = Object.assign(new Error("Aborted"), { name: "AbortError" });
+  global.fetch = jest.fn().mockRejectedValue(abort) as any;
+  await expect(generateProgram(URL, profile)).rejects.toMatchObject({ code: "timeout" });
+});
+
+test("fallo de red real da code network", async () => {
+  global.fetch = jest.fn().mockRejectedValue(new TypeError("Network request failed")) as any;
+  await expect(generateProgram(URL, profile)).rejects.toMatchObject({ code: "network" });
+});
