@@ -1,6 +1,29 @@
 # Pulsia — Onboarding / Handoff
 
-> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: 2026-07-01.
+> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: 2026-07-02.
+
+## 0. Cambios recientes (2026-07-02) — stack de auth backend mergeado a `main`
+
+Se integró y mergeó (squash) todo el stack de auth backend que estaba abierto/pausado. **Auth backend
+ya está en `main`** (deja desactualizado lo que dicen las secciones 3/4/8 sobre "auth PAUSADO"):
+
+- **#23** — sesiones, middleware y endpoints (register/login/logout).
+- **#24** — scoping por usuario + perfil server-side (`/profile`, guards `requireAuth` en
+  settings/programs/profile).
+- **#33** — hardening de auth (reemplaza a **#27**, que GitHub cerró al colapsar su base): borra la
+  fila de sesión expirada en `validateSession`, valida la config al boot con `loadServerEnv()` (sin
+  `process.env.X!`), y test de aislamiento de perfil entre usuarios.
+- **#26** — plan mobile Fase 3 (docs).
+
+**Conflictos resueltos al integrar con `main`** (que ya tenía la feature independiente de
+workout-sessions): union en `backend/src/app.ts` (conviven routers `/auth` + `/sessions` + `/profile`,
+`/sessions` sigue single-user sin `requireAuth`) y restauración de `backend/src/constants.ts`
+(`SINGLE_USER_ID`): el scoping lo borró pero `seed` y `/sessions` de main aún lo usan. `bun test
+shared backend` + `bun run typecheck` en verde tras cada merge; commits de resolución firmados con SSH.
+Ramas remotas mergeadas borradas.
+
+> Pendiente (no hecho aquí): el **mobile de auth** (login/registro, token en secure-store, navegación
+> gateada, perfil vía API) sigue sin construir — ver backlog sección 8.
 
 ## 1. Qué es Pulsia
 
