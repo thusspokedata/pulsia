@@ -54,12 +54,14 @@ export function tapRep(session: WorkoutSession, args: { exerciseOrder: number; s
   });
 }
 
-export function endSet(session: WorkoutSession, args: { exerciseOrder: number; weightKg: number | null; rpe: number | null; nowMs: number }): WorkoutSession {
+export function endSet(session: WorkoutSession, args: { exerciseOrder: number; weightKg: number | null; rpe: number | null; nowMs: number; hrAvg?: number | null; hrMax?: number | null }): WorkoutSession {
   return updateExercise(session, args.exerciseOrder, (ex) => {
     const openIdx = ex.sets.findIndex((s) => s.endedAt == null);
     if (openIdx < 0) return ex;
     const sets = ex.sets.map((s, i) =>
-      i === openIdx ? { ...s, weightKg: args.weightKg, rpe: args.rpe, endedAt: args.nowMs, durationMs: args.nowMs - s.startedAt } : s,
+      i === openIdx
+        ? { ...s, weightKg: args.weightKg, rpe: args.rpe, endedAt: args.nowMs, durationMs: args.nowMs - s.startedAt, hrAvg: args.hrAvg ?? null, hrMax: args.hrMax ?? null }
+        : s,
     );
     return { ...ex, sets };
   });

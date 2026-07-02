@@ -86,3 +86,21 @@ test("finishSession setea endedAt y totalDurationMs", () => {
   expect(s.endedAt).toBe(3601000);
   expect(s.totalDurationMs).toBe(3600000);
 });
+
+test("endSet puebla hrAvg/hrMax cuando se pasan", () => {
+  let s = start();
+  s = tapRep(s, { exerciseOrder: 0, setStartMs: 2000, nowMs: 2000 });
+  s = endSet(s, { exerciseOrder: 0, weightKg: 40, rpe: 8, nowMs: 5000, hrAvg: 128, hrMax: 141 });
+  const set = s.exercises[0].sets[0];
+  expect(set.hrAvg).toBe(128);
+  expect(set.hrMax).toBe(141);
+});
+
+test("endSet sin HR deja hrAvg/hrMax en null (retrocompat)", () => {
+  let s = start();
+  s = tapRep(s, { exerciseOrder: 0, setStartMs: 2000, nowMs: 2000 });
+  s = endSet(s, { exerciseOrder: 0, weightKg: 40, rpe: 8, nowMs: 5000 });
+  const set = s.exercises[0].sets[0];
+  expect(set.hrAvg).toBeNull();
+  expect(set.hrMax).toBeNull();
+});
