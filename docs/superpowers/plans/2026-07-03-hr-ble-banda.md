@@ -280,8 +280,9 @@ gh pr create --title "feat(mobile): núcleo HR BLE (parser + agregación + endSe
 ```bash
 bunx expo install react-native-ble-plx
 bun add base64-js
-bun add -d @types/base64-js
 ```
+
+`base64-js` ya trae sus propios tipos (`index.d.ts`) — no hace falta `@types/base64-js`.
 
 - [ ] **Step 2: Agregar el config plugin en `app.json`** — dentro de `expo.plugins`, agregar como nuevo elemento del array (después del bloque de `expo-build-properties`):
 
@@ -290,12 +291,13 @@ bun add -d @types/base64-js
   "react-native-ble-plx",
   {
     "isBackgroundEnabled": false,
-    "neverForLocation": true
+    "neverForLocation": true,
+    "bluetoothAlwaysPermission": "Pulsia usa Bluetooth para conectarse a tu banda de pulso"
   }
 ]
 ```
 
-El plugin inyecta en el manifest Android los permisos `BLUETOOTH_SCAN` (con `neverForLocation`) y `BLUETOOTH_CONNECT`.
+El plugin inyecta en el manifest Android los permisos `BLUETOOTH_SCAN` (con `neverForLocation`) y `BLUETOOTH_CONNECT`. La opción `bluetoothAlwaysPermission` agrega `NSBluetoothAlwaysUsageDescription` en iOS (inocuo en builds Android; hoy la app es Android-only).
 
 - [ ] **Step 3: Verificar que la suite sigue verde** (los tests no cargan ble-plx real porque se mockea)
 

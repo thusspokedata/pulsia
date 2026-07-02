@@ -128,6 +128,9 @@ test.
   `bluetooth` en el manifest Android).
 - **Permisos Android 12+:** `BLUETOOTH_SCAN` (con `neverForLocation`), `BLUETOOTH_CONNECT`. El plugin
   los agrega; se pide el runtime-permission al escanear por primera vez.
+- **Permisos iOS (solo si a futuro se agrega iOS; hoy la app es Android-only):**
+  `NSBluetoothAlwaysUsageDescription` vía la opción `bluetoothAlwaysPermission` del config plugin de
+  `react-native-ble-plx`. Inocuo en builds Android.
 - **Dev build (obligatorio):** BLE no corre en Expo Go ni en el APK `preview`. Se usa el perfil
   `development` (ya en `eas.json`): `bunx eas-cli build -p android --profile development` (cuenta
   Expo `belregistro`). El flujo de dev pasa a `bunx expo start --dev-client`. Documentar en
