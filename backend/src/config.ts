@@ -49,6 +49,10 @@ export function loadServerEnv(env: Env = process.env): ServerEnv {
     throw new Error(`Configuración de entorno inválida:\n- ${problems.join("\n- ")}`);
   }
 
+  // Modo single-user: salta el login (usa el usuario por defecto). Para la app actual
+  // sin auth; se apaga cuando entre el login multi-usuario.
+  const singleUserMode = env.SINGLE_USER_MODE?.trim() === "true";
+
   return {
     databaseUrl,
     config: {
@@ -56,6 +60,7 @@ export function loadServerEnv(env: Env = process.env): ServerEnv {
       defaultModel: DEFAULT_MODEL,
       inviteCode,
       sessionTtlDays,
+      singleUserMode,
     },
   };
 }
