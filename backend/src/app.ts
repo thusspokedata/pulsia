@@ -4,6 +4,7 @@ import type { AiClient } from "./ai/client";
 import { settingsRoutes } from "./routes/settings";
 import { programsRoutes } from "./routes/programs";
 import { authRoutes } from "./routes/auth";
+import { sessionsRoutes } from "./routes/sessions";
 
 export interface AppConfig {
   encryptionKey: string;
@@ -24,5 +25,6 @@ export function createApp(deps: AppDeps) {
   app.route("/settings", settingsRoutes(deps));
   app.route("/programs", programsRoutes(deps));
   app.route("/auth", authRoutes(deps));
+  app.route("/sessions", sessionsRoutes(deps));
   return app;
 }

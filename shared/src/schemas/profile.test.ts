@@ -28,3 +28,29 @@ test("rechaza daysPerWeek fuera de rango", () => {
     }),
   ).toThrow();
 });
+
+const base = {
+  experience: "beginner",
+  goal: "general_fitness",
+  daysPerWeek: 3,
+  sessionMinutes: 45,
+  gymEquipment: [],
+  homeEquipment: ["bodyweight"],
+  limitations: [],
+};
+
+test("acepta edad/peso/altura opcionales", () => {
+  const parsed = TrainingProfileSchema.parse({ ...base, age: 34, weightKg: 78.5, heightCm: 180 });
+  expect(parsed.age).toBe(34);
+  expect(parsed.weightKg).toBe(78.5);
+  expect(parsed.heightCm).toBe(180);
+});
+
+test("son opcionales: valida sin ellos", () => {
+  const parsed = TrainingProfileSchema.parse(base);
+  expect(parsed.age).toBeUndefined();
+});
+
+test("rechaza edad fuera de rango", () => {
+  expect(() => TrainingProfileSchema.parse({ ...base, age: 5 })).toThrow();
+});
