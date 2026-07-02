@@ -68,6 +68,32 @@ test("sin programId guardado no arma sesión y vuelve a la home", async () => {
   expect(screen.queryByText("Barbell Bench Press")).toBeNull();
 });
 
+test("una sesión activa de OTRO día no se resume: vuelve a la home", async () => {
+  mockActive = {
+    id: "99999999-9999-4999-8999-999999999999",
+    programId: "22222222-2222-4222-8222-222222222222",
+    weekNumber: 1, dayLabel: "Día 2", location: "gym",
+    startedAt: 1, endedAt: null, totalDurationMs: null, notes: "", exercises: [],
+  };
+  await render(<SesionScreen />); // params piden "Día 1"
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/"));
+  expect(screen.queryByText("Barbell Bench Press")).toBeNull();
+});
+
+test("peso no numérico no guarda NaN (queda null)", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.changeText(screen.getByTestId("weight"), "abc");
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => {
+    const last = mockSetActive.mock.calls.at(-1)?.[0];
+    const set = last.exercises[0].sets[0];
+    expect(set.endedAt).not.toBeNull();
+    expect(set.weightKg).toBeNull();
+  });
+});
+
 test("permite corregir las reps de una serie ya terminada", async () => {
   await render(<SesionScreen />);
   await waitFor(() => screen.getByTestId("tap-rep"));

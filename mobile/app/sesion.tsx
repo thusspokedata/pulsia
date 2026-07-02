@@ -17,12 +17,20 @@ function fmt(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+// Parseo numérico NaN-safe: texto vacío o no numérico → null (no guarda "NaN").
+function parseNum(text: string): number | null {
+  if (!text) return null;
+  const n = Number(text);
+  return Number.isNaN(n) ? null : n;
+}
+
 export default function SesionScreen() {
   const params = useLocalSearchParams<{ week: string; dayLabel: string; location: string }>();
   const [session, setSession] = useState<WorkoutSession | null>(null);
   const [weight, setWeight] = useState("");
   const [rpe, setRpe] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [finishError, setFinishError] = useState(false);
   const started = useRef(false);
   const setStartRef = useRef(Date.now());
   const mounted = useRef(true);
@@ -43,10 +51,32 @@ export default function SesionScreen() {
     if (started.current) return;
     started.current = true;
     (async () => {
+      const wantDay = params.dayLabel ? String(params.dayLabel) : null;
+      const wantLocation = params.location === "home" ? "home" : "gym";
+      const wantWeek = params.week != null ? Number(params.week) : null;
+
       const active = await getActiveSession();
       if (!mounted.current) return;
       if (active) {
-        setSession(active);
+        // Reanudar solo si coincide con lo pedido, o si se entró sin día (banner "continuar").
+        const matches =
+          !wantDay ||
+          (active.dayLabel === wantDay &&
+            active.location === wantLocation &&
+            (wantWeek == null || active.weekNumber === wantWeek));
+        if (matches) {
+          setSession(active);
+          return;
+        }
+        // Hay una sesión activa de OTRO día: no la pisamos ni la resumimos en silencio.
+        // Volvemos a la home, donde el banner permite continuar la que está en curso.
+        router.replace("/");
+        return;
+      }
+
+      // Sin un día concreto no se puede armar la sesión (deep link viejo / bug del caller).
+      if (!wantDay) {
+        router.replace("/");
         return;
       }
       const program = await getStoredProgram();
@@ -65,9 +95,9 @@ export default function SesionScreen() {
       const s = startSession({
         program,
         programId,
-        weekNumber: Number(params.week ?? 1),
-        dayLabel: String(params.dayLabel),
-        location: params.location === "home" ? "home" : "gym",
+        weekNumber: wantWeek ?? 1,
+        dayLabel: wantDay,
+        location: wantLocation,
         id: newSessionId(),
         nowMs: Date.now(),
       });
@@ -100,9 +130,11 @@ export default function SesionScreen() {
   }
 
   const sess = session; // narrowed a WorkoutSession (los handlers son closures y no estrechan `session`)
-  const current =
-    sess.exercises.find((e) => !e.skipped && e.sets.filter((s) => s.endedAt != null).length < e.planned.sets) ??
-    sess.exercises.find((e) => !e.skipped);
+  // Primer ejercicio no saltado con menos series hechas que las planificadas. Sin fallback:
+  // cuando todos están completos (o saltados), `current` es undefined → se muestra "completo".
+  const current = sess.exercises.find(
+    (e) => !e.skipped && e.sets.filter((s) => s.endedAt != null).length < e.planned.sets,
+  );
   const openSet = current?.sets.find((s) => s.endedAt == null);
   const doneSets = current ? current.sets.filter((s) => s.endedAt != null).length : 0;
   const doneList = current ? current.sets.filter((s) => s.endedAt != null) : [];
@@ -118,8 +150,8 @@ export default function SesionScreen() {
     apply(
       endSet(sess, {
         exerciseOrder: current.order,
-        weightKg: weight ? Number(weight) : null,
-        rpe: rpe ? Number(rpe) : null,
+        weightKg: parseNum(weight),
+        rpe: parseNum(rpe),
         nowMs: Date.now(),
       }),
     );
@@ -133,11 +165,22 @@ export default function SesionScreen() {
   }
 
   async function onFinish() {
-    const done = finishSession(sess, { nowMs: Date.now() });
-    await enqueueSession(done);
-    await clearActiveSession();
+    // Cerrar una serie abierta (si la hay) para no dejar endedAt=null en el payload.
+    let s = sess;
+    const openEx = s.exercises.find((e) => e.sets.some((x) => x.endedAt == null));
+    if (openEx) {
+      s = endSet(s, { exerciseOrder: openEx.order, weightKg: parseNum(weight), rpe: parseNum(rpe), nowMs: Date.now() });
+    }
+    const done = finishSession(s, { nowMs: Date.now() });
+    try {
+      await enqueueSession(done);
+      await clearActiveSession();
+    } catch {
+      if (mounted.current) setFinishError(true);
+      return; // no navegamos; la sesión sigue en activeSession para reintentar
+    }
     const url = await getBackendUrl();
-    if (url) void syncPending(url); // fire-and-forget; si falla queda en cola
+    if (url) void syncPending(url); // fire-and-forget; si falla queda en la cola
     router.replace("/");
   }
 
@@ -193,14 +236,14 @@ export default function SesionScreen() {
                     style={input}
                     keyboardType="numeric"
                     defaultValue={String(s.reps)}
-                    onEndEditing={(e) => apply(editSet(sess, { exerciseOrder: current.order, setNumber: s.setNumber, reps: Number(e.nativeEvent.text) || 0 }))}
+                    onEndEditing={(e) => apply(editSet(sess, { exerciseOrder: current.order, setNumber: s.setNumber, reps: parseNum(e.nativeEvent.text) ?? 0 }))}
                   />
                   <TextInput
                     testID={`edit-weight-${s.setNumber}`}
                     style={input}
                     keyboardType="numeric"
                     defaultValue={s.weightKg == null ? "" : String(s.weightKg)}
-                    onEndEditing={(e) => apply(editSet(sess, { exerciseOrder: current.order, setNumber: s.setNumber, weightKg: e.nativeEvent.text ? Number(e.nativeEvent.text) : null }))}
+                    onEndEditing={(e) => apply(editSet(sess, { exerciseOrder: current.order, setNumber: s.setNumber, weightKg: parseNum(e.nativeEvent.text) }))}
                   />
                 </View>
               ))}
@@ -214,6 +257,11 @@ export default function SesionScreen() {
       <Pressable testID="finish" onPress={onFinish} style={{ borderWidth: 1, borderColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", marginTop: spacing.lg }}>
         <Text style={{ color: colors.accentText }}>Terminar entrenamiento</Text>
       </Pressable>
+      {finishError && (
+        <Text testID="finish-error" style={{ color: colors.accent, fontSize: 12, textAlign: "center" }}>
+          No se pudo guardar la sesión. Reintentá.
+        </Text>
+      )}
     </ScrollView>
   );
 }
