@@ -1,0 +1,12 @@
+# El backend no necesita el workspace mobile ni artefactos locales.
+**/node_modules
+mobile
+.git
+.github
+.claude
+.superpowers
+docs
+**/.env
+**/.env.local
+*.log
+.DS_Store

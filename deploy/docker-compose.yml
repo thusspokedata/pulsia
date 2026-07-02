@@ -1,0 +1,36 @@
+# Deploy del backend Pulsia en la Pi (local/VPN). Corre backend + Postgres pgvector.
+# Uso en la Pi:  cd /home/kilo/pulsia && docker compose -f deploy/docker-compose.yml up -d --build
+# Requiere deploy/app.env (NO versionado; ver app.env.example).
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pulsia
+      # Debe coincidir con la password en DATABASE_URL (deploy/app.env). Para cambiarla,
+      # editá AMBOS acá y en DATABASE_URL (el env_file no alcanza la interpolación del compose).
+      POSTGRES_PASSWORD: pulsia
+      POSTGRES_DB: pulsia
+    volumes:
+      - pulsia_pgdata:/var/lib/postgresql/data
+    # DB solo en la red interna del compose (no se publica el 5432 al host).
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pulsia -d pulsia"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file: app.env
+    ports:
+      - "3011:8787" # el teléfono le pega a http://<IP-de-la-Pi>:3011
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pulsia_pgdata:
