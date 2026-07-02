@@ -8,6 +8,8 @@ const app = createApp({
   config: {
     encryptionKey: process.env.ENCRYPTION_KEY!,
     defaultModel: "claude-sonnet-4-6",
+    inviteCode: process.env.INVITE_CODE!,
+    sessionTtlDays: Number(process.env.SESSION_TTL_DAYS ?? 4),
   },
   aiClient: new AnthropicAiClient(),
 });
