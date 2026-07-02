@@ -60,6 +60,20 @@ test("editSet corrige reps/peso de una serie ya cargada", () => {
   expect(set.weightKg).toBe(42.5);
 });
 
+test("editSet distingue null (borra) de undefined (deja igual)", () => {
+  let s = start();
+  s = tapRep(s, { exerciseOrder: 0, setStartMs: 2000, nowMs: 2000 });
+  s = endSet(s, { exerciseOrder: 0, weightKg: 40, rpe: 8, nowMs: 5000 });
+  // null borra el peso; rpe omitido queda igual
+  s = editSet(s, { exerciseOrder: 0, setNumber: 1, weightKg: null });
+  expect(s.exercises[0].sets[0].weightKg).toBeNull();
+  expect(s.exercises[0].sets[0].rpe).toBe(8);
+  // omitir weightKg no lo toca (sigue null)
+  s = editSet(s, { exerciseOrder: 0, setNumber: 1, reps: 7 });
+  expect(s.exercises[0].sets[0].weightKg).toBeNull();
+  expect(s.exercises[0].sets[0].reps).toBe(7);
+});
+
 test("skipExercise marca el ejercicio como saltado", () => {
   let s = start();
   s = skipExercise(s, { exerciseOrder: 1 });
