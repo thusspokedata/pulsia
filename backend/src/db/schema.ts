@@ -1,5 +1,6 @@
-import { pgTable, uuid, text, jsonb, timestamp } from "drizzle-orm/pg-core";
-import type { TrainingProfile, Program } from "@pulsia/shared";
+import { pgTable, uuid, text, jsonb, timestamp, integer, bigint, boolean, doublePrecision } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
+import type { TrainingProfile, Program, PlannedExercise } from "@pulsia/shared";
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -46,3 +47,55 @@ export const exerciseCatalog = pgTable("exercise_catalog", {
   secondaryMuscles: jsonb("secondary_muscles").$type<string[]>().notNull(),
   equipment: jsonb("equipment").$type<string[]>().notNull(),
 });
+
+export const workoutSession = pgTable("workout_session", {
+  id: uuid("id").primaryKey(), // UUID generado en el cliente (no defaultRandom)
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  programId: uuid("program_id").references(() => programs.id).notNull(),
+  weekNumber: integer("week_number").notNull(),
+  dayLabel: text("day_label").notNull(),
+  location: text("location").notNull(),
+  startedAt: bigint("started_at", { mode: "number" }).notNull(),
+  endedAt: bigint("ended_at", { mode: "number" }),
+  totalDurationMs: integer("total_duration_ms"),
+  notes: text("notes").default("").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const sessionExercise = pgTable("session_exercise", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sessionId: uuid("session_id").references(() => workoutSession.id, { onDelete: "cascade" }).notNull(),
+  catalogId: text("catalog_id").notNull(),
+  garminName: text("garmin_name").notNull(),
+  orderIndex: integer("order_index").notNull(),
+  planned: jsonb("planned").$type<PlannedExercise>().notNull(),
+  skipped: boolean("skipped").default(false).notNull(),
+});
+
+export const setLog = pgTable("set_log", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sessionExerciseId: uuid("session_exercise_id").references(() => sessionExercise.id, { onDelete: "cascade" }).notNull(),
+  setNumber: integer("set_number").notNull(),
+  reps: integer("reps").notNull(),
+  weightKg: doublePrecision("weight_kg"),
+  rpe: integer("rpe"),
+  startedAt: bigint("started_at", { mode: "number" }).notNull(),
+  endedAt: bigint("ended_at", { mode: "number" }),
+  durationMs: integer("duration_ms"),
+  repTimestamps: jsonb("rep_timestamps").$type<number[]>().default([]).notNull(),
+  hrAvg: integer("hr_avg"),
+  hrMax: integer("hr_max"),
+  skipped: boolean("skipped").default(false).notNull(),
+});
+
+export const workoutSessionRelations = relations(workoutSession, ({ many }) => ({
+  exercises: many(sessionExercise),
+}));
+export const sessionExerciseRelations = relations(sessionExercise, ({ one, many }) => ({
+  session: one(workoutSession, { fields: [sessionExercise.sessionId], references: [workoutSession.id] }),
+  sets: many(setLog),
+}));
+export const setLogRelations = relations(setLog, ({ one }) => ({
+  exercise: one(sessionExercise, { fields: [setLog.sessionExerciseId], references: [sessionExercise.id] }),
+}));
