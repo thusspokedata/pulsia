@@ -79,6 +79,23 @@ verdad, igual que `ProgramSchema`), reusados por backend y mobile.
 Endpoints backend: `PUT /sessions/:id` (upsert de la sesión + hijos), `GET /sessions/:id` y
 `GET /sessions` (para el resumen / última sesión). Scoping por `SINGLE_USER_ID` como el resto.
 
+### Identidad de sync (clave para que sea idempotente de verdad)
+
+El **`id` de la sesión (UUID generado por el cliente) es la única identidad canónica** del sync.
+De ahí se derivan tres reglas explícitas que garantizan que reintentos y ediciones post-terminar
+nunca dupliquen ni reproduzcan estado viejo:
+
+1. **`pendingSessions` guarda un único snapshot por `id`.** Encolar/re-encolar una sesión hace
+   *upsert por `id`* en la cola (reemplaza el snapshot anterior), no agrega una segunda entrada. Así
+   una edición tras terminar pisa el pendiente en vez de crear un duplicado a subir.
+2. **Los hijos (`session_exercise` / `set_log`) NO tienen identidad de cliente.** No se reusan ni se
+   mergean entre syncs: se regeneran server-side en cada `PUT`. El cliente solo es dueño del `id` de
+   la sesión.
+3. **El `PUT` reemplaza la sesión + hijos transaccionalmente por el padre**: en una sola
+   transacción borra la sesión por `id` (cascade elimina sus hijos) y reinserta todo desde el
+   payload. Subir dos veces el mismo snapshot deja exactamente el mismo estado (idempotente); subir
+   un snapshot editado lo reemplaza entero. Nunca quedan filas hijas huérfanas ni duplicadas.
+
 ## Captura en vivo (Layout A)
 
 - **Tempo por rep:** cada tap guarda un timestamp (offset desde el inicio de la serie) en
