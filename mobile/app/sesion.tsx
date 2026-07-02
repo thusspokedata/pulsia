@@ -10,11 +10,20 @@ import { enqueueSession } from "../src/storage/pendingSessions";
 import { syncPending } from "../src/sync/syncSessions";
 import { startSession, tapRep, endSet, editSet, skipExercise, finishSession } from "../src/session/engine";
 import { newSessionId } from "../src/session/id";
+import { useHeartRate } from "../src/ble/useHeartRate";
+import { aggregateHr } from "../src/ble/hrAggregate";
 import { colors, radius, spacing } from "../src/theme/tokens";
 
 function fmt(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function hrLabel(status: string): string {
+  if (status === "no-band") return "sin banda";
+  if (status === "connecting") return "buscando…";
+  if (status === "disconnected") return "sin señal";
+  return "—";
 }
 
 // Parseo numérico NaN-safe: texto vacío o no numérico → null (no guarda "NaN").
@@ -34,6 +43,13 @@ export default function SesionScreen() {
   const started = useRef(false);
   const setStartRef = useRef(Date.now());
   const mounted = useRef(true);
+  const hr = useHeartRate();
+  const hrStarted = useRef(false);
+  useEffect(() => {
+    if (hrStarted.current) return;
+    hrStarted.current = true;
+    void hr.connect();
+  }, [hr]);
 
   useEffect(() => {
     mounted.current = true;
@@ -141,18 +157,24 @@ export default function SesionScreen() {
 
   function onTap() {
     if (!current) return;
-    if (!openSet) setStartRef.current = Date.now();
+    if (!openSet) {
+      setStartRef.current = Date.now();
+      hr.resetSamples();
+    }
     apply(tapRep(sess, { exerciseOrder: current.order, setStartMs: setStartRef.current, nowMs: Date.now() }));
   }
 
   function onEndSet() {
     if (!current) return;
+    const { hrAvg, hrMax } = aggregateHr(hr.getSamples());
     apply(
       endSet(sess, {
         exerciseOrder: current.order,
         weightKg: parseNum(weight),
         rpe: parseNum(rpe),
         nowMs: Date.now(),
+        hrAvg,
+        hrMax,
       }),
     );
     setWeight("");
@@ -169,7 +191,8 @@ export default function SesionScreen() {
     let s = sess;
     const openEx = s.exercises.find((e) => e.sets.some((x) => x.endedAt == null));
     if (openEx) {
-      s = endSet(s, { exerciseOrder: openEx.order, weightKg: parseNum(weight), rpe: parseNum(rpe), nowMs: Date.now() });
+      const { hrAvg, hrMax } = aggregateHr(hr.getSamples());
+      s = endSet(s, { exerciseOrder: openEx.order, weightKg: parseNum(weight), rpe: parseNum(rpe), nowMs: Date.now(), hrAvg, hrMax });
     }
     const done = finishSession(s, { nowMs: Date.now() });
     try {
@@ -192,7 +215,9 @@ export default function SesionScreen() {
       </View>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm }}>
         <Text style={{ color: colors.textMuted, fontSize: 12 }}>♥ HR</Text>
-        <Text testID="hr-value" style={{ color: colors.textMuted, fontSize: 16 }}>—</Text>
+        <Text testID="hr-value" style={{ color: hr.bpm != null ? colors.accent : colors.textMuted, fontSize: 16 }}>
+          {hr.bpm != null ? hr.bpm : hrLabel(hr.status)}
+        </Text>
       </View>
 
       {current ? (
