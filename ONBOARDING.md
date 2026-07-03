@@ -91,10 +91,18 @@ cd mobile && bunx eas-cli build -p android --profile preview   # cuenta Expo: be
 En la app: Configuración → `http://192.168.178.47:3011` → Guardar ("Conexión OK") → API key →
 Guardar → Perfil → Generar (~2 min).
 
-**Dev build (necesario para BLE / sub-proyecto B):** el APK `preview` no incluye BLE. Para HR por
-banda hace falta un dev client:
+**BLE en el APK standalone (sub-proyecto B):** `react-native-ble-plx` está declarado como config
+plugin en `app.json`, así que **cualquier** build EAS que corre prebuild lo compila nativo —
+`preview` **y** `production` incluyen BLE. Esos perfiles son builds **release**: **embeben el bundle
+JS** y funcionan sin Metro. Para usar la app (con banda) en el día a día, buildeá `preview`/`production`,
+NO el dev client. Emparejar la banda en Configuración → "Banda de pulso".
+
+**Dev client (solo para desarrollo con live-reload):** el perfil `development`
+(`developmentClient: true`) **NO embebe el bundle**; siempre carga el JS desde Metro.
 `cd mobile && bunx eas-cli build -p android --profile development` → instalar el APK →
-`bunx expo start --dev-client`. Emparejar la banda en Configuración → "Banda de pulso".
+`bunx expo start --dev-client` (device en la misma red / `adb reverse tcp:8081 tcp:8081` por USB).
+⚠️ Abrir este APK **sin Metro corriendo** revienta con `Unable to load script … index.android.bundle`
+(ver §7): es un dev client, no un release. Si querés algo que abra solo, usá `preview`/`production`.
 
 ## 6. Convenciones (IMPORTANTE)
 
@@ -116,6 +124,10 @@ banda hace falta un dev client:
 - Tests que importan `expo-router` → `jest.mock`; vars dentro de `jest.mock()` con prefijo `mock`.
 - **`zod` no resuelve desde `mobile/`** (layout del store de Bun) → validar con `WorkoutSessionSchema.safeParse`, no `import { z }`.
 - **Android bloquea HTTP cleartext** en release → `expo-build-properties` con `usesCleartextTraffic:true` (ya puesto).
+- **`RuntimeException: Unable to load script … index.android.bundle`** al abrir el APK → el APK es un
+  **dev client** (`--profile development`), que no embebe el bundle y necesita Metro. Fix: correr
+  `bunx expo start --dev-client` con el device alcanzando Metro, o —para uso standalone— buildear
+  `--profile preview`/`production` (esos SÍ embeben el bundle e incluyen BLE). Ver §5.
 - **Backend requiere `INVITE_CODE`** (auth) al boot → está en `app.env` de la Pi.
 - `z.string().uuid()` de zod 4 exige UUID RFC 4122 válido (los ids de sesión son v4 de `expo-crypto`).
 
