@@ -51,7 +51,10 @@ export default function ProgramaScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
-      <Text style={{ fontSize: 20, fontWeight: "500", color: colors.text }}>{program.name}</Text>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <Text style={{ fontSize: 20, fontWeight: "500", color: colors.text }}>{program.name}</Text>
+        <Link href="/configuracion" style={{ color: colors.accent }}><Text>⚙ Configuración</Text></Link>
+      </View>
       {hasActive && (
         <Pressable
           testID="resume-banner"
