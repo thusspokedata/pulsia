@@ -12,6 +12,12 @@ function num(v: number): string {
   return Number.isInteger(v) ? String(v) : String(Math.round(v * 10) / 10);
 }
 
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+function fmtDate(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getDate()} ${MESES[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 function Metric({ label, value, sub, testID }: { label: string; value: string; sub?: string; testID?: string }) {
   return (
     <View
@@ -42,8 +48,8 @@ export function SessionSummary({ summary }: { summary: SessionSummaryData }) {
   return (
     <View testID="summary" style={{ gap: spacing.lg }}>
       <View style={{ gap: spacing.xs }}>
-        <Text style={{ color: colors.text, fontSize: 22, fontWeight: "700" }}>Resumen</Text>
-        <Text style={{ color: colors.textMuted, fontSize: 13 }}>Entrenamiento completado</Text>
+        <Text style={{ color: colors.text, fontSize: 22, fontWeight: "700" }}>{summary.dayLabel}</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 13 }}>Entrenamiento completado · {fmtDate(summary.startedAt)}</Text>
       </View>
 
       {/* Grid de métricas clave */}

@@ -27,6 +27,8 @@ export interface MuscleVolume {
 }
 
 export interface SessionSummary {
+  dayLabel: string;
+  startedAt: number;
   durationMs: number;
   workMs: number;
   restMs: number;
@@ -149,6 +151,8 @@ export function summarize(session: WorkoutSession): SessionSummary {
   });
 
   return {
+    dayLabel: session.dayLabel,
+    startedAt: session.startedAt,
     durationMs,
     workMs,
     restMs,

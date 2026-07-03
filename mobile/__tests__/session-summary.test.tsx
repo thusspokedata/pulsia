@@ -3,6 +3,8 @@ import { SessionSummary } from "../src/components/SessionSummary";
 import type { SessionSummary as SessionSummaryData } from "../src/session/summary";
 
 const summary: SessionSummaryData = {
+  dayLabel: "Día 1: Pecho",
+  startedAt: 1782900000000,
   durationMs: 11000,
   workMs: 7000,
   restMs: 4000,
