@@ -10,6 +10,9 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: "Programa",
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? "barbell" : "barbell-outline"} size={size} color={color} />
+          ),
           headerRight: () => (
             <Pressable onPress={() => router.push("/configuracion")} style={{ paddingHorizontal: 12 }}>
               <Ionicons name="settings-outline" size={22} color={colors.accent} />
@@ -17,7 +20,15 @@ export default function TabsLayout() {
           ),
         }}
       />
-      <Tabs.Screen name="perfil" options={{ title: "Perfil" }} />
+      <Tabs.Screen
+        name="perfil"
+        options={{
+          title: "Perfil",
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? "person" : "person-outline"} size={size} color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
