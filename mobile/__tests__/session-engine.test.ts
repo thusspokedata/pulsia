@@ -1,4 +1,4 @@
-import { startSession, tapRep, endSet, editSet, skipExercise, finishSession } from "../src/session/engine";
+import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession } from "../src/session/engine";
 import type { Program } from "@pulsia/shared";
 
 const program = {
@@ -37,6 +37,29 @@ test("tapRep agrega un timestamp relativo al inicio de la serie", () => {
   expect(set.reps).toBe(2);
   expect(set.repTimestamps).toEqual([0, 4000]);
   expect(set.startedAt).toBe(2000);
+});
+
+test("adjustReps con delta +5 sobre serie nueva deja reps en 5", () => {
+  let s = start();
+  s = adjustReps(s, { exerciseOrder: 0, setStartMs: 2000, delta: 5 });
+  const set = s.exercises[0].sets[0];
+  expect(set.reps).toBe(5);
+  expect(set.startedAt).toBe(2000);
+  expect(set.repTimestamps).toEqual([]);
+});
+
+test("adjustReps suma y resta reps (+1 y −1)", () => {
+  let s = start();
+  s = adjustReps(s, { exerciseOrder: 0, setStartMs: 2000, delta: 1 });
+  s = adjustReps(s, { exerciseOrder: 0, setStartMs: 2000, delta: 1 });
+  s = adjustReps(s, { exerciseOrder: 0, setStartMs: 2000, delta: -1 });
+  expect(s.exercises[0].sets[0].reps).toBe(1);
+});
+
+test("adjustReps no baja de 0", () => {
+  let s = start();
+  s = adjustReps(s, { exerciseOrder: 0, setStartMs: 2000, delta: -5 });
+  expect(s.exercises[0].sets[0].reps).toBe(0);
 });
 
 test("endSet cierra la serie con peso/rpe y durationMs", () => {

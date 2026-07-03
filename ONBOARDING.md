@@ -121,10 +121,34 @@ banda hace falta un dev client:
 
 ## 8. Backlog (pendientes / ideas)
 
-- **[Sub-proyecto B — HECHO en código, pendiente verificación en dispositivo]** HR en vivo por banda
-  BLE (perfil estándar 0x180D), avg/max por serie. Falta: dev build + prueba con banda física.
+- **[Sub-proyecto B — HECHO ✓]** HR en vivo por banda BLE (perfil estándar 0x180D), avg/max por
+  serie. Verificado en dispositivo (preview build + banda Polar/Garmin).
 - **[Backlog B]** curva de HR completa (serie temporal), HRV/RR por PMD Polar (dominio estrés),
   marca de calidad de cobertura del dato. Ver spec 2026-07-03-hr-ble-banda-design.md §9.
+- **[Polish pass + Sesión v2 — HECHO en código, pendiente build/merge]** en rama
+  `fix/mobile-acceso-configuracion` (13 commits). Polish: permiso BLE runtime automático; escaneo con
+  feedback/timeout; ⚙ Configuración al header; íconos de tabs; sin botón "Copiar a Garmin". Sesión
+  v2: ejercicio activo explícito + lista con ✓ (arregla el bug de "última serie no editable"); botones
+  ±1/±5 reps; rótulos Peso(kg)/RPE; descanso con cuenta regresiva + campana (`assets/bell.wav`) con
+  toggle "Sonidos" en Configuración (`expo-audio`).
+- **[Sub-proyecto C — experiencia de sesión y post-entrenamiento]** (orden acordado):
+  - **C2 — Resumen post-entrenamiento** (primero): pantalla al Terminar entrenamiento → tiempo
+    total, promedio de pulso (de los `hrAvg` por serie), series/reps/volumen, ejercicios hechos, y
+    **% de cumplimiento del plan** (ejercicios/series realizadas vs planificadas).
+  - **C3 — Mapa corporal**: silueta que resalta músculos trabajados desde `primaryMuscles` del
+    catálogo (ya existe el dato). Vive dentro del resumen C2.
+  - **C1 — Controles de sesión en vivo**: botón Pausar/Reanudar (el timer no cuenta el descanso del
+    baño) + descartar/eliminar la sesión en curso + **indicador global de "sesión en curso / tiempo
+    corriendo"** cuando salís de la pantalla de entrenamiento (hoy solo hay el banner en Programa).
+  - **C4 — Historial de sesiones** (transversal): lista de entrenamientos pasados para verlos y
+    eliminarlos. Hoy se guardan/sincronizan pero no hay pantalla.
+  - **C5 — Notas de sesión → IA**: espacio de anotaciones por sesión (el campo `notes` de
+    `WorkoutSession` ya existe, sin UI). Las notas recientes deben **alimentar la generación** del
+    próximo plan (backend incluye notas + datos reales en el prompt de Claude). Se solapa con el
+    ítem de backlog "[PT agent] entrenador conversacional". Toca mobile + backend.
+  - **C6 — Entrenamiento puntual (one-off)**: generar un entreno de **un día** eligiendo músculos +
+    gym/casa (mismo cuestionario de equipo), **sin tocar el plan vigente**. Para viaje/vacaciones.
+    Nuevo flujo/endpoint de generación acotado. Toca mobile + backend.
 - **[Deployment] CI para la Pi**: `deploy.yml` (self-hosted runner en `/home/kilo/actions-runner`,
   deploy en push a `main`) + `ci.yml`. Hoy el deploy es **manual** (rsync + `docker compose up -d --build`).
 - **[Deployment] Backup de la DB de Pulsia a la pi-respaldo** (pedido del usuario, sin apuro): job
@@ -132,6 +156,10 @@ banda hace falta un dev client:
 - **[Integración Garmin] Ingesta de datos pasivos**: sueño, composición corporal (balanza Index),
   HRV, FC en reposo, **estrés** → Garmin Health API (OAuth; ⚠️ requiere aprobación del programa dev).
   Alternativa: import `.FIT`. Transversal a entrenamiento/estrés/estado holístico.
+- **[Integración Garmin] Empujar workouts (Training API)**: el botón "Copiar a Garmin" (copiaba
+  nombres al portapapeles) **se elimina** — Garmin Connect NO permite pegar/importar un entreno, así
+  que no servía. El camino real para mandar el programa al reloj es la **Garmin Training API** (OAuth
+  + aprobación del dev program). Proyecto aparte, v-next.
 - **[FEATURE] Sugerencia de peso inicial por ejercicio**: sobre el historial de kg reales (depende
   del registro A). v1 regla determinista → v2 contexto (RPE/descanso) → v3 IA.
 - **[PT agent] Entrenador conversacional** sobre Claude: ajusta el plan según sesiones reales,

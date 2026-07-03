@@ -54,6 +54,16 @@ export function tapRep(session: WorkoutSession, args: { exerciseOrder: number; s
   });
 }
 
+export function adjustReps(session: WorkoutSession, args: { exerciseOrder: number; setStartMs: number; delta: number }): WorkoutSession {
+  return updateExercise(session, args.exerciseOrder, (ex) => {
+    const { ex: withSet, idx } = withOpenSet(ex, args.setStartMs);
+    const sets = withSet.sets.map((s, i) =>
+      i === idx ? { ...s, reps: Math.max(0, s.reps + args.delta) } : s,
+    );
+    return { ...withSet, sets };
+  });
+}
+
 export function endSet(session: WorkoutSession, args: { exerciseOrder: number; weightKg: number | null; rpe: number | null; nowMs: number; hrAvg?: number | null; hrMax?: number | null }): WorkoutSession {
   return updateExercise(session, args.exerciseOrder, (ex) => {
     const openIdx = ex.sets.findIndex((s) => s.endedAt == null);

@@ -8,10 +8,12 @@ import { getBackendUrl } from "../src/storage/config";
 import { getActiveSession, setActiveSession, clearActiveSession } from "../src/storage/activeSession";
 import { enqueueSession } from "../src/storage/pendingSessions";
 import { syncPending } from "../src/sync/syncSessions";
-import { startSession, tapRep, endSet, editSet, skipExercise, finishSession } from "../src/session/engine";
+import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession } from "../src/session/engine";
 import { newSessionId } from "../src/session/id";
 import { useHeartRate } from "../src/ble/useHeartRate";
 import { aggregateHr } from "../src/ble/hrAggregate";
+import { getSoundsEnabled } from "../src/storage/sounds";
+import { useAudioPlayer } from "expo-audio";
 import { colors, radius, spacing } from "../src/theme/tokens";
 
 function fmt(ms: number): string {
@@ -33,6 +35,14 @@ function parseNum(text: string): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
+// Primer ejercicio no saltado con series incompletas; 0 si no hay ninguno.
+function firstIncompleteOrder(s: WorkoutSession): number {
+  const ex = s.exercises.find(
+    (e) => !e.skipped && e.sets.filter((x) => x.endedAt != null).length < e.planned.sets,
+  );
+  return ex ? ex.order : 0;
+}
+
 export default function SesionScreen() {
   const params = useLocalSearchParams<{ week: string; dayLabel: string; location: string }>();
   const [session, setSession] = useState<WorkoutSession | null>(null);
@@ -40,9 +50,14 @@ export default function SesionScreen() {
   const [rpe, setRpe] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [finishError, setFinishError] = useState(false);
+  const [activeOrder, setActiveOrder] = useState<number | null>(null);
+  const [restUntil, setRestUntil] = useState<number | null>(null);
   const started = useRef(false);
   const setStartRef = useRef(Date.now());
   const mounted = useRef(true);
+  const soundsEnabledRef = useRef(true);
+  const restDoneRef = useRef(false);
+  const bell = useAudioPlayer(require("../assets/bell.wav"));
   const hr = useHeartRate();
   const hrStarted = useRef(false);
   useEffect(() => {
@@ -82,6 +97,7 @@ export default function SesionScreen() {
             (wantWeek == null || active.weekNumber === wantWeek));
         if (matches) {
           setSession(active);
+          setActiveOrder(firstIncompleteOrder(active));
           return;
         }
         // Hay una sesión activa de OTRO día: no la pisamos ni la resumimos en silencio.
@@ -118,14 +134,39 @@ export default function SesionScreen() {
         nowMs: Date.now(),
       });
       setStartRef.current = Date.now();
+      setActiveOrder(firstIncompleteOrder(s));
       apply(s);
     })();
   }, [params.week, params.dayLabel, params.location]);
+
+  // Preferencia de sonidos: la leemos una vez al montar a un ref (sin re-render por tick).
+  useEffect(() => {
+    void getSoundsEnabled().then((v) => {
+      soundsEnabledRef.current = v;
+    });
+  }, []);
 
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  // Cuando el descanso cruza 0: limpiar y sonar la campana UNA sola vez (restDoneRef).
+  useEffect(() => {
+    if (restUntil == null) return;
+    if (nowMs >= restUntil && !restDoneRef.current) {
+      restDoneRef.current = true;
+      setRestUntil(null);
+      if (soundsEnabledRef.current) {
+        try {
+          bell.seekTo(0);
+          bell.play();
+        } catch {
+          // reproducción de audio best-effort; no bloquea la sesión
+        }
+      }
+    }
+  }, [nowMs, restUntil, bell]);
 
   const input = {
     borderWidth: 1,
@@ -146,11 +187,13 @@ export default function SesionScreen() {
   }
 
   const sess = session; // narrowed a WorkoutSession (los handlers son closures y no estrechan `session`)
-  // Primer ejercicio no saltado con menos series hechas que las planificadas. Sin fallback:
-  // cuando todos están completos (o saltados), `current` es undefined → se muestra "completo".
-  const current = sess.exercises.find(
+  // Ejercicio activo explícito: NO auto-avanza. Al terminar la última serie el ejercicio
+  // sigue activo (editable). El avance es tocar otro ejercicio en la lista de abajo.
+  const fallback = sess.exercises.find(
     (e) => !e.skipped && e.sets.filter((s) => s.endedAt != null).length < e.planned.sets,
   );
+  const current =
+    activeOrder != null ? sess.exercises.find((e) => e.order === activeOrder) ?? fallback : fallback;
   const openSet = current?.sets.find((s) => s.endedAt == null);
   const doneSets = current ? current.sets.filter((s) => s.endedAt != null).length : 0;
   const doneList = current ? current.sets.filter((s) => s.endedAt != null) : [];
@@ -179,6 +222,18 @@ export default function SesionScreen() {
     );
     setWeight("");
     setRpe("");
+    // Arranca el descanso con cuenta regresiva; la campana suena al cruzar 0.
+    restDoneRef.current = false;
+    setRestUntil(Date.now() + current.planned.restSeconds * 1000);
+  }
+
+  function onAdjustReps(delta: number) {
+    if (!current) return;
+    if (!openSet) {
+      setStartRef.current = Date.now();
+      hr.resetSamples();
+    }
+    apply(adjustReps(sess, { exerciseOrder: current.order, setStartMs: setStartRef.current, delta }));
   }
 
   function onSkip() {
@@ -220,6 +275,53 @@ export default function SesionScreen() {
         </Text>
       </View>
 
+      <View style={{ gap: spacing.xs }}>
+        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Ejercicios</Text>
+        {[...sess.exercises]
+          .sort((a, b) => a.order - b.order)
+          .map((e) => {
+            const done = e.sets.filter((s) => s.endedAt != null).length;
+            const completed = done >= e.planned.sets;
+            const isActive = current?.order === e.order;
+            return (
+              <Pressable
+                key={e.order}
+                testID={`ex-item-${e.order}`}
+                onPress={() => setActiveOrder(e.order)}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  borderWidth: 1,
+                  borderColor: isActive ? colors.accent : colors.border,
+                  backgroundColor: isActive ? colors.accentSoft : colors.bg,
+                  borderRadius: radius.sm,
+                  padding: spacing.sm,
+                }}
+              >
+                <Text style={{ color: isActive ? colors.accentText : colors.text, fontSize: 13, flexShrink: 1 }}>
+                  {e.garminName}
+                  {e.skipped ? " (saltado)" : ""}
+                </Text>
+                <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                  {done}/{e.planned.sets}
+                  {completed ? " ✓" : ""}
+                </Text>
+              </Pressable>
+            );
+          })}
+      </View>
+
+      {restUntil != null && restUntil > nowMs && (
+        <View testID="rest-timer" style={{ alignItems: "center", backgroundColor: colors.accentSoft, borderRadius: radius.md, padding: spacing.md, gap: spacing.xs }}>
+          <Text style={{ color: colors.accentText, fontSize: 12 }}>Descanso</Text>
+          <Text style={{ color: colors.accentText, fontSize: 32, fontWeight: "700" }}>{fmt(Math.max(0, restUntil - nowMs))}</Text>
+          <Pressable testID="skip-rest" onPress={() => { restDoneRef.current = true; setRestUntil(null); }}>
+            <Text style={{ color: colors.textMuted, fontSize: 12 }}>Saltar descanso</Text>
+          </Pressable>
+        </View>
+      )}
+
       {current ? (
         <>
           <Text style={{ color: colors.text, fontSize: 18, fontWeight: "600" }}>{current.garminName}</Text>
@@ -239,8 +341,32 @@ export default function SesionScreen() {
           </Pressable>
 
           <View style={{ flexDirection: "row", gap: spacing.sm, justifyContent: "center", alignItems: "center" }}>
-            <TextInput testID="weight" style={input} placeholder="kg" keyboardType="numeric" value={weight} onChangeText={setWeight} />
-            <TextInput testID="rpe" style={input} placeholder="RPE" keyboardType="numeric" value={rpe} onChangeText={setRpe} />
+            {[
+              { label: "−5", delta: -5 },
+              { label: "−1", delta: -1 },
+              { label: "+1", delta: 1 },
+              { label: "+5", delta: 5 },
+            ].map((b) => (
+              <Pressable
+                key={b.label}
+                testID={`reps-${b.delta}`}
+                onPress={() => onAdjustReps(b.delta)}
+                style={{ borderWidth: 1, borderColor: colors.accent, borderRadius: radius.sm, paddingVertical: spacing.xs, paddingHorizontal: spacing.md }}
+              >
+                <Text style={{ color: colors.accentText, fontSize: 16 }}>{b.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={{ flexDirection: "row", gap: spacing.sm, justifyContent: "center", alignItems: "flex-end" }}>
+            <View style={{ alignItems: "center", gap: 2 }}>
+              <Text style={{ color: colors.textMuted, fontSize: 11 }}>Peso (kg)</Text>
+              <TextInput testID="weight" style={input} placeholder="kg" keyboardType="numeric" value={weight} onChangeText={setWeight} />
+            </View>
+            <View style={{ alignItems: "center", gap: 2 }}>
+              <Text style={{ color: colors.textMuted, fontSize: 11 }}>RPE</Text>
+              <TextInput testID="rpe" style={input} placeholder="RPE" keyboardType="numeric" value={rpe} onChangeText={setRpe} />
+            </View>
           </View>
 
           <Pressable testID="end-set" onPress={onEndSet} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
@@ -253,12 +379,18 @@ export default function SesionScreen() {
           {doneList.length > 0 && (
             <View style={{ gap: spacing.xs, marginTop: spacing.sm }}>
               <Text style={{ color: colors.textMuted, fontSize: 12 }}>Series hechas (tocá para corregir)</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                <Text style={{ color: colors.textMuted, fontSize: 11, width: 52 }} />
+                <Text style={{ color: colors.textMuted, fontSize: 11, minWidth: 70, textAlign: "center" }}>reps</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 11, minWidth: 70, textAlign: "center" }}>kg</Text>
+              </View>
               {doneList.map((s) => (
                 <View key={s.setNumber} style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
                   <Text style={{ color: colors.textMuted, fontSize: 12, width: 52 }}>Serie {s.setNumber}</Text>
                   <TextInput
                     testID={`edit-reps-${s.setNumber}`}
                     style={input}
+                    placeholder="reps"
                     keyboardType="numeric"
                     defaultValue={String(s.reps)}
                     onEndEditing={(e) => apply(editSet(sess, { exerciseOrder: current.order, setNumber: s.setNumber, reps: parseNum(e.nativeEvent.text) ?? 0 }))}
@@ -266,6 +398,7 @@ export default function SesionScreen() {
                   <TextInput
                     testID={`edit-weight-${s.setNumber}`}
                     style={input}
+                    placeholder="kg"
                     keyboardType="numeric"
                     defaultValue={s.weightKg == null ? "" : String(s.weightKg)}
                     onEndEditing={(e) => apply(editSet(sess, { exerciseOrder: current.order, setNumber: s.setNumber, weightKg: parseNum(e.nativeEvent.text) }))}

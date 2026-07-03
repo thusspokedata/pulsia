@@ -24,7 +24,8 @@
           "neverForLocation": true,
           "bluetoothAlwaysPermission": "Pulsia usa Bluetooth para conectarse a tu banda de pulso"
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "ios": {
       "supportsTablet": true
