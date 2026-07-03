@@ -100,6 +100,28 @@ export function discardOpenSets(session: WorkoutSession, args: { exerciseOrder: 
   }));
 }
 
+// Cierra/descarta todas las series abiertas al terminar la sesión, para que ninguna quede con
+// endedAt=null. El ejercicio ACTIVO se cierra con los valores visibles (peso/RPE/HR le corresponden);
+// los ABANDONADOS por navegación se cierran preservando solo las reps (sin metadata ajena); los
+// SALTADOS se descartan.
+export function closeOpenSets(
+  session: WorkoutSession,
+  args: { activeOrder: number | null; weightKg: number | null; rpe: number | null; nowMs: number; hrAvg?: number | null; hrMax?: number | null },
+): WorkoutSession {
+  let s = session;
+  for (const e of s.exercises) {
+    if (!e.sets.some((x) => x.endedAt == null)) continue;
+    if (e.skipped) {
+      s = discardOpenSets(s, { exerciseOrder: e.order });
+    } else if (e.order === args.activeOrder) {
+      s = endSet(s, { exerciseOrder: e.order, weightKg: args.weightKg, rpe: args.rpe, nowMs: args.nowMs, hrAvg: args.hrAvg ?? null, hrMax: args.hrMax ?? null });
+    } else {
+      s = endSet(s, { exerciseOrder: e.order, weightKg: null, rpe: null, nowMs: args.nowMs, hrAvg: null, hrMax: null });
+    }
+  }
+  return s;
+}
+
 export function skipExercise(session: WorkoutSession, args: { exerciseOrder: number }): WorkoutSession {
   return updateExercise(session, args.exerciseOrder, (ex) => ({ ...ex, skipped: true }));
 }

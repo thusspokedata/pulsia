@@ -1,4 +1,4 @@
-import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, discardOpenSets } from "../src/session/engine";
+import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, discardOpenSets, closeOpenSets } from "../src/session/engine";
 import type { Program } from "@pulsia/shared";
 
 const program = {
@@ -141,4 +141,34 @@ test("endSet sin HR deja hrAvg/hrMax en null (retrocompat)", () => {
   const set = s.exercises[0].sets[0];
   expect(set.hrAvg).toBeNull();
   expect(set.hrMax).toBeNull();
+});
+
+test("closeOpenSets: activo con valores visibles, abandonado sin metadata ajena, ninguno queda endedAt=null", () => {
+  let s = start();
+  // Serie abierta en ejercicio 0 (activo) y en ejercicio 1 (abandonado por navegación).
+  s = tapRep(s, { exerciseOrder: 0, setStartMs: 2000, nowMs: 2000 });
+  s = tapRep(s, { exerciseOrder: 1, setStartMs: 3000, nowMs: 3000 });
+  s = closeOpenSets(s, { activeOrder: 0, weightKg: 40, rpe: 8, nowMs: 9000, hrAvg: 120, hrMax: 130 });
+  const active = s.exercises[0].sets[0];
+  const stale = s.exercises[1].sets[0];
+  // Ninguna serie queda abierta.
+  expect(active.endedAt).toBe(9000);
+  expect(stale.endedAt).toBe(9000);
+  // El activo recibe los valores visibles.
+  expect(active.weightKg).toBe(40);
+  expect(active.rpe).toBe(8);
+  expect(active.hrAvg).toBe(120);
+  // El abandonado preserva reps pero NO recibe metadata ajena.
+  expect(stale.reps).toBe(1);
+  expect(stale.weightKg).toBeNull();
+  expect(stale.rpe).toBeNull();
+  expect(stale.hrAvg).toBeNull();
+});
+
+test("closeOpenSets descarta la serie abierta de un ejercicio saltado", () => {
+  let s = start();
+  s = tapRep(s, { exerciseOrder: 1, setStartMs: 2000, nowMs: 2000 });
+  s = skipExercise(s, { exerciseOrder: 1 });
+  s = closeOpenSets(s, { activeOrder: 0, weightKg: null, rpe: null, nowMs: 9000 });
+  expect(s.exercises[1].sets).toEqual([]);
 });

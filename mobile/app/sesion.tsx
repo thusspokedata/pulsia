@@ -8,7 +8,7 @@ import { getBackendUrl } from "../src/storage/config";
 import { getActiveSession, setActiveSession, clearActiveSession } from "../src/storage/activeSession";
 import { enqueueSession } from "../src/storage/pendingSessions";
 import { syncPending } from "../src/sync/syncSessions";
-import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, discardOpenSets } from "../src/session/engine";
+import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets } from "../src/session/engine";
 import { newSessionId } from "../src/session/id";
 import { useHeartRate } from "../src/ble/useHeartRate";
 import { aggregateHr } from "../src/ble/hrAggregate";
@@ -267,19 +267,9 @@ export default function SesionScreen() {
   }
 
   async function onFinish() {
-    // Ninguna serie debe quedar con endedAt=null en el payload. Recorremos TODOS los
-    // ejercicios: si tienen alguna serie abierta, la cerramos (si el ejercicio está activo)
-    // o la descartamos (si está saltado).
-    let s = sess;
+    // Ninguna serie debe quedar con endedAt=null en el payload (ver closeOpenSets en el motor).
     const { hrAvg, hrMax } = aggregateHr(hr.getSamples());
-    for (const e of s.exercises) {
-      if (!e.sets.some((x) => x.endedAt == null)) continue;
-      if (e.skipped) {
-        s = discardOpenSets(s, { exerciseOrder: e.order });
-      } else {
-        s = endSet(s, { exerciseOrder: e.order, weightKg: parseNum(weight), rpe: parseNum(rpe), nowMs: Date.now(), hrAvg, hrMax });
-      }
-    }
+    const s = closeOpenSets(sess, { activeOrder: current?.order ?? null, weightKg: parseNum(weight), rpe: parseNum(rpe), nowMs: Date.now(), hrAvg, hrMax });
     const done = finishSession(s, { nowMs: Date.now() });
     try {
       await enqueueSession(done);
