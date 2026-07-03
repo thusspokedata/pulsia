@@ -22,6 +22,8 @@ jest.mock("../src/storage/pendingSessions", () => ({
 const mockSync = jest.fn(async (..._a: any[]) => 0);
 jest.mock("../src/sync/syncSessions", () => ({ syncPending: (...a: any[]) => mockSync(...a) }));
 
+jest.mock("expo-audio", () => ({ useAudioPlayer: () => ({ seekTo: jest.fn(), play: jest.fn() }) }));
+
 jest.mock("../src/session/id", () => ({ newSessionId: () => "11111111-1111-4111-8111-111111111111" }));
 jest.mock("../src/storage/config", () => ({ getBackendUrl: async () => "http://backend.test" }));
 let mockProgramId: string | null = "22222222-2222-4222-8222-222222222222";
@@ -56,7 +58,8 @@ beforeEach(() => { mockActive = null; mockProgramId = "22222222-2222-4222-8222-2
 
 test("arma la sesión del día y muestra el ejercicio actual", async () => {
   await render(<SesionScreen />);
-  await waitFor(() => expect(screen.getByText("Barbell Bench Press")).toBeTruthy());
+  // Aparece en la lista de ejercicios y como título del activo.
+  await waitFor(() => expect(screen.getAllByText("Barbell Bench Press").length).toBeGreaterThan(0));
 });
 
 test("tap incrementa las reps de la serie", async () => {
@@ -120,6 +123,37 @@ test("permite corregir las reps de una serie ya terminada", async () => {
       expect.objectContaining({
         exercises: expect.arrayContaining([
           expect.objectContaining({ sets: expect.arrayContaining([expect.objectContaining({ setNumber: 1, reps: 9 })]) }),
+        ]),
+      }),
+    ),
+  );
+});
+
+test("los botones ±reps ajustan la serie abierta", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("reps-5"));
+  await fireEvent.press(screen.getByTestId("reps-5"));
+  await waitFor(() => expect(screen.getByTestId("rep-count").props.children).toBe(5));
+  await fireEvent.press(screen.getByTestId("reps--1"));
+  await waitFor(() => expect(screen.getByTestId("rep-count").props.children).toBe(4));
+});
+
+test("tras completar la última serie el ejercicio sigue editable (no auto-avanza)", async () => {
+  // El programa mock tiene 2 series planificadas. Completamos ambas.
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("end-set")); // serie 1
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("end-set")); // serie 2 (última)
+  // El ejercicio activo NO desaparece: sus filas de corrección siguen visibles y editables.
+  await waitFor(() => screen.getByTestId("edit-reps-2"));
+  await fireEvent(screen.getByTestId("edit-reps-2"), "endEditing", { nativeEvent: { text: "7" } });
+  await waitFor(() =>
+    expect(mockSetActive).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exercises: expect.arrayContaining([
+          expect.objectContaining({ sets: expect.arrayContaining([expect.objectContaining({ setNumber: 2, reps: 7 })]) }),
         ]),
       }),
     ),
