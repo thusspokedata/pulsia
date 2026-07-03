@@ -21,6 +21,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="historial"
+        options={{
+          title: "Historial",
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? "time" : "time-outline"} size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="perfil"
         options={{
           title: "Perfil",

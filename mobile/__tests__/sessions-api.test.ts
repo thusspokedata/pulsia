@@ -1,4 +1,4 @@
-import { putSession } from "../src/api/sessions";
+import { putSession, getSessions } from "../src/api/sessions";
 import type { WorkoutSession } from "@pulsia/shared";
 
 const URL = "http://backend.test";
@@ -25,4 +25,18 @@ test("putSession hace PUT a /sessions/:id y resuelve en 2xx", async () => {
 test("putSession lanza si el backend responde no-ok", async () => {
   global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 400, json: async () => ({}) }) as any;
   await expect(putSession(URL, session)).rejects.toThrow();
+});
+
+test("getSessions hace GET a /sessions y devuelve el array en 2xx", async () => {
+  const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => [session] });
+  global.fetch = fetchMock as any;
+  const result = await getSessions(URL);
+  const [calledUrl] = fetchMock.mock.calls[0];
+  expect(calledUrl).toBe(`${URL}/sessions`);
+  expect(result).toEqual([session]);
+});
+
+test("getSessions lanza si el backend responde no-ok", async () => {
+  global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }) as any;
+  await expect(getSessions(URL)).rejects.toThrow("No se pudieron cargar las sesiones");
 });

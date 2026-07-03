@@ -10,3 +10,10 @@ export async function putSession(baseUrl: string, session: WorkoutSession): Prom
   });
   if (!res.ok) throw new Error("No se pudo sincronizar la sesión");
 }
+
+// Trae el historial de sesiones del usuario desde el backend.
+export async function getSessions(baseUrl: string): Promise<WorkoutSession[]> {
+  const res = await apiFetch(baseUrl, "/sessions");
+  if (!res.ok) throw new Error("No se pudieron cargar las sesiones");
+  return (await res.json()) as WorkoutSession[];
+}
