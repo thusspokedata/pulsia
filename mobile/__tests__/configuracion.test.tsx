@@ -15,3 +15,14 @@ test("guarda la URL del backend al tocar Guardar", async () => {
     expect(await AsyncStorage.getItem("pulsia.backendUrl")).toBe("http://10.0.0.2:8787");
   });
 });
+
+test("el toggle de sonidos alterna y persiste el estado", async () => {
+  await render(<ConfiguracionScreen />);
+  // Default: habilitado.
+  await waitFor(() => expect(screen.getByText("Activados")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("sounds-toggle"));
+  await waitFor(async () => {
+    expect(await AsyncStorage.getItem("pulsia.soundsEnabled")).toBe("0");
+  });
+  expect(screen.getByText("Desactivados")).toBeTruthy();
+});

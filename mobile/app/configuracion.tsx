@@ -4,6 +4,7 @@ import { getBackendUrl, setBackendUrl } from "../src/storage/config";
 import { testConnection } from "../src/api/health";
 import { saveSettings } from "../src/api/settings";
 import { getPairedBand, setPairedBand, clearPairedBand } from "../src/storage/pairedBand";
+import { getSoundsEnabled, setSoundsEnabled } from "../src/storage/sounds";
 import { createBandManager, type BandManagerHandle, type FoundDevice } from "../src/ble/bandManager";
 import { ensureBlePermissions } from "../src/ble/permissions";
 import { colors, radius, spacing } from "../src/theme/tokens";
@@ -18,6 +19,7 @@ export default function ConfiguracionScreen() {
   const [found, setFound] = useState<FoundDevice[]>([]);
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [soundsEnabled, setSoundsEnabledState] = useState(true);
   const bandMgr = useRef<BandManagerHandle | null>(null);
   const scanTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const foundRef = useRef<FoundDevice[]>([]);
@@ -34,6 +36,7 @@ export default function ConfiguracionScreen() {
       if (u) setUrl(u);
     });
     getPairedBand().then((b) => setPairedName(b?.name ?? null));
+    getSoundsEnabled().then(setSoundsEnabledState);
     return () => {
       clearScanTimer();
       bandMgr.current?.destroy();
@@ -111,6 +114,12 @@ export default function ConfiguracionScreen() {
     setPairedName(null);
   }
 
+  async function onToggleSounds() {
+    const next = !soundsEnabled;
+    setSoundsEnabledState(next);
+    await setSoundsEnabled(next);
+  }
+
   const input = {
     borderWidth: 1,
     borderColor: colors.border,
@@ -180,6 +189,20 @@ export default function ConfiguracionScreen() {
             <Text style={{ color: colors.textMuted, fontSize: 12 }}>Olvidar banda</Text>
           </Pressable>
         )}
+      </View>
+
+      <View style={{ gap: spacing.sm }}>
+        <Text style={{ color: colors.textMuted }}>Sonidos</Text>
+        <Pressable
+          testID="sounds-toggle"
+          onPress={onToggleSounds}
+          style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.md }}
+        >
+          <Text style={{ color: colors.text }}>Campana al terminar el descanso</Text>
+          <Text style={{ color: soundsEnabled ? colors.accentText : colors.textMuted }}>
+            {soundsEnabled ? "Activados" : "Desactivados"}
+          </Text>
+        </Pressable>
       </View>
 
       {status && <Text style={{ color: colors.accentText }}>{status}</Text>}
