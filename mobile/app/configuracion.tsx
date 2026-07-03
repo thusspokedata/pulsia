@@ -75,6 +75,8 @@ export default function ConfiguracionScreen() {
     foundRef.current = [];
     setScanning(true);
     if (!bandMgr.current) bandMgr.current = createBandManager();
+    // Guarda contra re-escaneo apilado: detener cualquier escaneo previo antes de arrancar.
+    bandMgr.current.stopScan();
     bandMgr.current.scan((d) => {
       setFound((prev) => {
         const next = prev.some((x) => x.id === d.id) ? prev : [...prev, d];
@@ -85,9 +87,10 @@ export default function ConfiguracionScreen() {
     clearScanTimer();
     scanTimer.current = setTimeout(() => {
       scanTimer.current = null;
+      // Siempre detenemos el escaneo y limpiamos el estado al vencer el timeout.
+      bandMgr.current?.stopScan();
+      setScanning(false);
       if (foundRef.current.length === 0) {
-        bandMgr.current?.stopScan();
-        setScanning(false);
         setScanMsg("No se encontró ninguna banda. Encendela y cerrá la app de Polar/Garmin.");
       }
     }, SCAN_TIMEOUT_MS);
@@ -117,7 +120,12 @@ export default function ConfiguracionScreen() {
   async function onToggleSounds() {
     const next = !soundsEnabled;
     setSoundsEnabledState(next);
-    await setSoundsEnabled(next);
+    try {
+      await setSoundsEnabled(next);
+    } catch {
+      // Rollback UI para no desincronizar UI↔storage si la escritura falla.
+      setSoundsEnabledState(!next);
+    }
   }
 
   const input = {
