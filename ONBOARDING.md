@@ -125,20 +125,30 @@ banda hace falta un dev client:
   serie. Verificado en dispositivo (preview build + banda Polar/Garmin).
 - **[Backlog B]** curva de HR completa (serie temporal), HRV/RR por PMD Polar (dominio estrés),
   marca de calidad de cobertura del dato. Ver spec 2026-07-03-hr-ble-banda-design.md §9.
-- **[Polish pass — pendiente, un build]** (1) BLE: pedir el permiso runtime automáticamente al
-  escanear (hoy hay que darlo a mano en Ajustes → Android 12+); (2) escaneo con feedback ("no se
-  encontró banda / error") en vez de colgarse en "Buscando"; (3) reubicar la ⚙ Configuración al
-  header (hoy se corta contra el título largo); (4) íconos de las tabs Programa/Perfil (hoy salen
-  cuadraditos: falta `tabBarIcon`); (5) **sacar el botón "Copiar a Garmin"** (ver Garmin abajo).
+- **[Polish pass + Sesión v2 — HECHO en código, pendiente build/merge]** en rama
+  `fix/mobile-acceso-configuracion` (13 commits). Polish: permiso BLE runtime automático; escaneo con
+  feedback/timeout; ⚙ Configuración al header; íconos de tabs; sin botón "Copiar a Garmin". Sesión
+  v2: ejercicio activo explícito + lista con ✓ (arregla el bug de "última serie no editable"); botones
+  ±1/±5 reps; rótulos Peso(kg)/RPE; descanso con cuenta regresiva + campana (`assets/bell.wav`) con
+  toggle "Sonidos" en Configuración (`expo-audio`).
 - **[Sub-proyecto C — experiencia de sesión y post-entrenamiento]** (orden acordado):
   - **C2 — Resumen post-entrenamiento** (primero): pantalla al Terminar entrenamiento → tiempo
-    total, promedio de pulso (de los `hrAvg` por serie), series/reps/volumen, ejercicios hechos.
+    total, promedio de pulso (de los `hrAvg` por serie), series/reps/volumen, ejercicios hechos, y
+    **% de cumplimiento del plan** (ejercicios/series realizadas vs planificadas).
   - **C3 — Mapa corporal**: silueta que resalta músculos trabajados desde `primaryMuscles` del
     catálogo (ya existe el dato). Vive dentro del resumen C2.
   - **C1 — Controles de sesión en vivo**: botón Pausar/Reanudar (el timer no cuenta el descanso del
-    baño) + descartar/eliminar la sesión en curso.
+    baño) + descartar/eliminar la sesión en curso + **indicador global de "sesión en curso / tiempo
+    corriendo"** cuando salís de la pantalla de entrenamiento (hoy solo hay el banner en Programa).
   - **C4 — Historial de sesiones** (transversal): lista de entrenamientos pasados para verlos y
     eliminarlos. Hoy se guardan/sincronizan pero no hay pantalla.
+  - **C5 — Notas de sesión → IA**: espacio de anotaciones por sesión (el campo `notes` de
+    `WorkoutSession` ya existe, sin UI). Las notas recientes deben **alimentar la generación** del
+    próximo plan (backend incluye notas + datos reales en el prompt de Claude). Se solapa con el
+    ítem de backlog "[PT agent] entrenador conversacional". Toca mobile + backend.
+  - **C6 — Entrenamiento puntual (one-off)**: generar un entreno de **un día** eligiendo músculos +
+    gym/casa (mismo cuestionario de equipo), **sin tocar el plan vigente**. Para viaje/vacaciones.
+    Nuevo flujo/endpoint de generación acotado. Toca mobile + backend.
 - **[Deployment] CI para la Pi**: `deploy.yml` (self-hosted runner en `/home/kilo/actions-runner`,
   deploy en push a `main`) + `ci.yml`. Hoy el deploy es **manual** (rsync + `docker compose up -d --build`).
 - **[Deployment] Backup de la DB de Pulsia a la pi-respaldo** (pedido del usuario, sin apuro): job
