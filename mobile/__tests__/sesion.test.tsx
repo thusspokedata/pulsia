@@ -180,6 +180,36 @@ test("tras completar la última serie el ejercicio sigue editable (no auto-avanz
   );
 });
 
+test("tap/±reps en un ejercicio ya completo no crean serie nueva (no-op)", async () => {
+  // El programa mock tiene 2 series. Completamos ambas.
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("end-set")); // serie 1
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("end-set")); // serie 2 (última) → ejercicio completo
+  await waitFor(() => screen.getByTestId("edit-reps-2"));
+  // Con el ejercicio completo y sin serie abierta, tap y ±reps son no-op.
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("reps-5"));
+  const last = mockSetActive.mock.calls.at(-1)?.[0];
+  expect(last.exercises[0].sets.length).toBe(2);
+  expect(last.exercises[0].sets.every((s: any) => s.endedAt != null)).toBe(true);
+});
+
+test("terminar con una serie abierta no deja endedAt=null en el payload", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  // Abrimos una serie (tap) pero NO la terminamos.
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
+  const done = mockEnqueue.mock.calls.at(-1)?.[0];
+  const allSets = done.exercises.flatMap((e: any) => e.sets);
+  expect(allSets.length).toBeGreaterThan(0);
+  expect(allSets.every((s: any) => s.endedAt != null)).toBe(true);
+});
+
 test("muestra el bpm en vivo en el box de HR", async () => {
   mockBpm = 80;
   await render(<SesionScreen />);

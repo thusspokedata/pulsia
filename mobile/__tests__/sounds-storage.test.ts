@@ -20,3 +20,8 @@ test("guarda y recupera el estado habilitado", async () => {
   expect(await getSoundsEnabled()).toBe(true);
   expect(await AsyncStorage.getItem("pulsia.soundsEnabled")).toBe("1");
 });
+
+test("un valor corrupto cae al default habilitado (true)", async () => {
+  await AsyncStorage.setItem("pulsia.soundsEnabled", "wat");
+  expect(await getSoundsEnabled()).toBe(true);
+});
