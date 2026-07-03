@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, Pressable, TextInput, ScrollView } from "react-native";
+import { View, Text, Pressable, TextInput, ScrollView, Alert } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import type { WorkoutSession } from "@pulsia/shared";
 import { getStoredProgram } from "../src/storage/program";
@@ -15,6 +15,8 @@ import { aggregateHr } from "../src/ble/hrAggregate";
 import { getSoundsEnabled } from "../src/storage/sounds";
 import { useAudioPlayer } from "expo-audio";
 import { colors, radius, spacing } from "../src/theme/tokens";
+import { summarize } from "../src/session/summary";
+import { SessionSummary } from "../src/components/SessionSummary";
 
 function fmt(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -50,6 +52,7 @@ export default function SesionScreen() {
   const [rpe, setRpe] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [finishError, setFinishError] = useState(false);
+  const [finishedSession, setFinishedSession] = useState<WorkoutSession | null>(null);
   const [activeOrder, setActiveOrder] = useState<number | null>(null);
   const [restUntil, setRestUntil] = useState<number | null>(null);
   const started = useRef(false);
@@ -178,6 +181,21 @@ export default function SesionScreen() {
     textAlign: "center",
   } as const;
 
+  if (finishedSession) {
+    return (
+      <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
+        <SessionSummary summary={summarize(finishedSession)} />
+        <Pressable
+          testID="summary-done"
+          onPress={() => router.replace("/")}
+          style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", marginTop: spacing.md }}
+        >
+          <Text style={{ color: "#fff" }}>Listo</Text>
+        </Pressable>
+      </ScrollView>
+    );
+  }
+
   if (!session) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}>
@@ -259,7 +277,26 @@ export default function SesionScreen() {
     }
     const url = await getBackendUrl();
     if (url) void syncPending(url); // fire-and-forget; si falla queda en la cola
-    router.replace("/");
+    // No navegamos: mostramos el resumen; "Listo" navega a la home.
+    setFinishedSession(done);
+  }
+
+  function onCancel() {
+    Alert.alert(
+      "Cancelar entrenamiento",
+      "¿Seguro que querés cancelarlo? Se perderá lo registrado.",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Sí, cancelar",
+          style: "destructive",
+          onPress: async () => {
+            await clearActiveSession();
+            router.replace("/");
+          },
+        },
+      ],
+    );
   }
 
   return (
@@ -420,6 +457,9 @@ export default function SesionScreen() {
           No se pudo guardar la sesión. Reintentá.
         </Text>
       )}
+      <Pressable testID="cancel" onPress={onCancel} style={{ alignItems: "center", padding: spacing.sm }}>
+        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Cancelar entrenamiento</Text>
+      </Pressable>
     </ScrollView>
   );
 }

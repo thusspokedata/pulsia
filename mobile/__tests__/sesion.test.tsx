@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { Alert } from "react-native";
 
 const mockReplace = jest.fn();
 jest.mock("expo-router", () => ({
@@ -70,12 +71,31 @@ test("tap incrementa las reps de la serie", async () => {
   await waitFor(() => expect(screen.getByTestId("rep-count").props.children).toBe(2));
 });
 
-test("terminar entrenamiento persiste a la cola y navega a home", async () => {
+test("terminar entrenamiento persiste a la cola y muestra el resumen (no navega hasta Listo)", async () => {
   await render(<SesionScreen />);
   await waitFor(() => screen.getByTestId("finish"));
   await fireEvent.press(screen.getByTestId("finish"));
   await waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
-  expect(mockReplace).toHaveBeenCalledWith("/");
+  // Aparece el resumen y NO se navega todavía.
+  await waitFor(() => expect(screen.getByTestId("summary")).toBeTruthy());
+  expect(mockReplace).not.toHaveBeenCalled();
+  // Recién al tocar "Listo" se navega a la home.
+  await fireEvent.press(screen.getByTestId("summary-done"));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/"));
+});
+
+test("cancelar entrenamiento confirma, navega y no encola", async () => {
+  const spy = jest.spyOn(Alert, "alert").mockImplementation((_t, _m, buttons) => {
+    // Invocamos el onPress del botón "Sí, cancelar".
+    const confirm = buttons?.find((b) => b.text === "Sí, cancelar");
+    void confirm?.onPress?.();
+  });
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("cancel"));
+  await fireEvent.press(screen.getByTestId("cancel"));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/"));
+  expect(mockEnqueue).not.toHaveBeenCalled();
+  spy.mockRestore();
 });
 
 test("sin programId guardado no arma sesión y vuelve a la home", async () => {
