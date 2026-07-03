@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, Alert } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import type { WorkoutSession } from "@pulsia/shared";
+import type { WorkoutSession, SessionExercise } from "@pulsia/shared";
 import { getStoredProgram } from "../src/storage/program";
 import { getStoredProgramId } from "../src/storage/programId";
 import { getBackendUrl } from "../src/storage/config";
 import { getActiveSession, setActiveSession, clearActiveSession } from "../src/storage/activeSession";
 import { enqueueSession } from "../src/storage/pendingSessions";
 import { syncPending } from "../src/sync/syncSessions";
-import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession } from "../src/session/engine";
+import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, discardOpenSets } from "../src/session/engine";
 import { newSessionId } from "../src/session/id";
 import { useHeartRate } from "../src/ble/useHeartRate";
 import { aggregateHr } from "../src/ble/hrAggregate";
@@ -37,12 +37,16 @@ function parseNum(text: string): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
-// Primer ejercicio no saltado con series incompletas; 0 si no hay ninguno.
-function firstIncompleteOrder(s: WorkoutSession): number {
-  const ex = s.exercises.find(
+// Primer ejercicio no saltado con series incompletas (o undefined si no hay ninguno).
+function firstIncomplete(s: WorkoutSession): SessionExercise | undefined {
+  return s.exercises.find(
     (e) => !e.skipped && e.sets.filter((x) => x.endedAt != null).length < e.planned.sets,
   );
-  return ex ? ex.order : 0;
+}
+
+// Orden del primer ejercicio incompleto; 0 si no hay ninguno.
+function firstIncompleteOrder(s: WorkoutSession): number {
+  return firstIncomplete(s)?.order ?? 0;
 }
 
 export default function SesionScreen() {
@@ -207,9 +211,7 @@ export default function SesionScreen() {
   const sess = session; // narrowed a WorkoutSession (los handlers son closures y no estrechan `session`)
   // Ejercicio activo explícito: NO auto-avanza. Al terminar la última serie el ejercicio
   // sigue activo (editable). El avance es tocar otro ejercicio en la lista de abajo.
-  const fallback = sess.exercises.find(
-    (e) => !e.skipped && e.sets.filter((s) => s.endedAt != null).length < e.planned.sets,
-  );
+  const fallback = firstIncomplete(sess);
   const current =
     activeOrder != null ? sess.exercises.find((e) => e.order === activeOrder) ?? fallback : fallback;
   const openSet = current?.sets.find((s) => s.endedAt == null);
@@ -218,6 +220,9 @@ export default function SesionScreen() {
 
   function onTap() {
     if (!current) return;
+    // Ejercicio ya completo (todas las series planificadas hechas y sin serie abierta):
+    // no crear una serie fantasma. Para corregir están las filas "Series hechas".
+    if (!openSet && doneSets >= current.planned.sets) return;
     if (!openSet) {
       setStartRef.current = Date.now();
       hr.resetSamples();
@@ -247,6 +252,8 @@ export default function SesionScreen() {
 
   function onAdjustReps(delta: number) {
     if (!current) return;
+    // Ejercicio ya completo: no-op (mismo criterio que onTap).
+    if (!openSet && doneSets >= current.planned.sets) return;
     if (!openSet) {
       setStartRef.current = Date.now();
       hr.resetSamples();
@@ -260,12 +267,18 @@ export default function SesionScreen() {
   }
 
   async function onFinish() {
-    // Cerrar una serie abierta (si la hay) para no dejar endedAt=null en el payload.
+    // Ninguna serie debe quedar con endedAt=null en el payload. Recorremos TODOS los
+    // ejercicios: si tienen alguna serie abierta, la cerramos (si el ejercicio está activo)
+    // o la descartamos (si está saltado).
     let s = sess;
-    const openEx = s.exercises.find((e) => e.sets.some((x) => x.endedAt == null));
-    if (openEx) {
-      const { hrAvg, hrMax } = aggregateHr(hr.getSamples());
-      s = endSet(s, { exerciseOrder: openEx.order, weightKg: parseNum(weight), rpe: parseNum(rpe), nowMs: Date.now(), hrAvg, hrMax });
+    const { hrAvg, hrMax } = aggregateHr(hr.getSamples());
+    for (const e of s.exercises) {
+      if (!e.sets.some((x) => x.endedAt == null)) continue;
+      if (e.skipped) {
+        s = discardOpenSets(s, { exerciseOrder: e.order });
+      } else {
+        s = endSet(s, { exerciseOrder: e.order, weightKg: parseNum(weight), rpe: parseNum(rpe), nowMs: Date.now(), hrAvg, hrMax });
+      }
     }
     const done = finishSession(s, { nowMs: Date.now() });
     try {
@@ -324,7 +337,12 @@ export default function SesionScreen() {
               <Pressable
                 key={e.order}
                 testID={`ex-item-${e.order}`}
-                onPress={() => setActiveOrder(e.order)}
+                onPress={() => {
+                  setActiveOrder(e.order);
+                  // Cortar el descanso/campana del ejercicio anterior al cambiar.
+                  setRestUntil(null);
+                  restDoneRef.current = true;
+                }}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",

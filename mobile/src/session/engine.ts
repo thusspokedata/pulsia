@@ -93,6 +93,13 @@ export function editSet(session: WorkoutSession, args: { exerciseOrder: number; 
   }));
 }
 
+export function discardOpenSets(session: WorkoutSession, args: { exerciseOrder: number }): WorkoutSession {
+  return updateExercise(session, args.exerciseOrder, (ex) => ({
+    ...ex,
+    sets: ex.sets.filter((s) => s.endedAt != null),
+  }));
+}
+
 export function skipExercise(session: WorkoutSession, args: { exerciseOrder: number }): WorkoutSession {
   return updateExercise(session, args.exerciseOrder, (ex) => ({ ...ex, skipped: true }));
 }

@@ -1,4 +1,4 @@
-import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession } from "../src/session/engine";
+import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, discardOpenSets } from "../src/session/engine";
 import type { Program } from "@pulsia/shared";
 
 const program = {
@@ -117,6 +117,21 @@ test("endSet puebla hrAvg/hrMax cuando se pasan", () => {
   const set = s.exercises[0].sets[0];
   expect(set.hrAvg).toBe(128);
   expect(set.hrMax).toBe(141);
+});
+
+test("discardOpenSets elimina las series abiertas y conserva las cerradas", () => {
+  let s = start();
+  // Serie 1: cerrada.
+  s = tapRep(s, { exerciseOrder: 0, setStartMs: 2000, nowMs: 2000 });
+  s = endSet(s, { exerciseOrder: 0, weightKg: 40, rpe: 8, nowMs: 5000 });
+  // Serie 2: abierta (sin endSet).
+  s = tapRep(s, { exerciseOrder: 0, setStartMs: 6000, nowMs: 6000 });
+  expect(s.exercises[0].sets.length).toBe(2);
+  s = discardOpenSets(s, { exerciseOrder: 0 });
+  expect(s.exercises[0].sets.length).toBe(1);
+  expect(s.exercises[0].sets[0].endedAt).toBe(5000);
+  // No toca otros ejercicios.
+  expect(s.exercises[1].sets).toEqual([]);
 });
 
 test("endSet sin HR deja hrAvg/hrMax en null (retrocompat)", () => {
