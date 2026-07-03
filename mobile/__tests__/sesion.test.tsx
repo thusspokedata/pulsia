@@ -36,9 +36,23 @@ const program = {
 };
 jest.mock("../src/storage/program", () => ({ getStoredProgram: async () => program }));
 
+let mockHrSamples: { t: number; bpm: number }[] = [];
+let mockBpm: number | null = null;
+jest.mock("../src/ble/useHeartRate", () => ({
+  useHeartRate: () => ({
+    status: "connected",
+    bpm: mockBpm,
+    connect: jest.fn(),
+    disconnect: jest.fn(),
+    reconnect: jest.fn(),
+    getSamples: () => mockHrSamples,
+    resetSamples: jest.fn(),
+  }),
+}));
+
 import SesionScreen from "../app/sesion";
 
-beforeEach(() => { mockActive = null; mockProgramId = "22222222-2222-4222-8222-222222222222"; jest.clearAllMocks(); });
+beforeEach(() => { mockActive = null; mockProgramId = "22222222-2222-4222-8222-222222222222"; mockHrSamples = []; mockBpm = null; jest.clearAllMocks(); });
 
 test("arma la sesión del día y muestra el ejercicio actual", async () => {
   await render(<SesionScreen />);
@@ -110,4 +124,24 @@ test("permite corregir las reps de una serie ya terminada", async () => {
       }),
     ),
   );
+});
+
+test("muestra el bpm en vivo en el box de HR", async () => {
+  mockBpm = 80;
+  await render(<SesionScreen />);
+  await waitFor(() => expect(screen.getByTestId("hr-value").props.children).toBe(80));
+});
+
+test("al terminar la serie guarda hrAvg/hrMax agregados de los samples", async () => {
+  mockHrSamples = [{ t: 1, bpm: 78 }, { t: 2, bpm: 84 }];
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => {
+    const last = mockSetActive.mock.calls.at(-1)?.[0];
+    const set = last.exercises[0].sets[0];
+    expect(set.hrAvg).toBe(81); // round((78+84)/2)
+    expect(set.hrMax).toBe(84);
+  });
 });

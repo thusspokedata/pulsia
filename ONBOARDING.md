@@ -91,6 +91,11 @@ cd mobile && bunx eas-cli build -p android --profile preview   # cuenta Expo: be
 En la app: Configuración → `http://192.168.178.47:3011` → Guardar ("Conexión OK") → API key →
 Guardar → Perfil → Generar (~2 min).
 
+**Dev build (necesario para BLE / sub-proyecto B):** el APK `preview` no incluye BLE. Para HR por
+banda hace falta un dev client:
+`cd mobile && bunx eas-cli build -p android --profile development` → instalar el APK →
+`bunx expo start --dev-client`. Emparejar la banda en Configuración → "Banda de pulso".
+
 ## 6. Convenciones (IMPORTANTE)
 
 - **Flujo por PRs revisados por CodeRabbit.** Rama por PR; NUNCA commitear features directo a `main`.
@@ -116,8 +121,10 @@ Guardar → Perfil → Generar (~2 min).
 
 ## 8. Backlog (pendientes / ideas)
 
-- **[Sub-proyecto B] HR banda Polar (BLE)** → dev build + `react-native-ble-plx`, asociar HR a la
-  serie activa (llena `hr_avg`/`hr_max`). El hueco en la UI ya está.
+- **[Sub-proyecto B — HECHO en código, pendiente verificación en dispositivo]** HR en vivo por banda
+  BLE (perfil estándar 0x180D), avg/max por serie. Falta: dev build + prueba con banda física.
+- **[Backlog B]** curva de HR completa (serie temporal), HRV/RR por PMD Polar (dominio estrés),
+  marca de calidad de cobertura del dato. Ver spec 2026-07-03-hr-ble-banda-design.md §9.
 - **[Deployment] CI para la Pi**: `deploy.yml` (self-hosted runner en `/home/kilo/actions-runner`,
   deploy en push a `main`) + `ci.yml`. Hoy el deploy es **manual** (rsync + `docker compose up -d --build`).
 - **[Deployment] Backup de la DB de Pulsia a la pi-respaldo** (pedido del usuario, sin apuro): job
