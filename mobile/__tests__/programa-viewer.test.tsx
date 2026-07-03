@@ -3,7 +3,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import ProgramaScreen from "../app/(tabs)/index";
 
 jest.mock("expo-router", () => ({ Link: ({ children }: any) => children, useFocusEffect: (cb: any) => cb() }));
-jest.mock("expo-clipboard", () => ({ setStringAsync: jest.fn() }));
 
 const program = {
   name: "Plan Hipertrofia",
