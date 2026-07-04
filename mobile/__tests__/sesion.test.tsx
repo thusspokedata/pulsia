@@ -15,6 +15,15 @@ jest.mock("../src/storage/activeSession", () => ({
   clearActiveSession: async () => { mockActive = null; },
 }));
 
+const mockSetPause = jest.fn();
+const mockClearPause = jest.fn();
+let mockPauseState: any = null;
+jest.mock("../src/storage/pauseState", () => ({
+  getPauseState: async () => mockPauseState,
+  setPauseState: async (s: any) => { mockPauseState = s; mockSetPause(s); },
+  clearPauseState: async () => { mockPauseState = null; mockClearPause(); },
+}));
+
 const mockEnqueue = jest.fn();
 jest.mock("../src/storage/pendingSessions", () => ({
   enqueueSession: async (s: any) => mockEnqueue(s),
@@ -23,7 +32,8 @@ jest.mock("../src/storage/pendingSessions", () => ({
 const mockSync = jest.fn(async (..._a: any[]) => 0);
 jest.mock("../src/sync/syncSessions", () => ({ syncPending: (...a: any[]) => mockSync(...a) }));
 
-jest.mock("expo-audio", () => ({ useAudioPlayer: () => ({ seekTo: jest.fn(), play: jest.fn() }) }));
+const mockBellPlay = jest.fn();
+jest.mock("expo-audio", () => ({ useAudioPlayer: () => ({ seekTo: jest.fn(), play: (...a: any[]) => mockBellPlay(...a) }) }));
 
 jest.mock("../src/session/id", () => ({ newSessionId: () => "11111111-1111-4111-8111-111111111111" }));
 jest.mock("../src/storage/config", () => ({ getBackendUrl: async () => "http://backend.test" }));
@@ -55,7 +65,7 @@ jest.mock("../src/ble/useHeartRate", () => ({
 
 import SesionScreen from "../app/sesion";
 
-beforeEach(() => { mockActive = null; mockProgramId = "22222222-2222-4222-8222-222222222222"; mockHrSamples = []; mockBpm = null; jest.clearAllMocks(); });
+beforeEach(() => { mockActive = null; mockPauseState = null; mockProgramId = "22222222-2222-4222-8222-222222222222"; mockHrSamples = []; mockBpm = null; jest.clearAllMocks(); });
 
 test("arma la sesión del día y muestra el ejercicio actual", async () => {
   await render(<SesionScreen />);
@@ -208,6 +218,131 @@ test("terminar con una serie abierta no deja endedAt=null en el payload", async 
   const allSets = done.exercises.flatMap((e: any) => e.sets);
   expect(allSets.length).toBeGreaterThan(0);
   expect(allSets.every((s: any) => s.endedAt != null)).toBe(true);
+});
+
+test("el botón pausar/reanudar existe y alterna su rótulo", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("pause-toggle"));
+  // Rótulo inicial: "Pausar".
+  expect(screen.getByText("Pausar")).toBeTruthy();
+  await fireEvent.press(screen.getByTestId("pause-toggle"));
+  // Al pausar: aparece "⏸ Pausado" y el botón pasa a "Reanudar".
+  await waitFor(() => expect(screen.getByText("Reanudar")).toBeTruthy());
+  expect(screen.getByText("⏸ Pausado")).toBeTruthy();
+  // Reanudar vuelve al rótulo original.
+  await fireEvent.press(screen.getByTestId("pause-toggle"));
+  await waitFor(() => expect(screen.getByText("Pausar")).toBeTruthy());
+});
+
+test("al pausar se persiste el estado (setPauseState con pausedAt); al reanudar pausedAt es null", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("pause-toggle"));
+  await fireEvent.press(screen.getByTestId("pause-toggle")); // pausa
+  await waitFor(() => expect(mockSetPause).toHaveBeenCalled());
+  const paused = mockSetPause.mock.calls.at(-1)?.[0];
+  expect(paused.sessionId).toBe("11111111-1111-4111-8111-111111111111");
+  expect(typeof paused.pausedAt).toBe("number");
+  // Reanudar: pausedAt vuelve a null.
+  await fireEvent.press(screen.getByTestId("pause-toggle"));
+  await waitFor(() => {
+    const resumed = mockSetPause.mock.calls.at(-1)?.[0];
+    expect(resumed.pausedAt).toBeNull();
+  });
+});
+
+test("terminar limpia el estado de pausa persistido", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("finish"));
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => expect(mockClearPause).toHaveBeenCalled());
+});
+
+test("cancelar limpia el estado de pausa persistido", async () => {
+  const spy = jest.spyOn(Alert, "alert").mockImplementation((_t, _m, buttons) => {
+    const confirm = buttons?.find((b) => b.text === "Sí, cancelar");
+    void confirm?.onPress?.();
+  });
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("cancel"));
+  await fireEvent.press(screen.getByTestId("cancel"));
+  await waitFor(() => expect(mockClearPause).toHaveBeenCalled());
+  spy.mockRestore();
+});
+
+test("al remontar con pausa persistida (pausedAt no nulo) el total al terminar excluye ese tiempo", async () => {
+  const t0 = 1_000_000;
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0);
+  // Sesión activa ya en curso (arrancó en t0) con pausa persistida: 2s acumulados + pausa en
+  // curso desde t0 (pausedAt = t0). Simula un remontaje mientras estaba pausada.
+  mockActive = {
+    id: "11111111-1111-4111-8111-111111111111",
+    programId: "22222222-2222-4222-8222-222222222222",
+    weekNumber: 1, dayLabel: "Día 1", location: "gym",
+    startedAt: t0, endedAt: null, totalDurationMs: null, notes: "", exercises: [],
+  };
+  mockPauseState = { sessionId: "11111111-1111-4111-8111-111111111111", pausedMs: 2_000, pausedAt: t0 };
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("finish"));
+  // Reanudar en t0 + 10s → la pausa en curso duró 10s → total pausado 2s + 10s = 12s.
+  spy.mockReturnValue(t0 + 10_000);
+  await fireEvent.press(screen.getByTestId("pause-toggle")); // reanuda
+  // Terminar en t0 + 30s → bruto 30s, menos 12s pausados = 18s.
+  spy.mockReturnValue(t0 + 30_000);
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
+  const done = mockEnqueue.mock.calls.at(-1)?.[0];
+  expect(done.totalDurationMs).toBe(18_000);
+  spy.mockRestore();
+});
+
+test("pausar durante el descanso lo congela y no dispara la campana; al reanudar retoma", async () => {
+  const t0 = 1_000_000;
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0);
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  // Terminar una serie arranca el descanso (restSeconds = 90 → 90s).
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => screen.getByTestId("rest-timer"));
+  // Pausar a los 10s: quedan 80s de descanso, el contador se congela.
+  spy.mockReturnValue(t0 + 10_000);
+  await fireEvent.press(screen.getByTestId("pause-toggle"));
+  // El rest-timer desaparece mientras está pausado (restUntil = null).
+  await waitFor(() => expect(screen.queryByTestId("rest-timer")).toBeNull());
+  // Avanza el reloj MUCHO más allá del descanso original mientras está pausado: la campana NO suena.
+  spy.mockReturnValue(t0 + 200_000);
+  expect(mockBellPlay).not.toHaveBeenCalled();
+  // Reanudar: el descanso retoma con los 80s que le quedaban (nuevo restUntil ~ ahora + 80s).
+  await fireEvent.press(screen.getByTestId("pause-toggle"));
+  await waitFor(() => screen.getByTestId("rest-timer"));
+  // La campana sigue sin haber sonado (aún queda descanso).
+  expect(mockBellPlay).not.toHaveBeenCalled();
+  spy.mockRestore();
+});
+
+test("el total al terminar excluye el tiempo pausado", async () => {
+  // Controlamos el reloj para medir la pausa determinísticamente.
+  const t0 = 1_000_000;
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0);
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("pause-toggle"));
+  // Pausar en t0 + 5s.
+  spy.mockReturnValue(t0 + 5_000);
+  await fireEvent.press(screen.getByTestId("pause-toggle")); // pausa arranca
+  // Reanudar en t0 + 8s → 3s pausados.
+  spy.mockReturnValue(t0 + 8_000);
+  await fireEvent.press(screen.getByTestId("pause-toggle")); // pausa termina (3s acumulados)
+  // Terminar en t0 + 20s → total bruto 20s, menos 3s pausados = 17s.
+  spy.mockReturnValue(t0 + 20_000);
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
+  const done = mockEnqueue.mock.calls.at(-1)?.[0];
+  // La sesión arrancó en el primer Date.now() (t0), total = 20s - 3s pausados.
+  expect(done.totalDurationMs).toBe(17_000);
+  spy.mockRestore();
 });
 
 test("muestra el bpm en vivo en el box de HR", async () => {
