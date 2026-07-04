@@ -42,3 +42,13 @@ test("vacío → { data: [], hasFullBody: false }", () => {
 test("MUSCLE_MAP mapea full_body a null", () => {
   expect(MUSCLE_MAP.full_body).toBeNull();
 });
+
+test("forearms → slug forearm (secondary común en el catálogo)", () => {
+  expect(MUSCLE_MAP.forearms).toEqual(["forearm"]);
+  const { data } = buildBodyData([], ["forearms"]);
+  expect(data).toEqual([{ slug: "forearm", intensity: 2 }]);
+});
+
+test("MUSCLE_MAP cubre los 12 grupos del enum", () => {
+  expect(Object.keys(MUSCLE_MAP).length).toBe(12);
+});

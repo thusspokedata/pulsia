@@ -1,6 +1,10 @@
+import type { MuscleGroup } from "@pulsia/shared";
+
 // Mapeo de músculos del catálogo (@pulsia/shared) a slugs de react-native-body-highlighter.
 // PURO y testeable. full_body → null: no localizable, se muestra como chip "Cuerpo completo".
-export const MUSCLE_MAP: Record<string, string[] | null> = {
+// Tipado como Record exhaustivo sobre MuscleGroup: TS obliga a cubrir TODOS los grupos del enum
+// (12), así no se escapa ninguno (como pasó con `forearms`).
+export const MUSCLE_MAP: Record<MuscleGroup, string[] | null> = {
   abs: ["abs"],
   back: ["upper-back", "lower-back", "trapezius"],
   glutes: ["gluteal"],
@@ -9,8 +13,9 @@ export const MUSCLE_MAP: Record<string, string[] | null> = {
   quads: ["quadriceps"],
   hamstrings: ["hamstring"],
   triceps: ["triceps"],
-  calves: ["calves"],
   biceps: ["biceps"],
+  forearms: ["forearm"],
+  calves: ["calves"],
   full_body: null,
 };
 
@@ -31,7 +36,7 @@ export function buildBodyData(
 
   const add = (muscles: string[], intensity: number) => {
     for (const m of muscles) {
-      const slugs = MUSCLE_MAP[m];
+      const slugs = MUSCLE_MAP[m as MuscleGroup];
       if (slugs == null) continue; // sin match o full_body
       for (const slug of slugs) {
         const prev = bySlug.get(slug);

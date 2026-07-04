@@ -20,8 +20,8 @@ Silueta humana (frente + espalda) que resalta los músculos trabajados en la ses
 ## 2. Datos
 
 El catálogo (`@pulsia/shared`, `getExerciseById`) tiene `primaryMuscles` **y** `secondaryMuscles` por
-ejercicio. Valores posibles (11): `abs, back, full_body, glutes, shoulders, chest, quads, hamstrings,
-triceps, calves, biceps`.
+ejercicio. Valores posibles (12): `abs, back, full_body, glutes, shoulders, chest, quads, hamstrings,
+triceps, forearms, calves, biceps`. `MuscleGroup` de @pulsia/shared es la fuente exhaustiva.
 
 Extender `summarize` (`mobile/src/session/summary.ts`) para exponer, sobre los ejercicios con series
 terminadas:
