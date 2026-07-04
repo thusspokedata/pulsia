@@ -137,3 +137,37 @@ export function finishSession(session: WorkoutSession, args: { nowMs: number; pa
 export function setNotes(session: WorkoutSession, notes: string): WorkoutSession {
   return { ...session, notes };
 }
+
+export function substituteExercise(
+  session: WorkoutSession,
+  args: { order: number; newCatalogId: string; newGarminName: string; note: string },
+): WorkoutSession {
+  return {
+    ...session,
+    exercises: session.exercises.map((e) =>
+      e.order === args.order
+        ? { ...e, catalogId: args.newCatalogId, garminName: args.newGarminName, note: args.note, substitutedFromId: e.substitutedFromId ?? e.catalogId }
+        : e,
+    ),
+  };
+}
+
+export function substituteInProgram(
+  program: Program,
+  oldCatalogId: string,
+  next: { catalogId: string; garminName: string },
+  note: string,
+): Program {
+  return {
+    ...program,
+    weeks: program.weeks.map((w) => ({
+      ...w,
+      workouts: w.workouts.map((wo) => ({
+        ...wo,
+        exercises: wo.exercises.map((e) =>
+          e.catalogId === oldCatalogId ? { ...e, catalogId: next.catalogId, garminName: next.garminName, notes: note } : e,
+        ),
+      })),
+    })),
+  };
+}
