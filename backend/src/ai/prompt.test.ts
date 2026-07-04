@@ -37,3 +37,14 @@ test("no incluye las líneas antropométricas cuando faltan", () => {
   expect(prompt).not.toContain("Edad:");
   expect(prompt).not.toContain("Peso:");
 });
+
+test("incluye el bloque de historial cuando se pasa historySummary", () => {
+  const p = buildGenerationPrompt(profile, "2026-07-01 — Día 1 (gym)\n  - Bench: 40×10@8");
+  expect(p).toContain("Historial reciente");
+  expect(p).toContain("40×10@8");
+});
+
+test("sin historySummary el prompt no incluye el bloque", () => {
+  const p = buildGenerationPrompt(profile);
+  expect(p).not.toContain("Historial reciente");
+});

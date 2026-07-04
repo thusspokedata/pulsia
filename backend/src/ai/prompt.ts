@@ -1,6 +1,6 @@
 import { catalogForEquipment, type TrainingProfile, type Equipment } from "@pulsia/shared";
 
-export function buildGenerationPrompt(profile: TrainingProfile): string {
+export function buildGenerationPrompt(profile: TrainingProfile, historySummary?: string): string {
   const allEquipment = Array.from(
     new Set<Equipment>([...profile.gymEquipment, ...profile.homeEquipment]),
   );
@@ -31,6 +31,13 @@ export function buildGenerationPrompt(profile: TrainingProfile): string {
     "3. Aplicá progresión semana a semana (cargas/series/reps).",
     "4. Respetá las limitaciones del atleta.",
     "5. Generá un programa de 2 semanas, con un máximo de 5 ejercicios por día.",
+    ...(historySummary && historySummary.trim()
+      ? [
+          "",
+          "Historial reciente del atleta (usalo para ajustar cargas, volumen y ejercicios; respetá las notas y sustituciones — el atleta NO puede hacer los ejercicios sustituidos):",
+          historySummary,
+        ]
+      : []),
     "Devolvé el resultado llamando a la herramienta provista.",
   ].join("\n");
 }
