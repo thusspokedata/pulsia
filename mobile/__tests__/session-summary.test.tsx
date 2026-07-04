@@ -2,6 +2,12 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react-nativ
 import { SessionSummary } from "../src/components/SessionSummary";
 import type { SessionSummary as SessionSummaryData } from "../src/session/summary";
 
+// Mock del componente nativo (SVG) para no cargar react-native-svg en jest.
+jest.mock("react-native-body-highlighter", () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
 const summary: SessionSummaryData = {
   dayLabel: "Día 1: Pecho",
   startedAt: 1782900000000,
@@ -23,6 +29,8 @@ const summary: SessionSummaryData = {
     { order: 0, garminName: "Barbell Bench Press", plannedSets: 3, doneSets: 2, completed: false, reps: 18, volumeKg: 736 },
   ],
   perMuscle: [{ muscle: "chest", sets: 2 }],
+  primaryMuscles: ["chest"],
+  secondaryMuscles: ["triceps", "shoulders"],
   perSet: [
     { setNumber: 1, exerciseName: "Barbell Bench Press", durationMs: 3000, restMs: 1000, reps: 10, weightKg: 40, volumeKg: 400 },
   ],
@@ -35,6 +43,11 @@ test("muestra % cumplimiento, volumen y avg HR", async () => {
   expect(screen.getByTestId("summary-volume")).toBeTruthy();
   expect(screen.getByTestId("summary-avghr")).toBeTruthy();
   expect(screen.getByText("50%")).toBeTruthy();
+});
+
+test("renderiza el mapa corporal (muscle-map) en vez de la lista por músculo", async () => {
+  await render(<SessionSummary summary={summary} />);
+  expect(screen.getByTestId("muscle-map")).toBeTruthy();
 });
 
 test("la tabla por serie está colapsada por defecto y se abre con toggle-sets", async () => {

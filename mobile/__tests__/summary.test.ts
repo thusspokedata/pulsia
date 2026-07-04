@@ -174,6 +174,48 @@ test("perMuscle cuenta series por músculo primario vía catálogo, ordenado des
   ]);
 });
 
+test("primaryMuscles/secondaryMuscles: músculos distintos de series terminadas vía catálogo", () => {
+  // bench: primary chest, secondary triceps/shoulders. row: primary back, secondary biceps.
+  const bench = exercise({
+    catalogId: "barbell_bench_press",
+    garminName: "Barbell Bench Press",
+    order: 0,
+    planned: { sets: 1, reps: "8", targetLoad: "x", restSeconds: 60 },
+    sets: [setLog({ setNumber: 1, startedAt: 2000, endedAt: 3000, durationMs: 1000, reps: 8, weightKg: 40 })],
+  });
+  const row = exercise({
+    catalogId: "barbell_row",
+    garminName: "Barbell Row",
+    order: 1,
+    planned: { sets: 1, reps: "10", targetLoad: "x", restSeconds: 60 },
+    sets: [setLog({ setNumber: 1, startedAt: 4000, endedAt: 5000, durationMs: 1000, reps: 10, weightKg: 50 })],
+  });
+  const s = summarize(session({ exercises: [bench, row], endedAt: 6000, totalDurationMs: 5000 }));
+  expect([...s.primaryMuscles].sort()).toEqual(["back", "chest"]);
+  expect([...s.secondaryMuscles].sort()).toEqual(["biceps", "shoulders", "triceps"]);
+});
+
+test("primaryMuscles/secondaryMuscles ignoran ejercicios sin series terminadas o sin match", () => {
+  // bench sin series terminadas (sets vacíos) + unknown con serie => nada.
+  const benchNoDone = exercise({
+    catalogId: "barbell_bench_press",
+    garminName: "Barbell Bench Press",
+    order: 0,
+    planned: { sets: 1, reps: "8", targetLoad: "x", restSeconds: 60 },
+    sets: [],
+  });
+  const unknown = exercise({
+    catalogId: "no_existe_en_catalogo",
+    garminName: "Mystery Move",
+    order: 1,
+    planned: { sets: 1, reps: "8", targetLoad: "x", restSeconds: 60 },
+    sets: [setLog({ setNumber: 1, startedAt: 2000, endedAt: 3000, durationMs: 1000, reps: 8, weightKg: 40 })],
+  });
+  const s = summarize(session({ exercises: [benchNoDone, unknown], endedAt: 4000, totalDurationMs: 3000 }));
+  expect(s.primaryMuscles).toEqual([]);
+  expect(s.secondaryMuscles).toEqual([]);
+});
+
 test("perMuscle ignora ejercicios sin match en el catálogo", () => {
   const unknown = exercise({
     catalogId: "no_existe_en_catalogo",
@@ -218,6 +260,8 @@ test("sesión sin series: totales en 0 y campos null donde aplica", () => {
   expect(s.avgHr).toBeNull();
   expect(s.maxHr).toBeNull();
   expect(s.perMuscle).toEqual([]);
+  expect(s.primaryMuscles).toEqual([]);
+  expect(s.secondaryMuscles).toEqual([]);
   expect(s.perSet).toEqual([]);
   expect(s.completionPct).toBe(0); // done 0 / planned 3
 });
