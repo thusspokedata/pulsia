@@ -39,3 +39,5 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # DEBUG temporal: exponer el output real de la SDK para ver el error de auth.
+          show_full_output: true
