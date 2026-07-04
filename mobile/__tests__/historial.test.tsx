@@ -4,6 +4,12 @@ import HistorialScreen from "../app/(tabs)/historial";
 import { getSessions, getSessionById, deleteSessionById } from "../src/api/sessions";
 import type { WorkoutSession } from "@pulsia/shared";
 
+// Mock del componente nativo (SVG) para no cargar react-native-svg en jest.
+jest.mock("react-native-body-highlighter", () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
 const mockSessionA: WorkoutSession = {
   id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   programId: "22222222-2222-4222-8222-222222222222",

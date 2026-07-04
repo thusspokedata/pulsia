@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import type { SessionSummary as SessionSummaryData } from "../session/summary";
 import { colors, radius, spacing } from "../theme/tokens";
+import { MuscleMap } from "./MuscleMap";
 
 function fmt(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -86,16 +87,11 @@ export function SessionSummary({ summary }: { summary: SessionSummaryData }) {
         </View>
       </View>
 
-      {/* Por músculo */}
-      {summary.perMuscle.length > 0 ? (
+      {/* Mapa corporal (músculos trabajados) */}
+      {summary.primaryMuscles.length > 0 || summary.secondaryMuscles.length > 0 ? (
         <View style={{ gap: spacing.xs }}>
-          <Text style={{ color: colors.textMuted, fontSize: 12 }}>Por músculo</Text>
-          {summary.perMuscle.map((m) => (
-            <View key={m.muscle} style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ color: colors.text, fontSize: 13 }}>{m.muscle}</Text>
-              <Text style={{ color: colors.textMuted, fontSize: 13 }}>{m.sets} series</Text>
-            </View>
-          ))}
+          <Text style={{ color: colors.textMuted, fontSize: 12 }}>Músculos trabajados</Text>
+          <MuscleMap primary={summary.primaryMuscles} secondary={summary.secondaryMuscles} />
         </View>
       ) : null}
 

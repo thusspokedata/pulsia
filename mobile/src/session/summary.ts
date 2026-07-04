@@ -45,6 +45,8 @@ export interface SessionSummary {
   maxHr: number | null;
   perExercise: ExerciseSummary[];
   perMuscle: MuscleVolume[];
+  primaryMuscles: string[]; // músculos primarios distintos de ejercicios con series terminadas
+  secondaryMuscles: string[]; // músculos secundarios distintos de ejercicios con series terminadas
   perSet: SetRow[];
 }
 
@@ -133,6 +135,20 @@ export function summarize(session: WorkoutSession): SessionSummary {
     .map(([muscle, sets]) => ({ muscle, sets }))
     .sort((a, b) => b.sets - a.sets);
 
+  // primaryMuscles/secondaryMuscles: músculos distintos (via catálogo) de ejercicios con series
+  // terminadas. Orden de primera aparición, sin duplicados.
+  const primarySet = new Set<string>();
+  const secondarySet = new Set<string>();
+  for (const ex of session.exercises) {
+    if (doneSetsOf(ex).length === 0) continue;
+    const cat = getExerciseById(ex.catalogId);
+    if (!cat) continue;
+    for (const m of cat.primaryMuscles ?? []) primarySet.add(m);
+    for (const m of cat.secondaryMuscles ?? []) secondarySet.add(m);
+  }
+  const primaryMuscles = [...primarySet];
+  const secondaryMuscles = [...secondarySet];
+
   // perSet: rest = próxima.startedAt - esta.endedAt (>= 0); null en la última.
   const perSet: SetRow[] = flat.map(({ set, garminName }, i) => {
     const next = flat[i + 1];
@@ -169,6 +185,8 @@ export function summarize(session: WorkoutSession): SessionSummary {
     maxHr,
     perExercise,
     perMuscle,
+    primaryMuscles,
+    secondaryMuscles,
     perSet,
   };
 }
