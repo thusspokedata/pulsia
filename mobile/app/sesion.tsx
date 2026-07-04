@@ -6,6 +6,7 @@ import { getStoredProgram } from "../src/storage/program";
 import { getStoredProgramId } from "../src/storage/programId";
 import { getBackendUrl } from "../src/storage/config";
 import { getActiveSession, setActiveSession, clearActiveSession } from "../src/storage/activeSession";
+import { getPauseState, setPauseState, clearPauseState } from "../src/storage/pauseState";
 import { enqueueSession } from "../src/storage/pendingSessions";
 import { syncPending } from "../src/sync/syncSessions";
 import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets } from "../src/session/engine";
@@ -62,6 +63,7 @@ export default function SesionScreen() {
   const [paused, setPaused] = useState(false);
   const pausedMsRef = useRef(0); // tiempo pausado acumulado (ms)
   const pauseStartedRef = useRef(0); // Date.now() del inicio de la pausa en curso
+  const restRemainingRef = useRef<number | null>(null); // ms restantes de descanso congelados al pausar
   const started = useRef(false);
   const setStartRef = useRef(Date.now());
   const mounted = useRef(true);
@@ -106,6 +108,20 @@ export default function SesionScreen() {
             active.location === wantLocation &&
             (wantWeek == null || active.weekNumber === wantWeek));
         if (matches) {
+          // Restaurar el estado de pausa persistido (sobrevive remontaje / reinicio de app):
+          // si no, el tiempo fuera de la pantalla se contaría como entrenamiento activo.
+          const ps = await getPauseState();
+          if (!mounted.current) return;
+          if (ps && ps.sessionId === active.id) {
+            pausedMsRef.current = ps.pausedMs;
+            if (ps.pausedAt != null) {
+              // La sesión quedó pausada: el tiempo desde pausedAt hasta ahora cuenta como pausa.
+              pauseStartedRef.current = ps.pausedAt;
+              setPaused(true);
+            } else {
+              setPaused(false);
+            }
+          }
           setSession(active);
           setActiveOrder(firstIncompleteOrder(active));
           return;
@@ -275,10 +291,24 @@ export default function SesionScreen() {
       // Reanudar: acumular la duración de la pausa en curso.
       pausedMsRef.current += now - pauseStartedRef.current;
       setPaused(false);
+      // Retomar el descanso con lo que le quedaba (el contador estaba congelado).
+      if (restRemainingRef.current != null) {
+        restDoneRef.current = false; // permitir que la campana suene una vez al cruzar 0
+        setRestUntil(now + restRemainingRef.current);
+        restRemainingRef.current = null;
+      }
+      void setPauseState({ sessionId: sess.id, pausedMs: pausedMsRef.current, pausedAt: null });
     } else {
       // Pausar: marcar el inicio de la pausa.
       pauseStartedRef.current = now;
       setPaused(true);
+      // Congelar el descanso activo: guardar lo que resta y frenar el contador (así la campana
+      // no dispara mientras está pausado).
+      if (restUntil != null && restUntil > now) {
+        restRemainingRef.current = restUntil - now;
+        setRestUntil(null);
+      }
+      void setPauseState({ sessionId: sess.id, pausedMs: pausedMsRef.current, pausedAt: now });
     }
   }
 
@@ -293,6 +323,7 @@ export default function SesionScreen() {
     try {
       await enqueueSession(done);
       await clearActiveSession();
+      await clearPauseState();
     } catch {
       if (mounted.current) setFinishError(true);
       return; // no navegamos; la sesión sigue en activeSession para reintentar
@@ -314,6 +345,7 @@ export default function SesionScreen() {
           style: "destructive",
           onPress: async () => {
             await clearActiveSession();
+            await clearPauseState();
             router.replace("/");
           },
         },
