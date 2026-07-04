@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router } from "expo-router";
 import PerfilScreen from "../app/(tabs)/perfil";
 
 // expo-router no se puede importar de verdad bajo jest (getDevServer crashea con scriptURL null).
@@ -27,4 +28,11 @@ test("guarda la edad opcional cuando se ingresa", async () => {
     const p = JSON.parse((await AsyncStorage.getItem("pulsia.profile")) as string);
     expect(p.age).toBe(34);
   });
+});
+
+test("el link de memoria navega a /memoria", async () => {
+  await render(<PerfilScreen />);
+  await waitFor(() => screen.getByTestId("perfil-memoria-link"));
+  await fireEvent.press(screen.getByTestId("perfil-memoria-link"));
+  expect(router.push).toHaveBeenCalledWith("/memoria");
 });

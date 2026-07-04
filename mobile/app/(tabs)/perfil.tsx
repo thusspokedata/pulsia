@@ -101,6 +101,14 @@ export default function PerfilScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
+      <Pressable
+        testID="perfil-memoria-link"
+        onPress={() => router.push("/memoria")}
+        style={{ alignItems: "center", paddingVertical: spacing.sm }}
+      >
+        <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: "600" }}>Qué sabe la IA de mí →</Text>
+      </Pressable>
+
       <View><Text style={label}>Experiencia</Text><ChipGroup single options={EXPERIENCE} selected={[experience]} onChange={(v) => setExperience(v[0])} /></View>
       <View><Text style={label}>Objetivo</Text><ChipGroup single options={GOAL} selected={[goal]} onChange={(v) => setGoal(v[0])} /></View>
       <View style={{ flexDirection: "row", gap: spacing.md }}>
