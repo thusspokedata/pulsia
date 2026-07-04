@@ -96,6 +96,7 @@ export default function HistorialScreen() {
     if (!url || !selected) return;
     const updated = { ...selected, notes: detailNotes };
     setSelected(updated);
+    setDetailError(null); // limpiar cualquier error previo antes de reintentar
     try {
       await putSession(url, updated);
     } catch {
@@ -134,6 +135,7 @@ export default function HistorialScreen() {
           <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: "600" }}>← Volver al historial</Text>
         </Pressable>
         <NotesEditor value={detailNotes} onChangeText={setDetailNotes} onBlur={saveDetailNotes} />
+        {detailError && <Text testID="hist-detail-error" style={{ color: colors.danger, fontSize: 12 }}>{detailError}</Text>}
         <SessionSummary summary={summarize(selected)} />
       </ScrollView>
     );

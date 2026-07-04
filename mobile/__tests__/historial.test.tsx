@@ -166,3 +166,23 @@ test("editar la nota en el detalle del historial la guarda con putSession", asyn
       expect.objectContaining({ id: mockSessionA.id, notes: "revisar técnica de press" })),
   );
 });
+
+test("un guardado de nota que falla muestra el error, y un guardado exitoso posterior lo limpia", async () => {
+  await render(<HistorialScreen />);
+  await waitFor(() => expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy());
+  await fireEvent.press(screen.getByTestId(`hist-item-${mockSessionA.id}`));
+  const input = await screen.findByTestId("notes-input");
+
+  // 1) El guardado falla → aparece el cartel de error.
+  (putSession as jest.Mock).mockRejectedValueOnce(new Error("boom"));
+  await fireEvent.changeText(input, "nota 1");
+  await fireEvent(input, "blur");
+  await waitFor(() =>
+    expect(screen.getByTestId("hist-detail-error").props.children).toBe("No se pudo guardar la nota"),
+  );
+
+  // 2) Un guardado exitoso posterior limpia el cartel.
+  await fireEvent.changeText(input, "nota 2");
+  await fireEvent(input, "blur");
+  await waitFor(() => expect(screen.queryByTestId("hist-detail-error")).toBeNull());
+});
