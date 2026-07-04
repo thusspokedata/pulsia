@@ -29,14 +29,23 @@ test("refreshMemory hace POST a /memory/refresh y devuelve el content actualizad
   expect(result).toBe("actualizada");
 });
 
-test("refreshMemory usa timeout de 60s", async () => {
-  const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ content: "ok" }) });
-  global.fetch = fetchMock as any;
-  await refreshMemory(URL);
-  const [, init] = fetchMock.mock.calls[0];
-  // Verificamos que se pasó el timeoutMs; no podemos acceder directamente,
-  // pero la implementación debe pasar 60000 a apiFetch.
-  expect(init).toBeDefined();
+test("refreshMemory aborta a los 60s (no a los 15s por defecto)", async () => {
+  jest.useFakeTimers();
+  const abortSpy = jest.spyOn(AbortController.prototype, "abort");
+  // fetch que nunca resuelve, salvo que se aborte la señal.
+  global.fetch = jest.fn((_u: any, init: any) => new Promise((_res, rej) => {
+    init.signal.addEventListener("abort", () => rej(new DOMException("Aborted", "AbortError")));
+  })) as any;
+  const p = refreshMemory(URL).catch(() => "aborted");
+  // A los 15s (el default de apiFetch) todavía NO debe haber abortado.
+  jest.advanceTimersByTime(15000);
+  expect(abortSpy).not.toHaveBeenCalled();
+  // A los 60s SÍ (el timeout que pasa refreshMemory).
+  jest.advanceTimersByTime(45000);
+  expect(abortSpy).toHaveBeenCalled();
+  await p;
+  abortSpy.mockRestore();
+  jest.useRealTimers();
 });
 
 test("refreshMemory lanza si el backend responde no-ok", async () => {

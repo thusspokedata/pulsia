@@ -60,8 +60,8 @@ export default function MemoriaScreen() {
       <Pressable
         testID="memoria-actualizar"
         onPress={onRefresh}
-        disabled={refreshing || loading}
-        style={{ backgroundColor: colors.accent, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center", opacity: refreshing ? 0.6 : 1 }}
+        disabled={refreshing || loading || !baseUrl.current}
+        style={{ backgroundColor: colors.accent, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center", opacity: refreshing || !baseUrl.current ? 0.6 : 1 }}
       >
         <Text style={{ color: "#fff", fontWeight: "600" }}>{refreshing ? "Actualizando…" : "Actualizar memoria"}</Text>
       </Pressable>
