@@ -53,9 +53,15 @@ function fakeDb(withKey: boolean) {
       },
       sessions: { findFirst: async () => ({ token: "t", userId: "u1", expiresAt: new Date(Date.now() + 1e9) }) },
       workoutSession: { findMany: async (_args: any) => [nestedSessionRow] },
+      athleteMemory: { findFirst: async () => ({ userId: "u1", content: "memoria previa" }) },
     },
     update: () => ({ set: () => ({ where: async () => {} }) }),
-    insert: () => ({ values: (v: any) => ({ returning: async () => { saved.push(v); return [{ ...v, id: "prog-1" }]; } }) }),
+    insert: () => ({
+      values: (v: any) => ({
+        returning: async () => { saved.push(v); return [{ ...v, id: "prog-1" }]; },
+        onConflictDoUpdate: async () => {},
+      }),
+    }),
   };
 }
 
@@ -75,6 +81,7 @@ function deps(db: any) {
         lastAiInput = input;
         return validProgram;
       },
+      updateMemory: async (_input: any) => "memoria nueva",
     },
   };
 }
@@ -116,6 +123,19 @@ test("POST /programs/generate sin API key configurada devuelve 400", async () =>
     body: JSON.stringify(validProfileBody),
   });
   expect(res.status).toBe(400);
+});
+
+test("la generación refresca la memoria y la pasa al generador", async () => {
+  lastAiInput = null;
+  const db = fakeDb(true);
+  const app = createApp(deps(db) as any);
+  const res = await app.request("/programs/generate", {
+    method: "POST", headers: authHeaders,
+    body: JSON.stringify(validProfileBody),
+  });
+  expect(res.status).toBe(200);
+  expect(lastAiInput).not.toBeNull();
+  expect(lastAiInput.memory).toBe("memoria nueva");
 });
 
 test("POST /programs/generate con perfil inválido devuelve 400", async () => {
