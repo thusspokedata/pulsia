@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { ScrollView, View, Text, Pressable } from "react-native";
 import { useFocusEffect } from "expo-router";
 import type { WorkoutSession } from "@pulsia/shared";
-import { getSessions } from "../../src/api/sessions";
+import { getSessions, getSessionById, type SessionListItem } from "../../src/api/sessions";
 import { getBackendUrl } from "../../src/storage/config";
 import { summarize } from "../../src/session/summary";
 import { SessionSummary } from "../../src/components/SessionSummary";
@@ -20,11 +20,13 @@ function fmtDate(ms: number): string {
 }
 
 export default function HistorialScreen() {
-  const [sessions, setSessions] = useState<WorkoutSession[]>([]);
+  const [items, setItems] = useState<SessionListItem[]>([]);
   const [selected, setSelected] = useState<WorkoutSession | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
   const lastLoaded = useRef<string | null>(null);
+  const baseUrl = useRef<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -32,11 +34,12 @@ export default function HistorialScreen() {
       (async () => {
         const url = await getBackendUrl();
         if (!active) return;
+        baseUrl.current = url;
         if (!url) {
           if (lastLoaded.current !== "no-url") {
             lastLoaded.current = "no-url";
             setError("Configurá el backend");
-            setSessions([]);
+            setItems([]);
             setLoading(false);
           }
           return;
@@ -49,7 +52,7 @@ export default function HistorialScreen() {
           if (serialized === lastLoaded.current) return;
           lastLoaded.current = serialized;
           setError(null);
-          setSessions(sorted);
+          setItems(sorted);
           setLoading(false);
         } catch {
           if (active && lastLoaded.current !== "error") {
@@ -64,6 +67,21 @@ export default function HistorialScreen() {
       };
     }, []),
   );
+
+  async function onOpen(item: SessionListItem) {
+    const url = baseUrl.current;
+    if (!url) return;
+    setDetailLoading(true);
+    setError(null);
+    try {
+      const full = await getSessionById(url, item.id);
+      setSelected(full);
+    } catch {
+      setError("No se pudo abrir el entrenamiento");
+    } finally {
+      setDetailLoading(false);
+    }
+  }
 
   if (selected != null) {
     return (
@@ -83,39 +101,34 @@ export default function HistorialScreen() {
         <Text style={{ color: colors.textMuted }}>{error}</Text>
       ) : loading ? (
         <Text style={{ color: colors.textMuted }}>Cargando…</Text>
-      ) : sessions.length === 0 ? (
+      ) : items.length === 0 ? (
         <Text style={{ color: colors.textMuted }}>Todavía no hay entrenamientos</Text>
       ) : (
-        sessions.map((s) => {
-          const sum = summarize(s);
-          return (
-            <Pressable
-              key={s.id}
-              testID={`hist-item-${s.id}`}
-              onPress={() => setSelected(s)}
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                backgroundColor: colors.surface,
-                borderRadius: radius.md,
-                padding: spacing.md,
-                gap: spacing.sm,
-              }}
-            >
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={{ color: colors.text, fontSize: 15, fontWeight: "600" }} numberOfLines={1}>
-                  {s.dayLabel}
-                </Text>
-                <Text style={{ color: colors.textMuted, fontSize: 12 }}>{fmtDate(s.startedAt)}</Text>
-              </View>
-              <View style={{ alignItems: "flex-end", gap: 2 }}>
-                <Text style={{ color: colors.text, fontSize: 15, fontWeight: "700" }}>{sum.completionPct}%</Text>
-                <Text style={{ color: colors.textMuted, fontSize: 12 }}>{fmt(sum.durationMs)}</Text>
-              </View>
-            </Pressable>
-          );
-        })
+        items.map((s) => (
+          <Pressable
+            key={s.id}
+            testID={`hist-item-${s.id}`}
+            onPress={() => onOpen(s)}
+            disabled={detailLoading}
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              backgroundColor: colors.surface,
+              borderRadius: radius.md,
+              padding: spacing.md,
+              gap: spacing.sm,
+            }}
+          >
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ color: colors.text, fontSize: 15, fontWeight: "600" }} numberOfLines={1}>
+                {s.dayLabel}
+              </Text>
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>{fmtDate(s.startedAt)}</Text>
+            </View>
+            <Text style={{ color: colors.textMuted, fontSize: 13 }}>⏱ {fmt(s.totalDurationMs ?? 0)}</Text>
+          </Pressable>
+        ))
       )}
     </ScrollView>
   );

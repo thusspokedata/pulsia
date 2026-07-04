@@ -35,8 +35,14 @@ const mockSessionB: WorkoutSession = {
   endedAt: 1783003600000,
 } as WorkoutSession;
 
+// getSessions devuelve la lista liviana (el backend NO manda los ejercicios); getSessionById
+// trae la sesión completa al tocar. Los mockSession* tienen los campos livianos, así sirven para la lista.
 jest.mock("../src/api/sessions", () => ({
-  getSessions: jest.fn(async () => [mockSessionA, mockSessionB]),
+  getSessions: jest.fn(async () => [
+    { id: mockSessionA.id, programId: mockSessionA.programId, dayLabel: mockSessionA.dayLabel, location: "gym", startedAt: mockSessionA.startedAt, totalDurationMs: mockSessionA.totalDurationMs },
+    { id: mockSessionB.id, programId: mockSessionB.programId, dayLabel: mockSessionB.dayLabel, location: "gym", startedAt: mockSessionB.startedAt, totalDurationMs: mockSessionB.totalDurationMs },
+  ]),
+  getSessionById: jest.fn(async (_url: string, id: string) => (id === mockSessionA.id ? mockSessionA : mockSessionB)),
 }));
 jest.mock("../src/storage/config", () => ({
   getBackendUrl: jest.fn(async () => "http://backend.test"),
