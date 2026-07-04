@@ -95,6 +95,7 @@ export default function HistorialScreen() {
   async function onDelete(item: SessionListItem) {
     const url = baseUrl.current;
     if (!url) return;
+    setDetailError(null); // limpiar cualquier error previo antes de reintentar
     try {
       await deleteSessionById(url, item.id);
       setItems((prev) => {
