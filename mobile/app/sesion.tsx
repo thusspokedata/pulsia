@@ -9,7 +9,7 @@ import { getActiveSession, setActiveSession, clearActiveSession } from "../src/s
 import { getPauseState, setPauseState, clearPauseState } from "../src/storage/pauseState";
 import { enqueueSession } from "../src/storage/pendingSessions";
 import { syncPending } from "../src/sync/syncSessions";
-import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets } from "../src/session/engine";
+import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets, setNotes } from "../src/session/engine";
 import { newSessionId } from "../src/session/id";
 import { useHeartRate } from "../src/ble/useHeartRate";
 import { aggregateHr } from "../src/ble/hrAggregate";
@@ -18,6 +18,7 @@ import { useAudioPlayer } from "expo-audio";
 import { colors, radius, spacing } from "../src/theme/tokens";
 import { summarize } from "../src/session/summary";
 import { SessionSummary } from "../src/components/SessionSummary";
+import { NotesEditor } from "../src/components/NotesEditor";
 
 function fmt(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -522,6 +523,8 @@ export default function SesionScreen() {
       ) : (
         <Text style={{ color: colors.textMuted }}>No hay más ejercicios pendientes.</Text>
       )}
+
+      <NotesEditor value={sess.notes} onChangeText={(t) => apply(setNotes(sess, t))} />
 
       {/* Acciones de sesión, separadas de las acciones de la serie en curso. */}
       <View style={{ height: 1, backgroundColor: colors.border, marginTop: spacing.lg }} />
