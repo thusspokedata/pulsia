@@ -4,6 +4,8 @@ import { TrainingProfileSchema } from "@pulsia/shared";
 import { programs, settings } from "../db/schema";
 import { decryptSecret } from "../crypto/secrets";
 import { generateProgramForProfile } from "../ai/generate";
+import { getRecentSessions } from "../sessions/repository";
+import { buildTrainingHistorySummary } from "../ai/history";
 import type { AppDeps } from "../app";
 
 export function programsRoutes(deps: AppDeps) {
@@ -21,9 +23,12 @@ export function programsRoutes(deps: AppDeps) {
     const apiKey = decryptSecret(row.aiApiKeyEncrypted, deps.config.encryptionKey);
     const model = row.aiModel ?? deps.config.defaultModel;
 
+    const recent = await getRecentSessions(deps.db, userId, 6);
+    const historySummary = buildTrainingHistorySummary(recent);
+
     let program;
     try {
-      program = await generateProgramForProfile({ profile: parsed.data, apiKey, model, ai: deps.aiClient });
+      program = await generateProgramForProfile({ profile: parsed.data, apiKey, model, ai: deps.aiClient, historySummary });
     } catch (e) {
       return c.json({ error: (e as Error).message }, 502);
     }

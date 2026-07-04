@@ -75,6 +75,16 @@ export async function getSession(db: Db, id: string, userId: string): Promise<Wo
   return row ? rowsToSession(row) : null;
 }
 
+export async function getRecentSessions(db: Db, userId: string, limit = 6): Promise<WorkoutSession[]> {
+  const rows = await db.query.workoutSession.findMany({
+    where: eq(workoutSession.userId, userId),
+    orderBy: (w, { desc }) => [desc(w.startedAt)],
+    limit,
+    with: { exercises: { orderBy: (e, { asc }) => [asc(e.orderIndex)], with: { sets: { orderBy: (s, { asc }) => [asc(s.setNumber)] } } } },
+  });
+  return rows.map(rowsToSession);
+}
+
 export async function deleteSession(db: Db, id: string, userId: string): Promise<boolean> {
   const rows = await db
     .delete(workoutSession)

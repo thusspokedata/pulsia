@@ -12,6 +12,35 @@ const validProgram: Program = {
   ] }],
 };
 
+// Fila anidada tal como la devuelve db.query.workoutSession.findMany({ with: ... }).
+const nestedSessionRow = {
+  id: "11111111-1111-4111-8111-111111111111",
+  userId: "u1",
+  programId: "22222222-2222-4222-8222-222222222222",
+  weekNumber: 1,
+  dayLabel: "Día 1 - Pecho",
+  location: "gym",
+  startedAt: 1782900000000,
+  endedAt: 1782903600000,
+  totalDurationMs: 3600000,
+  notes: "",
+  exercises: [
+    {
+      id: "ex-1", sessionId: "11111111-1111-4111-8111-111111111111",
+      catalogId: "barbell_bench_press", garminName: "Barbell Bench Press",
+      orderIndex: 0, planned: { sets: 4, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90 }, skipped: false,
+      note: "", substitutedFromId: null,
+      sets: [
+        {
+          id: "s-1", sessionExerciseId: "ex-1", setNumber: 1, reps: 10, weightKg: 40, rpe: 7,
+          startedAt: 1782900000000, endedAt: 1782900045000, durationMs: 45000,
+          repTimestamps: [0, 4000], hrAvg: null, hrMax: null, skipped: false,
+        },
+      ],
+    },
+  ],
+};
+
 function fakeDb(withKey: boolean) {
   const saved: any[] = [];
   return {
@@ -23,6 +52,7 @@ function fakeDb(withKey: boolean) {
           : null,
       },
       sessions: { findFirst: async () => ({ token: "t", userId: "u1", expiresAt: new Date(Date.now() + 1e9) }) },
+      workoutSession: { findMany: async (_args: any) => [nestedSessionRow] },
     },
     update: () => ({ set: () => ({ where: async () => {} }) }),
     insert: () => ({ values: (v: any) => ({ returning: async () => { saved.push(v); return [{ ...v, id: "prog-1" }]; } }) }),
@@ -34,11 +64,18 @@ const validProfileBody = {
   gymEquipment: ["barbell", "bench"], homeEquipment: ["bodyweight"], limitations: [],
 };
 
+let lastAiInput: any = null;
+
 function deps(db: any) {
   return {
     db,
     config: { encryptionKey: KEY, defaultModel: "claude-sonnet-4-6", inviteCode: "INV", sessionTtlDays: 4 },
-    aiClient: { generateProgram: async () => validProgram },
+    aiClient: {
+      generateProgram: async (input: any) => {
+        lastAiInput = input;
+        return validProgram;
+      },
+    },
   };
 }
 
@@ -56,6 +93,19 @@ test("POST /programs/generate genera y guarda el programa", async () => {
   expect(body.program.name).toBe("Plan");
   expect(db._saved.length).toBe(1);
   expect(db._saved[0].userId).toBe("u1");
+});
+
+test("POST /programs/generate pasa historySummary con las últimas sesiones a la IA", async () => {
+  lastAiInput = null;
+  const db = fakeDb(true);
+  const app = createApp(deps(db) as any);
+  const res = await app.request("/programs/generate", {
+    method: "POST", headers: authHeaders,
+    body: JSON.stringify(validProfileBody),
+  });
+  expect(res.status).toBe(200);
+  expect(lastAiInput).not.toBeNull();
+  expect(lastAiInput.historySummary).toContain("Día 1 - Pecho");
 });
 
 test("POST /programs/generate sin API key configurada devuelve 400", async () => {

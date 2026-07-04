@@ -9,14 +9,16 @@ export interface AiClient {
     profile: TrainingProfile;
     apiKey: string;
     model: string;
+    historySummary?: string;
   }): Promise<Program>;
 }
 
 export class AnthropicAiClient implements AiClient {
-  async generateProgram({ profile, apiKey, model }: {
+  async generateProgram({ profile, apiKey, model, historySummary }: {
     profile: TrainingProfile;
     apiKey: string;
     model: string;
+    historySummary?: string;
   }): Promise<Program> {
     const client = new Anthropic({ apiKey });
     // z.toJSONSchema agrega una key "$schema" (meta) que no necesita el tool de Anthropic.
@@ -31,7 +33,7 @@ export class AnthropicAiClient implements AiClient {
       max_tokens: 16000,
       tools: [tool],
       tool_choice: { type: "tool", name: "return_program" },
-      messages: [{ role: "user", content: buildGenerationPrompt(profile) }],
+      messages: [{ role: "user", content: buildGenerationPrompt(profile, historySummary) }],
     });
     if (res.stop_reason === "max_tokens") {
       throw new Error(
