@@ -21,6 +21,8 @@ function exercise(over: Partial<SessionExercise> & { catalogId: string; garminNa
     planned: { sets: 2, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90 },
     skipped: false,
     sets: [],
+    note: "",
+    substitutedFromId: null,
     ...over,
   };
 }

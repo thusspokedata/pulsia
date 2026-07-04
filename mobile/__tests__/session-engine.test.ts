@@ -29,6 +29,12 @@ test("startSession arma la sesión con planned y sin series", () => {
   expect(s.exercises[0].order).toBe(0);
 });
 
+test("startSession inicializa note='' y substitutedFromId=null por ejercicio", () => {
+  const s = start();
+  expect(s.exercises[0].note).toBe("");
+  expect(s.exercises[0].substitutedFromId).toBe(null);
+});
+
 test("tapRep agrega un timestamp relativo al inicio de la serie", () => {
   let s = start();
   s = tapRep(s, { exerciseOrder: 0, setStartMs: 2000, nowMs: 2000 });

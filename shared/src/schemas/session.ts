@@ -29,6 +29,8 @@ export const SessionExerciseSchema = z.object({
   planned: PlannedExerciseSchema,
   skipped: z.boolean().default(false),
   sets: z.array(SetLogSchema),
+  note: z.string().default(""),
+  substitutedFromId: z.string().nullable().default(null),
 });
 
 export const WorkoutSessionSchema = z.object({

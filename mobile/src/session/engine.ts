@@ -35,6 +35,8 @@ export function startSession(input: {
     planned: { sets: e.sets, reps: e.reps, targetLoad: e.targetLoad, restSeconds: e.restSeconds },
     skipped: false,
     sets: [],
+    note: "",
+    substitutedFromId: null,
   }));
   return {
     id: input.id, programId: input.programId, weekNumber: input.weekNumber,

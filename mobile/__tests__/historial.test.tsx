@@ -31,6 +31,8 @@ const mockSessionA: WorkoutSession = {
         { setNumber: 1, startedAt: 2000, endedAt: 5000, durationMs: 3000, reps: 10, weightKg: 40, rpe: 8, repTimestamps: [], hrAvg: null, hrMax: null, skipped: false },
         { setNumber: 2, startedAt: 6000, endedAt: 10000, durationMs: 4000, reps: 8, weightKg: 42, rpe: 9, repTimestamps: [], hrAvg: null, hrMax: null, skipped: false },
       ],
+      note: "",
+      substitutedFromId: null,
     },
   ],
 } as WorkoutSession;
