@@ -3,6 +3,7 @@ import type { Program, TrainingProfile } from "@pulsia/shared";
 import Anthropic from "@anthropic-ai/sdk";
 import { ProgramSchema } from "@pulsia/shared";
 import { buildGenerationPrompt } from "./prompt";
+import { buildMemoryUpdatePrompt } from "./memory";
 
 export interface AiClient {
   generateProgram(input: {
@@ -11,6 +12,12 @@ export interface AiClient {
     model: string;
     historySummary?: string;
   }): Promise<Program>;
+  updateMemory?(input: {
+    current: string;
+    historySummary: string;
+    apiKey: string;
+    model: string;
+  }): Promise<string>;
 }
 
 export class AnthropicAiClient implements AiClient {
@@ -45,5 +52,22 @@ export class AnthropicAiClient implements AiClient {
       throw new Error("La IA no devolvió un programa estructurado");
     }
     return ProgramSchema.parse(block.input);
+  }
+
+  async updateMemory({ current, historySummary, apiKey, model }: {
+    current: string;
+    historySummary: string;
+    apiKey: string;
+    model: string;
+  }): Promise<string> {
+    const client = new Anthropic({ apiKey });
+    const res = await client.messages.create({
+      model,
+      max_tokens: 1024,
+      messages: [{ role: "user", content: buildMemoryUpdatePrompt(current, historySummary) }],
+    });
+    const block = res.content.find((b) => b.type === "text");
+    const text = block && block.type === "text" ? block.text.trim() : "";
+    return text || current;
   }
 }
