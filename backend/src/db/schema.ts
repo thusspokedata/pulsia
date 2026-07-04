@@ -29,6 +29,12 @@ export const profiles = pgTable("profiles", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const athleteMemory = pgTable("athlete_memory", {
+  userId: uuid("user_id").primaryKey().references(() => users.id),
+  content: text("content").default("").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const programs = pgTable("programs", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").references(() => users.id).notNull(),
