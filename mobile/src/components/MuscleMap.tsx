@@ -16,7 +16,9 @@ export function MuscleMap({ primary, secondary }: { primary: string[]; secondary
 
   return (
     <View testID="muscle-map" style={{ gap: spacing.sm }}>
-      <View style={{ flexDirection: "row", justifyContent: "center", gap: spacing.lg }}>
+      {/* Los dos cuerpos juntos: el margen negativo solapa el whitespace lateral del SVG
+          para acercarlos y angostar el grupo, así los brazos externos no se cortan. */}
+      <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center" }}>
         <Body
           data={bodyData}
           side="front"
@@ -25,14 +27,16 @@ export function MuscleMap({ primary, secondary }: { primary: string[]; secondary
           border="none"
           scale={1.3}
         />
-        <Body
-          data={bodyData}
-          side="back"
-          colors={bodyColors}
-          defaultFill={DEFAULT_FILL}
-          border="none"
-          scale={1.3}
-        />
+        <View style={{ marginLeft: -spacing.xl }}>
+          <Body
+            data={bodyData}
+            side="back"
+            colors={bodyColors}
+            defaultFill={DEFAULT_FILL}
+            border="none"
+            scale={1.3}
+          />
+        </View>
       </View>
 
       {/* Leyenda */}

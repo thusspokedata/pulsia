@@ -119,3 +119,36 @@ test("tocar 🗑 pide confirmación, y al confirmar borra en el backend y quita 
 
   alertSpy.mockRestore();
 });
+
+test("un borrado que falla muestra el error, y un borrado exitoso posterior lo limpia", async () => {
+  const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  // Reset del mock (otro test lo deja devolviendo solo la sesión B) para tener ambas filas.
+  (getSessions as jest.Mock).mockResolvedValue([
+    { id: mockSessionA.id, programId: mockSessionA.programId, dayLabel: mockSessionA.dayLabel, location: "gym", startedAt: mockSessionA.startedAt, totalDurationMs: mockSessionA.totalDurationMs },
+    { id: mockSessionB.id, programId: mockSessionB.programId, dayLabel: mockSessionB.dayLabel, location: "gym", startedAt: mockSessionB.startedAt, totalDurationMs: mockSessionB.totalDurationMs },
+  ]);
+  await render(<HistorialScreen />);
+  await waitFor(() => expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy());
+
+  const confirmDelete = async (id: string) => {
+    alertSpy.mockClear();
+    await fireEvent.press(screen.getByTestId(`hist-del-${id}`));
+    const buttons = alertSpy.mock.calls[0][2] as any[];
+    const confirm = buttons.find((b) => b.style === "destructive");
+    await act(async () => {
+      await confirm.onPress();
+    });
+  };
+
+  // 1) Primer borrado falla → aparece el cartel "No se pudo eliminar".
+  (deleteSessionById as jest.Mock).mockRejectedValueOnce(new Error("boom"));
+  await confirmDelete(mockSessionA.id);
+  await waitFor(() => expect(screen.getByTestId("hist-detail-error")).toBeTruthy());
+  expect(screen.getByTestId("hist-detail-error").props.children).toBe("No se pudo eliminar");
+
+  // 2) Segundo borrado (otra fila) tiene éxito → el cartel se limpia.
+  await confirmDelete(mockSessionB.id);
+  await waitFor(() => expect(screen.queryByTestId("hist-detail-error")).toBeNull());
+
+  alertSpy.mockRestore();
+});
