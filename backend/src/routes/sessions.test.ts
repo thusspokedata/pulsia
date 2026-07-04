@@ -99,3 +99,40 @@ test("PUT con JSON malformado devuelve 400 (no 500)", async () => {
   });
   expect(res.status).toBe(400);
 });
+
+test("DELETE /sessions/:id borra la sesión → 200 y GET posterior da 404", async () => {
+  // fakeDb con un row almacenado; el delete devuelve la fila borrada (returning) y luego el GET no la encuentra.
+  const db = fakeDb({ id: SID });
+  // el delete debe devolver la fila borrada para que deleteSession devuelva true
+  db.delete = (table: any) => ({
+    where: () => {
+      const p: any = Promise.resolve([{ id: SID }]);
+      p.returning = async () => [{ id: SID }];
+      return p;
+    },
+  });
+  const app = createApp(deps(db) as any);
+  const res = await app.request(`/sessions/${SID}`, { method: "DELETE" });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ id: SID });
+
+  // GET posterior: sin fila almacenada → 404
+  const dbEmpty = fakeDb(null);
+  const app2 = createApp(deps(dbEmpty) as any);
+  const getRes = await app2.request(`/sessions/${SID}`);
+  expect(getRes.status).toBe(404);
+});
+
+test("DELETE /sessions/:id inexistente devuelve 404", async () => {
+  const db = fakeDb(null);
+  db.delete = (table: any) => ({
+    where: () => {
+      const p: any = Promise.resolve([]);
+      p.returning = async () => [];
+      return p;
+    },
+  });
+  const app = createApp(deps(db) as any);
+  const res = await app.request(`/sessions/${SID}`, { method: "DELETE" });
+  expect(res.status).toBe(404);
+});

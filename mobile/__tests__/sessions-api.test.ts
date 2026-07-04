@@ -1,4 +1,4 @@
-import { putSession, getSessions, getSessionById } from "../src/api/sessions";
+import { putSession, getSessions, getSessionById, deleteSessionById } from "../src/api/sessions";
 import type { WorkoutSession } from "@pulsia/shared";
 
 const URL = "http://backend.test";
@@ -53,4 +53,18 @@ test("getSessionById hace GET a /sessions/:id y devuelve la sesión completa en 
 test("getSessionById lanza si el backend responde no-ok", async () => {
   global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({}) }) as any;
   await expect(getSessionById(URL, session.id)).rejects.toThrow("No se pudo cargar la sesión");
+});
+
+test("deleteSessionById hace DELETE a /sessions/:id y resuelve en 2xx", async () => {
+  const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ id: session.id }) });
+  global.fetch = fetchMock as any;
+  await deleteSessionById(URL, session.id);
+  const [calledUrl, init] = fetchMock.mock.calls[0];
+  expect(calledUrl).toBe(`${URL}/sessions/${session.id}`);
+  expect(init.method).toBe("DELETE");
+});
+
+test("deleteSessionById lanza si el backend responde no-ok", async () => {
+  global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({}) }) as any;
+  await expect(deleteSessionById(URL, session.id)).rejects.toThrow("No se pudo eliminar el entrenamiento");
 });

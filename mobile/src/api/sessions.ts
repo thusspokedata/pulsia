@@ -35,3 +35,9 @@ export async function getSessionById(baseUrl: string, id: string): Promise<Worko
   if (!res.ok) throw new Error("No se pudo cargar la sesión");
   return (await res.json()) as WorkoutSession;
 }
+
+// Elimina una sesión del backend (cascade borra ejercicios y series).
+export async function deleteSessionById(baseUrl: string, id: string): Promise<void> {
+  const res = await apiFetch(baseUrl, `/sessions/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("No se pudo eliminar el entrenamiento");
+}

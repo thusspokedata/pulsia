@@ -72,6 +72,14 @@ export async function getSession(db: Db, id: string, userId: string): Promise<Wo
   return row ? rowsToSession(row) : null;
 }
 
+export async function deleteSession(db: Db, id: string, userId: string): Promise<boolean> {
+  const rows = await db
+    .delete(workoutSession)
+    .where(and(eq(workoutSession.id, id), eq(workoutSession.userId, userId)))
+    .returning({ id: workoutSession.id });
+  return rows.length > 0;
+}
+
 export async function listSessions(db: Db, userId: string) {
   const rows = await db
     .select({

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { WorkoutSessionSchema } from "@pulsia/shared";
 import { SINGLE_USER_ID } from "../constants";
-import { upsertSession, getSession, listSessions } from "../sessions/repository";
+import { upsertSession, getSession, listSessions, deleteSession } from "../sessions/repository";
 import type { AppDeps } from "../app";
 
 export function sessionsRoutes(deps: AppDeps) {
@@ -29,6 +29,11 @@ export function sessionsRoutes(deps: AppDeps) {
   });
 
   r.get("/", async (c) => c.json(await listSessions(deps.db, SINGLE_USER_ID)));
+
+  r.delete("/:id", async (c) => {
+    const ok = await deleteSession(deps.db, c.req.param("id"), SINGLE_USER_ID);
+    return ok ? c.json({ id: c.req.param("id") }) : c.json({ error: "sesión no encontrada" }, 404);
+  });
 
   return r;
 }
