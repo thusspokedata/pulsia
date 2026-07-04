@@ -122,7 +122,6 @@ export default function HistorialScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
-      <Text style={{ fontSize: 20, fontWeight: "500", color: colors.text }}>Historial</Text>
       {detailLoading && <Text testID="hist-opening" style={{ color: colors.textMuted, fontSize: 12 }}>Abriendo…</Text>}
       {detailError && <Text testID="hist-detail-error" style={{ color: colors.accent, fontSize: 12 }}>{detailError}</Text>}
       {error ? (

@@ -355,9 +355,9 @@ export default function SesionScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.md }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <Text style={{ color: colors.textMuted, fontSize: 12 }}>{session.dayLabel}</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: spacing.sm }}>
+        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12, flex: 1 }}>{session.dayLabel}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flexShrink: 0 }}>
           {paused && <Text style={{ color: colors.accentText, fontSize: 12 }}>⏸ Pausado</Text>}
           <Text style={{ color: colors.text, fontSize: 12 }}>
             ⏱ {fmt(nowMs - session.startedAt - pausedMsRef.current - (paused ? nowMs - pauseStartedRef.current : 0))}
@@ -365,9 +365,10 @@ export default function SesionScreen() {
           <Pressable
             testID="pause-toggle"
             onPress={onPauseToggle}
+            hitSlop={8}
             style={{ borderWidth: 1, borderColor: colors.accent, borderRadius: radius.sm, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm }}
           >
-            <Text style={{ color: colors.accentText, fontSize: 12 }}>{paused ? "Reanudar" : "Pausar"}</Text>
+            <Text style={{ color: colors.accentText, fontSize: 12, fontWeight: "600" }}>{paused ? "Reanudar" : "Pausar"}</Text>
           </Pressable>
         </View>
       </View>
@@ -479,11 +480,11 @@ export default function SesionScreen() {
             </View>
           </View>
 
-          <Pressable testID="end-set" onPress={onEndSet} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
-            <Text style={{ color: "#fff" }}>Terminar serie</Text>
+          <Pressable testID="end-set" onPress={onEndSet} style={{ backgroundColor: colors.accent, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center" }}>
+            <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>Terminar serie</Text>
           </Pressable>
-          <Pressable testID="skip" onPress={onSkip} style={{ alignItems: "center" }}>
-            <Text style={{ color: colors.textMuted, fontSize: 12 }}>Saltar ejercicio</Text>
+          <Pressable testID="skip" onPress={onSkip} hitSlop={8} style={{ alignItems: "center", paddingVertical: spacing.sm }}>
+            <Text style={{ color: colors.accentText, fontSize: 13, fontWeight: "600" }}>Saltar ejercicio</Text>
           </Pressable>
 
           {doneList.length > 0 && (
@@ -522,16 +523,18 @@ export default function SesionScreen() {
         <Text style={{ color: colors.textMuted }}>No hay más ejercicios pendientes.</Text>
       )}
 
-      <Pressable testID="finish" onPress={onFinish} style={{ borderWidth: 1, borderColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", marginTop: spacing.lg }}>
-        <Text style={{ color: colors.accentText }}>Terminar entrenamiento</Text>
+      {/* Acciones de sesión, separadas de las acciones de la serie en curso. */}
+      <View style={{ height: 1, backgroundColor: colors.border, marginTop: spacing.lg }} />
+      <Pressable testID="finish" onPress={onFinish} style={{ borderWidth: 1.5, borderColor: colors.accent, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center", marginTop: spacing.lg }}>
+        <Text style={{ color: colors.accentText, fontSize: 15, fontWeight: "700" }}>Terminar entrenamiento</Text>
       </Pressable>
       {finishError && (
-        <Text testID="finish-error" style={{ color: colors.accent, fontSize: 12, textAlign: "center" }}>
+        <Text testID="finish-error" style={{ color: colors.danger, fontSize: 12, textAlign: "center" }}>
           No se pudo guardar la sesión. Reintentá.
         </Text>
       )}
-      <Pressable testID="cancel" onPress={onCancel} style={{ alignItems: "center", padding: spacing.sm }}>
-        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Cancelar entrenamiento</Text>
+      <Pressable testID="cancel" onPress={onCancel} hitSlop={8} style={{ alignItems: "center", paddingVertical: spacing.sm }}>
+        <Text style={{ color: colors.danger, fontSize: 13, fontWeight: "600" }}>Cancelar entrenamiento</Text>
       </Pressable>
     </ScrollView>
   );
