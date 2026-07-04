@@ -9,7 +9,7 @@ import { getActiveSession, setActiveSession, clearActiveSession } from "../src/s
 import { getPauseState, setPauseState, clearPauseState } from "../src/storage/pauseState";
 import { enqueueSession } from "../src/storage/pendingSessions";
 import { syncPending } from "../src/sync/syncSessions";
-import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets } from "../src/session/engine";
+import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets, setNotes } from "../src/session/engine";
 import { newSessionId } from "../src/session/id";
 import { useHeartRate } from "../src/ble/useHeartRate";
 import { aggregateHr } from "../src/ble/hrAggregate";
@@ -18,6 +18,7 @@ import { useAudioPlayer } from "expo-audio";
 import { colors, radius, spacing } from "../src/theme/tokens";
 import { summarize } from "../src/session/summary";
 import { SessionSummary } from "../src/components/SessionSummary";
+import { NotesEditor } from "../src/components/NotesEditor";
 
 function fmt(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -58,6 +59,7 @@ export default function SesionScreen() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [finishError, setFinishError] = useState(false);
   const [finishedSession, setFinishedSession] = useState<WorkoutSession | null>(null);
+  const [finishedNotes, setFinishedNotes] = useState("");
   const [activeOrder, setActiveOrder] = useState<number | null>(null);
   const [restUntil, setRestUntil] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
@@ -84,6 +86,10 @@ export default function SesionScreen() {
       mounted.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (finishedSession) setFinishedNotes(finishedSession.notes);
+  }, [finishedSession]);
 
   function apply(next: WorkoutSession) {
     setSession(next);
@@ -208,6 +214,7 @@ export default function SesionScreen() {
     return (
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
         <SessionSummary summary={summarize(finishedSession)} />
+        <NotesEditor value={finishedNotes} onChangeText={setFinishedNotes} onBlur={saveFinishedNotes} />
         <Pressable
           testID="summary-done"
           onPress={() => router.replace("/")}
@@ -332,6 +339,15 @@ export default function SesionScreen() {
     if (url) void syncPending(url); // fire-and-forget; si falla queda en la cola
     // No navegamos: mostramos el resumen; "Listo" navega a la home.
     setFinishedSession(done);
+  }
+
+  async function saveFinishedNotes() {
+    if (!finishedSession) return;
+    const updated = setNotes(finishedSession, finishedNotes);
+    setFinishedSession(updated);
+    await enqueueSession(updated);
+    const url = await getBackendUrl();
+    if (url) void syncPending(url);
   }
 
   function onCancel() {
@@ -522,6 +538,8 @@ export default function SesionScreen() {
       ) : (
         <Text style={{ color: colors.textMuted }}>No hay más ejercicios pendientes.</Text>
       )}
+
+      <NotesEditor value={sess.notes} onChangeText={(t) => apply(setNotes(sess, t))} />
 
       {/* Acciones de sesión, separadas de las acciones de la serie en curso. */}
       <View style={{ height: 1, backgroundColor: colors.border, marginTop: spacing.lg }} />

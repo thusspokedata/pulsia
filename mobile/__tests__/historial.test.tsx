@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react-native";
 import { Alert } from "react-native";
 import HistorialScreen from "../app/(tabs)/historial";
-import { getSessions, getSessionById, deleteSessionById } from "../src/api/sessions";
+import { getSessions, getSessionById, deleteSessionById, putSession } from "../src/api/sessions";
 import type { WorkoutSession } from "@pulsia/shared";
 
 // Mock del componente nativo (SVG) para no cargar react-native-svg en jest.
@@ -52,6 +52,7 @@ jest.mock("../src/api/sessions", () => ({
   ]),
   getSessionById: jest.fn(async (_url: string, id: string) => (id === mockSessionA.id ? mockSessionA : mockSessionB)),
   deleteSessionById: jest.fn(async () => undefined),
+  putSession: jest.fn(async () => undefined),
 }));
 jest.mock("../src/storage/config", () => ({
   getBackendUrl: jest.fn(async () => "http://backend.test"),
@@ -151,4 +152,37 @@ test("un borrado que falla muestra el error, y un borrado exitoso posterior lo l
   await waitFor(() => expect(screen.queryByTestId("hist-detail-error")).toBeNull());
 
   alertSpy.mockRestore();
+});
+
+test("editar la nota en el detalle del historial la guarda con putSession", async () => {
+  await render(<HistorialScreen />);
+  await waitFor(() => expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy());
+  await fireEvent.press(screen.getByTestId(`hist-item-${mockSessionA.id}`));
+  const input = await screen.findByTestId("notes-input");
+  await fireEvent.changeText(input, "revisar técnica de press");
+  await fireEvent(input, "blur");
+  await waitFor(() =>
+    expect(putSession).toHaveBeenCalledWith("http://backend.test",
+      expect.objectContaining({ id: mockSessionA.id, notes: "revisar técnica de press" })),
+  );
+});
+
+test("un guardado de nota que falla muestra el error, y un guardado exitoso posterior lo limpia", async () => {
+  await render(<HistorialScreen />);
+  await waitFor(() => expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy());
+  await fireEvent.press(screen.getByTestId(`hist-item-${mockSessionA.id}`));
+  const input = await screen.findByTestId("notes-input");
+
+  // 1) El guardado falla → aparece el cartel de error.
+  (putSession as jest.Mock).mockRejectedValueOnce(new Error("boom"));
+  await fireEvent.changeText(input, "nota 1");
+  await fireEvent(input, "blur");
+  await waitFor(() =>
+    expect(screen.getByTestId("hist-detail-error").props.children).toBe("No se pudo guardar la nota"),
+  );
+
+  // 2) Un guardado exitoso posterior limpia el cartel.
+  await fireEvent.changeText(input, "nota 2");
+  await fireEvent(input, "blur");
+  await waitFor(() => expect(screen.queryByTestId("hist-detail-error")).toBeNull());
 });

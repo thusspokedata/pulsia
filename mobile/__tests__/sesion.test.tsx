@@ -351,6 +351,29 @@ test("muestra el bpm en vivo en el box de HR", async () => {
   await waitFor(() => expect(screen.getByTestId("hr-value").props.children).toBe(80));
 });
 
+test("editar la nota durante la sesión persiste en sesión activa", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  const input = await screen.findByTestId("notes-input");
+  await fireEvent.changeText(input, "hombro molesto");
+  await waitFor(() =>
+    expect(mockSetActive).toHaveBeenCalledWith(expect.objectContaining({ notes: "hombro molesto" })),
+  );
+});
+
+test("editar la nota en el resumen re-encola la sesión con la nota", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("finish"));
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => expect(screen.getByTestId("summary")).toBeTruthy());
+  const input = await screen.findByTestId("notes-input");
+  await fireEvent.changeText(input, "buen día de espalda");
+  await fireEvent(input, "blur");
+  await waitFor(() =>
+    expect(mockEnqueue).toHaveBeenCalledWith(expect.objectContaining({ notes: "buen día de espalda" })),
+  );
+});
+
 test("al terminar la serie guarda hrAvg/hrMax agregados de los samples", async () => {
   mockHrSamples = [{ t: 1, bpm: 78 }, { t: 2, bpm: 84 }];
   await render(<SesionScreen />);

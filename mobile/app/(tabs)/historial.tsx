@@ -1,11 +1,12 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, View, Text, Pressable, Alert } from "react-native";
 import { useFocusEffect } from "expo-router";
 import type { WorkoutSession } from "@pulsia/shared";
-import { getSessions, getSessionById, deleteSessionById, type SessionListItem } from "../../src/api/sessions";
+import { getSessions, getSessionById, deleteSessionById, putSession, type SessionListItem } from "../../src/api/sessions";
 import { getBackendUrl } from "../../src/storage/config";
 import { summarize } from "../../src/session/summary";
 import { SessionSummary } from "../../src/components/SessionSummary";
+import { NotesEditor } from "../../src/components/NotesEditor";
 import { colors, spacing, radius } from "../../src/theme/tokens";
 
 function fmt(ms: number): string {
@@ -26,8 +27,13 @@ export default function HistorialScreen() {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailNotes, setDetailNotes] = useState("");
   const lastLoaded = useRef<string | null>(null);
   const baseUrl = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (selected) setDetailNotes(selected.notes);
+  }, [selected]);
 
   useFocusEffect(
     useCallback(() => {
@@ -85,6 +91,19 @@ export default function HistorialScreen() {
     }
   }
 
+  async function saveDetailNotes() {
+    const url = baseUrl.current;
+    if (!url || !selected) return;
+    const updated = { ...selected, notes: detailNotes };
+    setSelected(updated);
+    setDetailError(null); // limpiar cualquier error previo antes de reintentar
+    try {
+      await putSession(url, updated);
+    } catch {
+      setDetailError("No se pudo guardar la nota");
+    }
+  }
+
   function confirmDelete(item: SessionListItem) {
     Alert.alert("Eliminar entrenamiento", "Se borrará de la base de datos. ¿Seguro?", [
       { text: "No", style: "cancel" },
@@ -115,6 +134,8 @@ export default function HistorialScreen() {
         <Pressable testID="hist-back" onPress={() => setSelected(null)} style={{ paddingVertical: spacing.xs }}>
           <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: "600" }}>← Volver al historial</Text>
         </Pressable>
+        <NotesEditor value={detailNotes} onChangeText={setDetailNotes} onBlur={saveDetailNotes} />
+        {detailError && <Text testID="hist-detail-error" style={{ color: colors.danger, fontSize: 12 }}>{detailError}</Text>}
         <SessionSummary summary={summarize(selected)} />
       </ScrollView>
     );
