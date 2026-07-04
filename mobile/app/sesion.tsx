@@ -59,6 +59,9 @@ export default function SesionScreen() {
   const [finishedSession, setFinishedSession] = useState<WorkoutSession | null>(null);
   const [activeOrder, setActiveOrder] = useState<number | null>(null);
   const [restUntil, setRestUntil] = useState<number | null>(null);
+  const [paused, setPaused] = useState(false);
+  const pausedMsRef = useRef(0); // tiempo pausado acumulado (ms)
+  const pauseStartedRef = useRef(0); // Date.now() del inicio de la pausa en curso
   const started = useRef(false);
   const setStartRef = useRef(Date.now());
   const mounted = useRef(true);
@@ -266,11 +269,27 @@ export default function SesionScreen() {
     apply(skipExercise(sess, { exerciseOrder: current.order }));
   }
 
+  function onPauseToggle() {
+    const now = Date.now();
+    if (paused) {
+      // Reanudar: acumular la duración de la pausa en curso.
+      pausedMsRef.current += now - pauseStartedRef.current;
+      setPaused(false);
+    } else {
+      // Pausar: marcar el inicio de la pausa.
+      pauseStartedRef.current = now;
+      setPaused(true);
+    }
+  }
+
   async function onFinish() {
     // Ninguna serie debe quedar con endedAt=null en el payload (ver closeOpenSets en el motor).
     const { hrAvg, hrMax } = aggregateHr(hr.getSamples());
-    const s = closeOpenSets(sess, { activeOrder: current?.order ?? null, weightKg: parseNum(weight), rpe: parseNum(rpe), nowMs: Date.now(), hrAvg, hrMax });
-    const done = finishSession(s, { nowMs: Date.now() });
+    const now = Date.now();
+    // Tiempo pausado total: acumulado + una pausa en curso (si la hay) hasta ahora.
+    const pausedMs = pausedMsRef.current + (paused ? now - pauseStartedRef.current : 0);
+    const s = closeOpenSets(sess, { activeOrder: current?.order ?? null, weightKg: parseNum(weight), rpe: parseNum(rpe), nowMs: now, hrAvg, hrMax });
+    const done = finishSession(s, { nowMs: now, pausedMs });
     try {
       await enqueueSession(done);
       await clearActiveSession();
@@ -306,7 +325,19 @@ export default function SesionScreen() {
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.md }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
         <Text style={{ color: colors.textMuted, fontSize: 12 }}>{session.dayLabel}</Text>
-        <Text style={{ color: colors.text, fontSize: 12 }}>⏱ {fmt(nowMs - session.startedAt)}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+          {paused && <Text style={{ color: colors.accentText, fontSize: 12 }}>⏸ Pausado</Text>}
+          <Text style={{ color: colors.text, fontSize: 12 }}>
+            ⏱ {fmt(nowMs - session.startedAt - pausedMsRef.current - (paused ? nowMs - pauseStartedRef.current : 0))}
+          </Text>
+          <Pressable
+            testID="pause-toggle"
+            onPress={onPauseToggle}
+            style={{ borderWidth: 1, borderColor: colors.accent, borderRadius: radius.sm, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm }}
+          >
+            <Text style={{ color: colors.accentText, fontSize: 12 }}>{paused ? "Reanudar" : "Pausar"}</Text>
+          </Pressable>
+        </View>
       </View>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm }}>
         <Text style={{ color: colors.textMuted, fontSize: 12 }}>♥ HR</Text>

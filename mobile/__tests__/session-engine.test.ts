@@ -110,6 +110,27 @@ test("finishSession setea endedAt y totalDurationMs", () => {
   expect(s.totalDurationMs).toBe(3600000);
 });
 
+test("finishSession con pausedMs resta el tiempo pausado del total", () => {
+  let s = start(); // startedAt = 1000
+  s = finishSession(s, { nowMs: 3601000, pausedMs: 600000 });
+  expect(s.endedAt).toBe(3601000);
+  expect(s.totalDurationMs).toBe(3000000); // 3600000 - 600000
+});
+
+test("finishSession sin pausedMs se comporta igual que antes (retrocompat)", () => {
+  let s = start();
+  const a = finishSession(s, { nowMs: 3601000 });
+  const b = finishSession(s, { nowMs: 3601000, pausedMs: 0 });
+  expect(a.totalDurationMs).toBe(3600000);
+  expect(b.totalDurationMs).toBe(3600000);
+});
+
+test("finishSession nunca deja totalDurationMs negativo", () => {
+  let s = start(); // startedAt = 1000
+  s = finishSession(s, { nowMs: 2000, pausedMs: 999999 });
+  expect(s.totalDurationMs).toBe(0);
+});
+
 test("endSet puebla hrAvg/hrMax cuando se pasan", () => {
   let s = start();
   s = tapRep(s, { exerciseOrder: 0, setStartMs: 2000, nowMs: 2000 });

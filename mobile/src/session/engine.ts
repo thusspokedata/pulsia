@@ -126,6 +126,8 @@ export function skipExercise(session: WorkoutSession, args: { exerciseOrder: num
   return updateExercise(session, args.exerciseOrder, (ex) => ({ ...ex, skipped: true }));
 }
 
-export function finishSession(session: WorkoutSession, args: { nowMs: number }): WorkoutSession {
-  return { ...session, endedAt: args.nowMs, totalDurationMs: args.nowMs - session.startedAt };
+export function finishSession(session: WorkoutSession, args: { nowMs: number; pausedMs?: number }): WorkoutSession {
+  // El tiempo pausado (ir al baño, etc.) no cuenta en el total. Nunca negativo.
+  const total = Math.max(0, args.nowMs - session.startedAt - (args.pausedMs ?? 0));
+  return { ...session, endedAt: args.nowMs, totalDurationMs: total };
 }

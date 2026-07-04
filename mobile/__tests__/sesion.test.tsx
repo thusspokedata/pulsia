@@ -210,6 +210,43 @@ test("terminar con una serie abierta no deja endedAt=null en el payload", async 
   expect(allSets.every((s: any) => s.endedAt != null)).toBe(true);
 });
 
+test("el botón pausar/reanudar existe y alterna su rótulo", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("pause-toggle"));
+  // Rótulo inicial: "Pausar".
+  expect(screen.getByText("Pausar")).toBeTruthy();
+  await fireEvent.press(screen.getByTestId("pause-toggle"));
+  // Al pausar: aparece "⏸ Pausado" y el botón pasa a "Reanudar".
+  await waitFor(() => expect(screen.getByText("Reanudar")).toBeTruthy());
+  expect(screen.getByText("⏸ Pausado")).toBeTruthy();
+  // Reanudar vuelve al rótulo original.
+  await fireEvent.press(screen.getByTestId("pause-toggle"));
+  await waitFor(() => expect(screen.getByText("Pausar")).toBeTruthy());
+});
+
+test("el total al terminar excluye el tiempo pausado", async () => {
+  // Controlamos el reloj para medir la pausa determinísticamente.
+  const t0 = 1_000_000;
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0);
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("pause-toggle"));
+  // Pausar en t0 + 5s.
+  spy.mockReturnValue(t0 + 5_000);
+  await fireEvent.press(screen.getByTestId("pause-toggle")); // pausa arranca
+  // Reanudar en t0 + 8s → 3s pausados.
+  spy.mockReturnValue(t0 + 8_000);
+  await fireEvent.press(screen.getByTestId("pause-toggle")); // pausa termina (3s acumulados)
+  // Terminar en t0 + 20s → total bruto 20s, menos 3s pausados = 17s.
+  spy.mockReturnValue(t0 + 20_000);
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
+  const done = mockEnqueue.mock.calls.at(-1)?.[0];
+  // La sesión arrancó en el primer Date.now() (t0), total = 20s - 3s pausados.
+  expect(done.totalDurationMs).toBe(17_000);
+  spy.mockRestore();
+});
+
 test("muestra el bpm en vivo en el box de HR", async () => {
   mockBpm = 80;
   await render(<SesionScreen />);

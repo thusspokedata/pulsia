@@ -33,8 +33,11 @@ test("muestra 'Empezar entrenamiento' y navega a /sesion con los params del día
   expect(mockPush).toHaveBeenCalledWith({ pathname: "/sesion", params: { week: 1, dayLabel: "Día 1", location: "gym" } });
 });
 
-test("muestra el banner 'Entrenamiento en curso' si hay sesión activa", async () => {
+// El banner de "sesión en curso" ya no vive en la home: ahora es global (SessionIndicator,
+// mostrado en las tabs). El index ya no debe renderizar resume-banner aunque haya sesión activa.
+test("la home ya no muestra el resume-banner (movido al indicador global)", async () => {
   mockActive = { id: "x", dayLabel: "Día 1" };
   await render(<ProgramaScreen />);
-  await waitFor(() => expect(screen.getByTestId("resume-banner")).toBeTruthy());
+  await waitFor(() => screen.getByTestId("start-Día 1"));
+  expect(screen.queryByTestId("resume-banner")).toBeNull();
 });

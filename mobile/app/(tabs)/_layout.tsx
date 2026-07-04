@@ -1,11 +1,14 @@
 import { Tabs, router } from "expo-router";
-import { Pressable } from "react-native";
+import { Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../src/theme/tokens";
+import { SessionIndicator } from "../../src/components/SessionIndicator";
 
 export default function TabsLayout() {
   return (
-    <Tabs screenOptions={{ tabBarActiveTintColor: colors.accent, headerShown: true }}>
+    <View style={{ flex: 1 }}>
+      <SessionIndicator />
+      <Tabs screenOptions={{ tabBarActiveTintColor: colors.accent, headerShown: true }}>
       <Tabs.Screen
         name="index"
         options={{
@@ -38,6 +41,7 @@ export default function TabsLayout() {
           ),
         }}
       />
-    </Tabs>
+      </Tabs>
+    </View>
   );
 }
