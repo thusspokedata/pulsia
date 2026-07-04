@@ -71,6 +71,8 @@ export const sessionExercise = pgTable("session_exercise", {
   orderIndex: integer("order_index").notNull(),
   planned: jsonb("planned").$type<PlannedExercise>().notNull(),
   skipped: boolean("skipped").default(false).notNull(),
+  note: text("note").default("").notNull(),
+  substitutedFromId: text("substituted_from_id"),
 });
 
 export const setLog = pgTable("set_log", {
