@@ -131,3 +131,7 @@ export function finishSession(session: WorkoutSession, args: { nowMs: number; pa
   const total = Math.max(0, args.nowMs - session.startedAt - (args.pausedMs ?? 0));
   return { ...session, endedAt: args.nowMs, totalDurationMs: total };
 }
+
+export function setNotes(session: WorkoutSession, notes: string): WorkoutSession {
+  return { ...session, notes };
+}

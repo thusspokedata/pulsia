@@ -1,4 +1,4 @@
-import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, discardOpenSets, closeOpenSets } from "../src/session/engine";
+import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, discardOpenSets, closeOpenSets, setNotes } from "../src/session/engine";
 import type { Program } from "@pulsia/shared";
 
 const program = {
@@ -192,4 +192,13 @@ test("closeOpenSets descarta la serie abierta de un ejercicio saltado", () => {
   s = skipExercise(s, { exerciseOrder: 1 });
   s = closeOpenSets(s, { activeOrder: 0, weightKg: null, rpe: null, nowMs: 9000 });
   expect(s.exercises[1].sets).toEqual([]);
+});
+
+test("setNotes setea la nota sin mutar la sesión original ni tocar el resto", () => {
+  const base = { id: "s1", programId: "p1", weekNumber: 1, dayLabel: "Día 1", location: "gym",
+    startedAt: 1000, endedAt: null, totalDurationMs: null, notes: "", exercises: [] } as any;
+  const next = setNotes(base, "me dolió el hombro");
+  expect(next.notes).toBe("me dolió el hombro");
+  expect(base.notes).toBe("");
+  expect(next.exercises).toBe(base.exercises);
 });
