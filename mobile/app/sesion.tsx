@@ -392,8 +392,10 @@ export default function SesionScreen() {
                 testID={`ex-item-${e.order}`}
                 onPress={() => {
                   setActiveOrder(e.order);
-                  // Cortar el descanso/campana del ejercicio anterior al cambiar.
+                  // Cortar el descanso/campana del ejercicio anterior al cambiar (incluido uno
+                  // congelado por pausa, para que no reaparezca al reanudar).
                   setRestUntil(null);
+                  restRemainingRef.current = null;
                   restDoneRef.current = true;
                 }}
                 style={{
