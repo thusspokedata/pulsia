@@ -15,7 +15,8 @@ function exerciseLine(ex: SessionExercise): string {
   const target = ex.planned.sets;
   const pct = target > 0 ? Math.round((done.length / target) * 100) : 0;
   const setsStr = done.length ? done.map(fmtSet).join(", ") : "sin series";
-  const parts = [`  - ${ex.garminName} (${done.length}/${target} series, ${pct}%): ${setsStr}`];
+  const skip = ex.skipped ? " (saltado)" : "";
+  const parts = [`  - ${ex.garminName}${skip} (${done.length}/${target} series, ${pct}%): ${setsStr}`];
   if (ex.substitutedFromId) parts.push(`    (cambió ${ex.substitutedFromId} por ${ex.catalogId})`);
   const note = ex.note?.trim();
   if (note) parts.push(`    nota: ${note.slice(0, 300)}`);

@@ -89,3 +89,10 @@ test("sets con weightKg/rpe null no rompen", () => {
   expect(typeof out).toBe("string");
   expect(out.length).toBeGreaterThan(0);
 });
+
+test("marca los ejercicios saltados como (saltado)", () => {
+  const s = sess();
+  s.exercises[0] = { ...s.exercises[0], skipped: true, sets: [] };
+  const out = buildTrainingHistorySummary([s]);
+  expect(out).toContain("(saltado)");
+});
