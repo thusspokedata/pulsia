@@ -48,3 +48,14 @@ test("sin historySummary el prompt no incluye el bloque", () => {
   const p = buildGenerationPrompt(profile);
   expect(p).not.toContain("Historial reciente");
 });
+
+test("incluye el bloque de memoria cuando se pasa memory", () => {
+  const p = buildGenerationPrompt(profile, undefined, "no tiene barra; press fuerte");
+  expect(p).toContain("Memoria del atleta");
+  expect(p).toContain("no tiene barra");
+});
+
+test("sin memory no incluye el bloque de memoria", () => {
+  const p = buildGenerationPrompt(profile);
+  expect(p).not.toContain("Memoria del atleta");
+});
