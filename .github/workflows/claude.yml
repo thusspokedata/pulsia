@@ -20,12 +20,13 @@ jobs:
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
     runs-on: ubuntu-latest
-    # Permisos mínimos: la Action hace sus escrituras (comentar/pushear) con el OAuth token
-    # del GitHub App; el GITHUB_TOKEN solo necesita lectura + OIDC.
+    # En tag mode, la Action postea un comentario placeholder y luego Claude lo REEMPLAZA con el
+    # resultado — para eso Claude necesita write sobre pull-requests/issues (con read se queda en el
+    # placeholder y termina en ~2s sin hacer nada). Ver README de anthropics/claude-code-action.
     permissions:
-      contents: read
-      pull-requests: read
-      issues: read
+      contents: read # review-only: no puede pushear código (subir a write si querés que edite)
+      pull-requests: write
+      issues: write
       id-token: write
       actions: read # leer resultados de CI del PR
     steps:
