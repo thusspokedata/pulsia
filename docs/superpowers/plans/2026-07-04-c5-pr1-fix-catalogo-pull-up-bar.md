@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: band-assisted pull-ups requieren `pull_up_bar`
+## Task 1: band-assisted pull-ups requieren `pull_up_bar`
 
 **Files:**
 - Test: `shared/src/catalog/exercises.test.ts` (agregar un test)

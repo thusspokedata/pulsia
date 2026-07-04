@@ -44,10 +44,11 @@ rendimiento real + sustituciones** de las últimas sesiones **alimenten el promp
 
 ### PR 1 — Fix de catálogo (shared, chico, standalone)
 
-`band_assisted_pull_up` está mal: `equipment: ["resistance_band"]` (`shared/src/catalog/exercises.data.ts:1425`)
-— una dominada asistida con banda **necesita barra**. Se corrige a `["resistance_band", "pull_up_bar"]`
-y se **auditan** las variantes hermanas (colgarse/anclar a barra) por el mismo error. Con el gating
-`catalogForEquipment`, si no tenés `pull_up_bar` en el perfil deja de generarse.
+`band_assisted_pull_up` estaba mal: `equipment: ["resistance_band"]` (`shared/src/catalog/exercises.data.ts`)
+— una dominada asistida con banda **necesita barra**. Se corrigió a `["resistance_band", "pull_up_bar"]`
+y se **auditaron** las variantes hermanas (colgarse/anclar a barra) por el mismo error: resultaron 3
+(`banded_pull_ups`, `band_assisted_chin_up`, `band_assisted_pull_up`). Con el gating
+`catalogForEquipment`, si no tenés `pull_up_bar` en el perfil dejan de generarse. **Entregado en este PR.**
 
 - **Test:** `catalogForEquipment(["resistance_band"])` NO incluye `band_assisted_pull_up`;
   `catalogForEquipment(["resistance_band","pull_up_bar"])` sí.
