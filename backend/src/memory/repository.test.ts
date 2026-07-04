@@ -23,3 +23,9 @@ test("upsertMemory guarda y getMemory lo devuelve", async () => {
   await upsertMemory(db, "u", "no tiene barra; press fuerte");
   expect(db._get().content).toBe("no tiene barra; press fuerte");
 });
+
+test("upsertMemory trunca contenido excesivamente largo (cota defensiva)", async () => {
+  const db = fakeDb();
+  await upsertMemory(db, "u", "x".repeat(10000));
+  expect(db._get().content.length).toBeLessThanOrEqual(4000);
+});

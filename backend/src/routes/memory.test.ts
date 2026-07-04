@@ -118,3 +118,19 @@ test("POST /memory/refresh sin API key configurada devuelve 400", async () => {
   const res = await app.request("/memory/refresh", { method: "POST", headers: authHeaders });
   expect(res.status).toBe(400);
 });
+
+test("POST /memory/refresh sin updateMemory disponible devuelve 501", async () => {
+  const db = fakeDb({ memoryContent: "memoria vieja" });
+  const d: any = deps(db);
+  delete d.aiClient.updateMemory;
+  const app = createApp(d);
+  const res = await app.request("/memory/refresh", { method: "POST", headers: authHeaders });
+  expect(res.status).toBe(501);
+});
+
+test("POST /memory/refresh propaga fallo de la IA como 502", async () => {
+  const db = fakeDb({ memoryContent: "memoria vieja" });
+  const app = createApp(deps(db, async () => { throw new Error("boom"); }) as any);
+  const res = await app.request("/memory/refresh", { method: "POST", headers: authHeaders });
+  expect(res.status).toBe(502);
+});
