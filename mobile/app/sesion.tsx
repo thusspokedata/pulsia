@@ -59,6 +59,7 @@ export default function SesionScreen() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [finishError, setFinishError] = useState(false);
   const [finishedSession, setFinishedSession] = useState<WorkoutSession | null>(null);
+  const [finishedNotes, setFinishedNotes] = useState("");
   const [activeOrder, setActiveOrder] = useState<number | null>(null);
   const [restUntil, setRestUntil] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
@@ -85,6 +86,10 @@ export default function SesionScreen() {
       mounted.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (finishedSession) setFinishedNotes(finishedSession.notes);
+  }, [finishedSession]);
 
   function apply(next: WorkoutSession) {
     setSession(next);
@@ -209,6 +214,7 @@ export default function SesionScreen() {
     return (
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
         <SessionSummary summary={summarize(finishedSession)} />
+        <NotesEditor value={finishedNotes} onChangeText={setFinishedNotes} onBlur={saveFinishedNotes} />
         <Pressable
           testID="summary-done"
           onPress={() => router.replace("/")}
@@ -333,6 +339,15 @@ export default function SesionScreen() {
     if (url) void syncPending(url); // fire-and-forget; si falla queda en la cola
     // No navegamos: mostramos el resumen; "Listo" navega a la home.
     setFinishedSession(done);
+  }
+
+  async function saveFinishedNotes() {
+    if (!finishedSession) return;
+    const updated = setNotes(finishedSession, finishedNotes);
+    setFinishedSession(updated);
+    await enqueueSession(updated);
+    const url = await getBackendUrl();
+    if (url) void syncPending(url);
   }
 
   function onCancel() {
