@@ -30,9 +30,14 @@ export function programsRoutes(deps: AppDeps) {
 
     let memory = await getMemory(deps.db, userId);
     try {
-      memory = await refreshAthleteMemory(deps.db, deps.aiClient, userId, apiKey, model);
-    } catch {
+      // Reusar `memory` y `historySummary` ya computados para evitar re-fetchear en el refresh.
+      memory = await refreshAthleteMemory(deps.db, deps.aiClient, userId, apiKey, model, {
+        current: memory,
+        historySummary,
+      });
+    } catch (e) {
       // best-effort: si el refresh de memoria falla, seguimos con la memoria previa (no bloquea la generación)
+      console.warn("refresh de memoria falló (best-effort):", (e as Error).message);
     }
 
     let program;

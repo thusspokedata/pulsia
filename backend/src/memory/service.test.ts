@@ -27,3 +27,16 @@ test("refreshAthleteMemory lanza si no hay updateMemory", async () => {
   const db = fakeDb("x");
   await expect(refreshAthleteMemory(db, {} as any, "u", "sk", "model")).rejects.toThrow();
 });
+
+test("refreshAthleteMemory reusa current/historySummary de opts sin re-fetchear", async () => {
+  // db sin query.* : si el servicio intentara re-fetchear, rompería. Con opts no debería tocarlo.
+  const upserts: any[] = [];
+  const db: any = { insert: () => ({ values: (v: any) => ({ onConflictDoUpdate: async () => { upserts.push(v); } }) }) };
+  let seen: any = null;
+  const ai: any = { updateMemory: async (input: any) => { seen = input; return "nueva"; } };
+  const out = await refreshAthleteMemory(db, ai, "u", "sk", "model", { current: "prev", historySummary: "HS-Día-1" });
+  expect(out).toBe("nueva");
+  expect(seen.current).toBe("prev");
+  expect(seen.historySummary).toBe("HS-Día-1");
+  expect(upserts[0].content).toBe("nueva");
+});
