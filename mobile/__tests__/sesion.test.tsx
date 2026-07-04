@@ -47,7 +47,15 @@ const program = {
     exercises: [{ catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 2, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90, notes: "" }],
   }] }],
 };
-jest.mock("../src/storage/program", () => ({ getStoredProgram: async () => program }));
+const mockSetProgram = jest.fn();
+jest.mock("../src/storage/program", () => ({
+  getStoredProgram: async () => program,
+  setStoredProgram: async (p: any) => mockSetProgram(p),
+}));
+
+jest.mock("../src/storage/profile", () => ({
+  getProfile: async () => ({ gymEquipment: ["dumbbell"], homeEquipment: ["dumbbell"] }),
+}));
 
 let mockHrSamples: { t: number; bpm: number }[] = [];
 let mockBpm: number | null = null;
@@ -372,6 +380,22 @@ test("editar la nota en el resumen re-encola la sesión con la nota", async () =
   await waitFor(() =>
     expect(mockEnqueue).toHaveBeenCalledWith(expect.objectContaining({ notes: "buen día de espalda" })),
   );
+});
+
+test("cambiar ejercicio: elige alternativa + nota y aplica a sesión y programa", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("cambiar-ejercicio"));
+  const alts = await screen.findAllByTestId(/^alt-/); // alternativas por músculo+equipo
+  await fireEvent.press(alts[0]); // elegimos la primera alternativa
+  await fireEvent.changeText(screen.getByTestId("cambio-nota"), "no tengo barra");
+  await fireEvent.press(screen.getByTestId("confirmar-cambio"));
+  await waitFor(() => {
+    const last = mockSetActive.mock.calls.at(-1)?.[0];
+    expect(last.exercises[0].note).toBe("no tengo barra");
+    expect(last.exercises[0].catalogId).not.toBe("barbell_bench_press");
+  });
+  await waitFor(() => expect(mockSetProgram).toHaveBeenCalled());
 });
 
 test("al terminar la serie guarda hrAvg/hrMax agregados de los samples", async () => {
