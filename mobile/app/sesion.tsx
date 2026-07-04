@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, Alert } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import type { WorkoutSession, SessionExercise } from "@pulsia/shared";
+import type { WorkoutSession, SessionExercise, Equipment } from "@pulsia/shared";
 import { alternativesFor } from "@pulsia/shared";
 import { getStoredProgram, setStoredProgram } from "../src/storage/program";
 import { getStoredProgramId } from "../src/storage/programId";
@@ -68,7 +68,7 @@ export default function SesionScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [pickChoice, setPickChoice] = useState<{ catalogId: string; garminName: string } | null>(null);
   const [changeNote, setChangeNote] = useState("");
-  const [equipment, setEquipment] = useState<string[]>([]);
+  const [equipment, setEquipment] = useState<Equipment[]>([]);
   const pausedMsRef = useRef(0); // tiempo pausado acumulado (ms)
   const pauseStartedRef = useRef(0); // Date.now() del inicio de la pausa en curso
   const restRemainingRef = useRef<number | null>(null); // ms restantes de descanso congelados al pausar
@@ -102,6 +102,14 @@ export default function SesionScreen() {
       if (p) setEquipment(session?.location === "home" ? p.homeEquipment : p.gymEquipment);
     });
   }, [session?.location]);
+
+  // Al cambiar de ejercicio activo, cerrar y limpiar el picker de cambio: evita arrastrar una
+  // alternativa/nota elegida para otro ejercicio y sustituir el equivocado.
+  useEffect(() => {
+    setShowPicker(false);
+    setPickChoice(null);
+    setChangeNote("");
+  }, [activeOrder]);
 
   function apply(next: WorkoutSession) {
     setSession(next);
@@ -541,7 +549,7 @@ export default function SesionScreen() {
           {showPicker && (
             <View style={{ gap: spacing.xs, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.sm }}>
               {(() => {
-                const alts = alternativesFor(current.catalogId, equipment as any);
+                const alts = alternativesFor(current.catalogId, equipment);
                 if (alts.length === 0) {
                   return <Text style={{ color: colors.textMuted, fontSize: 12 }}>No hay alternativas con tu equipo — podés saltar el ejercicio.</Text>;
                 }
