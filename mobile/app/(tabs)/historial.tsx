@@ -25,6 +25,7 @@ export default function HistorialScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const lastLoaded = useRef<string | null>(null);
   const baseUrl = useRef<string | null>(null);
 
@@ -71,13 +72,14 @@ export default function HistorialScreen() {
   async function onOpen(item: SessionListItem) {
     const url = baseUrl.current;
     if (!url) return;
+    // Error separado del de la lista: si falla abrir una sesión NO debe ocultar el historial.
+    setDetailError(null);
     setDetailLoading(true);
-    setError(null);
     try {
       const full = await getSessionById(url, item.id);
       setSelected(full);
     } catch {
-      setError("No se pudo abrir el entrenamiento");
+      setDetailError("No se pudo abrir el entrenamiento");
     } finally {
       setDetailLoading(false);
     }
@@ -97,6 +99,8 @@ export default function HistorialScreen() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
       <Text style={{ fontSize: 20, fontWeight: "500", color: colors.text }}>Historial</Text>
+      {detailLoading && <Text testID="hist-opening" style={{ color: colors.textMuted, fontSize: 12 }}>Abriendo…</Text>}
+      {detailError && <Text testID="hist-detail-error" style={{ color: colors.accent, fontSize: 12 }}>{detailError}</Text>}
       {error ? (
         <Text style={{ color: colors.textMuted }}>{error}</Text>
       ) : loading ? (

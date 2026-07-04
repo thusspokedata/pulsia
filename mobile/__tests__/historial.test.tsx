@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
 import HistorialScreen from "../app/(tabs)/historial";
+import { getSessionById } from "../src/api/sessions";
 import type { WorkoutSession } from "@pulsia/shared";
 
 const mockSessionA: WorkoutSession = {
@@ -68,4 +69,14 @@ test("al tocar una sesión muestra su SessionSummary y hist-back vuelve a la lis
 
   await fireEvent.press(screen.getByTestId("hist-back"));
   await waitFor(() => expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy());
+});
+
+test("si falla abrir una sesión muestra un error de detalle SIN ocultar la lista", async () => {
+  (getSessionById as jest.Mock).mockRejectedValueOnce(new Error("boom"));
+  await render(<HistorialScreen />);
+  await waitFor(() => expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy());
+  await fireEvent.press(screen.getByTestId(`hist-item-${mockSessionA.id}`));
+  await waitFor(() => expect(screen.getByTestId("hist-detail-error")).toBeTruthy());
+  // La lista sigue visible (no la reemplazó el error).
+  expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy();
 });
