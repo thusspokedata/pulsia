@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from "react";
-import { ScrollView, View, Text, Pressable } from "react-native";
+import { ScrollView, View, Text, Pressable, Alert } from "react-native";
 import { useFocusEffect } from "expo-router";
 import type { WorkoutSession } from "@pulsia/shared";
-import { getSessions, getSessionById, type SessionListItem } from "../../src/api/sessions";
+import { getSessions, getSessionById, deleteSessionById, type SessionListItem } from "../../src/api/sessions";
 import { getBackendUrl } from "../../src/storage/config";
 import { summarize } from "../../src/session/summary";
 import { SessionSummary } from "../../src/components/SessionSummary";
@@ -85,6 +85,29 @@ export default function HistorialScreen() {
     }
   }
 
+  function confirmDelete(item: SessionListItem) {
+    Alert.alert("Eliminar entrenamiento", "Se borrará de la base de datos. ¿Seguro?", [
+      { text: "No", style: "cancel" },
+      { text: "Sí, eliminar", style: "destructive", onPress: () => onDelete(item) },
+    ]);
+  }
+
+  async function onDelete(item: SessionListItem) {
+    const url = baseUrl.current;
+    if (!url) return;
+    try {
+      await deleteSessionById(url, item.id);
+      setItems((prev) => {
+        const next = prev.filter((x) => x.id !== item.id);
+        // Actualizar el dedupe del focus-effect para que no reintroduzca el item borrado.
+        lastLoaded.current = JSON.stringify(next);
+        return next;
+      });
+    } catch {
+      setDetailError("No se pudo eliminar");
+    }
+  }
+
   if (selected != null) {
     return (
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
@@ -131,6 +154,14 @@ export default function HistorialScreen() {
               <Text style={{ color: colors.textMuted, fontSize: 12 }}>{fmtDate(s.startedAt)}</Text>
             </View>
             <Text style={{ color: colors.textMuted, fontSize: 13 }}>⏱ {fmt(s.totalDurationMs ?? 0)}</Text>
+            <Pressable
+              testID={`hist-del-${s.id}`}
+              onPress={() => confirmDelete(s)}
+              hitSlop={8}
+              style={{ paddingHorizontal: spacing.xs, paddingVertical: spacing.xs }}
+            >
+              <Text style={{ fontSize: 16 }}>🗑</Text>
+            </Pressable>
           </Pressable>
         ))
       )}

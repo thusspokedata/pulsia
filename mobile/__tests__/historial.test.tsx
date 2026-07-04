@@ -1,6 +1,7 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react-native";
+import { Alert } from "react-native";
 import HistorialScreen from "../app/(tabs)/historial";
-import { getSessionById } from "../src/api/sessions";
+import { getSessions, getSessionById, deleteSessionById } from "../src/api/sessions";
 import type { WorkoutSession } from "@pulsia/shared";
 
 const mockSessionA: WorkoutSession = {
@@ -44,6 +45,7 @@ jest.mock("../src/api/sessions", () => ({
     { id: mockSessionB.id, programId: mockSessionB.programId, dayLabel: mockSessionB.dayLabel, location: "gym", startedAt: mockSessionB.startedAt, totalDurationMs: mockSessionB.totalDurationMs },
   ]),
   getSessionById: jest.fn(async (_url: string, id: string) => (id === mockSessionA.id ? mockSessionA : mockSessionB)),
+  deleteSessionById: jest.fn(async () => undefined),
 }));
 jest.mock("../src/storage/config", () => ({
   getBackendUrl: jest.fn(async () => "http://backend.test"),
@@ -79,4 +81,35 @@ test("si falla abrir una sesión muestra un error de detalle SIN ocultar la list
   await waitFor(() => expect(screen.getByTestId("hist-detail-error")).toBeTruthy());
   // La lista sigue visible (no la reemplazó el error).
   expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy();
+});
+
+test("tocar 🗑 pide confirmación, y al confirmar borra en el backend y quita la fila sin abrir el detalle", async () => {
+  const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  await render(<HistorialScreen />);
+  await waitFor(() => expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy());
+
+  await fireEvent.press(screen.getByTestId(`hist-del-${mockSessionA.id}`));
+
+  // Se pidió confirmación y NO se abrió el detalle.
+  expect(alertSpy).toHaveBeenCalledTimes(1);
+  expect(screen.queryByTestId("summary")).toBeNull();
+
+  // Tras borrar, el backend ya no devuelve la sesión A (el focus-effect puede re-fetchar).
+  (getSessions as jest.Mock).mockResolvedValue([
+    { id: mockSessionB.id, programId: mockSessionB.programId, dayLabel: mockSessionB.dayLabel, location: "gym", startedAt: mockSessionB.startedAt, totalDurationMs: mockSessionB.totalDurationMs },
+  ]);
+
+  // Invocar el onPress del botón "Sí, eliminar".
+  const buttons = alertSpy.mock.calls[0][2] as any[];
+  const confirm = buttons.find((b) => b.style === "destructive");
+  await act(async () => {
+    await confirm.onPress();
+  });
+
+  await waitFor(() => expect(deleteSessionById).toHaveBeenCalledWith("http://backend.test", mockSessionA.id));
+  await waitFor(() => expect(screen.queryByTestId(`hist-item-${mockSessionA.id}`)).toBeNull());
+  // La otra sesión sigue en la lista.
+  expect(screen.getByTestId(`hist-item-${mockSessionB.id}`)).toBeTruthy();
+
+  alertSpy.mockRestore();
 });
