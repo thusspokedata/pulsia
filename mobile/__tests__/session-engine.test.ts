@@ -1,4 +1,4 @@
-import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, discardOpenSets, closeOpenSets, setNotes } from "../src/session/engine";
+import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, discardOpenSets, closeOpenSets, setNotes, substituteExercise, substituteInProgram } from "../src/session/engine";
 import type { Program } from "@pulsia/shared";
 
 const program = {
@@ -27,6 +27,12 @@ test("startSession arma la sesión con planned y sin series", () => {
   expect(s.exercises[0].planned.sets).toBe(3);
   expect(s.exercises[0].sets).toEqual([]);
   expect(s.exercises[0].order).toBe(0);
+});
+
+test("startSession inicializa note='' y substitutedFromId=null por ejercicio", () => {
+  const s = start();
+  expect(s.exercises[0].note).toBe("");
+  expect(s.exercises[0].substitutedFromId).toBe(null);
 });
 
 test("tapRep agrega un timestamp relativo al inicio de la serie", () => {
@@ -201,4 +207,27 @@ test("setNotes setea la nota sin mutar la sesión original ni tocar el resto", (
   expect(next.notes).toBe("me dolió el hombro");
   expect(base.notes).toBe("");
   expect(next.exercises).toBe(base.exercises);
+});
+
+test("substituteExercise cambia el ejercicio en ese order, setea note y substitutedFromId, preserva sets", () => {
+  const base = start();
+  const origCatalog = base.exercises[0].catalogId;
+  const withSet = { ...base, exercises: base.exercises.map((e, i) => i === 0 ? { ...e, sets: [{ setNumber: 1, reps: 5, weightKg: null, rpe: null, startedAt: 1, endedAt: 2, durationMs: 1, repTimestamps: [], hrAvg: null, hrMax: null, skipped: false }] } : e) };
+  const next = substituteExercise(withSet, { order: 0, newCatalogId: "dumbbell_row", newGarminName: "Dumbbell Row", note: "no tengo barra" });
+  const ex = next.exercises.find((e) => e.order === 0)!;
+  expect(ex.catalogId).toBe("dumbbell_row");
+  expect(ex.garminName).toBe("Dumbbell Row");
+  expect(ex.note).toBe("no tengo barra");
+  expect(ex.substitutedFromId).toBe(origCatalog);
+  expect(ex.sets.length).toBe(1);
+});
+
+test("substituteInProgram reemplaza todas las apariciones del catalogId viejo, escribe el motivo en notes", () => {
+  const oldId = program.weeks[0].workouts[0].exercises[0].catalogId;
+  const next = substituteInProgram(program, oldId, { catalogId: "dumbbell_row", garminName: "Dumbbell Row" }, "no tengo barra");
+  const all = next.weeks.flatMap((w) => w.workouts.flatMap((wo) => wo.exercises));
+  expect(all.some((e) => e.catalogId === oldId)).toBe(false);
+  const swapped = all.find((e) => e.catalogId === "dumbbell_row")!;
+  expect(swapped.garminName).toBe("Dumbbell Row");
+  expect(swapped.notes).toBe("no tengo barra");
 });

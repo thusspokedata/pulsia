@@ -40,14 +40,34 @@ jest.mock("../src/storage/config", () => ({ getBackendUrl: async () => "http://b
 let mockProgramId: string | null = "22222222-2222-4222-8222-222222222222";
 jest.mock("../src/storage/programId", () => ({ getStoredProgramId: async () => mockProgramId }));
 
-const program = {
+const baseProgram = {
   name: "Plan",
   weeks: [{ weekNumber: 1, workouts: [{
     dayLabel: "Día 1", location: "gym", focus: "chest",
     exercises: [{ catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 2, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90, notes: "" }],
   }] }],
 };
-jest.mock("../src/storage/program", () => ({ getStoredProgram: async () => program }));
+// Variante con 2 ejercicios para poder cambiar de ejercicio activo en un test.
+const twoExerciseProgram = {
+  name: "Plan",
+  weeks: [{ weekNumber: 1, workouts: [{
+    dayLabel: "Día 1", location: "gym", focus: "chest",
+    exercises: [
+      { catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 2, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90, notes: "" },
+      { catalogId: "barbell_back_squat", garminName: "Barbell Back Squat", sets: 2, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90, notes: "" },
+    ],
+  }] }],
+};
+let mockProgram = baseProgram;
+const mockSetProgram = jest.fn();
+jest.mock("../src/storage/program", () => ({
+  getStoredProgram: async () => mockProgram,
+  setStoredProgram: async (p: any) => mockSetProgram(p),
+}));
+
+jest.mock("../src/storage/profile", () => ({
+  getProfile: async () => ({ gymEquipment: ["dumbbell"], homeEquipment: ["dumbbell"] }),
+}));
 
 let mockHrSamples: { t: number; bpm: number }[] = [];
 let mockBpm: number | null = null;
@@ -65,7 +85,7 @@ jest.mock("../src/ble/useHeartRate", () => ({
 
 import SesionScreen from "../app/sesion";
 
-beforeEach(() => { mockActive = null; mockPauseState = null; mockProgramId = "22222222-2222-4222-8222-222222222222"; mockHrSamples = []; mockBpm = null; jest.clearAllMocks(); });
+beforeEach(() => { mockActive = null; mockPauseState = null; mockProgramId = "22222222-2222-4222-8222-222222222222"; mockHrSamples = []; mockBpm = null; mockProgram = baseProgram; jest.clearAllMocks(); });
 
 test("arma la sesión del día y muestra el ejercicio actual", async () => {
   await render(<SesionScreen />);
@@ -374,6 +394,22 @@ test("editar la nota en el resumen re-encola la sesión con la nota", async () =
   );
 });
 
+test("cambiar ejercicio: elige alternativa + nota y aplica a sesión y programa", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("cambiar-ejercicio"));
+  const alts = await screen.findAllByTestId(/^alt-/); // alternativas por músculo+equipo
+  await fireEvent.press(alts[0]); // elegimos la primera alternativa
+  await fireEvent.changeText(screen.getByTestId("cambio-nota"), "no tengo barra");
+  await fireEvent.press(screen.getByTestId("confirmar-cambio"));
+  await waitFor(() => {
+    const last = mockSetActive.mock.calls.at(-1)?.[0];
+    expect(last.exercises[0].note).toBe("no tengo barra");
+    expect(last.exercises[0].catalogId).not.toBe("barbell_bench_press");
+  });
+  await waitFor(() => expect(mockSetProgram).toHaveBeenCalled());
+});
+
 test("al terminar la serie guarda hrAvg/hrMax agregados de los samples", async () => {
   mockHrSamples = [{ t: 1, bpm: 78 }, { t: 2, bpm: 84 }];
   await render(<SesionScreen />);
@@ -386,4 +422,18 @@ test("al terminar la serie guarda hrAvg/hrMax agregados de los samples", async (
     expect(set.hrAvg).toBe(81); // round((78+84)/2)
     expect(set.hrMax).toBe(84);
   });
+});
+
+test("cambiar de ejercicio activo resetea el picker de cambio (no arrastra la elección)", async () => {
+  mockProgram = twoExerciseProgram;
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  // Abrir el picker para el ejercicio activo (order 0) y elegir una alternativa.
+  await fireEvent.press(screen.getByTestId("cambiar-ejercicio"));
+  const alts = await screen.findAllByTestId(/^alt-/);
+  await fireEvent.press(alts[0]);
+  expect(screen.getByTestId("confirmar-cambio")).toBeTruthy();
+  // Cambiar al segundo ejercicio (order 1) SIN confirmar → el picker se cierra/resetea.
+  await fireEvent.press(screen.getByTestId("ex-item-1"));
+  await waitFor(() => expect(screen.queryByTestId("confirmar-cambio")).toBeNull());
 });

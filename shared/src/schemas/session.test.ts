@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { WorkoutSessionSchema } from "./session";
+import { WorkoutSessionSchema, SessionExerciseSchema } from "./session";
 
 const validSession = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -51,4 +51,14 @@ test("rechaza location inválida", () => {
   const bad = structuredClone(validSession);
   (bad as any).location = "park";
   expect(WorkoutSessionSchema.safeParse(bad).success).toBe(false);
+});
+
+test("SessionExercise tiene note y substitutedFromId con defaults", () => {
+  const parsed = SessionExerciseSchema.parse({
+    catalogId: "x", garminName: "X", order: 0,
+    planned: { sets: 2, reps: "8", targetLoad: "RPE 8", restSeconds: 60 },
+    sets: [],
+  });
+  expect(parsed.note).toBe("");
+  expect(parsed.substitutedFromId).toBe(null);
 });

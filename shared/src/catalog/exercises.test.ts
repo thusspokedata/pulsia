@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import { CatalogExerciseSchema } from "../schemas/catalog";
-import { EXERCISE_CATALOG, getExerciseById, catalogForEquipment } from "./exercises";
+import { EXERCISE_CATALOG, getExerciseById, catalogForEquipment, alternativesFor } from "./exercises";
 
 test("todas las entradas son válidas según el schema", () => {
   for (const ex of EXERCISE_CATALOG) {
@@ -43,4 +43,16 @@ test("las dominadas asistidas con banda requieren también barra (pull_up_bar)",
     expect(bandOnly).not.toContain(id);
     expect(bandPlusBar).toContain(id);
   }
+});
+
+test("alternativesFor: mismo músculo primario, equipo disponible, excluye el actual", () => {
+  const alts = alternativesFor("band_assisted_pull_up", ["dumbbell"]);
+  expect(alts.every((e) => e.primaryMuscles.includes("back"))).toBe(true);
+  expect(alts.every((e) => e.equipment.every((eq) => eq === "dumbbell"))).toBe(true);
+  expect(alts.some((e) => e.id === "band_assisted_pull_up")).toBe(false);
+  expect(alts.length).toBeGreaterThan(0);
+});
+
+test("alternativesFor: catalogId inexistente → []", () => {
+  expect(alternativesFor("no_existe", ["dumbbell"])).toEqual([]);
 });

@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, Alert } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import type { WorkoutSession, SessionExercise } from "@pulsia/shared";
-import { getStoredProgram } from "../src/storage/program";
+import type { WorkoutSession, SessionExercise, Equipment } from "@pulsia/shared";
+import { alternativesFor } from "@pulsia/shared";
+import { getStoredProgram, setStoredProgram } from "../src/storage/program";
 import { getStoredProgramId } from "../src/storage/programId";
 import { getBackendUrl } from "../src/storage/config";
+import { getProfile } from "../src/storage/profile";
 import { getActiveSession, setActiveSession, clearActiveSession } from "../src/storage/activeSession";
 import { getPauseState, setPauseState, clearPauseState } from "../src/storage/pauseState";
 import { enqueueSession } from "../src/storage/pendingSessions";
 import { syncPending } from "../src/sync/syncSessions";
-import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets, setNotes } from "../src/session/engine";
+import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets, setNotes, substituteExercise, substituteInProgram } from "../src/session/engine";
 import { newSessionId } from "../src/session/id";
 import { useHeartRate } from "../src/ble/useHeartRate";
 import { aggregateHr } from "../src/ble/hrAggregate";
@@ -63,6 +65,10 @@ export default function SesionScreen() {
   const [activeOrder, setActiveOrder] = useState<number | null>(null);
   const [restUntil, setRestUntil] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickChoice, setPickChoice] = useState<{ catalogId: string; garminName: string } | null>(null);
+  const [changeNote, setChangeNote] = useState("");
+  const [equipment, setEquipment] = useState<Equipment[]>([]);
   const pausedMsRef = useRef(0); // tiempo pausado acumulado (ms)
   const pauseStartedRef = useRef(0); // Date.now() del inicio de la pausa en curso
   const restRemainingRef = useRef<number | null>(null); // ms restantes de descanso congelados al pausar
@@ -90,6 +96,20 @@ export default function SesionScreen() {
   useEffect(() => {
     if (finishedSession) setFinishedNotes(finishedSession.notes);
   }, [finishedSession]);
+
+  useEffect(() => {
+    void getProfile().then((p) => {
+      if (p) setEquipment(session?.location === "home" ? p.homeEquipment : p.gymEquipment);
+    });
+  }, [session?.location]);
+
+  // Al cambiar de ejercicio activo, cerrar y limpiar el picker de cambio: evita arrastrar una
+  // alternativa/nota elegida para otro ejercicio y sustituir el equivocado.
+  useEffect(() => {
+    setShowPicker(false);
+    setPickChoice(null);
+    setChangeNote("");
+  }, [activeOrder]);
 
   function apply(next: WorkoutSession) {
     setSession(next);
@@ -290,6 +310,23 @@ export default function SesionScreen() {
   function onSkip() {
     if (!current) return;
     apply(skipExercise(sess, { exerciseOrder: current.order }));
+  }
+
+  async function confirmChange() {
+    if (!current || !pickChoice) return;
+    apply(
+      substituteExercise(sess, {
+        order: current.order,
+        newCatalogId: pickChoice.catalogId,
+        newGarminName: pickChoice.garminName,
+        note: changeNote,
+      }),
+    );
+    const prog = await getStoredProgram();
+    if (prog) await setStoredProgram(substituteInProgram(prog, current.catalogId, pickChoice, changeNote));
+    setShowPicker(false);
+    setPickChoice(null);
+    setChangeNote("");
   }
 
   function onPauseToggle() {
@@ -502,6 +539,53 @@ export default function SesionScreen() {
           <Pressable testID="skip" onPress={onSkip} hitSlop={8} style={{ alignItems: "center", paddingVertical: spacing.sm }}>
             <Text style={{ color: colors.accentText, fontSize: 13, fontWeight: "600" }}>Saltar ejercicio</Text>
           </Pressable>
+          <Pressable
+            testID="cambiar-ejercicio"
+            onPress={() => setShowPicker((v) => !v)}
+            style={{ alignItems: "center", paddingVertical: spacing.sm }}
+          >
+            <Text style={{ color: colors.accentText, fontSize: 13, fontWeight: "600" }}>Cambiar ejercicio</Text>
+          </Pressable>
+          {showPicker && (
+            <View style={{ gap: spacing.xs, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.sm }}>
+              {(() => {
+                const alts = alternativesFor(current.catalogId, equipment);
+                if (alts.length === 0) {
+                  return <Text style={{ color: colors.textMuted, fontSize: 12 }}>No hay alternativas con tu equipo — podés saltar el ejercicio.</Text>;
+                }
+                return alts.map((e) => (
+                  <Pressable
+                    key={e.id}
+                    testID={`alt-${e.id}`}
+                    onPress={() => setPickChoice({ catalogId: e.id, garminName: e.garminName })}
+                    style={{ paddingVertical: spacing.xs }}
+                  >
+                    <Text style={{ color: pickChoice?.catalogId === e.id ? colors.accent : colors.text, fontSize: 14 }}>
+                      {e.garminName}
+                    </Text>
+                  </Pressable>
+                ));
+              })()}
+              <TextInput
+                testID="cambio-nota"
+                value={changeNote}
+                onChangeText={setChangeNote}
+                placeholder="Motivo (ej.: no tengo barra)"
+                placeholderTextColor={colors.textMuted}
+                multiline
+                maxLength={300}
+                style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.sm, color: colors.text, minHeight: 44 }}
+              />
+              <Pressable
+                testID="confirmar-cambio"
+                disabled={!pickChoice}
+                onPress={confirmChange}
+                style={{ backgroundColor: pickChoice ? colors.accent : colors.border, borderRadius: radius.sm, paddingVertical: spacing.sm, alignItems: "center" }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "600" }}>Confirmar cambio</Text>
+              </Pressable>
+            </View>
+          )}
 
           {doneList.length > 0 && (
             <View style={{ gap: spacing.xs, marginTop: spacing.sm }}>

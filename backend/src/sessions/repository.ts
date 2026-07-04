@@ -21,6 +21,8 @@ export function rowsToSession(row: any): WorkoutSession {
       order: ex.orderIndex,
       planned: ex.planned,
       skipped: ex.skipped,
+      note: ex.note,
+      substitutedFromId: ex.substitutedFromId,
       sets: (ex.sets ?? []).map((s: any) => ({
         setNumber: s.setNumber,
         reps: s.reps,
@@ -51,6 +53,7 @@ export async function upsertSession(db: Db, userId: string, s: WorkoutSession): 
       const [exRow] = await tx.insert(sessionExercise).values({
         sessionId: s.id, catalogId: ex.catalogId, garminName: ex.garminName,
         orderIndex: ex.order, planned: ex.planned, skipped: ex.skipped,
+        note: ex.note, substitutedFromId: ex.substitutedFromId,
       }).returning();
       for (const set of ex.sets) {
         await tx.insert(setLog).values({

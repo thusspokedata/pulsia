@@ -20,6 +20,7 @@ const nestedRow = {
       id: "ex-1", sessionId: "11111111-1111-4111-8111-111111111111",
       catalogId: "barbell_bench_press", garminName: "Barbell Bench Press",
       orderIndex: 0, planned: { sets: 4, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90 }, skipped: false,
+      note: "no tengo barra", substitutedFromId: "band_assisted_pull_up",
       sets: [
         {
           id: "s-1", sessionExerciseId: "ex-1", setNumber: 1, reps: 10, weightKg: 40, rpe: 7,
@@ -40,4 +41,10 @@ test("rowsToSession convierte filas anidadas a WorkoutSession", () => {
   // No filtra campos de DB al shape compartido:
   expect((s as any).createdAt).toBeUndefined();
   expect((s.exercises[0] as any).sessionId).toBeUndefined();
+});
+
+test("rowsToSession mapea note y substitutedFromId", () => {
+  const s = rowsToSession(nestedRow as any);
+  expect(s.exercises[0].note).toBe("no tengo barra");
+  expect(s.exercises[0].substitutedFromId).toBe("band_assisted_pull_up");
 });
