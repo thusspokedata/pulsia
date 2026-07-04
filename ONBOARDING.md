@@ -1,13 +1,48 @@
 # Pulsia — Onboarding / Handoff
 
-> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: 2026-07-02 (fin de sesión larga: sub-proyecto A completo + deploy a la Pi + APK Android andando).
+> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: 2026-07-04 (sesión larga: sub-proyecto B HR completo + experiencia de sesión v2 + resumen post-entrenamiento (C2) + historial (C4) + eliminar sesión + workflow @claude).
 
 ## 0. Estado en una línea
 
-**La app anda de punta a punta desde el teléfono del usuario (Android):** APK instalado (EAS) →
-backend dockerizado corriendo en la **Pi** (`http://192.168.178.47:3011`) → genera planes de
-entrenamiento. El **sub-proyecto A (registro de entrenamiento)** está completo en `main`. Lo
-siguiente es el **sub-proyecto B (HR por banda Polar/Garmin, requiere dev build)** y pulir.
+**La app anda de punta a punta desde el teléfono (Android), y ya se registra + resume + revisa el
+historial de entrenamientos con HR por banda BLE.** APK/preview (EAS) → backend en la **Pi**
+(`http://192.168.178.47:3011`). En `main`: sub-proyecto A (registro), **B (HR por banda BLE)**,
+**Sesión v2** (lista con ✓, ±reps, descanso+campana), **C2 (resumen post-entrenamiento)** y **C4
+(historial)**. **Próximo:** C3 (mapa corporal en el resumen), C1 (pausar + indicador), C5/C6.
+
+## 0b. Estado de la sesión 2026-07-04 (leer primero)
+
+**Todo mergeado en `main` (revisado por CodeRabbit salvo donde se aclara):**
+- **Sub-proyecto B — HR por banda BLE:** perfil estándar `0x180D`, avg/max por serie. `mobile/src/ble/`
+  (`hrParser`, `hrAggregate`, `bandManager` con `react-native-ble-plx`, hook `useHeartRate`), storage
+  `pairedBand`, permiso runtime (`ble/permissions.ts`). Emparejar en Configuración → auto-conecta en
+  sesión. **Verificado en dispositivo con banda real.** Requiere preview/dev build (BLE no anda en Expo Go).
+- **Sesión v2** (`app/sesion.tsx`): ejercicio activo explícito + lista con ✓ (arregla "última serie no
+  editable"), botones ±1/±5 reps, rótulos Peso(kg)/RPE, **descanso con cuenta regresiva + campana**
+  (`assets/bell.wav`, `expo-audio`) con toggle "Sonidos" en Configuración, botón **Cancelar** con confirmación.
+- **C2 — resumen post-entrenamiento** (`src/session/summary.ts` puro + `components/SessionSummary.tsx`):
+  al Terminar → tiempo/work/rest, % cumplimiento, series/reps/volumen, carga, avg/max HR, por músculo,
+  tabla por serie. Se muestra al terminar y en el historial.
+- **C4 — historial** (`app/(tabs)/historial.tsx`, tab nueva): lista (día/fecha/duración) desde
+  `GET /sessions` (proyección LIVIANA sin exercises), tap → `GET /sessions/:id` (completa) → resumen.
+  ⚠️ **Gotcha:** `listSessions` NO trae exercises; NO llamar `summarize` sobre la lista (crashea) —
+  usar `getSessionById` al tocar.
+- **`.github/workflows/claude.yml`** (#51): Action de `@claude` on-demand. **Fix de permisos pendiente** (ver PRs abiertos).
+
+**PRs ABIERTOS (mergear al retomar, en este orden):**
+- **#53** `fix/claude-workflow-permisos`: sube `pull-requests`/`issues` a `write`. **Sin esto `@claude`
+  se queda en el placeholder "I'll analyze this and get back to you" y termina en ~2s sin revisar.**
+  Mergear PRIMERO para que `@claude` funcione.
+- **#52** `feat/eliminar-sesion`: **eliminar entrenamiento** (`DELETE /sessions/:id` con cascade + 🗑
+  por fila en historial con confirmación). Implementado + tests verdes + diff revisado por mí, **falta
+  el review-gate** (CodeRabbit estaba throttled; disparar `@claude` una vez que #53 esté en main, o
+  CodeRabbit cuando libere) y mergear.
+- **#54** (este): update del ONBOARDING.
+
+**Gotchas de tooling nuevos de esta sesión:**
+- **`eas-cli` con `bunx` ROMPE** (`Cannot find module 'wrap-ansi'`). Usar **`npx eas-cli`** o `npm i -g eas-cli`. `bunx expo start --dev-client` SÍ anda.
+- **`expo start` en el teléfono (dev build):** el error "Failed to open app" es normal si no hay Metro corriendo. `bunx expo start --dev-client --host lan`; el teléfono con **VPN full-tunnel NO alcanza el Metro de la Mac** (sí la Pi) → probar en la MISMA WiFi sin VPN, o `--tunnel`, o USB+`adb reverse`. La Mac es `192.168.178.30`.
+- **CodeRabbit throttle:** ver memoria [[coderabbit-rate-limits]] y [[workflow-prs-coderabbit]]. Repo tiene `.coderabbit.yaml` (`auto_incremental_review: false`). Un review LIMPIO de CodeRabbit NO deja el marcador "Actionable comments posted" — no confundir con "no revisó". **`@claude` review = gate válido** (aceptado por el usuario) cuando CodeRabbit está throttled.
 
 ## 1. Qué es Pulsia
 
@@ -125,23 +160,25 @@ banda hace falta un dev client:
   serie. Verificado en dispositivo (preview build + banda Polar/Garmin).
 - **[Backlog B]** curva de HR completa (serie temporal), HRV/RR por PMD Polar (dominio estrés),
   marca de calidad de cobertura del dato. Ver spec 2026-07-03-hr-ble-banda-design.md §9.
-- **[Polish pass + Sesión v2 — HECHO en código, pendiente build/merge]** en rama
-  `fix/mobile-acceso-configuracion` (13 commits). Polish: permiso BLE runtime automático; escaneo con
-  feedback/timeout; ⚙ Configuración al header; íconos de tabs; sin botón "Copiar a Garmin". Sesión
-  v2: ejercicio activo explícito + lista con ✓ (arregla el bug de "última serie no editable"); botones
-  ±1/±5 reps; rótulos Peso(kg)/RPE; descanso con cuenta regresiva + campana (`assets/bell.wav`) con
-  toggle "Sonidos" en Configuración (`expo-audio`).
+- **[Polish pass + Sesión v2 — HECHO ✓ en `main`]** (#47, + fixes de review en #49). Polish: permiso
+  BLE runtime automático; escaneo con feedback/timeout; ⚙ Configuración al header; íconos de tabs; sin
+  botón "Copiar a Garmin". Sesión v2: ejercicio activo explícito + lista con ✓; botones ±1/±5 reps;
+  rótulos Peso(kg)/RPE; descanso con cuenta regresiva + campana; **Cancelar** con confirmación.
 - **[Sub-proyecto C — experiencia de sesión y post-entrenamiento]** (orden acordado):
-  - **C2 — Resumen post-entrenamiento** (primero): pantalla al Terminar entrenamiento → tiempo
-    total, promedio de pulso (de los `hrAvg` por serie), series/reps/volumen, ejercicios hechos, y
-    **% de cumplimiento del plan** (ejercicios/series realizadas vs planificadas).
-  - **C3 — Mapa corporal**: silueta que resalta músculos trabajados desde `primaryMuscles` del
-    catálogo (ya existe el dato). Vive dentro del resumen C2.
-  - **C1 — Controles de sesión en vivo**: botón Pausar/Reanudar (el timer no cuenta el descanso del
-    baño) + descartar/eliminar la sesión en curso + **indicador global de "sesión en curso / tiempo
-    corriendo"** cuando salís de la pantalla de entrenamiento (hoy solo hay el banner en Programa).
-  - **C4 — Historial de sesiones** (transversal): lista de entrenamientos pasados para verlos y
-    eliminarlos. Hoy se guardan/sincronizan pero no hay pantalla.
+  - **C2 — Resumen post-entrenamiento — HECHO ✓ en `main`** (#48): `src/session/summary.ts` (puro) +
+    `components/SessionSummary.tsx`. Tiempo/work/rest, % cumplimiento, series/reps/volumen, carga,
+    avg/max HR, por músculo, tabla por serie. (El % NO está en la lista del historial todavía — la
+    proyección liviana no lo trae; incremento chico de backend si se quiere.)
+  - **C3 — Mapa corporal (PRÓXIMO)**: silueta que resalta músculos trabajados. Datos: catálogo tiene
+    `primaryMuscles` **Y `secondaryMuscles`** (11 valores: abs, back, full_body, glutes, shoulders,
+    chest, quads, hamstrings, triceps, calves, biceps — ojo `full_body`). ⚠️ **`react-native-svg` NO
+    está instalado** → agregarlo = nuevo preview build. Vive dentro del resumen C2 (reemplaza la lista
+    "por músculo"). Estaba arrancado el brainstorming (se ofreció visual companion, sin responder).
+  - **C1 — Controles de sesión en vivo**: Pausar/Reanudar (el timer no cuenta el descanso del baño) +
+    **indicador global de "sesión en curso / tiempo corriendo"** al salir de la pantalla de entrenamiento.
+    (El "descartar/cancelar la sesión en curso" YA está en Sesión v2.)
+  - **C4 — Historial — HECHO ✓ en `main`** (#50) + **eliminar en curso (#52, sin mergear)**. Lista →
+    tap → resumen. Backend `GET /sessions` (liviano) y `GET /sessions/:id` (completo) ya existen.
   - **C5 — Notas de sesión → IA**: espacio de anotaciones por sesión (el campo `notes` de
     `WorkoutSession` ya existe, sin UI). Las notas recientes deben **alimentar la generación** del
     próximo plan (backend incluye notas + datos reales en el prompt de Claude). Se solapa con el
