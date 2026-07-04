@@ -1,8 +1,7 @@
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
-import { getMemory, upsertMemory } from "../memory/repository";
-import { getRecentSessions } from "../sessions/repository";
-import { buildTrainingHistorySummary } from "../ai/history";
+import { getMemory } from "../memory/repository";
+import { refreshAthleteMemory } from "../memory/service";
 import { decryptSecret } from "../crypto/secrets";
 import { settings } from "../db/schema";
 import type { AppDeps } from "../app";
@@ -22,16 +21,12 @@ export function memoryRoutes(deps: AppDeps) {
     const apiKey = decryptSecret(row.aiApiKeyEncrypted, deps.config.encryptionKey);
     const model = row.aiModel ?? deps.config.defaultModel;
 
-    const current = await getMemory(deps.db, userId);
-    const recent = await getRecentSessions(deps.db, userId, 6);
-    const historySummary = buildTrainingHistorySummary(recent);
     let updated: string;
     try {
-      updated = await deps.aiClient.updateMemory({ current, historySummary, apiKey, model });
+      updated = await refreshAthleteMemory(deps.db, deps.aiClient, userId, apiKey, model);
     } catch (e) {
       return c.json({ error: (e as Error).message }, 502);
     }
-    await upsertMemory(deps.db, userId, updated);
     return c.json({ content: updated });
   });
 

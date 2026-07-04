@@ -1,6 +1,10 @@
 import { catalogForEquipment, type TrainingProfile, type Equipment } from "@pulsia/shared";
 
-export function buildGenerationPrompt(profile: TrainingProfile, historySummary?: string): string {
+export function buildGenerationPrompt(
+  profile: TrainingProfile,
+  historySummary?: string,
+  memory?: string,
+): string {
   const allEquipment = Array.from(
     new Set<Equipment>([...profile.gymEquipment, ...profile.homeEquipment]),
   );
@@ -36,6 +40,13 @@ export function buildGenerationPrompt(profile: TrainingProfile, historySummary?:
           "",
           "Historial reciente del atleta (usalo para ajustar cargas, volumen y ejercicios; respetá las notas y sustituciones — el atleta NO puede hacer los ejercicios sustituidos):",
           historySummary,
+        ]
+      : []),
+    ...(memory && memory.trim()
+      ? [
+          "",
+          "Memoria del atleta (conocimiento acumulado — equipo que NO tiene, molestias/lesiones, preferencias, niveles y tendencias): usala para personalizar el plan.",
+          memory,
         ]
       : []),
     "Devolvé el resultado llamando a la herramienta provista.",

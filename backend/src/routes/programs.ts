@@ -6,6 +6,8 @@ import { decryptSecret } from "../crypto/secrets";
 import { generateProgramForProfile } from "../ai/generate";
 import { getRecentSessions } from "../sessions/repository";
 import { buildTrainingHistorySummary } from "../ai/history";
+import { getMemory } from "../memory/repository";
+import { refreshAthleteMemory } from "../memory/service";
 import type { AppDeps } from "../app";
 
 export function programsRoutes(deps: AppDeps) {
@@ -26,9 +28,21 @@ export function programsRoutes(deps: AppDeps) {
     const recent = await getRecentSessions(deps.db, userId, 6);
     const historySummary = buildTrainingHistorySummary(recent);
 
+    let memory = await getMemory(deps.db, userId);
+    try {
+      // Reusar `memory` y `historySummary` ya computados para evitar re-fetchear en el refresh.
+      memory = await refreshAthleteMemory(deps.db, deps.aiClient, userId, apiKey, model, {
+        current: memory,
+        historySummary,
+      });
+    } catch (e) {
+      // best-effort: si el refresh de memoria falla, seguimos con la memoria previa (no bloquea la generación)
+      console.warn("refresh de memoria falló (best-effort):", (e as Error).message);
+    }
+
     let program;
     try {
-      program = await generateProgramForProfile({ profile: parsed.data, apiKey, model, ai: deps.aiClient, historySummary });
+      program = await generateProgramForProfile({ profile: parsed.data, apiKey, model, ai: deps.aiClient, historySummary, memory });
     } catch (e) {
       return c.json({ error: (e as Error).message }, 502);
     }
