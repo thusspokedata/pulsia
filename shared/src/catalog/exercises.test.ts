@@ -34,3 +34,13 @@ test("el catálogo tiene un tamaño razonable (150-250)", () => {
   expect(EXERCISE_CATALOG.length).toBeGreaterThanOrEqual(150);
   expect(EXERCISE_CATALOG.length).toBeLessThanOrEqual(250);
 });
+
+test("las dominadas asistidas con banda requieren también barra (pull_up_bar)", () => {
+  const bandOnly = catalogForEquipment(["resistance_band"]).map((e) => e.id);
+  const bandPlusBar = catalogForEquipment(["resistance_band", "pull_up_bar"]).map((e) => e.id);
+
+  for (const id of ["band_assisted_pull_up", "band_assisted_chin_up", "banded_pull_ups"]) {
+    expect(bandOnly).not.toContain(id);
+    expect(bandPlusBar).toContain(id);
+  }
+});

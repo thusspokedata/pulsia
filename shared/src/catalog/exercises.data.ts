@@ -1386,7 +1386,7 @@ export const EXERCISE_CATALOG_DATA: CatalogExercise[] = [
     displayName: "Banded Pull Ups",
     primaryMuscles: ["back"],
     secondaryMuscles: ["biceps"],
-    equipment: ["resistance_band"],
+    equipment: ["resistance_band", "pull_up_bar"],
   },
   {
     id: "hanging_hurdle",
@@ -1404,7 +1404,7 @@ export const EXERCISE_CATALOG_DATA: CatalogExercise[] = [
     displayName: "Band Assisted Chin Up",
     primaryMuscles: ["back"],
     secondaryMuscles: ["biceps"],
-    equipment: ["resistance_band"],
+    equipment: ["resistance_band", "pull_up_bar"],
   },
   {
     id: "lat_pulldown",
@@ -1422,7 +1422,7 @@ export const EXERCISE_CATALOG_DATA: CatalogExercise[] = [
     displayName: "Band Assisted Pull Up",
     primaryMuscles: ["back"],
     secondaryMuscles: ["biceps"],
-    equipment: ["resistance_band"],
+    equipment: ["resistance_band", "pull_up_bar"],
   },
   {
     id: "pilates_pushup",
