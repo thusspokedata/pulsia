@@ -7,6 +7,7 @@ import { getStoredProgram, setStoredProgram } from "../src/storage/program";
 import { getStoredProgramId } from "../src/storage/programId";
 import { getBackendUrl } from "../src/storage/config";
 import { getProfile } from "../src/storage/profile";
+import { getLastWeights } from "../src/api/sessions";
 import { getActiveSession, setActiveSession, clearActiveSession } from "../src/storage/activeSession";
 import { getPauseState, setPauseState, clearPauseState } from "../src/storage/pauseState";
 import { enqueueSession } from "../src/storage/pendingSessions";
@@ -69,6 +70,7 @@ export default function SesionScreen() {
   const [pickChoice, setPickChoice] = useState<{ catalogId: string; garminName: string } | null>(null);
   const [changeNote, setChangeNote] = useState("");
   const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [lastWeights, setLastWeights] = useState<Record<string, number>>({});
   const pausedMsRef = useRef(0); // tiempo pausado acumulado (ms)
   const pauseStartedRef = useRef(0); // Date.now() del inicio de la pausa en curso
   const restRemainingRef = useRef<number | null>(null); // ms restantes de descanso congelados al pausar
@@ -102,6 +104,12 @@ export default function SesionScreen() {
       if (p) setEquipment(session?.location === "home" ? p.homeEquipment : p.gymEquipment);
     });
   }, [session?.location]);
+
+  useEffect(() => {
+    void getBackendUrl().then((url) => {
+      if (url) getLastWeights(url).then(setLastWeights).catch(() => {});
+    });
+  }, []);
 
   // Al cambiar de ejercicio activo, cerrar y limpiar el picker de cambio: evita arrastrar una
   // alternativa/nota elegida para otro ejercicio y sustituir el equivocado.
@@ -526,6 +534,15 @@ export default function SesionScreen() {
             <View style={{ alignItems: "center", gap: 2 }}>
               <Text style={{ color: colors.textMuted, fontSize: 11 }}>Peso (kg)</Text>
               <TextInput testID="weight" style={input} placeholder="kg" keyboardType="numeric" value={weight} onChangeText={setWeight} />
+              {current && lastWeights[current.catalogId] != null && (
+                <Pressable
+                  testID="weight-suggestion"
+                  onPress={() => setWeight(String(lastWeights[current.catalogId]))}
+                  hitSlop={6}
+                >
+                  <Text style={{ color: colors.accentText, fontSize: 12 }}>Sugerido: {lastWeights[current.catalogId]} kg</Text>
+                </Pressable>
+              )}
             </View>
             <View style={{ alignItems: "center", gap: 2 }}>
               <Text style={{ color: colors.textMuted, fontSize: 11 }}>RPE</Text>

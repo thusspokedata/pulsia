@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { WorkoutSessionSchema } from "@pulsia/shared";
 import { SINGLE_USER_ID } from "../constants";
-import { upsertSession, getSession, listSessions, deleteSession } from "../sessions/repository";
+import { upsertSession, getSession, listSessions, deleteSession, getRecentSessions } from "../sessions/repository";
+import { lastWeightByExercise } from "../sessions/lastWeight";
 import type { AppDeps } from "../app";
 
 export function sessionsRoutes(deps: AppDeps) {
@@ -20,6 +21,11 @@ export function sessionsRoutes(deps: AppDeps) {
     if (parsed.data.id !== id) return c.json({ error: "el id de la URL no coincide con el del body" }, 400);
     await upsertSession(deps.db, SINGLE_USER_ID, parsed.data);
     return c.json({ id }, 200);
+  });
+
+  r.get("/last-weights", async (c) => {
+    const recent = await getRecentSessions(deps.db, SINGLE_USER_ID, 20);
+    return c.json(lastWeightByExercise(recent));
   });
 
   r.get("/:id", async (c) => {

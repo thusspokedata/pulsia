@@ -37,6 +37,7 @@ jest.mock("expo-audio", () => ({ useAudioPlayer: () => ({ seekTo: jest.fn(), pla
 
 jest.mock("../src/session/id", () => ({ newSessionId: () => "11111111-1111-4111-8111-111111111111" }));
 jest.mock("../src/storage/config", () => ({ getBackendUrl: async () => "http://backend.test" }));
+jest.mock("../src/api/sessions", () => ({ getLastWeights: async () => ({ barbell_bench_press: 42 }) }));
 let mockProgramId: string | null = "22222222-2222-4222-8222-222222222222";
 jest.mock("../src/storage/programId", () => ({ getStoredProgramId: async () => mockProgramId }));
 
@@ -422,6 +423,14 @@ test("al terminar la serie guarda hrAvg/hrMax agregados de los samples", async (
     expect(set.hrAvg).toBe(81); // round((78+84)/2)
     expect(set.hrMax).toBe(84);
   });
+});
+
+test("muestra el peso sugerido del ejercicio activo y al tocarlo rellena el input", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  const hint = await screen.findByTestId("weight-suggestion");
+  await fireEvent.press(hint);
+  await waitFor(() => expect(screen.getByTestId("weight").props.value).toBe("42"));
 });
 
 test("cambiar de ejercicio activo resetea el picker de cambio (no arrastra la elección)", async () => {

@@ -42,3 +42,10 @@ export async function deleteSessionById(baseUrl: string, id: string): Promise<vo
   const res = await apiFetch(baseUrl, `/sessions/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("No se pudo eliminar el entrenamiento");
 }
+
+// Trae el último peso usado por ejercicio (catalogId -> kg), para sugerir en la sesión.
+export async function getLastWeights(baseUrl: string): Promise<Record<string, number>> {
+  const res = await apiFetch(baseUrl, "/sessions/last-weights");
+  if (!res.ok) throw new Error("No se pudieron cargar los pesos sugeridos");
+  return (await res.json()) as Record<string, number>;
+}

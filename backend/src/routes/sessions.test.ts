@@ -17,7 +17,7 @@ const validSession = {
 };
 
 // fakeDb que registra inserts/deletes y sirve una fila para el GET.
-function fakeDb(storedRow: any = null) {
+function fakeDb(storedRow: any = null, recentRows: any[] | null = null) {
   const inserts: Array<{ table: any; rows: any[] }> = [];
   const deletes: Array<{ table: any }> = [];
   let seq = 0;
@@ -36,7 +36,12 @@ function fakeDb(storedRow: any = null) {
     delete: (table: any) => ({ where: async () => { deletes.push({ table }); } }),
     transaction: async (fn: any) => fn(db),
     select: () => ({ from: () => ({ where: async () => [] }) }),
-    query: { workoutSession: { findFirst: async () => storedRow } },
+    query: {
+      workoutSession: {
+        findFirst: async () => storedRow,
+        findMany: async () => (recentRows ?? []),
+      },
+    },
   };
   return db;
 }
@@ -84,6 +89,24 @@ test("GET /sessions/:id devuelve la sesión", async () => {
   expect(res.status).toBe(200);
   const body = await res.json();
   expect(body.exercises[0].order).toBe(0);
+});
+
+test("GET /sessions/last-weights devuelve el mapa de últimos pesos", async () => {
+  const nestedSessionRow = {
+    id: SID, userId: "u", programId: validSession.programId, weekNumber: 1, dayLabel: "Día 1",
+    location: "gym", startedAt: 1782900000000, endedAt: null, totalDurationMs: null, notes: "",
+    createdAt: new Date(), updatedAt: new Date(),
+    exercises: [{
+      id: "ex1", catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", orderIndex: 0,
+      planned: validSession.exercises[0].planned, skipped: false, note: null, substitutedFromId: null,
+      sets: [{ setNumber: 1, reps: 8, weightKg: 40, rpe: 8, startedAt: 1, endedAt: 2, durationMs: 1, repTimestamps: [], hrAvg: null, hrMax: null, skipped: false }],
+    }],
+  };
+  const app = createApp(deps(fakeDb(null, [nestedSessionRow])) as any);
+  const res = await app.request("/sessions/last-weights");
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.barbell_bench_press).toBe(40);
 });
 
 test("GET /sessions/:id inexistente devuelve 404", async () => {
