@@ -333,8 +333,12 @@ export default function SesionScreen() {
         note: changeNote,
       }),
     );
-    const prog = await getStoredProgram();
-    if (prog) await setStoredProgram(substituteInProgram(prog, current.catalogId, pickChoice, changeNote));
+    // En un entreno puntual NO tocar el plan vigente: la sustitución vale solo para esta sesión
+    // (el programa one-off se descarta al terminar/cancelar vía clearOneOff).
+    if (!oneOffRef.current) {
+      const prog = await getStoredProgram();
+      if (prog) await setStoredProgram(substituteInProgram(prog, current.catalogId, pickChoice, changeNote));
+    }
     setShowPicker(false);
     setPickChoice(null);
     setChangeNote("");

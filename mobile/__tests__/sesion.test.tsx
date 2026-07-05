@@ -438,6 +438,24 @@ test("cambiar ejercicio: elige alternativa + nota y aplica a sesión y programa"
   await waitFor(() => expect(mockSetProgram).toHaveBeenCalled());
 });
 
+test("cambiar ejercicio durante un entreno puntual NO persiste en el plan vigente", async () => {
+  mockParams = { week: "1", dayLabel: "Puntual: Pecho", location: "gym", oneOff: "true" };
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("cambiar-ejercicio"));
+  const alts = await screen.findAllByTestId(/^alt-/);
+  await fireEvent.press(alts[0]);
+  await fireEvent.changeText(screen.getByTestId("cambio-nota"), "en el hotel");
+  await fireEvent.press(screen.getByTestId("confirmar-cambio"));
+  // la sustitución se aplica a la sesión en curso...
+  await waitFor(() => {
+    const last = mockSetActive.mock.calls.at(-1)?.[0];
+    expect(last.exercises[0].catalogId).not.toBe("barbell_bench_press");
+  });
+  // ...pero NO se toca el plan vigente (pulsia.program) en un entreno puntual.
+  expect(mockSetProgram).not.toHaveBeenCalled();
+});
+
 test("al terminar la serie guarda hrAvg/hrMax agregados de los samples", async () => {
   mockHrSamples = [{ t: 1, bpm: 78 }, { t: 2, bpm: 84 }];
   await render(<SesionScreen />);
