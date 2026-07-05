@@ -53,13 +53,20 @@ test("generateOneOff postea a /programs/generate-oneoff y devuelve el programa p
   });
   global.fetch = fetchMock as any;
 
-  const res = await generateOneOff(URL, { profile, location: "home", focus: "chest" });
+  const args = {
+    profile,
+    location: "home" as const,
+    focus: ["chest"],
+    sessionMinutes: 45,
+    equipment: ["bodyweight"],
+  };
+  const res = await generateOneOff(URL, args);
 
   expect(fetchMock).toHaveBeenCalledWith(
     `${URL}/programs/generate-oneoff`,
     expect.objectContaining({
       method: "POST",
-      body: JSON.stringify({ profile, location: "home", focus: "chest" }),
+      body: JSON.stringify(args),
     }),
   );
   expect(res.id).toBe("oneoff-1");
@@ -68,7 +75,13 @@ test("generateOneOff postea a /programs/generate-oneoff y devuelve el programa p
 
 test("generateOneOff lanza error si la respuesta no es ok", async () => {
   global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 502, json: async () => ({}) }) as any;
-  await expect(generateOneOff(URL, { profile, location: "home", focus: "chest" })).rejects.toThrow(
-    "No se pudo generar el entreno puntual",
-  );
+  await expect(
+    generateOneOff(URL, {
+      profile,
+      location: "home",
+      focus: ["chest"],
+      sessionMinutes: 45,
+      equipment: ["bodyweight"],
+    }),
+  ).rejects.toThrow("No se pudo generar el entreno puntual");
 });

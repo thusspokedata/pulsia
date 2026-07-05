@@ -52,7 +52,14 @@ export async function generateProgram(
 
 export async function generateOneOff(
   baseUrl: string,
-  args: { profile: TrainingProfile; location: "gym" | "home"; focus: string },
+  args: {
+    profile: TrainingProfile;
+    location: "gym" | "home";
+    focus: string[];
+    sessionMinutes: number;
+    equipment: string[];
+    notes?: string;
+  },
 ): Promise<{ id: string; program: Program }> {
   const res = await apiFetch(baseUrl, "/programs/generate-oneoff", {
     method: "POST",
