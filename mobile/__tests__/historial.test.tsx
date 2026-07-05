@@ -71,6 +71,15 @@ test("lista ambas sesiones ordenadas por fecha desc", async () => {
   });
 });
 
+test("la fila del historial muestra el % de cumplimiento", async () => {
+  (getSessions as jest.Mock).mockResolvedValue([
+    { id: mockSessionA.id, programId: mockSessionA.programId, dayLabel: mockSessionA.dayLabel, location: "gym", startedAt: mockSessionA.startedAt, totalDurationMs: mockSessionA.totalDurationMs, completionPct: 80 },
+  ]);
+  await render(<HistorialScreen />);
+  await waitFor(() => expect(screen.getByTestId(`hist-pct-${mockSessionA.id}`)).toBeTruthy());
+  expect(screen.getByTestId(`hist-pct-${mockSessionA.id}`).props.children).toEqual("80%");
+});
+
 test("al tocar una sesión muestra su SessionSummary y hist-back vuelve a la lista", async () => {
   await render(<HistorialScreen />);
   await waitFor(() => expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy());

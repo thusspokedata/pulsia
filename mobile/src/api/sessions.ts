@@ -20,6 +20,7 @@ export interface SessionListItem {
   location: "gym" | "home";
   startedAt: number;
   totalDurationMs: number | null;
+  completionPct: number;
 }
 
 // Trae el historial (liviano) de sesiones del usuario desde el backend.
