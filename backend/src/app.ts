@@ -18,6 +18,9 @@ export interface AppConfig {
   inviteCode: string;
   sessionTtlDays: number;
   singleUserMode: boolean;
+  // Token de admin/ops para escribir la release (PUT /app/latest). Si no está seteado, el PUT se
+  // rechaza (fail-closed). Se setea en app.env de la Pi tras cada build.
+  adminToken?: string;
 }
 
 export interface AppDeps {

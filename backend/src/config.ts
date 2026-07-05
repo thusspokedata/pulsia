@@ -53,6 +53,9 @@ export function loadServerEnv(env: Env = process.env): ServerEnv {
   // sin auth; se apaga cuando entre el login multi-usuario.
   const singleUserMode = env.SINGLE_USER_MODE?.trim() === "true";
 
+  // Token de admin/ops para PUT /app/latest (opcional; si falta, el PUT se rechaza).
+  const adminToken = env.ADMIN_TOKEN?.trim() || undefined;
+
   return {
     databaseUrl,
     config: {
@@ -61,6 +64,7 @@ export function loadServerEnv(env: Env = process.env): ServerEnv {
       inviteCode,
       sessionTtlDays,
       singleUserMode,
+      adminToken,
     },
   };
 }
