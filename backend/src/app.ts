@@ -9,6 +9,7 @@ import type { MiddlewareHandler } from "hono";
 import { requireAuth } from "./auth/middleware";
 import { sessionsRoutes } from "./routes/sessions";
 import { memoryRoutes } from "./routes/memory";
+import { appReleaseRoutes } from "./routes/appRelease";
 import { SINGLE_USER_ID } from "./constants";
 
 export interface AppConfig {
@@ -45,10 +46,13 @@ export function createApp(deps: AppDeps) {
   app.use("/profile/*", auth);
   app.use("/memory", auth);
   app.use("/memory/*", auth);
+  app.use("/app", auth);
+  app.use("/app/*", auth);
   app.route("/settings", settingsRoutes(deps));
   app.route("/programs", programsRoutes(deps));
   app.route("/profile", profileRoutes(deps));
   app.route("/sessions", sessionsRoutes(deps));
   app.route("/memory", memoryRoutes(deps));
+  app.route("/app", appReleaseRoutes(deps));
   return app;
 }

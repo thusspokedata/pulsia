@@ -97,6 +97,14 @@ export const setLog = pgTable("set_log", {
   skipped: boolean("skipped").default(false).notNull(),
 });
 
+export const appRelease = pgTable("app_release", {
+  id: text("id").primaryKey(), // siempre "latest" (fila única)
+  versionCode: integer("version_code").notNull(),
+  apkUrl: text("apk_url").notNull(),
+  label: text("label").default("").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const workoutSessionRelations = relations(workoutSession, ({ many }) => ({
   exercises: many(sessionExercise),
 }));
