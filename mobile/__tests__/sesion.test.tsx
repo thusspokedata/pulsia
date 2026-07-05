@@ -2,9 +2,10 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react-nativ
 import { Alert } from "react-native";
 
 const mockReplace = jest.fn();
+let mockParams: any = { week: "1", dayLabel: "Día 1", location: "gym" };
 jest.mock("expo-router", () => ({
   router: { replace: (...a: any[]) => mockReplace(...a) },
-  useLocalSearchParams: () => ({ week: "1", dayLabel: "Día 1", location: "gym" }),
+  useLocalSearchParams: () => mockParams,
 }));
 
 const mockSetActive = jest.fn();
@@ -61,9 +62,25 @@ const twoExerciseProgram = {
 };
 let mockProgram = baseProgram;
 const mockSetProgram = jest.fn();
+const mockGetStoredProgram = jest.fn(async () => mockProgram);
 jest.mock("../src/storage/program", () => ({
-  getStoredProgram: async () => mockProgram,
+  getStoredProgram: () => mockGetStoredProgram(),
   setStoredProgram: async (p: any) => mockSetProgram(p),
+}));
+
+const oneOffProgram = {
+  name: "Puntual",
+  weeks: [{ weekNumber: 1, workouts: [{
+    dayLabel: "Puntual: Pecho", location: "gym", focus: "chest",
+    exercises: [{ catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 2, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90, notes: "" }],
+  }] }],
+};
+let mockOneOffProgramId: string | null = "33333333-3333-4333-8333-333333333333";
+const mockClearOneOff = jest.fn();
+jest.mock("../src/storage/oneOffProgram", () => ({
+  getStoredOneOffProgram: async () => oneOffProgram,
+  getStoredOneOffProgramId: async () => mockOneOffProgramId,
+  clearOneOff: async (...a: any[]) => mockClearOneOff(...a),
 }));
 
 jest.mock("../src/storage/profile", () => ({
@@ -86,7 +103,17 @@ jest.mock("../src/ble/useHeartRate", () => ({
 
 import SesionScreen from "../app/sesion";
 
-beforeEach(() => { mockActive = null; mockPauseState = null; mockProgramId = "22222222-2222-4222-8222-222222222222"; mockHrSamples = []; mockBpm = null; mockProgram = baseProgram; jest.clearAllMocks(); });
+beforeEach(() => {
+  mockActive = null;
+  mockPauseState = null;
+  mockProgramId = "22222222-2222-4222-8222-222222222222";
+  mockOneOffProgramId = "33333333-3333-4333-8333-333333333333";
+  mockHrSamples = [];
+  mockBpm = null;
+  mockProgram = baseProgram;
+  mockParams = { week: "1", dayLabel: "Día 1", location: "gym" };
+  jest.clearAllMocks();
+});
 
 test("arma la sesión del día y muestra el ejercicio actual", async () => {
   await render(<SesionScreen />);
@@ -431,6 +458,38 @@ test("muestra el peso sugerido del ejercicio activo y al tocarlo rellena el inpu
   const hint = await screen.findByTestId("weight-suggestion");
   await fireEvent.press(hint);
   await waitFor(() => expect(screen.getByTestId("weight").props.value).toBe("42"));
+});
+
+test("con oneOff=true arma la sesión desde el programa one-off (no el plan vigente)", async () => {
+  mockParams = { week: "1", dayLabel: "Puntual: Pecho", location: "gym", oneOff: "true" };
+  await render(<SesionScreen />);
+  await waitFor(() => expect(screen.getAllByText("Barbell Bench Press").length).toBeGreaterThan(0));
+  expect(screen.getByText("Puntual: Pecho")).toBeTruthy();
+  expect(mockGetStoredProgram).not.toHaveBeenCalled();
+});
+
+test("al terminar un entreno puntual se limpia el slot one-off (no el plan vigente)", async () => {
+  mockParams = { week: "1", dayLabel: "Puntual: Pecho", location: "gym", oneOff: "true" };
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("finish"));
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
+  await waitFor(() => expect(mockClearOneOff).toHaveBeenCalled());
+  expect(mockSetProgram).not.toHaveBeenCalled();
+});
+
+test("al cancelar un entreno puntual se limpia el slot one-off (no el plan vigente)", async () => {
+  const spy = jest.spyOn(Alert, "alert").mockImplementation((_t, _m, buttons) => {
+    const confirm = buttons?.find((b) => b.text === "Sí, cancelar");
+    void confirm?.onPress?.();
+  });
+  mockParams = { week: "1", dayLabel: "Puntual: Pecho", location: "gym", oneOff: "true" };
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("cancel"));
+  await fireEvent.press(screen.getByTestId("cancel"));
+  await waitFor(() => expect(mockClearOneOff).toHaveBeenCalled());
+  expect(mockSetProgram).not.toHaveBeenCalled();
+  spy.mockRestore();
 });
 
 test("cambiar de ejercicio activo resetea el picker de cambio (no arrastra la elección)", async () => {
