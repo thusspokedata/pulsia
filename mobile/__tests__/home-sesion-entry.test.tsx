@@ -41,3 +41,10 @@ test("la home ya no muestra el resume-banner (movido al indicador global)", asyn
   await waitFor(() => screen.getByTestId("start-Día 1"));
   expect(screen.queryByTestId("resume-banner")).toBeNull();
 });
+
+test("el botón 'Entreno puntual' navega a /entreno-puntual", async () => {
+  await render(<ProgramaScreen />);
+  await waitFor(() => screen.getByTestId("entreno-puntual-link"));
+  await fireEvent.press(screen.getByTestId("entreno-puntual-link"));
+  expect(mockPush).toHaveBeenCalledWith("/entreno-puntual");
+});
