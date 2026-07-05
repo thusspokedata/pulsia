@@ -148,7 +148,26 @@ test("POST /programs/generate con perfil inválido devuelve 400", async () => {
   expect(res.status).toBe(400);
 });
 
-test("POST /programs/generate-oneoff genera un programa de 1 semana/1 workout y pasa oneOff a la IA", async () => {
+test("POST /programs/generate-oneoff (payload nuevo) pasa focus[], minutos, equipo y notas a la IA", async () => {
+  lastAiInput = null;
+  const db = fakeDb(true);
+  const app = createApp(deps(db) as any);
+  const res = await app.request("/programs/generate-oneoff", {
+    method: "POST", headers: authHeaders,
+    body: JSON.stringify({
+      profile: validProfileBody, location: "gym",
+      focus: ["chest", "triceps"], sessionMinutes: 30, equipment: ["dumbbell"], notes: "sin barra",
+    }),
+  });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.program.weeks.length).toBe(1);
+  expect(lastAiInput.oneOff).toEqual({
+    location: "gym", focus: ["chest", "triceps"], sessionMinutes: 30, equipment: ["dumbbell"], notes: "sin barra",
+  });
+});
+
+test("POST /programs/generate-oneoff back-compat: focus single legacy → array", async () => {
   lastAiInput = null;
   const db = fakeDb(true);
   const app = createApp(deps(db) as any);
@@ -157,9 +176,18 @@ test("POST /programs/generate-oneoff genera un programa de 1 semana/1 workout y 
     body: JSON.stringify({ profile: validProfileBody, location: "home", focus: "chest" }),
   });
   expect(res.status).toBe(200);
-  const body = await res.json();
-  expect(body.program.weeks.length).toBe(1);
-  expect(body.program.weeks[0].workouts.length).toBe(1);
-  expect(lastAiInput).not.toBeNull();
-  expect(lastAiInput.oneOff).toEqual({ location: "home", focus: "chest" });
+  expect(lastAiInput.oneOff.focus).toEqual(["chest"]);
+  // Fallbacks: sessionMinutes del profile (45), equipment del homeEquipment (["bodyweight"])
+  expect(lastAiInput.oneOff.sessionMinutes).toBe(45);
+  expect(lastAiInput.oneOff.equipment).toEqual(["bodyweight"]);
+});
+
+test("POST /programs/generate-oneoff con focus vacío devuelve 400", async () => {
+  const db = fakeDb(true);
+  const app = createApp(deps(db) as any);
+  const res = await app.request("/programs/generate-oneoff", {
+    method: "POST", headers: authHeaders,
+    body: JSON.stringify({ profile: validProfileBody, location: "gym", focus: [] }),
+  });
+  expect(res.status).toBe(400);
 });
