@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
-import { MuscleGroupSchema, TrainingProfileSchema } from "@pulsia/shared";
+import { OneOffRequestSchema, TrainingProfileSchema } from "@pulsia/shared";
 import { programs, settings } from "../db/schema";
 import { decryptSecret } from "../crypto/secrets";
 import { generateProgramForProfile } from "../ai/generate";
@@ -57,13 +57,15 @@ export function programsRoutes(deps: AppDeps) {
 
   r.post("/generate-oneoff", async (c) => {
     const userId = c.get("userId");
-    const body = await c.req.json().catch(() => null) as any;
-    const parsed = TrainingProfileSchema.safeParse(body?.profile);
-    const location = body?.location === "home" ? "home" : body?.location === "gym" ? "gym" : null;
-    const focusOk = MuscleGroupSchema.safeParse(body?.focus);
-    if (!parsed.success || !location || !focusOk.success) {
-      return c.json({ error: "profile, location (gym|home) y focus (MuscleGroup) requeridos" }, 400);
+    const parsed = OneOffRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.issues }, 400);
     }
+    const { profile: reqProfile, location, focus, notes } = parsed.data;
+    const sessionMinutes = parsed.data.sessionMinutes ?? reqProfile.sessionMinutes;
+    const equipment = parsed.data.equipment.length > 0
+      ? parsed.data.equipment
+      : (location === "home" ? reqProfile.homeEquipment : reqProfile.gymEquipment);
 
     const row = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
     if (!row?.aiApiKeyEncrypted) {
@@ -75,11 +77,11 @@ export function programsRoutes(deps: AppDeps) {
     let program;
     try {
       program = await generateProgramForProfile({
-        profile: parsed.data,
+        profile: reqProfile,
         apiKey,
         model,
         ai: deps.aiClient,
-        oneOff: { location, focus: focusOk.data },
+        oneOff: { location, focus, sessionMinutes, equipment, notes },
       });
     } catch (e) {
       return c.json({ error: (e as Error).message }, 502);
@@ -87,7 +89,7 @@ export function programsRoutes(deps: AppDeps) {
 
     const inserted = await deps.db
       .insert(programs)
-      .values({ userId, name: program.name, data: program, profileSnapshot: parsed.data })
+      .values({ userId, name: program.name, data: program, profileSnapshot: reqProfile })
       .returning();
 
     return c.json({ id: inserted[0].id, program });
