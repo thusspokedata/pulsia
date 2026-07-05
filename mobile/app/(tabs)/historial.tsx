@@ -175,6 +175,7 @@ export default function HistorialScreen() {
               <Text style={{ color: colors.textMuted, fontSize: 12 }}>{fmtDate(s.startedAt)}</Text>
             </View>
             <Text style={{ color: colors.textMuted, fontSize: 13 }}>⏱ {fmt(s.totalDurationMs ?? 0)}</Text>
+            <Text testID={`hist-pct-${s.id}`} style={{ color: colors.textMuted, fontSize: 13 }}>{`${s.completionPct}%`}</Text>
             <Pressable
               testID={`hist-del-${s.id}`}
               onPress={() => confirmDelete(s)}
