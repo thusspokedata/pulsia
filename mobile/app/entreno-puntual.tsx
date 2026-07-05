@@ -147,7 +147,8 @@ export default function EntrenoPuntualScreen() {
     );
   }
 
-  const customOn = customMinutes.trim() !== "";
+  const customParsed = parseInt(customMinutes, 10);
+  const customOn = customMinutes.trim() !== "" && Number.isFinite(customParsed);
 
   return (
     <ScrollView contentContainerStyle={{ flexGrow: 1, backgroundColor: colors.bg, padding: spacing.xl, gap: spacing.lg }}>
@@ -226,6 +227,7 @@ export default function EntrenoPuntualScreen() {
           testID="oneoff-notes"
           value={notes}
           onChangeText={setNotes}
+          maxLength={500}
           placeholder="ej: me duele la cintura, no puedo hacer burpees"
           multiline
           style={{

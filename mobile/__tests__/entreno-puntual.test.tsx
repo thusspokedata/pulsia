@@ -83,3 +83,13 @@ test("cambiar de lugar a Casa resiembra la selección de equipo (dumbbell sí, b
   );
   expect(screen.getByTestId("equip-dumbbell").props.accessibilityState.selected).toBe(true);
 });
+
+test("tiempo custom inválido no resalta 'Otro' y el preset efectivo sigue seleccionado", async () => {
+  await render(<EntrenoPuntualScreen />);
+  await waitFor(() => expect(screen.getByTestId("time-60")).toBeTruthy());
+  // default = profile.sessionMinutes (60) → preset 60 seleccionado
+  expect(screen.getByTestId("time-60").props.accessibilityState.selected).toBe(true);
+  // valor no numérico en "Otro" → no debe robar el resaltado
+  await fireEvent.changeText(screen.getByTestId("time-custom"), "abc");
+  expect(screen.getByTestId("time-60").props.accessibilityState.selected).toBe(true);
+});
