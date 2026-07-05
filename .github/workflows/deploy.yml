@@ -1,0 +1,53 @@
+name: Deploy backend (Pi)
+
+# Deploy automático del backend a la Raspberry Pi en cada push a main.
+# Corre en el runner self-hosted DE LA PI (el mismo host donde vive el backend), así que
+# puede rsync-ear el repo al dir de deploy y reconstruir el contenedor localmente.
+#
+# ⚠️ PRERREQUISITO (ver docs/deploy-ci-setup.md): hoy el runner self-hosted de la Pi está
+# registrado en OTRO repo (thusspokedata/viajarpais). Para que este workflow corra hace falta
+# registrar un runner self-hosted en el repo `pulsia`. Hasta entonces, este workflow queda en
+# cola sin ejecutarse (no rompe nada).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Nunca correr dos deploys en paralelo (rebuild + restart del backend).
+concurrency:
+  group: deploy-pi
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sync al dir de deploy + rebuild del backend
+        run: |
+          set -euo pipefail
+          # rsync SIN --delete (no borra nada en la Pi) y SIN pisar deploy/app.env (secretos,
+          # solo en la Pi). Excluye mobile/node_modules/.git para que sea liviano.
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='mobile/' \
+            --exclude='node_modules/' \
+            --exclude='deploy/app.env' \
+            ./ /home/kilo/pulsia/
+          cd /home/kilo/pulsia
+          # El CMD del contenedor corre db:migrate + db:seed + start, así que las migraciones
+          # se aplican solas al arrancar la imagen nueva.
+          docker compose -f deploy/docker-compose.yml up -d --build
+
+      - name: Health check
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3011/health || true)
+            if [ "$code" = "200" ]; then echo "backend OK (HTTP 200)"; exit 0; fi
+            echo "esperando al backend… ($i) [$code]"; sleep 3
+          done
+          echo "el backend no respondió 200 tras el deploy"; exit 1
