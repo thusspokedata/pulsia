@@ -59,7 +59,7 @@ export function programsRoutes(deps: AppDeps) {
     const userId = c.get("userId");
     const parsed = OneOffRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
-      return c.json({ error: "profile, location (gym|home) y focus (≥1 MuscleGroup) requeridos" }, 400);
+      return c.json({ error: parsed.error.issues }, 400);
     }
     const { profile: reqProfile, location, focus, notes } = parsed.data;
     const sessionMinutes = parsed.data.sessionMinutes ?? reqProfile.sessionMinutes;

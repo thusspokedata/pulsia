@@ -48,7 +48,7 @@ export function buildOneOffPrompt(profile: TrainingProfile, args: OneOffArgs): s
     "1. Usá ÚNICAMENTE ejercicios de este catálogo (catalogId = id; garminName = nombre exacto):",
     catalogList,
     `2. Devolvé un programa (schema Program) con EXACTAMENTE 1 semana (weekNumber 1) y 1 workout, location=${args.location}, focus="${args.focus[0]}".`,
-    `3. Cubrí de forma balanceada TODOS los grupos pedidos (${musculos}). Ajustá la cantidad de ejercicios al tiempo disponible (~1 ejercicio cada 10 minutos, con un mínimo de 3).`,
+    `3. Cubrí de forma balanceada TODOS los grupos pedidos (${musculos}). Ajustá la cantidad de ejercicios al tiempo disponible (~1 ejercicio cada 10 minutos, con un mínimo de 3 y un máximo de 10).`,
     "4. Es un entrenamiento de un único día: no encadenes ni ajustes semana a semana. Elegí cargas/series/reps razonables para el nivel.",
     "5. Respetá las limitaciones del atleta y las notas de hoy.",
     "Devolvé el resultado llamando a la herramienta provista.",

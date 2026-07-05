@@ -20,9 +20,9 @@ Con **fallbacks** para tolerar version-skew (app vieja ↔ backend nuevo mientra
   "profile": TrainingProfile,
   "location": "gym" | "home",        // se mantiene: preset de equipo + contexto del prompt
   "focus": MuscleGroup[],            // era 1 músculo → array (mín 1). Acepta single legacy → [focus]
-  "sessionMinutes": number,          // NUEVO: override 15–180 (fallback: profile.sessionMinutes)
-  "equipment": Equipment[],          // NUEVO: equipo explícito de la sesión (fallback: equipo del location)
-  "notes": string                    // NUEVO: texto libre, opcional
+  "sessionMinutes": number,          // NUEVO (opcional): override 15–180 (fallback: profile.sessionMinutes)
+  "equipment": Equipment[],          // NUEVO (opcional): equipo explícito de la sesión (fallback: equipo del location)
+  "notes": string                    // NUEVO (opcional): texto libre
 }
 ```
 
