@@ -28,6 +28,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # El job solo clona + rsync + deploy local: no dejar el token en el .git/config del runner.
+          persist-credentials: false
 
       - name: Sync al dir de deploy + rebuild del backend
         run: |
