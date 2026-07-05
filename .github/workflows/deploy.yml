@@ -1,0 +1,60 @@
+name: Deploy backend (Pi)
+
+# Deploy automático del backend a la Raspberry Pi en cada push a main.
+# Corre en el runner self-hosted DE LA PI (el mismo host donde vive el backend), así que
+# puede rsync-ear el repo al dir de deploy y reconstruir el contenedor localmente.
+#
+# Requiere un runner self-hosted registrado en el repo `pulsia` (ver docs/deploy-ci-setup.md).
+# Ya registrado: `pi-nextcloud-pulsia` (labels self-hosted, ARM64, pulsia), aparte del de viajarpais.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Nunca correr dos deploys en paralelo (rebuild + restart del backend).
+concurrency:
+  group: deploy-pi
+  cancel-in-progress: false
+
+# El job solo hace checkout + deploy local en el runner de la Pi; con leer el repo alcanza.
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # El job solo clona + rsync + deploy local: no dejar el token en el .git/config del runner.
+          persist-credentials: false
+
+      - name: Sync al dir de deploy + rebuild del backend
+        run: |
+          set -euo pipefail
+          # rsync SIN --delete (no borra nada en la Pi) y SIN pisar deploy/app.env (secretos,
+          # solo en la Pi). Excluye mobile/node_modules/.git para que sea liviano.
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='mobile/' \
+            --exclude='node_modules/' \
+            --exclude='deploy/app.env' \
+            ./ /home/kilo/pulsia/
+          cd /home/kilo/pulsia
+          # El CMD del contenedor corre db:migrate + db:seed + start, así que las migraciones
+          # se aplican solas al arrancar la imagen nueva.
+          docker compose -f deploy/docker-compose.yml up -d --build
+
+      - name: Health check
+        run: |
+          set -euo pipefail
+          # Ventana amplia: el contenedor corre db:migrate + db:seed antes de levantar el server.
+          for i in $(seq 1 24); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3011/health || true)
+            if [ "$code" = "200" ]; then echo "backend OK (HTTP 200)"; exit 0; fi
+            echo "esperando al backend… ($i) [$code]"; sleep 5
+          done
+          echo "el backend no respondió 200 tras el deploy"; exit 1
