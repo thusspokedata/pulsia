@@ -7,6 +7,12 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": "pulsia",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/75028cfd-2e17-4d4c-a68c-0d24ecdce1e4"
+    },
     "plugins": [
       "expo-router",
       [
