@@ -1,9 +1,9 @@
 import { z } from "zod";
-import type { MuscleGroup, Program, TrainingProfile } from "@pulsia/shared";
+import type { Program, TrainingProfile } from "@pulsia/shared";
 import Anthropic from "@anthropic-ai/sdk";
 import { ProgramSchema } from "@pulsia/shared";
 import { buildGenerationPrompt } from "./prompt";
-import { buildOneOffPrompt } from "./oneoff";
+import { buildOneOffPrompt, type OneOffArgs } from "./oneoff";
 import { buildMemoryUpdatePrompt } from "./memory";
 
 export interface AiClient {
@@ -13,7 +13,7 @@ export interface AiClient {
     model: string;
     historySummary?: string;
     memory?: string;
-    oneOff?: { location: "gym" | "home"; focus: MuscleGroup };
+    oneOff?: OneOffArgs;
   }): Promise<Program>;
   updateMemory?(input: {
     current: string;
@@ -30,7 +30,7 @@ export class AnthropicAiClient implements AiClient {
     model: string;
     historySummary?: string;
     memory?: string;
-    oneOff?: { location: "gym" | "home"; focus: MuscleGroup };
+    oneOff?: OneOffArgs;
   }): Promise<Program> {
     const client = new Anthropic({ apiKey });
     // z.toJSONSchema agrega una key "$schema" (meta) que no necesita el tool de Anthropic.
