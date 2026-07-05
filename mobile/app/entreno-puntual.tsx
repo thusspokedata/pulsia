@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { View, Text, Pressable, ActivityIndicator, ScrollView } from "react-native";
+import { useEffect, useState } from "react";
+import { View, Text, Pressable, ActivityIndicator, ScrollView, TextInput } from "react-native";
 import { router } from "expo-router";
-import type { MuscleGroup } from "@pulsia/shared";
+import type { MuscleGroup, Equipment, TrainingProfile } from "@pulsia/shared";
 import { getBackendUrl } from "../src/storage/config";
 import { getProfile } from "../src/storage/profile";
 import { setStoredOneOffProgram, setStoredOneOffProgramId } from "../src/storage/oneOffProgram";
@@ -25,25 +25,104 @@ const LOCATION_OPTIONS: { value: "gym" | "home"; label: string }[] = [
   { value: "home", label: "Casa" },
 ];
 
+const EQUIPMENT_OPTIONS: { value: Equipment; label: string }[] = [
+  { value: "bodyweight", label: "Peso corporal" },
+  { value: "dumbbell", label: "Mancuerna" },
+  { value: "barbell", label: "Barra" },
+  { value: "kettlebell", label: "Kettlebell" },
+  { value: "resistance_band", label: "Banda" },
+  { value: "pull_up_bar", label: "Barra dominadas" },
+  { value: "bench", label: "Banco" },
+  { value: "cable_machine", label: "Polea" },
+  { value: "machine", label: "Máquina" },
+  { value: "trx", label: "TRX" },
+];
+
+const TIME_OPTIONS = [20, 30, 45, 60, 90];
+
+function Chip({ label, on, testID, onPress }: { label: string; on: boolean; testID: string; onPress: () => void }) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityState={{ selected: on }}
+      onPress={onPress}
+      style={{
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.md,
+        borderRadius: radius.pill,
+        borderWidth: 1,
+        borderColor: on ? colors.accent : colors.border,
+        backgroundColor: on ? colors.accent : colors.bg,
+      }}
+    >
+      <Text style={{ color: on ? "#fff" : colors.text, fontSize: 13 }}>{label}</Text>
+    </Pressable>
+  );
+}
+
 export default function EntrenoPuntualScreen() {
-  const [focus, setFocus] = useState<MuscleGroup | null>(null);
+  const [profile, setProfile] = useState<TrainingProfile | null>(null);
+  const [focus, setFocus] = useState<MuscleGroup[]>([]);
   const [location, setLocation] = useState<"gym" | "home">("gym");
+  const [equipment, setEquipment] = useState<Equipment[]>([]);
+  const [minutes, setMinutes] = useState<number>(60);
+  const [customMinutes, setCustomMinutes] = useState<string>("");
+  const [notes, setNotes] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Cargar el profile y sembrar minutos + equipo del lugar inicial (gym).
+  useEffect(() => {
+    (async () => {
+      const p = await getProfile();
+      if (!p) return;
+      setProfile(p);
+      setMinutes(p.sessionMinutes);
+      setEquipment(location === "home" ? p.homeEquipment : p.gymEquipment);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function onChangeLocation(next: "gym" | "home") {
+    setLocation(next);
+    if (profile) setEquipment(next === "home" ? profile.homeEquipment : profile.gymEquipment);
+  }
+
+  function toggleFocus(m: MuscleGroup) {
+    setFocus((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
+  }
+  function toggleEquipment(e: Equipment) {
+    setEquipment((prev) => (prev.includes(e) ? prev.filter((x) => x !== e) : [...prev, e]));
+  }
+
+  function effectiveMinutes(): number {
+    const custom = parseInt(customMinutes, 10);
+    if (customMinutes.trim() !== "" && Number.isFinite(custom)) {
+      return Math.min(180, Math.max(15, custom));
+    }
+    return minutes;
+  }
+
   async function onGenerate() {
-    if (!focus) return;
+    if (focus.length === 0) return;
     setLoading(true);
     setError(null);
     try {
       const url = await getBackendUrl();
-      const profile = await getProfile();
       if (!url || !profile) {
         setError("Configurá backend y perfil primero");
         setLoading(false);
         return;
       }
-      const { id, program } = await generateOneOff(url, { profile, location, focus });
+      const { id, program } = await generateOneOff(url, {
+        profile,
+        location,
+        focus,
+        sessionMinutes: effectiveMinutes(),
+        equipment,
+        notes: notes.trim() || undefined,
+      });
       await setStoredOneOffProgram(program);
       await setStoredOneOffProgramId(id);
       const wk = program.weeks[0].workouts[0];
@@ -68,36 +147,19 @@ export default function EntrenoPuntualScreen() {
     );
   }
 
+  const customOn = customMinutes.trim() !== "";
+
   return (
     <ScrollView contentContainerStyle={{ flexGrow: 1, backgroundColor: colors.bg, padding: spacing.xl, gap: spacing.lg }}>
       <Text style={{ fontSize: 18, fontWeight: "500", color: colors.text }}>Entreno puntual</Text>
-      <Text style={{ color: colors.textMuted }}>Elegí qué músculo querés entrenar y dónde.</Text>
+      <Text style={{ color: colors.textMuted }}>Elegí qué músculos, cuánto tiempo, con qué equipo y cualquier nota para hoy.</Text>
 
       <View style={{ gap: spacing.sm }}>
-        <Text style={{ color: colors.textMuted }}>Músculo</Text>
+        <Text style={{ color: colors.textMuted }}>Músculos</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-          {FOCUS_OPTIONS.map((o) => {
-            const isOn = focus === o.value;
-            return (
-              <Pressable
-                key={o.value}
-                testID={`focus-${o.value}`}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isOn }}
-                onPress={() => setFocus(o.value)}
-                style={{
-                  paddingVertical: spacing.sm,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.pill,
-                  borderWidth: 1,
-                  borderColor: isOn ? colors.accent : colors.border,
-                  backgroundColor: isOn ? colors.accent : colors.bg,
-                }}
-              >
-                <Text style={{ color: isOn ? "#fff" : colors.text, fontSize: 13 }}>{o.label}</Text>
-              </Pressable>
-            );
-          })}
+          {FOCUS_OPTIONS.map((o) => (
+            <Chip key={o.value} testID={`focus-${o.value}`} label={o.label} on={focus.includes(o.value)} onPress={() => toggleFocus(o.value)} />
+          ))}
         </View>
       </View>
 
@@ -112,7 +174,7 @@ export default function EntrenoPuntualScreen() {
                 testID={`loc-${o.value}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}
-                onPress={() => setLocation(o.value)}
+                onPress={() => onChangeLocation(o.value)}
                 style={{ flex: 1, paddingVertical: spacing.sm, alignItems: "center", backgroundColor: on ? colors.accent : colors.bg }}
               >
                 <Text style={{ color: on ? "#fff" : colors.textMuted, fontSize: 13 }}>{o.label}</Text>
@@ -122,12 +184,63 @@ export default function EntrenoPuntualScreen() {
         </View>
       </View>
 
+      <View style={{ gap: spacing.sm }}>
+        <Text style={{ color: colors.textMuted }}>Equipo disponible</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+          {EQUIPMENT_OPTIONS.filter((o) => equipment.includes(o.value)).map((o) => (
+            <Chip key={o.value} testID={`equip-${o.value}`} label={o.label} on onPress={() => toggleEquipment(o.value)} />
+          ))}
+        </View>
+      </View>
+
+      <View style={{ gap: spacing.sm }}>
+        <Text style={{ color: colors.textMuted }}>Tiempo (min)</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, alignItems: "center" }}>
+          {TIME_OPTIONS.map((t) => (
+            <Chip
+              key={t}
+              testID={`time-${t}`}
+              label={String(t)}
+              on={!customOn && minutes === t}
+              onPress={() => { setCustomMinutes(""); setMinutes(t); }}
+            />
+          ))}
+          <TextInput
+            testID="time-custom"
+            value={customMinutes}
+            onChangeText={setCustomMinutes}
+            placeholder="Otro"
+            keyboardType="number-pad"
+            style={{
+              minWidth: 64, paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
+              borderRadius: radius.pill, borderWidth: 1,
+              borderColor: customOn ? colors.accent : colors.border, color: colors.text,
+            }}
+          />
+        </View>
+      </View>
+
+      <View style={{ gap: spacing.sm }}>
+        <Text style={{ color: colors.textMuted }}>Notas para hoy (opcional)</Text>
+        <TextInput
+          testID="oneoff-notes"
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="ej: me duele la cintura, no puedo hacer burpees"
+          multiline
+          style={{
+            minHeight: 64, padding: spacing.md, borderRadius: radius.sm, borderWidth: 1,
+            borderColor: colors.border, color: colors.text, textAlignVertical: "top",
+          }}
+        />
+      </View>
+
       <Pressable
         testID="generar-puntual"
-        disabled={!focus || loading}
+        disabled={focus.length === 0 || loading}
         onPress={onGenerate}
         style={{
-          backgroundColor: !focus || loading ? colors.border : colors.accent,
+          backgroundColor: focus.length === 0 || loading ? colors.border : colors.accent,
           borderRadius: radius.sm,
           padding: spacing.md,
           alignItems: "center",
