@@ -2,6 +2,7 @@ import { eq, and } from "drizzle-orm";
 import type { WorkoutSession } from "@pulsia/shared";
 import type { Db } from "../db/client";
 import { workoutSession, sessionExercise, setLog } from "../db/schema";
+import { sessionCompletionPct } from "./completion";
 
 // --- Mapeo puro: fila anidada de Drizzle -> shape compartido WorkoutSession ---
 export function rowsToSession(row: any): WorkoutSession {
@@ -94,13 +95,16 @@ export async function deleteSession(db: Db, id: string, userId: string): Promise
 }
 
 export async function listSessions(db: Db, userId: string) {
-  const rows = await db
-    .select({
-      id: workoutSession.id, programId: workoutSession.programId,
-      dayLabel: workoutSession.dayLabel, location: workoutSession.location,
-      startedAt: workoutSession.startedAt, totalDurationMs: workoutSession.totalDurationMs,
-    })
-    .from(workoutSession)
-    .where(eq(workoutSession.userId, userId));
-  return rows;
+  const rows = await db.query.workoutSession.findMany({
+    where: eq(workoutSession.userId, userId),
+    with: { exercises: { with: { sets: true } } },
+  });
+  return rows.map((row: any) => {
+    const s = rowsToSession(row);
+    return {
+      id: s.id, programId: s.programId, dayLabel: s.dayLabel, location: s.location,
+      startedAt: s.startedAt, totalDurationMs: s.totalDurationMs,
+      completionPct: sessionCompletionPct(s),
+    };
+  });
 }

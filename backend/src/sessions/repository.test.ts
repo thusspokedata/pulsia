@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { rowsToSession, getRecentSessions } from "./repository";
+import { rowsToSession, getRecentSessions, listSessions } from "./repository";
 
 // Fila anidada tal como la devuelve db.query.workoutSession.findFirst({ with: ... }).
 const nestedRow = {
@@ -54,4 +54,12 @@ test("getRecentSessions mapea filas a WorkoutSession[] (limit)", async () => {
   const out = await getRecentSessions(db, "u", 6);
   expect(out).toHaveLength(1);
   expect(out[0].exercises[0].order).toBe(0);
+});
+
+test("listSessions incluye completionPct y proyecta liviano (sin exercises)", async () => {
+  const db: any = { query: { workoutSession: { findMany: async () => [nestedRow] } } };
+  const out = await listSessions(db, "u");
+  expect(out[0]).toHaveProperty("completionPct");
+  expect(typeof out[0].completionPct).toBe("number");
+  expect(out[0]).not.toHaveProperty("exercises");
 });
