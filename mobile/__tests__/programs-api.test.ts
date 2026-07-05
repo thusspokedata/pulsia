@@ -1,4 +1,4 @@
-import { generateProgram, GenerationError } from "../src/api/programs";
+import { generateProgram, generateOneOff, GenerationError } from "../src/api/programs";
 import type { TrainingProfile } from "@pulsia/shared";
 
 const URL = "http://backend.test";
@@ -7,6 +7,14 @@ const profile: TrainingProfile = {
   gymEquipment: ["barbell", "bench"], homeEquipment: ["bodyweight"], limitations: [],
 };
 const validProgram = { name: "Plan", weeks: [{ weekNumber: 1, workouts: [] }] };
+const validOneOffProgram = {
+  name: "Entreno puntual",
+  weeks: [{ weekNumber: 1, workouts: [
+    { dayLabel: "D1", location: "home", focus: "chest", exercises: [
+      { catalogId: "pushup", garminName: "Push Up", sets: 3, reps: "10-12", targetLoad: "RPE 7", restSeconds: 60, notes: "" },
+    ] },
+  ] }],
+};
 
 afterEach(() => { (global.fetch as any) = undefined; });
 
@@ -35,4 +43,32 @@ test("timeout (AbortError) da code timeout, no network", async () => {
 test("fallo de red real da code network", async () => {
   global.fetch = jest.fn().mockRejectedValue(new TypeError("Network request failed")) as any;
   await expect(generateProgram(URL, profile)).rejects.toMatchObject({ code: "network" });
+});
+
+test("generateOneOff postea a /programs/generate-oneoff y devuelve el programa parseado", async () => {
+  const fetchMock = jest.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ id: "oneoff-1", program: validOneOffProgram }),
+  });
+  global.fetch = fetchMock as any;
+
+  const res = await generateOneOff(URL, { profile, location: "home", focus: "chest" });
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    `${URL}/programs/generate-oneoff`,
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ profile, location: "home", focus: "chest" }),
+    }),
+  );
+  expect(res.id).toBe("oneoff-1");
+  expect(res.program).toEqual(validOneOffProgram);
+});
+
+test("generateOneOff lanza error si la respuesta no es ok", async () => {
+  global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 502, json: async () => ({}) }) as any;
+  await expect(generateOneOff(URL, { profile, location: "home", focus: "chest" })).rejects.toThrow(
+    "No se pudo generar el entreno puntual",
+  );
 });

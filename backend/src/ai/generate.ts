@@ -1,4 +1,4 @@
-import { getExerciseById, type Program, type TrainingProfile } from "@pulsia/shared";
+import { getExerciseById, type MuscleGroup, type Program, type TrainingProfile } from "@pulsia/shared";
 import type { AiClient } from "./client";
 
 function unknownCatalogIds(program: Program): string[] {
@@ -17,11 +17,12 @@ export async function generateProgramForProfile(input: {
   ai: AiClient;
   historySummary?: string;
   memory?: string;
+  oneOff?: { location: "gym" | "home"; focus: MuscleGroup };
 }): Promise<Program> {
-  const { profile, apiKey, model, ai, historySummary, memory } = input;
+  const { profile, apiKey, model, ai, historySummary, memory, oneOff } = input;
   let lastBad: string[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
-    const program = await ai.generateProgram({ profile, apiKey, model, historySummary, memory });
+    const program = await ai.generateProgram({ profile, apiKey, model, historySummary, memory, oneOff });
     lastBad = unknownCatalogIds(program);
     if (lastBad.length === 0) return program;
   }

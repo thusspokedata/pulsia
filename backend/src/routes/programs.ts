@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
-import { TrainingProfileSchema } from "@pulsia/shared";
+import { MuscleGroupSchema, TrainingProfileSchema } from "@pulsia/shared";
 import { programs, settings } from "../db/schema";
 import { decryptSecret } from "../crypto/secrets";
 import { generateProgramForProfile } from "../ai/generate";
@@ -43,6 +43,44 @@ export function programsRoutes(deps: AppDeps) {
     let program;
     try {
       program = await generateProgramForProfile({ profile: parsed.data, apiKey, model, ai: deps.aiClient, historySummary, memory });
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, 502);
+    }
+
+    const inserted = await deps.db
+      .insert(programs)
+      .values({ userId, name: program.name, data: program, profileSnapshot: parsed.data })
+      .returning();
+
+    return c.json({ id: inserted[0].id, program });
+  });
+
+  r.post("/generate-oneoff", async (c) => {
+    const userId = c.get("userId");
+    const body = await c.req.json().catch(() => null) as any;
+    const parsed = TrainingProfileSchema.safeParse(body?.profile);
+    const location = body?.location === "home" ? "home" : body?.location === "gym" ? "gym" : null;
+    const focusOk = MuscleGroupSchema.safeParse(body?.focus);
+    if (!parsed.success || !location || !focusOk.success) {
+      return c.json({ error: "profile, location (gym|home) y focus (MuscleGroup) requeridos" }, 400);
+    }
+
+    const row = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
+    if (!row?.aiApiKeyEncrypted) {
+      return c.json({ error: "No hay API key de IA configurada." }, 400);
+    }
+    const apiKey = decryptSecret(row.aiApiKeyEncrypted, deps.config.encryptionKey);
+    const model = row.aiModel ?? deps.config.defaultModel;
+
+    let program;
+    try {
+      program = await generateProgramForProfile({
+        profile: parsed.data,
+        apiKey,
+        model,
+        ai: deps.aiClient,
+        oneOff: { location, focus: focusOk.data },
+      });
     } catch (e) {
       return c.json({ error: (e as Error).message }, 502);
     }

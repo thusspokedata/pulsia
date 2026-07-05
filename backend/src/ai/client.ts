@@ -1,8 +1,9 @@
 import { z } from "zod";
-import type { Program, TrainingProfile } from "@pulsia/shared";
+import type { MuscleGroup, Program, TrainingProfile } from "@pulsia/shared";
 import Anthropic from "@anthropic-ai/sdk";
 import { ProgramSchema } from "@pulsia/shared";
 import { buildGenerationPrompt } from "./prompt";
+import { buildOneOffPrompt } from "./oneoff";
 import { buildMemoryUpdatePrompt } from "./memory";
 
 export interface AiClient {
@@ -12,6 +13,7 @@ export interface AiClient {
     model: string;
     historySummary?: string;
     memory?: string;
+    oneOff?: { location: "gym" | "home"; focus: MuscleGroup };
   }): Promise<Program>;
   updateMemory?(input: {
     current: string;
@@ -22,12 +24,13 @@ export interface AiClient {
 }
 
 export class AnthropicAiClient implements AiClient {
-  async generateProgram({ profile, apiKey, model, historySummary, memory }: {
+  async generateProgram({ profile, apiKey, model, historySummary, memory, oneOff }: {
     profile: TrainingProfile;
     apiKey: string;
     model: string;
     historySummary?: string;
     memory?: string;
+    oneOff?: { location: "gym" | "home"; focus: MuscleGroup };
   }): Promise<Program> {
     const client = new Anthropic({ apiKey });
     // z.toJSONSchema agrega una key "$schema" (meta) que no necesita el tool de Anthropic.
@@ -37,12 +40,15 @@ export class AnthropicAiClient implements AiClient {
       description: "Devuelve el programa de entrenamiento generado.",
       input_schema: inputSchema as any,
     };
+    const content = oneOff
+      ? buildOneOffPrompt(profile, oneOff)
+      : buildGenerationPrompt(profile, historySummary, memory);
     const res = await client.messages.create({
       model,
       max_tokens: 16000,
       tools: [tool],
       tool_choice: { type: "tool", name: "return_program" },
-      messages: [{ role: "user", content: buildGenerationPrompt(profile, historySummary, memory) }],
+      messages: [{ role: "user", content }],
     });
     if (res.stop_reason === "max_tokens") {
       throw new Error(

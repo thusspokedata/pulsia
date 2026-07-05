@@ -5,6 +5,7 @@ import type { WorkoutSession, SessionExercise, Equipment } from "@pulsia/shared"
 import { alternativesFor } from "@pulsia/shared";
 import { getStoredProgram, setStoredProgram } from "../src/storage/program";
 import { getStoredProgramId } from "../src/storage/programId";
+import { getStoredOneOffProgram, getStoredOneOffProgramId, clearOneOff } from "../src/storage/oneOffProgram";
 import { getBackendUrl } from "../src/storage/config";
 import { getProfile } from "../src/storage/profile";
 import { getLastWeights } from "../src/api/sessions";
@@ -55,7 +56,7 @@ function firstIncompleteOrder(s: WorkoutSession): number {
 }
 
 export default function SesionScreen() {
-  const params = useLocalSearchParams<{ week: string; dayLabel: string; location: string }>();
+  const params = useLocalSearchParams<{ week: string; dayLabel: string; location: string; oneOff?: string }>();
   const [session, setSession] = useState<WorkoutSession | null>(null);
   const [weight, setWeight] = useState("");
   const [rpe, setRpe] = useState("");
@@ -75,6 +76,7 @@ export default function SesionScreen() {
   const pauseStartedRef = useRef(0); // Date.now() del inicio de la pausa en curso
   const restRemainingRef = useRef<number | null>(null); // ms restantes de descanso congelados al pausar
   const started = useRef(false);
+  const oneOffRef = useRef(false);
   const setStartRef = useRef(Date.now());
   const mounted = useRef(true);
   const soundsEnabledRef = useRef(true);
@@ -127,6 +129,7 @@ export default function SesionScreen() {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
+    oneOffRef.current = params.oneOff === "true";
     (async () => {
       const wantDay = params.dayLabel ? String(params.dayLabel) : null;
       const wantLocation = params.location === "home" ? "home" : "gym";
@@ -171,14 +174,14 @@ export default function SesionScreen() {
         router.replace("/");
         return;
       }
-      const program = await getStoredProgram();
+      const program = oneOffRef.current ? await getStoredOneOffProgram() : await getStoredProgram();
       if (!mounted.current) return;
       if (!program) {
         router.replace("/");
         return;
       }
       // Sin programId real la sesión no puede sincronizar (FK en el backend). Volvemos a la home.
-      const programId = await getStoredProgramId();
+      const programId = oneOffRef.current ? await getStoredOneOffProgramId() : await getStoredProgramId();
       if (!mounted.current) return;
       if (!programId) {
         router.replace("/");
@@ -330,8 +333,12 @@ export default function SesionScreen() {
         note: changeNote,
       }),
     );
-    const prog = await getStoredProgram();
-    if (prog) await setStoredProgram(substituteInProgram(prog, current.catalogId, pickChoice, changeNote));
+    // En un entreno puntual NO tocar el plan vigente: la sustitución vale solo para esta sesión
+    // (el programa one-off se descarta al terminar/cancelar vía clearOneOff).
+    if (!oneOffRef.current) {
+      const prog = await getStoredProgram();
+      if (prog) await setStoredProgram(substituteInProgram(prog, current.catalogId, pickChoice, changeNote));
+    }
     setShowPicker(false);
     setPickChoice(null);
     setChangeNote("");
@@ -376,6 +383,7 @@ export default function SesionScreen() {
       await enqueueSession(done);
       await clearActiveSession();
       await clearPauseState();
+      if (oneOffRef.current) await clearOneOff();
     } catch {
       if (mounted.current) setFinishError(true);
       return; // no navegamos; la sesión sigue en activeSession para reintentar
@@ -407,6 +415,7 @@ export default function SesionScreen() {
           onPress: async () => {
             await clearActiveSession();
             await clearPauseState();
+            if (oneOffRef.current) await clearOneOff();
             router.replace("/");
           },
         },

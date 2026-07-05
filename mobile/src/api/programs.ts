@@ -49,3 +49,17 @@ export async function generateProgram(
   if (!parsed.success) throw new GenerationError("invalid", "El programa recibido es inválido.");
   return { id: body.id, program: parsed.data };
 }
+
+export async function generateOneOff(
+  baseUrl: string,
+  args: { profile: TrainingProfile; location: "gym" | "home"; focus: string },
+): Promise<{ id: string; program: Program }> {
+  const res = await apiFetch(baseUrl, "/programs/generate-oneoff", {
+    method: "POST",
+    body: JSON.stringify(args),
+    timeoutMs: GENERATION_TIMEOUT_MS,
+  });
+  if (!res.ok) throw new Error("No se pudo generar el entreno puntual");
+  const data = await res.json();
+  return { id: data.id, program: ProgramSchema.parse(data.program) };
+}
