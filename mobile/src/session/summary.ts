@@ -1,5 +1,5 @@
 import type { WorkoutSession, SessionExercise, SetLog } from "@pulsia/shared";
-import { getExerciseById } from "@pulsia/shared";
+import { getExerciseById, sessionCompletionPct } from "@pulsia/shared";
 
 export interface SetRow {
   setNumber: number;
@@ -73,7 +73,7 @@ export function summarize(session: WorkoutSession): SessionSummary {
 
   const totalPlannedSets = session.exercises.reduce((acc, ex) => acc + ex.planned.sets, 0);
   const totalDoneSets = flat.length;
-  const completionPct = totalPlannedSets > 0 ? Math.round((totalDoneSets / totalPlannedSets) * 100) : 0;
+  const completionPct = sessionCompletionPct(session);
 
   const exercisesTotal = session.exercises.length;
 

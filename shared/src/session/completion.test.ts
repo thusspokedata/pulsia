@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import { sessionCompletionPct } from "./completion";
-import type { WorkoutSession } from "@pulsia/shared";
+import type { WorkoutSession } from "../schemas/session";
 
 function ex(planned: number, doneSets: number) {
   return {
@@ -30,4 +30,7 @@ test("sólo cuenta series terminadas (endedAt != null)", () => {
   const s = sess([ex(2, 1)]);
   s.exercises[0].sets.push({ setNumber: 2, reps: 8, weightKg: null, rpe: null, startedAt: 3, endedAt: null, durationMs: null, repTimestamps: [], hrAvg: null, hrMax: null, skipped: false } as any);
   expect(sessionCompletionPct(s)).toBe(50);
+});
+test("clampa a 100 si se hicieron más series que las planeadas", () => {
+  expect(sessionCompletionPct(sess([ex(2, 4)]))).toBe(100);
 });

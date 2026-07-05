@@ -1,8 +1,8 @@
 import { eq, and } from "drizzle-orm";
 import type { WorkoutSession } from "@pulsia/shared";
+import { sessionCompletionPct } from "@pulsia/shared";
 import type { Db } from "../db/client";
 import { workoutSession, sessionExercise, setLog } from "../db/schema";
-import { sessionCompletionPct } from "./completion";
 
 // --- Mapeo puro: fila anidada de Drizzle -> shape compartido WorkoutSession ---
 export function rowsToSession(row: any): WorkoutSession {
