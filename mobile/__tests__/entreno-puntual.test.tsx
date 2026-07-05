@@ -71,11 +71,15 @@ test("no se puede generar sin músculo elegido", async () => {
   await waitFor(() => expect(generateOneOff).not.toHaveBeenCalled());
 });
 
-test("cambiar de lugar a Casa resiembra el equipo (dumbbell, sin barbell)", async () => {
+test("cambiar de lugar a Casa resiembra la selección de equipo (dumbbell sí, barbell no)", async () => {
   await render(<EntrenoPuntualScreen />);
   await waitFor(() => expect(screen.getByTestId("equip-barbell")).toBeTruthy());
+  // gym inicial: gymEquipment = ["barbell","dumbbell"] → ambos seleccionados
+  expect(screen.getByTestId("equip-barbell").props.accessibilityState.selected).toBe(true);
   await fireEvent.press(screen.getByTestId("loc-home"));
-  await waitFor(() => expect(screen.queryByTestId("equip-barbell")).toBeNull());
-  // dumbbell sigue disponible en homeEquipment
-  expect(screen.getByTestId("equip-dumbbell")).toBeTruthy();
+  // Casa: homeEquipment = ["dumbbell"] → barbell existe pero deselecto; dumbbell seleccionado
+  await waitFor(() =>
+    expect(screen.getByTestId("equip-barbell").props.accessibilityState.selected).toBe(false),
+  );
+  expect(screen.getByTestId("equip-dumbbell").props.accessibilityState.selected).toBe(true);
 });

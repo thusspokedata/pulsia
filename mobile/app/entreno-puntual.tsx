@@ -187,8 +187,8 @@ export default function EntrenoPuntualScreen() {
       <View style={{ gap: spacing.sm }}>
         <Text style={{ color: colors.textMuted }}>Equipo disponible</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-          {EQUIPMENT_OPTIONS.filter((o) => equipment.includes(o.value)).map((o) => (
-            <Chip key={o.value} testID={`equip-${o.value}`} label={o.label} on onPress={() => toggleEquipment(o.value)} />
+          {EQUIPMENT_OPTIONS.map((o) => (
+            <Chip key={o.value} testID={`equip-${o.value}`} label={o.label} on={equipment.includes(o.value)} onPress={() => toggleEquipment(o.value)} />
           ))}
         </View>
       </View>
