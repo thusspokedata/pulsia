@@ -32,6 +32,7 @@ test("renderiza el banner y navega a /sesion si hay sesión activa", async () =>
   };
   await render(<SessionIndicator />);
   await waitFor(() => expect(screen.getByTestId("session-indicator")).toBeTruthy());
+  expect(screen.getByText("▶ Volver al entrenamiento en curso")).toBeTruthy();
   await fireEvent.press(screen.getByTestId("session-indicator"));
   expect(mockPush).toHaveBeenCalledWith("/sesion");
 });

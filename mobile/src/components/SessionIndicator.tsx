@@ -54,11 +54,20 @@ export function SessionIndicator() {
     <Pressable
       testID="session-indicator"
       onPress={() => router.push("/sesion")}
-      style={{ backgroundColor: colors.accentSoft, padding: spacing.sm, borderRadius: radius.sm, margin: spacing.sm }}
+      style={{
+        backgroundColor: colors.accent,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.md,
+        margin: spacing.sm,
+        borderRadius: radius.md,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: spacing.sm,
+      }}
     >
-      <Text style={{ color: colors.accentText, fontSize: 13, textAlign: "center" }}>
-        ⏱ Entrenamiento en curso — {fmt(nowMs - session.startedAt - pausedMs)}
-      </Text>
+      <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>▶ Volver al entrenamiento en curso</Text>
+      <Text style={{ color: "#fff", fontSize: 14 }}>{fmt(nowMs - session.startedAt - pausedMs)}</Text>
     </Pressable>
   );
 }
