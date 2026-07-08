@@ -1,5 +1,8 @@
 import { testConnection } from "./health";
 import { saveSettings, getSettings } from "./settings";
+import { apiFetch } from "./client";
+
+jest.mock("../storage/authToken", () => ({ getToken: jest.fn(async () => "tok-123") }));
 
 const URL = "http://backend.test";
 
@@ -32,4 +35,12 @@ test("saveSettings hace POST /settings con la api key", async () => {
 test("getSettings devuelve hasApiKey", async () => {
   global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ hasApiKey: true, aiModel: "claude-sonnet-4-6" }) }) as any;
   expect(await getSettings(URL)).toEqual({ hasApiKey: true, aiModel: "claude-sonnet-4-6" });
+});
+
+test("apiFetch adjunta Authorization Bearer cuando hay token", async () => {
+  const fetchMock = jest.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+  global.fetch = fetchMock as any;
+  await apiFetch("http://b.test", "/x");
+  const init = fetchMock.mock.calls[0][1] as RequestInit;
+  expect((init.headers as any).Authorization).toBe("Bearer tok-123");
 });
