@@ -70,7 +70,7 @@ export function programsRoutes(deps: AppDeps) {
     const row = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
     const apiKey = resolveAiKey(row, deps.config);
     if (!apiKey) {
-      return c.json({ error: "No hay API key de IA configurada." }, 400);
+      return c.json({ error: "No hay API key de IA configurada. Cargala en Configuración." }, 400);
     }
     const model = row?.aiModel ?? deps.config.defaultModel;
 
