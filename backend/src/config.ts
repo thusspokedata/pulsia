@@ -56,6 +56,10 @@ export function loadServerEnv(env: Env = process.env): ServerEnv {
   // Token de admin/ops para PUT /app/latest (opcional; si falta, el PUT se rechaza).
   const adminToken = env.ADMIN_TOKEN?.trim() || undefined;
 
+  // Key de Anthropic por defecto del server (opcional). Si un usuario no cargó la suya,
+  // se usa esta. Si falta y el usuario tampoco tiene, la generación devuelve 400.
+  const defaultAiApiKey = env.ANTHROPIC_API_KEY?.trim() || undefined;
+
   return {
     databaseUrl,
     config: {
@@ -65,6 +69,7 @@ export function loadServerEnv(env: Env = process.env): ServerEnv {
       sessionTtlDays,
       singleUserMode,
       adminToken,
+      defaultAiApiKey,
     },
   };
 }
