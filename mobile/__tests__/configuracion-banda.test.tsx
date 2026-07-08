@@ -11,6 +11,8 @@ const mockFakeManager = {
   destroy: jest.fn(),
 };
 jest.mock("../src/ble/bandManager", () => ({ createBandManager: () => mockFakeManager }));
+jest.mock("expo-router", () => ({ router: { replace: jest.fn(), push: jest.fn() } }));
+jest.mock("../src/auth/AuthContext", () => ({ useAuth: () => ({ signOut: jest.fn(async () => {}) }) }));
 
 import ConfiguracionScreen from "../app/configuracion";
 

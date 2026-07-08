@@ -34,9 +34,17 @@ test("refreshMemory aborta a los 60s (no a los 15s por defecto)", async () => {
   const abortSpy = jest.spyOn(AbortController.prototype, "abort");
   // fetch que nunca resuelve, salvo que se aborte la señal.
   global.fetch = jest.fn((_u: any, init: any) => new Promise((_res, rej) => {
+    // `fetch` real rechaza de inmediato si la señal ya viene abortada (apiFetch lee el
+    // token —async— antes de llamar a fetch, así que el abort puede preceder a este listener).
+    if (init.signal.aborted) return rej(new DOMException("Aborted", "AbortError"));
     init.signal.addEventListener("abort", () => rej(new DOMException("Aborted", "AbortError")));
   })) as any;
   const p = refreshMemory(URL).catch(() => "aborted");
+  // apiFetch lee el token (async) ANTES de programar el timer; flushamos esos microtasks
+  // para que el setTimeout ya esté agendado antes de avanzar los timers falsos.
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
   // A los 15s (el default de apiFetch) todavía NO debe haber abortado.
   jest.advanceTimersByTime(15000);
   expect(abortSpy).not.toHaveBeenCalled();

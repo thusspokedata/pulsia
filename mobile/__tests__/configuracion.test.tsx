@@ -2,6 +2,9 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react-nativ
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import ConfiguracionScreen from "../app/configuracion";
 
+jest.mock("expo-router", () => ({ router: { replace: jest.fn(), push: jest.fn() } }));
+jest.mock("../src/auth/AuthContext", () => ({ useAuth: () => ({ signOut: jest.fn(async () => {}) }) }));
+
 beforeEach(async () => {
   await AsyncStorage.clear();
 });

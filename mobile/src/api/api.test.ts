@@ -1,10 +1,20 @@
 import { testConnection } from "./health";
 import { saveSettings, getSettings } from "./settings";
+import { apiFetch } from "./client";
+import { clearToken } from "../storage/authToken";
+import { notifyUnauthorized } from "../auth/unauthorized";
+
+jest.mock("../storage/authToken", () => ({
+  getToken: jest.fn(async () => "tok-123"),
+  clearToken: jest.fn(async () => {}),
+}));
+jest.mock("../auth/unauthorized", () => ({ notifyUnauthorized: jest.fn() }));
 
 const URL = "http://backend.test";
 
 afterEach(() => {
   (global.fetch as any) = undefined;
+  jest.clearAllMocks();
 });
 
 test("testConnection true cuando /health responde ok", async () => {
@@ -32,4 +42,26 @@ test("saveSettings hace POST /settings con la api key", async () => {
 test("getSettings devuelve hasApiKey", async () => {
   global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ hasApiKey: true, aiModel: "claude-sonnet-4-6" }) }) as any;
   expect(await getSettings(URL)).toEqual({ hasApiKey: true, aiModel: "claude-sonnet-4-6" });
+});
+
+test("apiFetch adjunta Authorization Bearer cuando hay token", async () => {
+  const fetchMock = jest.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+  global.fetch = fetchMock as any;
+  await apiFetch("http://b.test", "/x");
+  const init = fetchMock.mock.calls[0][1] as RequestInit;
+  expect((init.headers as any).Authorization).toBe("Bearer tok-123");
+});
+
+test("401 en ruta autenticada limpia el token y notifica", async () => {
+  global.fetch = jest.fn(async () => new Response("{}", { status: 401 })) as any;
+  await apiFetch("http://b.test", "/programs/x");
+  expect(clearToken).toHaveBeenCalled();
+  expect(notifyUnauthorized).toHaveBeenCalled();
+});
+
+test("401 en ruta de auth NO limpia el token ni notifica", async () => {
+  global.fetch = jest.fn(async () => new Response("{}", { status: 401 })) as any;
+  await apiFetch("http://b.test", "/auth/login");
+  expect(clearToken).not.toHaveBeenCalled();
+  expect(notifyUnauthorized).not.toHaveBeenCalled();
 });
