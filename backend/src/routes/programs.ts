@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { OneOffRequestSchema, TrainingProfileSchema } from "@pulsia/shared";
 import { programs, settings } from "../db/schema";
-import { decryptSecret } from "../crypto/secrets";
+import { resolveAiKey } from "../ai/resolveKey";
 import { generateProgramForProfile } from "../ai/generate";
 import { getRecentSessions } from "../sessions/repository";
 import { buildTrainingHistorySummary } from "../ai/history";
@@ -19,11 +19,11 @@ export function programsRoutes(deps: AppDeps) {
     if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
 
     const row = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
-    if (!row?.aiApiKeyEncrypted) {
+    const apiKey = resolveAiKey(row, deps.config);
+    if (!apiKey) {
       return c.json({ error: "No hay API key de IA configurada. Cargala en Configuración." }, 400);
     }
-    const apiKey = decryptSecret(row.aiApiKeyEncrypted, deps.config.encryptionKey);
-    const model = row.aiModel ?? deps.config.defaultModel;
+    const model = row?.aiModel ?? deps.config.defaultModel;
 
     const recent = await getRecentSessions(deps.db, userId, 6);
     const historySummary = buildTrainingHistorySummary(recent);
@@ -68,11 +68,11 @@ export function programsRoutes(deps: AppDeps) {
       : (location === "home" ? reqProfile.homeEquipment : reqProfile.gymEquipment);
 
     const row = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
-    if (!row?.aiApiKeyEncrypted) {
-      return c.json({ error: "No hay API key de IA configurada." }, 400);
+    const apiKey = resolveAiKey(row, deps.config);
+    if (!apiKey) {
+      return c.json({ error: "No hay API key de IA configurada. Cargala en Configuración." }, 400);
     }
-    const apiKey = decryptSecret(row.aiApiKeyEncrypted, deps.config.encryptionKey);
-    const model = row.aiModel ?? deps.config.defaultModel;
+    const model = row?.aiModel ?? deps.config.defaultModel;
 
     let program;
     try {
