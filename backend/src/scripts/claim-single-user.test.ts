@@ -2,15 +2,25 @@ import { test, expect } from "bun:test";
 import { claimSingleUser } from "./claim-single-user";
 import { SINGLE_USER_ID } from "../constants";
 
-// Fake db que registra los .update(table) y responde vacío a los selects de colisión.
-function fakeDb() {
+// Fake db que ejecuta la callback de `transaction(fn)` con un `tx` que registra los
+// .update(table) y responde vacío a los selects de colisión. `throwOnUpdate` fuerza que
+// el n-ésimo update lance, para ejercitar el rollback (el error se propaga desde la tx).
+function fakeDb(opts?: { throwOnUpdate?: number }) {
   const updates: string[] = [];
-  const nameOf = (t: any) => t?._?.name ?? t?.name ?? "unknown";
-  return {
-    _updates: updates,
+  let n = 0;
+  const tx = {
     select: () => ({ from: (_t: any) => ({ where: () => ({ limit: async () => [] }) }) }),
-    update: (t: any) => ({ set: (_v: any) => ({ where: async () => { updates.push(nameOf(t)); } }) }),
-  } as any;
+    update: (_t: any) => ({
+      set: (_v: any) => ({
+        where: async () => {
+          n++;
+          if (opts?.throwOnUpdate === n) throw new Error("db caída");
+          updates.push("u");
+        },
+      }),
+    }),
+  };
+  return { _updates: updates, transaction: async (fn: any) => fn(tx) } as any;
 }
 
 test("aborta si el destino es el usuario por defecto", async () => {
@@ -21,4 +31,9 @@ test("reasigna las 5 tablas al usuario destino", async () => {
   const db = fakeDb();
   await claimSingleUser(db, "11111111-1111-4111-8111-111111111111");
   expect(db._updates.length).toBe(5);
+});
+
+test("propaga el error (rollback) si un update de la transacción falla", async () => {
+  const db = fakeDb({ throwOnUpdate: 2 });
+  await expect(claimSingleUser(db, "11111111-1111-4111-8111-111111111111")).rejects.toThrow();
 });
