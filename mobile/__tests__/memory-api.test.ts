@@ -40,6 +40,11 @@ test("refreshMemory aborta a los 60s (no a los 15s por defecto)", async () => {
     init.signal.addEventListener("abort", () => rej(new DOMException("Aborted", "AbortError")));
   })) as any;
   const p = refreshMemory(URL).catch(() => "aborted");
+  // apiFetch lee el token (async) ANTES de programar el timer; flushamos esos microtasks
+  // para que el setTimeout ya esté agendado antes de avanzar los timers falsos.
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
   // A los 15s (el default de apiFetch) todavía NO debe haber abortado.
   jest.advanceTimersByTime(15000);
   expect(abortSpy).not.toHaveBeenCalled();

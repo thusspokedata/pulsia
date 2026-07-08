@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { getToken, clearToken } from "../storage/authToken";
+import { setUnauthorizedHandler } from "./unauthorized";
 
 type Status = "loading" | "in" | "out";
 type AuthValue = { status: Status; refresh: () => Promise<void>; signOut: () => Promise<void> };
@@ -18,6 +19,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("out");
   }
   useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    setUnauthorizedHandler(() => { void signOut(); });
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   return <AuthCtx.Provider value={{ status, refresh, signOut }}>{children}</AuthCtx.Provider>;
 }
