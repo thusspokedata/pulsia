@@ -3,7 +3,7 @@ import { DEFAULT_BACKEND_URL } from "../config/backend";
 
 const KEY = "pulsia.backendUrl";
 
-export async function getBackendUrl(): Promise<string | null> {
+export async function getBackendUrl(): Promise<string> {
   const stored = await AsyncStorage.getItem(KEY);
   return stored ?? DEFAULT_BACKEND_URL;
 }

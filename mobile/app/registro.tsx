@@ -18,7 +18,6 @@ export default function RegistroScreen() {
     setLoading(true); setError(null);
     try {
       const url = await getBackendUrl();
-      if (!url) { setError("Falta configurar el backend"); setLoading(false); return; }
       await register(url, email.trim(), password, invite.trim());
       await refresh();
       router.replace("/");

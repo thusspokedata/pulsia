@@ -17,7 +17,6 @@ export default function LoginScreen() {
     setLoading(true); setError(null);
     try {
       const url = await getBackendUrl();
-      if (!url) { setError("Falta configurar el backend"); setLoading(false); return; }
       await login(url, email.trim(), password);
       await refresh();
       router.replace("/");

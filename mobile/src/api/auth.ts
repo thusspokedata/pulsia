@@ -6,7 +6,7 @@ async function tokenFrom(res: Response): Promise<string> {
     const body = await res.json().catch(() => ({}));
     throw new Error(typeof body?.error === "string" ? body.error : "Error de autenticación");
   }
-  const data = await res.json();
+  const data = await res.json().catch(() => null);
   if (!data?.token) throw new Error("Respuesta inválida del servidor");
   return data.token;
 }

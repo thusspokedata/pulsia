@@ -122,8 +122,10 @@ export default function ConfiguracionScreen() {
   }
 
   async function onLogout() {
-    const url = await getBackendUrl();
-    if (url) await logout(url);
+    try {
+      const url = await getBackendUrl();
+      await logout(url);
+    } catch { /* best-effort: cerramos sesión local igual */ }
     await signOut();
     router.replace("/login");
   }

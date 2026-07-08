@@ -3,11 +3,11 @@ import * as SecureStore from "expo-secure-store";
 const KEY = "pulsia.authToken";
 
 export async function getToken(): Promise<string | null> {
-  return SecureStore.getItemAsync(KEY);
+  try { return await SecureStore.getItemAsync(KEY); } catch { return null; }
 }
 export async function setToken(token: string): Promise<void> {
   await SecureStore.setItemAsync(KEY, token);
 }
 export async function clearToken(): Promise<void> {
-  await SecureStore.deleteItemAsync(KEY);
+  try { await SecureStore.deleteItemAsync(KEY); } catch { /* best-effort */ }
 }
