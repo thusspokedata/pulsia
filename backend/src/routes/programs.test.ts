@@ -72,10 +72,10 @@ const validProfileBody = {
 
 let lastAiInput: any = null;
 
-function deps(db: any) {
+function deps(db: any, defaultAiApiKey?: string) {
   return {
     db,
-    config: { encryptionKey: KEY, defaultModel: "claude-sonnet-4-6", inviteCode: "INV", sessionTtlDays: 4 },
+    config: { encryptionKey: KEY, defaultModel: "claude-sonnet-4-6", inviteCode: "INV", sessionTtlDays: 4, defaultAiApiKey },
     aiClient: {
       generateProgram: async (input: any) => {
         lastAiInput = input;
@@ -190,4 +190,13 @@ test("POST /programs/generate-oneoff con focus vacío devuelve 400", async () =>
     body: JSON.stringify({ profile: validProfileBody, location: "gym", focus: [] }),
   });
   expect(res.status).toBe(400);
+});
+
+test("POST /programs/generate sin key de usuario pero con key del server → 200", async () => {
+  const db = fakeDb(false); // settings.findFirst → null (sin aiApiKeyEncrypted)
+  const app = createApp(deps(db, "sk-server-default") as any);
+  const res = await app.request("/programs/generate", {
+    method: "POST", headers: authHeaders, body: JSON.stringify(validProfileBody),
+  });
+  expect(res.status).toBe(200);
 });

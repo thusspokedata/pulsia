@@ -61,10 +61,10 @@ function fakeDb(opts: { withKey?: boolean; memoryContent?: string | null } = {})
 
 let lastAiInput: any = null;
 
-function deps(db: any, updateMemoryImpl?: (input: any) => Promise<string>) {
+function deps(db: any, updateMemoryImpl?: (input: any) => Promise<string>, defaultAiApiKey?: string) {
   return {
     db,
-    config: { encryptionKey: KEY, defaultModel: "claude-sonnet-4-6", inviteCode: "INV", sessionTtlDays: 4 },
+    config: { encryptionKey: KEY, defaultModel: "claude-sonnet-4-6", inviteCode: "INV", sessionTtlDays: 4, defaultAiApiKey },
     aiClient: {
       generateProgram: async () => ({ name: "x", weeks: [] }),
       updateMemory: updateMemoryImpl ?? (async (input: any) => {
@@ -117,6 +117,14 @@ test("POST /memory/refresh sin API key configurada devuelve 400", async () => {
   const app = createApp(deps(db) as any);
   const res = await app.request("/memory/refresh", { method: "POST", headers: authHeaders });
   expect(res.status).toBe(400);
+});
+
+test("POST /memory/refresh sin key de usuario pero con key del server → no da 400", async () => {
+  const db = fakeDb({ withKey: false });
+  const app = createApp(deps(db, undefined, "sk-server-default") as any);
+  const res = await app.request("/memory/refresh", { method: "POST", headers: authHeaders });
+  expect(res.status).not.toBe(400);
+  expect(res.status).toBe(200);
 });
 
 test("POST /memory/refresh sin updateMemory disponible devuelve 501", async () => {
