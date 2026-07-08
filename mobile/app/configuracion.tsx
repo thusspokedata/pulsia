@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
+import { router } from "expo-router";
 import { getBackendUrl, setBackendUrl } from "../src/storage/config";
+import { logout } from "../src/api/auth";
+import { useAuth } from "../src/auth/AuthContext";
 import { testConnection } from "../src/api/health";
 import { saveSettings } from "../src/api/settings";
 import { getPairedBand, setPairedBand, clearPairedBand } from "../src/storage/pairedBand";
@@ -12,6 +15,7 @@ import { colors, radius, spacing } from "../src/theme/tokens";
 const SCAN_TIMEOUT_MS = 12_000;
 
 export default function ConfiguracionScreen() {
+  const { signOut } = useAuth();
   const [url, setUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -117,6 +121,13 @@ export default function ConfiguracionScreen() {
     setPairedName(null);
   }
 
+  async function onLogout() {
+    const url = await getBackendUrl();
+    if (url) await logout(url);
+    await signOut();
+    router.replace("/login");
+  }
+
   async function onToggleSounds() {
     const next = !soundsEnabled;
     setSoundsEnabledState(next);
@@ -214,6 +225,10 @@ export default function ConfiguracionScreen() {
       </View>
 
       {status && <Text style={{ color: colors.accentText }}>{status}</Text>}
+
+      <Pressable testID="logout" onPress={onLogout} style={{ alignItems: "center", paddingVertical: spacing.md, marginTop: spacing.lg }}>
+        <Text style={{ color: colors.danger, fontWeight: "600" }}>Cerrar sesión</Text>
+      </Pressable>
     </View>
   );
 }
