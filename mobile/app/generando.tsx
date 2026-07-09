@@ -5,7 +5,7 @@ import { getBackendUrl } from "../src/storage/config";
 import { getProfile } from "../src/storage/profile";
 import { setStoredProgram } from "../src/storage/program";
 import { setStoredProgramId } from "../src/storage/programId";
-import { generateProgram, GenerationError } from "../src/api/programs";
+import { startGeneration, getGenerationStatus, GenerationError } from "../src/api/programs";
 import { colors, radius, spacing } from "../src/theme/tokens";
 
 const MESSAGES = [
@@ -54,12 +54,32 @@ export default function GenerandoScreen() {
       return;
     }
     try {
-      const { id, program } = await generateProgram(url, profile);
-      if (!mounted.current) return;
-      await setStoredProgram(program);
-      await setStoredProgramId(id);
-      if (!mounted.current) return;
-      router.replace("/");
+      const { jobId } = await startGeneration(url, profile);
+      const deadline = Date.now() + 5 * 60 * 1000;
+      // Poll corto cada 3s: la conexión con el server es breve (sin request larga → sin 499).
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 3000));
+        if (!mounted.current) return;
+        let st;
+        try {
+          st = await getGenerationStatus(url, jobId);
+        } catch {
+          // blip transitorio (red/timeout): seguimos polleando el mismo job en vez de matar todo.
+          continue;
+        }
+        if (!mounted.current) return;
+        if (st.status === "done") {
+          await setStoredProgram(st.program);
+          await setStoredProgramId(st.programId);
+          if (!mounted.current) return;
+          router.replace("/");
+          return;
+        }
+        if (st.status === "error") {
+          throw new GenerationError("aiError", st.error || "La IA no pudo generar el programa. Reintentá.");
+        }
+      }
+      throw new GenerationError("timeout", "La generación tardó demasiado. Reintentá.");
     } catch (e) {
       if (!mounted.current) return;
       if (e instanceof GenerationError && e.code === "noApiKey") {
@@ -96,7 +116,7 @@ export default function GenerandoScreen() {
     <View style={{ flex: 1, backgroundColor: colors.bg, padding: spacing.xl, gap: spacing.lg, justifyContent: "center", alignItems: "center" }}>
       <ActivityIndicator size="large" color={colors.accent} />
       <Text style={{ fontSize: 16, color: colors.text }}>{MESSAGES[msgIndex]}</Text>
-      <Text style={{ color: colors.textMuted, textAlign: "center" }}>Esto puede tardar hasta un minuto.</Text>
+      <Text style={{ color: colors.textMuted, textAlign: "center" }}>Esto puede tardar un par de minutos.</Text>
     </View>
   );
 }
