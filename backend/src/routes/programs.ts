@@ -1,13 +1,14 @@
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { OneOffRequestSchema, TrainingProfileSchema } from "@pulsia/shared";
-import { programs, settings } from "../db/schema";
+import { programs, settings, generationJobs } from "../db/schema";
 import { resolveAiKey } from "../ai/resolveKey";
 import { generateProgramForProfile } from "../ai/generate";
 import { getRecentSessions } from "../sessions/repository";
 import { buildTrainingHistorySummary } from "../ai/history";
 import { getMemory } from "../memory/repository";
 import { refreshAthleteMemory } from "../memory/service";
+import { runGenerationJob } from "../programs/generateJob";
 import type { AppDeps } from "../app";
 
 export function programsRoutes(deps: AppDeps) {
@@ -52,6 +53,45 @@ export function programsRoutes(deps: AppDeps) {
       .catch((e) => console.warn("refresh de memoria (background) falló:", (e as Error).message));
 
     return c.json({ id: inserted[0].id, program });
+  });
+
+  r.post("/generate-async", async (c) => {
+    const userId = c.get("userId");
+    const parsed = TrainingProfileSchema.safeParse(await c.req.json());
+    if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
+    const row = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
+    const apiKey = resolveAiKey(row, deps.config);
+    if (!apiKey) return c.json({ error: "No hay API key de IA configurada. Cargala en Configuración." }, 400);
+    const model = row?.aiModel ?? deps.config.defaultModel;
+    const [job] = await deps.db.insert(generationJobs).values({ userId, status: "pending" }).returning();
+    // La generación corre DESPUÉS de responder (floating promise): la conexión con el cliente es corta.
+    void runGenerationJob(deps, job.id, userId, parsed.data, apiKey, model);
+    return c.json({ jobId: job.id });
+  });
+
+  r.get("/generate-async/:jobId", async (c) => {
+    const userId = c.get("userId");
+    const jobId = c.req.param("jobId");
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(jobId)) return c.json({ error: "job no encontrado" }, 404);
+    const job = await deps.db.query.generationJobs.findFirst({ where: and(eq(generationJobs.id, jobId), eq(generationJobs.userId, userId)) });
+    if (!job) return c.json({ error: "job no encontrado" }, 404);
+    // Stale-job fallback: un restart del server deja jobs 'pending' colgados (el floating promise se
+    // pierde). Si el job es viejo (>10 min), lo auto-sanamos flipeándolo a 'error' al pollear.
+    const STALE_MS = 10 * 60 * 1000;
+    if (job.status === "pending" && Date.now() - new Date(job.createdAt).getTime() > STALE_MS) {
+      const msg = "La generación expiró. Reintentá.";
+      await deps.db.update(generationJobs).set({ status: "error", error: msg }).where(eq(generationJobs.id, jobId)).catch(() => {});
+      return c.json({ status: "error", error: msg });
+    }
+    if (job.status === "done") {
+      const prog = job.programId
+        ? await deps.db.query.programs.findFirst({ where: and(eq(programs.id, job.programId), eq(programs.userId, userId)) })
+        : null;
+      if (!prog) return c.json({ status: "error", error: "El programa generado no está disponible." });
+      return c.json({ status: "done", programId: job.programId, program: prog.data });
+    }
+    return c.json({ status: job.status, error: job.error ?? undefined });
   });
 
   r.post("/generate-oneoff", async (c) => {

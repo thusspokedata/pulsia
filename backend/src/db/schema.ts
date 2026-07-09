@@ -44,6 +44,15 @@ export const programs = pgTable("programs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const generationJobs = pgTable("generation_jobs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  status: text("status").notNull(), // 'pending' | 'done' | 'error'
+  programId: uuid("program_id").references(() => programs.id),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const exerciseCatalog = pgTable("exercise_catalog", {
   id: text("id").primaryKey(),
   garminCategory: text("garmin_category").notNull(),

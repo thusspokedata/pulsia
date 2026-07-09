@@ -41,7 +41,7 @@ const nestedSessionRow = {
   ],
 };
 
-function fakeDb(withKey: boolean) {
+function fakeDb(withKey: boolean, opts?: { job?: any; program?: any }) {
   const saved: any[] = [];
   return {
     _saved: saved,
@@ -54,6 +54,10 @@ function fakeDb(withKey: boolean) {
       sessions: { findFirst: async () => ({ token: "t", userId: "u1", expiresAt: new Date(Date.now() + 1e9) }) },
       workoutSession: { findMany: async (_args: any) => [nestedSessionRow] },
       athleteMemory: { findFirst: async () => ({ userId: "u1", content: "memoria previa" }) },
+      // El GET generate-async scopea por (id, userId): el fake devuelve lo que cada test configure
+      // (null simula job inexistente o de otro usuario → 404).
+      generationJobs: { findFirst: async () => opts?.job ?? null },
+      programs: { findFirst: async () => opts?.program ?? null },
     },
     update: () => ({ set: () => ({ where: async () => {} }) }),
     insert: () => ({
@@ -202,4 +206,93 @@ test("POST /programs/generate sin key de usuario pero con key del server → 200
     method: "POST", headers: authHeaders, body: JSON.stringify(validProfileBody),
   });
   expect(res.status).toBe(200);
+});
+
+test("POST /programs/generate-async devuelve un jobId y crea el job", async () => {
+  const db = fakeDb(true);
+  const app = createApp(deps(db) as any);
+  const res = await app.request("/programs/generate-async", { method: "POST", headers: authHeaders, body: JSON.stringify(validProfileBody) });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(typeof body.jobId).toBe("string");
+});
+
+test("POST /programs/generate-async sin key (ni user ni server) → 400", async () => {
+  const db = fakeDb(false);
+  const app = createApp(deps(db) as any); // deps sin defaultAiApiKey
+  const res = await app.request("/programs/generate-async", { method: "POST", headers: authHeaders, body: JSON.stringify(validProfileBody) });
+  expect(res.status).toBe(400);
+});
+
+const JOB_UUID = "11111111-1111-4111-8111-111111111111";
+
+test("GET /programs/generate-async/:jobId done → 200 con el programa", async () => {
+  const db = fakeDb(true, {
+    job: { id: JOB_UUID, userId: "u1", status: "done", programId: "prog-1" },
+    program: { id: "prog-1", userId: "u1", data: validProgram },
+  });
+  const app = createApp(deps(db) as any);
+  const res = await app.request(`/programs/generate-async/${JOB_UUID}`, { headers: authHeaders });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.status).toBe("done");
+  expect(body.programId).toBe("prog-1");
+  expect(body.program.name).toBe("Plan");
+});
+
+test("GET /programs/generate-async/:jobId pending → { status: pending }", async () => {
+  const db = fakeDb(true, { job: { id: JOB_UUID, userId: "u1", status: "pending", programId: null, createdAt: new Date() } });
+  const app = createApp(deps(db) as any);
+  const res = await app.request(`/programs/generate-async/${JOB_UUID}`, { headers: authHeaders });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.status).toBe("pending");
+});
+
+test("GET /programs/generate-async/:jobId error → { status: error, error }", async () => {
+  const db = fakeDb(true, { job: { id: JOB_UUID, userId: "u1", status: "error", programId: null, error: "IA caída" } });
+  const app = createApp(deps(db) as any);
+  const res = await app.request(`/programs/generate-async/${JOB_UUID}`, { headers: authHeaders });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.status).toBe("error");
+  expect(body.error).toBe("IA caída");
+});
+
+test("GET /programs/generate-async/:jobId de otro usuario / inexistente → 404", async () => {
+  const db = fakeDb(true, { job: null }); // findFirst scopea por userId → null
+  const app = createApp(deps(db) as any);
+  const res = await app.request(`/programs/generate-async/${JOB_UUID}`, { headers: authHeaders });
+  expect(res.status).toBe(404);
+});
+
+test("GET /programs/generate-async/:jobId con jobId malformado → 404 (sin tocar la DB)", async () => {
+  const db = fakeDb(true, { job: { id: JOB_UUID, userId: "u1", status: "done", programId: "prog-1" } });
+  const app = createApp(deps(db) as any);
+  const res = await app.request("/programs/generate-async/no-es-uuid", { headers: authHeaders });
+  expect(res.status).toBe(404);
+});
+
+test("GET /programs/generate-async/:jobId pending viejo (>10 min) → degrada a error", async () => {
+  const db = fakeDb(true, {
+    job: { id: JOB_UUID, userId: "u1", status: "pending", programId: null, createdAt: new Date(Date.now() - 11 * 60 * 1000) },
+  });
+  const app = createApp(deps(db) as any);
+  const res = await app.request(`/programs/generate-async/${JOB_UUID}`, { headers: authHeaders });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.status).toBe("error");
+});
+
+test("GET /programs/generate-async/:jobId done pero sin programa resoluble → degrada a error", async () => {
+  const db = fakeDb(true, {
+    job: { id: JOB_UUID, userId: "u1", status: "done", programId: "x" },
+    program: null, // el programa no existe / es de otro user
+  });
+  const app = createApp(deps(db) as any);
+  const res = await app.request(`/programs/generate-async/${JOB_UUID}`, { headers: authHeaders });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.status).toBe("error");
+  expect(body.program).toBeUndefined();
 });
