@@ -50,6 +50,33 @@ export async function generateProgram(
   return { id: body.id, program: parsed.data };
 }
 
+export async function startGeneration(baseUrl: string, profile: TrainingProfile): Promise<{ jobId: string }> {
+  const res = await apiFetch(baseUrl, "/programs/generate-async", { method: "POST", body: JSON.stringify(profile) });
+  if (res.status === 400) throw new GenerationError("noApiKey", "No hay API key de IA configurada.");
+  if (!res.ok) throw new GenerationError("aiError", "No se pudo iniciar la generación. Reintentá.");
+  const data = await res.json().catch(() => null);
+  if (!data?.jobId) throw new GenerationError("invalid", "El backend devolvió una respuesta inválida.");
+  return { jobId: data.jobId };
+}
+
+export type GenerationStatus =
+  | { status: "pending" }
+  | { status: "done"; programId: string; program: Program }
+  | { status: "error"; error?: string };
+
+export async function getGenerationStatus(baseUrl: string, jobId: string): Promise<GenerationStatus> {
+  const res = await apiFetch(baseUrl, `/programs/generate-async/${jobId}`);
+  if (!res.ok) throw new GenerationError("network", "No se pudo consultar el estado de la generación.");
+  const data = await res.json().catch(() => null);
+  if (data?.status === "done") {
+    const parsed = ProgramSchema.safeParse(data.program);
+    if (!parsed.success) throw new GenerationError("invalid", "El programa recibido es inválido.");
+    return { status: "done", programId: data.programId, program: parsed.data };
+  }
+  if (data?.status === "error") return { status: "error", error: data.error };
+  return { status: "pending" };
+}
+
 export async function generateOneOff(
   baseUrl: string,
   args: {
