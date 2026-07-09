@@ -46,7 +46,34 @@ function fakeDb(storedRow: any = null, recentRows: any[] | null = null) {
   return db;
 }
 
-const deps = (db: any) => ({ db, config: { encryptionKey: KEY, defaultModel: "claude-sonnet-4-6" }, aiClient: { generateProgram: async () => ({ name: "x", weeks: [] }) } });
+const deps = (db: any) => ({ db, config: { encryptionKey: KEY, defaultModel: "claude-sonnet-4-6", singleUserMode: true, sessionTtlDays: 4 }, aiClient: { generateProgram: async () => ({ name: "x", weeks: [] }) } });
+
+// deps multi-usuario (sin single-user): exige token de sesión.
+const depsAuth = (db: any) => ({ db, config: { encryptionKey: KEY, defaultModel: "claude-sonnet-4-6", singleUserMode: false, sessionTtlDays: 4 }, aiClient: { generateProgram: async () => ({ name: "x", weeks: [] }) } });
+
+test("GET /sessions SIN token (multi-usuario) devuelve 401 — no es público", async () => {
+  const app = createApp(depsAuth(fakeDb()) as any);
+  const res = await app.request("/sessions");
+  expect(res.status).toBe(401);
+});
+
+test("PUT /sessions/:id SIN token (multi-usuario) devuelve 401", async () => {
+  const app = createApp(depsAuth(fakeDb()) as any);
+  const res = await app.request(`/sessions/${SID}`, {
+    method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(validSession),
+  });
+  expect(res.status).toBe(401);
+});
+
+test("PUT /sessions/:id con un id que pertenece a otro usuario devuelve 409", async () => {
+  // findFirst (getSessionOwnerId) devuelve una fila con dueño distinto al del request (SINGLE_USER_ID en single-user).
+  const db = fakeDb({ userId: "otro-usuario-distinto" });
+  const app = createApp(deps(db) as any);
+  const res = await app.request(`/sessions/${SID}`, {
+    method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(validSession),
+  });
+  expect(res.status).toBe(409);
+});
 
 test("PUT /sessions/:id guarda la sesión (borra + reinserta)", async () => {
   const db = fakeDb();

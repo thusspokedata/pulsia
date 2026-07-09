@@ -76,6 +76,16 @@ export async function getSession(db: Db, id: string, userId: string): Promise<Wo
   return row ? rowsToSession(row) : null;
 }
 
+// Dueño de una sesión por id (sin scopear por usuario), o null si no existe. Se usa en el PUT
+// para rechazar un id que pertenece a otro usuario (la PK es global → el insert daría 500).
+export async function getSessionOwnerId(db: Db, id: string): Promise<string | null> {
+  const row = await db.query.workoutSession.findFirst({
+    where: eq(workoutSession.id, id),
+    columns: { userId: true },
+  });
+  return row?.userId ?? null;
+}
+
 export async function getRecentSessions(db: Db, userId: string, limit = 6): Promise<WorkoutSession[]> {
   const rows = await db.query.workoutSession.findMany({
     where: eq(workoutSession.userId, userId),

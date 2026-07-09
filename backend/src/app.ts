@@ -52,6 +52,8 @@ export function createApp(deps: AppDeps) {
   app.use("/memory/*", auth);
   app.use("/app", auth);
   app.use("/app/*", auth);
+  app.use("/sessions", auth);
+  app.use("/sessions/*", auth);
   app.route("/settings", settingsRoutes(deps));
   app.route("/programs", programsRoutes(deps));
   app.route("/profile", profileRoutes(deps));
