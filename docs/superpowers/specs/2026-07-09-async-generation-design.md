@@ -20,7 +20,7 @@ La conexión deja de ser larga: el POST responde al instante con un `jobId`, el 
 - `generando.tsx`: `startGeneration` → guarda `jobId` → **pollea `getGenerationStatus` cada 3s** (hasta ~5 min). En `done` → `setStoredProgram(program)` + `setStoredProgramId(programId)` → navega. En `error` → muestra el mensaje (con reintento). Timeout total → reintento. La conexión con el server es corta (POST + polls) → sin 499.
 
 ### Robustez
-Si el server se reinicia mientras genera, el job queda `pending` para siempre (la floating promise se pierde). Aceptable para app familiar (el usuario reintenta). Mejora futura opcional: marcar jobs `pending` viejos (>10 min) como `error` al pollear.
+Si el server se reinicia mientras genera, la floating promise se pierde y el job quedaría `pending` para siempre. **Stale-job fallback (implementado):** el `GET /programs/generate-async/:jobId` detecta jobs `pending` de >10 min (por `createdAt`), los flipea a `error` ("La generación expiró. Reintentá.") y los devuelve así — el propio polling auto-sana los jobs colgados por un restart. Además, el GET valida que `jobId` sea un UUID antes de tocar la DB (un UUID malformado devuelve 404, no un 500 de Postgres).
 
 ## Fuera de alcance (YAGNI)
 - Async para `/programs/generate-oneoff` (mismo patrón; se hace después si molesta — el reporte fue sobre el `/generate` full).

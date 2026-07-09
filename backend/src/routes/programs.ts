@@ -72,8 +72,18 @@ export function programsRoutes(deps: AppDeps) {
   r.get("/generate-async/:jobId", async (c) => {
     const userId = c.get("userId");
     const jobId = c.req.param("jobId");
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(jobId)) return c.json({ error: "job no encontrado" }, 404);
     const job = await deps.db.query.generationJobs.findFirst({ where: and(eq(generationJobs.id, jobId), eq(generationJobs.userId, userId)) });
     if (!job) return c.json({ error: "job no encontrado" }, 404);
+    // Stale-job fallback: un restart del server deja jobs 'pending' colgados (el floating promise se
+    // pierde). Si el job es viejo (>10 min), lo auto-sanamos flipeándolo a 'error' al pollear.
+    const STALE_MS = 10 * 60 * 1000;
+    if (job.status === "pending" && Date.now() - new Date(job.createdAt).getTime() > STALE_MS) {
+      const msg = "La generación expiró. Reintentá.";
+      await deps.db.update(generationJobs).set({ status: "error", error: msg }).where(eq(generationJobs.id, jobId)).catch(() => {});
+      return c.json({ status: "error", error: msg });
+    }
     if (job.status === "done") {
       const prog = job.programId
         ? await deps.db.query.programs.findFirst({ where: and(eq(programs.id, job.programId), eq(programs.userId, userId)) })

@@ -224,13 +224,15 @@ test("POST /programs/generate-async sin key (ni user ni server) → 400", async 
   expect(res.status).toBe(400);
 });
 
+const JOB_UUID = "11111111-1111-4111-8111-111111111111";
+
 test("GET /programs/generate-async/:jobId done → 200 con el programa", async () => {
   const db = fakeDb(true, {
-    job: { id: "job-1", userId: "u1", status: "done", programId: "prog-1" },
+    job: { id: JOB_UUID, userId: "u1", status: "done", programId: "prog-1" },
     program: { id: "prog-1", userId: "u1", data: validProgram },
   });
   const app = createApp(deps(db) as any);
-  const res = await app.request("/programs/generate-async/job-1", { headers: authHeaders });
+  const res = await app.request(`/programs/generate-async/${JOB_UUID}`, { headers: authHeaders });
   expect(res.status).toBe(200);
   const body = await res.json();
   expect(body.status).toBe("done");
@@ -239,18 +241,18 @@ test("GET /programs/generate-async/:jobId done → 200 con el programa", async (
 });
 
 test("GET /programs/generate-async/:jobId pending → { status: pending }", async () => {
-  const db = fakeDb(true, { job: { id: "job-1", userId: "u1", status: "pending", programId: null } });
+  const db = fakeDb(true, { job: { id: JOB_UUID, userId: "u1", status: "pending", programId: null, createdAt: new Date() } });
   const app = createApp(deps(db) as any);
-  const res = await app.request("/programs/generate-async/job-1", { headers: authHeaders });
+  const res = await app.request(`/programs/generate-async/${JOB_UUID}`, { headers: authHeaders });
   expect(res.status).toBe(200);
   const body = await res.json();
   expect(body.status).toBe("pending");
 });
 
 test("GET /programs/generate-async/:jobId error → { status: error, error }", async () => {
-  const db = fakeDb(true, { job: { id: "job-1", userId: "u1", status: "error", programId: null, error: "IA caída" } });
+  const db = fakeDb(true, { job: { id: JOB_UUID, userId: "u1", status: "error", programId: null, error: "IA caída" } });
   const app = createApp(deps(db) as any);
-  const res = await app.request("/programs/generate-async/job-1", { headers: authHeaders });
+  const res = await app.request(`/programs/generate-async/${JOB_UUID}`, { headers: authHeaders });
   expect(res.status).toBe(200);
   const body = await res.json();
   expect(body.status).toBe("error");
@@ -260,17 +262,35 @@ test("GET /programs/generate-async/:jobId error → { status: error, error }", a
 test("GET /programs/generate-async/:jobId de otro usuario / inexistente → 404", async () => {
   const db = fakeDb(true, { job: null }); // findFirst scopea por userId → null
   const app = createApp(deps(db) as any);
-  const res = await app.request("/programs/generate-async/otro-job", { headers: authHeaders });
+  const res = await app.request(`/programs/generate-async/${JOB_UUID}`, { headers: authHeaders });
   expect(res.status).toBe(404);
+});
+
+test("GET /programs/generate-async/:jobId con jobId malformado → 404 (sin tocar la DB)", async () => {
+  const db = fakeDb(true, { job: { id: JOB_UUID, userId: "u1", status: "done", programId: "prog-1" } });
+  const app = createApp(deps(db) as any);
+  const res = await app.request("/programs/generate-async/no-es-uuid", { headers: authHeaders });
+  expect(res.status).toBe(404);
+});
+
+test("GET /programs/generate-async/:jobId pending viejo (>10 min) → degrada a error", async () => {
+  const db = fakeDb(true, {
+    job: { id: JOB_UUID, userId: "u1", status: "pending", programId: null, createdAt: new Date(Date.now() - 11 * 60 * 1000) },
+  });
+  const app = createApp(deps(db) as any);
+  const res = await app.request(`/programs/generate-async/${JOB_UUID}`, { headers: authHeaders });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.status).toBe("error");
 });
 
 test("GET /programs/generate-async/:jobId done pero sin programa resoluble → degrada a error", async () => {
   const db = fakeDb(true, {
-    job: { id: "job-1", userId: "u1", status: "done", programId: "x" },
+    job: { id: JOB_UUID, userId: "u1", status: "done", programId: "x" },
     program: null, // el programa no existe / es de otro user
   });
   const app = createApp(deps(db) as any);
-  const res = await app.request("/programs/generate-async/job-1", { headers: authHeaders });
+  const res = await app.request(`/programs/generate-async/${JOB_UUID}`, { headers: authHeaders });
   expect(res.status).toBe(200);
   const body = await res.json();
   expect(body.status).toBe("error");
