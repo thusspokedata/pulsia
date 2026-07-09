@@ -125,7 +125,10 @@ test("POST /programs/generate sin API key configurada devuelve 400", async () =>
   expect(res.status).toBe(400);
 });
 
-test("la generación refresca la memoria y la pasa al generador", async () => {
+test("la generación usa la memoria guardada (el refresh es en background, no bloquea)", async () => {
+  // El generador recibe la memoria YA guardada ("memoria previa"), no la refrescada en el momento:
+  // el refresh (otra llamada a la IA) se dispara en background después de responder, para no alargar
+  // el camino crítico (el cliente móvil corta conexiones ociosas de >~60s).
   lastAiInput = null;
   const db = fakeDb(true);
   const app = createApp(deps(db) as any);
@@ -135,7 +138,7 @@ test("la generación refresca la memoria y la pasa al generador", async () => {
   });
   expect(res.status).toBe(200);
   expect(lastAiInput).not.toBeNull();
-  expect(lastAiInput.memory).toBe("memoria nueva");
+  expect(lastAiInput.memory).toBe("memoria previa");
 });
 
 test("POST /programs/generate con perfil inválido devuelve 400", async () => {

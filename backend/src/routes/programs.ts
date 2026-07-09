@@ -28,17 +28,11 @@ export function programsRoutes(deps: AppDeps) {
     const recent = await getRecentSessions(deps.db, userId, 6);
     const historySummary = buildTrainingHistorySummary(recent);
 
-    let memory = await getMemory(deps.db, userId);
-    try {
-      // Reusar `memory` y `historySummary` ya computados para evitar re-fetchear en el refresh.
-      memory = await refreshAthleteMemory(deps.db, deps.aiClient, userId, apiKey, model, {
-        current: memory,
-        historySummary,
-      });
-    } catch (e) {
-      // best-effort: si el refresh de memoria falla, seguimos con la memoria previa (no bloquea la generación)
-      console.warn("refresh de memoria falló (best-effort):", (e as Error).message);
-    }
+    // Generar con la memoria YA guardada (rápido: una sola llamada a la IA). El refresh de memoria
+    // —otra llamada a la IA— se hace en background DESPUÉS de responder: la generación tarda ~60s y
+    // el cliente móvil (okhttp) / el NAT del celular cortan conexiones ociosas de >~60s (499), así que
+    // el camino crítico debe ser una única llamada.
+    const memory = await getMemory(deps.db, userId);
 
     let program;
     try {
@@ -51,6 +45,11 @@ export function programsRoutes(deps: AppDeps) {
       .insert(programs)
       .values({ userId, name: program.name, data: program, profileSnapshot: parsed.data })
       .returning();
+
+    // Refresh de memoria en background (best-effort, no bloquea la respuesta). Actualiza la memoria
+    // del atleta para las PRÓXIMAS generaciones; si falla, no afecta esta respuesta.
+    void refreshAthleteMemory(deps.db, deps.aiClient, userId, apiKey, model, { current: memory, historySummary })
+      .catch((e) => console.warn("refresh de memoria (background) falló:", (e as Error).message));
 
     return c.json({ id: inserted[0].id, program });
   });
