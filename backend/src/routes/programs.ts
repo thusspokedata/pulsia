@@ -74,9 +74,12 @@ export function programsRoutes(deps: AppDeps) {
     const jobId = c.req.param("jobId");
     const job = await deps.db.query.generationJobs.findFirst({ where: and(eq(generationJobs.id, jobId), eq(generationJobs.userId, userId)) });
     if (!job) return c.json({ error: "job no encontrado" }, 404);
-    if (job.status === "done" && job.programId) {
-      const prog = await deps.db.query.programs.findFirst({ where: and(eq(programs.id, job.programId), eq(programs.userId, userId)) });
-      return c.json({ status: "done", programId: job.programId, program: prog?.data });
+    if (job.status === "done") {
+      const prog = job.programId
+        ? await deps.db.query.programs.findFirst({ where: and(eq(programs.id, job.programId), eq(programs.userId, userId)) })
+        : null;
+      if (!prog) return c.json({ status: "error", error: "El programa generado no está disponible." });
+      return c.json({ status: "done", programId: job.programId, program: prog.data });
     }
     return c.json({ status: job.status, error: job.error ?? undefined });
   });
