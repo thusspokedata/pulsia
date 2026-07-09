@@ -65,6 +65,16 @@ test("PUT /sessions/:id SIN token (multi-usuario) devuelve 401", async () => {
   expect(res.status).toBe(401);
 });
 
+test("PUT /sessions/:id con un id que pertenece a otro usuario devuelve 409", async () => {
+  // findFirst (getSessionOwnerId) devuelve una fila con dueño distinto al del request (SINGLE_USER_ID en single-user).
+  const db = fakeDb({ userId: "otro-usuario-distinto" });
+  const app = createApp(deps(db) as any);
+  const res = await app.request(`/sessions/${SID}`, {
+    method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(validSession),
+  });
+  expect(res.status).toBe(409);
+});
+
 test("PUT /sessions/:id guarda la sesión (borra + reinserta)", async () => {
   const db = fakeDb();
   const app = createApp(deps(db) as any);

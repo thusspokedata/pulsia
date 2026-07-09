@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { WorkoutSessionSchema } from "@pulsia/shared";
-import { upsertSession, getSession, listSessions, deleteSession, getRecentSessions } from "../sessions/repository";
+import { upsertSession, getSession, listSessions, deleteSession, getRecentSessions, getSessionOwnerId } from "../sessions/repository";
 import { lastWeightByExercise } from "../sessions/lastWeight";
 import type { AppDeps } from "../app";
 
@@ -18,7 +18,12 @@ export function sessionsRoutes(deps: AppDeps) {
     const parsed = WorkoutSessionSchema.safeParse(raw);
     if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
     if (parsed.data.id !== id) return c.json({ error: "el id de la URL no coincide con el del body" }, 400);
-    await upsertSession(deps.db, c.get("userId"), parsed.data);
+    const userId = c.get("userId");
+    // El id de sesión es PK global: si ya pertenece a otro usuario, rechazamos (evita un 500 por
+    // choque de constraint y que un id ajeno se use como blanco).
+    const owner = await getSessionOwnerId(deps.db, id);
+    if (owner && owner !== userId) return c.json({ error: "esa sesión pertenece a otro usuario" }, 409);
+    await upsertSession(deps.db, userId, parsed.data);
     return c.json({ id }, 200);
   });
 
