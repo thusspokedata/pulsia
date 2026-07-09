@@ -203,3 +203,19 @@ test("POST /programs/generate sin key de usuario pero con key del server → 200
   });
   expect(res.status).toBe(200);
 });
+
+test("POST /programs/generate-async devuelve un jobId y crea el job", async () => {
+  const db = fakeDb(true);
+  const app = createApp(deps(db) as any);
+  const res = await app.request("/programs/generate-async", { method: "POST", headers: authHeaders, body: JSON.stringify(validProfileBody) });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(typeof body.jobId).toBe("string");
+});
+
+test("POST /programs/generate-async sin key (ni user ni server) → 400", async () => {
+  const db = fakeDb(false);
+  const app = createApp(deps(db) as any); // deps sin defaultAiApiKey
+  const res = await app.request("/programs/generate-async", { method: "POST", headers: authHeaders, body: JSON.stringify(validProfileBody) });
+  expect(res.status).toBe(400);
+});
