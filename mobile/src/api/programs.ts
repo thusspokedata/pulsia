@@ -51,7 +51,13 @@ export async function generateProgram(
 }
 
 export async function startGeneration(baseUrl: string, profile: TrainingProfile): Promise<{ jobId: string }> {
-  const res = await apiFetch(baseUrl, "/programs/generate-async", { method: "POST", body: JSON.stringify(profile) });
+  let res: Response;
+  try {
+    res = await apiFetch(baseUrl, "/programs/generate-async", { method: "POST", body: JSON.stringify(profile) });
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") throw new GenerationError("timeout", "La generación tardó demasiado. Reintentá.");
+    throw new GenerationError("network", "No se pudo conectar con el backend.");
+  }
   if (res.status === 400) throw new GenerationError("noApiKey", "No hay API key de IA configurada.");
   if (!res.ok) throw new GenerationError("aiError", "No se pudo iniciar la generación. Reintentá.");
   const data = await res.json().catch(() => null);
@@ -65,7 +71,13 @@ export type GenerationStatus =
   | { status: "error"; error?: string };
 
 export async function getGenerationStatus(baseUrl: string, jobId: string): Promise<GenerationStatus> {
-  const res = await apiFetch(baseUrl, `/programs/generate-async/${jobId}`);
+  let res: Response;
+  try {
+    res = await apiFetch(baseUrl, `/programs/generate-async/${jobId}`);
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") throw new GenerationError("timeout", "No se pudo consultar el estado (timeout).");
+    throw new GenerationError("network", "No se pudo consultar el estado de la generación.");
+  }
   if (!res.ok) throw new GenerationError("network", "No se pudo consultar el estado de la generación.");
   const data = await res.json().catch(() => null);
   if (data?.status === "done") {

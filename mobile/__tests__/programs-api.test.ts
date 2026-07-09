@@ -107,6 +107,11 @@ test("startGeneration lanza GenerationError code aiError en 500", async () => {
   await expect(startGeneration(URL, profile)).rejects.toMatchObject({ code: "aiError" });
 });
 
+test("startGeneration convierte un fallo de red en GenerationError code network", async () => {
+  global.fetch = jest.fn().mockRejectedValue(new Error("boom")) as any;
+  await expect(startGeneration(URL, profile)).rejects.toMatchObject({ code: "network" });
+});
+
 test("getGenerationStatus devuelve pending", async () => {
   global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ status: "pending" }) }) as any;
   const res = await getGenerationStatus(URL, "job-1");
@@ -127,6 +132,11 @@ test("getGenerationStatus devuelve error con el mensaje", async () => {
   global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ status: "error", error: "IA caída" }) }) as any;
   const res = await getGenerationStatus(URL, "job-1");
   expect(res).toEqual({ status: "error", error: "IA caída" });
+});
+
+test("getGenerationStatus convierte un fallo de red en GenerationError code network", async () => {
+  global.fetch = jest.fn().mockRejectedValue(new Error("boom")) as any;
+  await expect(getGenerationStatus(URL, "job-1")).rejects.toMatchObject({ code: "network" });
 });
 
 test("getGenerationStatus lanza GenerationError code invalid si el programa en done es inválido", async () => {
