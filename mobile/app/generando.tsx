@@ -60,7 +60,13 @@ export default function GenerandoScreen() {
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 3000));
         if (!mounted.current) return;
-        const st = await getGenerationStatus(url, jobId);
+        let st;
+        try {
+          st = await getGenerationStatus(url, jobId);
+        } catch {
+          // blip transitorio (red/timeout): seguimos polleando el mismo job en vez de matar todo.
+          continue;
+        }
         if (!mounted.current) return;
         if (st.status === "done") {
           await setStoredProgram(st.program);
@@ -110,7 +116,7 @@ export default function GenerandoScreen() {
     <View style={{ flex: 1, backgroundColor: colors.bg, padding: spacing.xl, gap: spacing.lg, justifyContent: "center", alignItems: "center" }}>
       <ActivityIndicator size="large" color={colors.accent} />
       <Text style={{ fontSize: 16, color: colors.text }}>{MESSAGES[msgIndex]}</Text>
-      <Text style={{ color: colors.textMuted, textAlign: "center" }}>Esto puede tardar hasta un minuto.</Text>
+      <Text style={{ color: colors.textMuted, textAlign: "center" }}>Esto puede tardar un par de minutos.</Text>
     </View>
   );
 }
