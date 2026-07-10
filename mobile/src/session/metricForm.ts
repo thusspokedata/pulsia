@@ -1,4 +1,4 @@
-import { METRIC_TYPES, METRIC_RANGES, type MetricReading, type MetricType } from "@pulsia/shared";
+import { BODY_METRIC_TYPES, BP_METRIC_TYPES, METRIC_RANGES, type MetricReading, type MetricType } from "@pulsia/shared";
 
 export interface BuildReadingResult {
   reading: MetricReading | null;
@@ -8,9 +8,39 @@ export interface BuildReadingResult {
 export function buildReadingFromForm(form: Partial<Record<MetricType, string>>, measuredAt: number): BuildReadingResult {
   const entries: { metricType: MetricType; value: number }[] = [];
   const invalid: MetricType[] = [];
-  for (const t of METRIC_TYPES) {
+  for (const t of BODY_METRIC_TYPES) {
     const raw = form[t]?.trim();
     if (!raw) continue;
+    const value = Number(raw);
+    const [min, max] = METRIC_RANGES[t];
+    if (!Number.isFinite(value) || value < min || value > max) {
+      invalid.push(t);
+      continue;
+    }
+    entries.push({ metricType: t, value });
+  }
+  return { reading: entries.length ? { measuredAt, entries } : null, invalid };
+}
+
+export interface BpForm {
+  alta?: string;
+  baja?: string;
+  pulso?: string;
+}
+
+const BP_FORM_KEY_TO_METRIC: Record<keyof BpForm, MetricType> = {
+  alta: BP_METRIC_TYPES[0],
+  baja: BP_METRIC_TYPES[1],
+  pulso: BP_METRIC_TYPES[2],
+};
+
+export function buildBpReadingFromForm(form: BpForm, measuredAt: number): BuildReadingResult {
+  const entries: { metricType: MetricType; value: number }[] = [];
+  const invalid: MetricType[] = [];
+  for (const key of Object.keys(BP_FORM_KEY_TO_METRIC) as (keyof BpForm)[]) {
+    const raw = form[key]?.trim();
+    if (!raw) continue;
+    const t = BP_FORM_KEY_TO_METRIC[key];
     const value = Number(raw);
     const [min, max] = METRIC_RANGES[t];
     if (!Number.isFinite(value) || value < min || value > max) {
