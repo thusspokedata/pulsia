@@ -34,7 +34,11 @@ const mockSync = jest.fn(async (..._a: any[]) => 0);
 jest.mock("../src/sync/syncSessions", () => ({ syncPending: (...a: any[]) => mockSync(...a) }));
 
 const mockBellPlay = jest.fn();
-jest.mock("expo-audio", () => ({ useAudioPlayer: () => ({ seekTo: jest.fn(), play: (...a: any[]) => mockBellPlay(...a) }) }));
+const mockSetAudioModeAsync = jest.fn(async (..._a: any[]) => undefined);
+jest.mock("expo-audio", () => ({
+  useAudioPlayer: () => ({ seekTo: jest.fn(), play: (...a: any[]) => mockBellPlay(...a) }),
+  setAudioModeAsync: (...a: any[]) => mockSetAudioModeAsync(...a),
+}));
 
 jest.mock("../src/session/id", () => ({ newSessionId: () => "11111111-1111-4111-8111-111111111111" }));
 jest.mock("../src/storage/config", () => ({ getBackendUrl: async () => "http://backend.test" }));
@@ -530,4 +534,13 @@ test("cambiar de ejercicio activo resetea el picker de cambio (no arrastra la el
   // Cambiar al segundo ejercicio (order 1) SIN confirmar → el picker se cierra/resetea.
   await fireEvent.press(screen.getByTestId("ex-item-1"));
   await waitFor(() => expect(screen.queryByTestId("confirmar-cambio")).toBeNull());
+});
+
+test("configura el audio en mixWithOthers al montar (la campana no pausa música/podcasts)", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() =>
+    expect(mockSetAudioModeAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ interruptionMode: "mixWithOthers", playsInSilentMode: true }),
+    ),
+  );
 });

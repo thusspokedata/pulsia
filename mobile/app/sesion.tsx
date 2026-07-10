@@ -18,7 +18,7 @@ import { newSessionId } from "../src/session/id";
 import { useHeartRate } from "../src/ble/useHeartRate";
 import { aggregateHr } from "../src/ble/hrAggregate";
 import { getSoundsEnabled } from "../src/storage/sounds";
-import { useAudioPlayer } from "expo-audio";
+import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
 import { parsePlannedReps } from "../src/session/plannedReps";
 import { colors, radius, spacing } from "../src/theme/tokens";
 import { summarize } from "../src/session/summary";
@@ -96,6 +96,19 @@ export default function SesionScreen() {
     return () => {
       mounted.current = false;
     };
+  }, []);
+
+  // La campana debe sonar POR ENCIMA de la música/podcast sin pausarlos (mixWithOthers), no
+  // pedir foco exclusivo. Best-effort: si el modo de audio no se puede configurar, no bloquea
+  // la sesión (la campana simplemente puede llegar a interrumpir el audio externo).
+  useEffect(() => {
+    void (async () => {
+      try {
+        await setAudioModeAsync({ interruptionMode: "mixWithOthers", playsInSilentMode: true });
+      } catch {
+        // ver comentario arriba
+      }
+    })();
   }, []);
 
   useEffect(() => {
