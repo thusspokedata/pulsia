@@ -18,12 +18,13 @@ export async function generateProgramForProfile(input: {
   ai: AiClient;
   historySummary?: string;
   memory?: string;
+  progressSummary?: string;
   oneOff?: OneOffArgs;
 }): Promise<Program> {
-  const { profile, apiKey, model, ai, historySummary, memory, oneOff } = input;
+  const { profile, apiKey, model, ai, historySummary, memory, progressSummary, oneOff } = input;
   let lastBad: string[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
-    const program = await ai.generateProgram({ profile, apiKey, model, historySummary, memory, oneOff });
+    const program = await ai.generateProgram({ profile, apiKey, model, historySummary, memory, progressSummary, oneOff });
     lastBad = unknownCatalogIds(program);
     if (lastBad.length === 0) return program;
   }

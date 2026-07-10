@@ -6,6 +6,8 @@ import { buildTrainingHistorySummary } from "../ai/history";
 import { getMemory } from "../memory/repository";
 import { refreshAthleteMemory } from "../memory/service";
 import { generateProgramForProfile } from "../ai/generate";
+import { buildProgressSummary } from "../ai/progress";
+import { getMetricsSince } from "../metrics/repository";
 import type { AppDeps } from "../app";
 
 // Corre la generación (una llamada a la IA), guarda el programa y actualiza el job.
@@ -22,14 +24,17 @@ export async function runGenerationJob(
     const recent = await getRecentSessions(deps.db, userId, 6);
     const historySummary = buildTrainingHistorySummary(recent);
     const memory = await getMemory(deps.db, userId);
-    const program = await generateProgramForProfile({ profile, apiKey, model, ai: deps.aiClient, historySummary, memory });
+    const since = Date.now() - 56 * 24 * 60 * 60 * 1000;
+    const metrics = await getMetricsSince(deps.db, userId, since);
+    const progressSummary = buildProgressSummary({ metrics, sessions: recent, heightCm: profile.heightCm ?? null, nowMs: Date.now() });
+    const program = await generateProgramForProfile({ profile, apiKey, model, ai: deps.aiClient, historySummary, memory, progressSummary });
     const inserted = await deps.db
       .insert(programs)
       .values({ userId, name: program.name, data: program, profileSnapshot: profile })
       .returning();
     await deps.db.update(generationJobs).set({ status: "done", programId: inserted[0].id }).where(eq(generationJobs.id, jobId));
     // Refresh de memoria en background para las próximas generaciones (best-effort).
-    void refreshAthleteMemory(deps.db, deps.aiClient, userId, apiKey, model, { current: memory, historySummary })
+    void refreshAthleteMemory(deps.db, deps.aiClient, userId, apiKey, model, { current: memory, historySummary, progressSummary })
       .catch((e) => console.warn("refresh de memoria (bg) falló:", (e as Error).message));
   } catch (e) {
     await deps.db

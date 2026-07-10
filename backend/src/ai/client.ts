@@ -13,23 +13,26 @@ export interface AiClient {
     model: string;
     historySummary?: string;
     memory?: string;
+    progressSummary?: string;
     oneOff?: OneOffArgs;
   }): Promise<Program>;
   updateMemory?(input: {
     current: string;
     historySummary: string;
+    progressSummary?: string;
     apiKey: string;
     model: string;
   }): Promise<string>;
 }
 
 export class AnthropicAiClient implements AiClient {
-  async generateProgram({ profile, apiKey, model, historySummary, memory, oneOff }: {
+  async generateProgram({ profile, apiKey, model, historySummary, memory, progressSummary, oneOff }: {
     profile: TrainingProfile;
     apiKey: string;
     model: string;
     historySummary?: string;
     memory?: string;
+    progressSummary?: string;
     oneOff?: OneOffArgs;
   }): Promise<Program> {
     const client = new Anthropic({ apiKey });
@@ -42,7 +45,7 @@ export class AnthropicAiClient implements AiClient {
     };
     const content = oneOff
       ? buildOneOffPrompt(profile, oneOff)
-      : buildGenerationPrompt(profile, historySummary, memory);
+      : buildGenerationPrompt(profile, historySummary, memory, progressSummary);
     const res = await client.messages.create({
       model,
       max_tokens: 16000,
@@ -62,9 +65,10 @@ export class AnthropicAiClient implements AiClient {
     return ProgramSchema.parse(block.input);
   }
 
-  async updateMemory({ current, historySummary, apiKey, model }: {
+  async updateMemory({ current, historySummary, progressSummary, apiKey, model }: {
     current: string;
     historySummary: string;
+    progressSummary?: string;
     apiKey: string;
     model: string;
   }): Promise<string> {
@@ -72,7 +76,7 @@ export class AnthropicAiClient implements AiClient {
     const res = await client.messages.create({
       model,
       max_tokens: 1024,
-      messages: [{ role: "user", content: buildMemoryUpdatePrompt(current, historySummary) }],
+      messages: [{ role: "user", content: buildMemoryUpdatePrompt(current, historySummary, progressSummary) }],
     });
     const block = res.content.find((b) => b.type === "text");
     const text = block && block.type === "text" ? block.text.trim() : "";

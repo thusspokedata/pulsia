@@ -10,7 +10,12 @@ function fakeDb() {
   const inserted = [{ id: "prog-1" }];
   return {
     _updates: updates,
-    query: { workoutSession: { findMany: async () => [] }, athleteMemory: { findFirst: async () => null } },
+    query: {
+      workoutSession: { findMany: async () => [] },
+      athleteMemory: { findFirst: async () => null },
+      profiles: { findFirst: async () => null },
+    },
+    select: () => ({ from: () => ({ where: () => ({ orderBy: async () => [] }) }) }),
     insert: () => ({ values: () => ({ returning: async () => inserted, onConflictDoUpdate: async () => {} }) }),
     update: () => ({ set: (v: any) => ({ where: async () => { updates.push(v); } }) }),
   } as any;

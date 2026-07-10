@@ -58,7 +58,9 @@ function fakeDb(withKey: boolean, opts?: { job?: any; program?: any }) {
       // (null simula job inexistente o de otro usuario → 404).
       generationJobs: { findFirst: async () => opts?.job ?? null },
       programs: { findFirst: async () => opts?.program ?? null },
+      profiles: { findFirst: async () => null },
     },
+    select: () => ({ from: () => ({ where: () => ({ orderBy: async () => [] }) }) }),
     update: () => ({ set: () => ({ where: async () => {} }) }),
     insert: () => ({
       values: (v: any) => ({

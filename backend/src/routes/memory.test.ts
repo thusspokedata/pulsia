@@ -49,7 +49,9 @@ function fakeDb(opts: { withKey?: boolean; memoryContent?: string | null } = {})
         findFirst: async () => memoryContent == null ? null : { userId: "u1", content: memoryContent },
       },
       workoutSession: { findMany: async (_args: any) => [nestedSessionRow] },
+      profiles: { findFirst: async () => null },
     },
+    select: () => ({ from: () => ({ where: () => ({ orderBy: async () => [] }) }) }),
     update: () => ({ set: () => ({ where: async () => {} }) }),
     insert: () => ({
       values: (v: any) => ({

@@ -4,6 +4,7 @@ export function buildGenerationPrompt(
   profile: TrainingProfile,
   historySummary?: string,
   memory?: string,
+  progressSummary?: string,
 ): string {
   const allEquipment = Array.from(
     new Set<Equipment>([...profile.gymEquipment, ...profile.homeEquipment]),
@@ -47,6 +48,13 @@ export function buildGenerationPrompt(
           "",
           "Memoria del atleta (conocimiento acumulado — equipo que NO tiene, molestias/lesiones, preferencias, niveles y tendencias): usala para personalizar el plan.",
           memory,
+        ]
+      : []),
+    ...(progressSummary && progressSummary.trim()
+      ? [
+          "",
+          "Progreso medido del atleta (métricas corporales y de fuerza en el tiempo): tenelo en cuenta para ajustar cargas, volumen y objetivo del plan.",
+          progressSummary,
         ]
       : []),
     "Devolvé el resultado llamando a la herramienta provista.",
