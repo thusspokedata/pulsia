@@ -84,6 +84,7 @@ export default function SesionScreen() {
   const mounted = useRef(true);
   const soundsEnabledRef = useRef(true);
   const [soundsEnabled, setSoundsEnabled] = useState(true);
+  const [soundsLoaded, setSoundsLoaded] = useState(false);
   const restDoneRef = useRef(false);
   const bell = useAudioPlayer(require("../assets/bell.wav"));
   const hr = useHeartRate();
@@ -225,6 +226,7 @@ export default function SesionScreen() {
     void getSoundsEnabled().then((v) => {
       soundsEnabledRef.current = v;
       setSoundsEnabled(v);
+      setSoundsLoaded(true);
     });
   }, []);
 
@@ -232,6 +234,9 @@ export default function SesionScreen() {
   // se programa al haber descanso futuro y se cancela en el cleanup (skip/pausa/terminar/reprogramar).
   // Cambiar de ejercicio NO toca `restUntil` → la notif sobrevive (fix #4).
   useEffect(() => {
+    // No programar hasta cargar la preferencia de sonidos: el default `true` podría agendar una
+    // campana para un usuario que la tiene apagada durante la ventana async del getSoundsEnabled().
+    if (!soundsLoaded) return;
     const plan = restNotificationPlan({ restUntil, soundsEnabled, now: Date.now() });
     if (!plan.schedule) return;
     let id: string | null = null;
@@ -244,7 +249,7 @@ export default function SesionScreen() {
       cancelled = true;
       if (id) void cancelRestBell(id);
     };
-  }, [restUntil, soundsEnabled]);
+  }, [restUntil, soundsEnabled, soundsLoaded]);
 
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
