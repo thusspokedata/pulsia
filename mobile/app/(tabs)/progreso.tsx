@@ -10,6 +10,7 @@ import { colors, radius, spacing } from "../../src/theme/tokens";
 
 export default function ProgresoScreen() {
   const baseUrl = useRef<string | null>(null);
+  const latestReqRef = useRef<MetricType>("weight_kg");
   const [latest, setLatest] = useState<Partial<Record<MetricType, { value: number; measuredAt: number }>>>({});
   const [selected, setSelected] = useState<MetricType>("weight_kg");
   const [series, setSeries] = useState<BodyMetric[]>([]);
@@ -19,7 +20,8 @@ export default function ProgresoScreen() {
   const [saving, setSaving] = useState(false);
 
   async function loadSeries(url: string, type: MetricType) {
-    setSeries(await getMetricSeries(url, type));
+    const data = await getMetricSeries(url, type);
+    if (latestReqRef.current === type) setSeries(data);
   }
 
   useEffect(() => {
@@ -27,6 +29,7 @@ export default function ProgresoScreen() {
       const url = await getBackendUrl();
       baseUrl.current = url;
       if (!url) { setError("Configurá el backend"); return; }
+      latestReqRef.current = selected;
       try {
         setLatest(await getLatestMetrics(url));
         setPerf(await getPerformance(url));
@@ -37,21 +40,37 @@ export default function ProgresoScreen() {
 
   async function onSelect(type: MetricType) {
     setSelected(type);
-    if (baseUrl.current) await loadSeries(baseUrl.current, type);
+    latestReqRef.current = type;
+    if (!baseUrl.current) return;
+    try {
+      await loadSeries(baseUrl.current, type);
+      setError(null);
+    } catch { setError("No se pudo cargar la métrica"); }
   }
 
   async function onSave() {
     const url = baseUrl.current;
     if (!url) return;
-    const reading = buildReadingFromForm(form, Date.now());
+    const { reading, invalid } = buildReadingFromForm(form, Date.now());
     if (!reading) { setError("Cargá al menos un valor válido"); return; }
     setSaving(true); setError(null);
     try {
       await postReading(url, reading);
       setForm({});
+      if (invalid.length > 0) {
+        setError(`Revisá: ${invalid.map((t) => METRIC_LABELS[t]).join(", ")}`);
+      }
+    } catch {
+      setSaving(false);
+      setError("No se pudo guardar la medición");
+      return;
+    }
+    try {
       setLatest(await getLatestMetrics(url));
       await loadSeries(url, selected);
-    } catch { setError("No se pudo guardar la medición"); }
+    } catch {
+      setError((prev) => prev ?? "Guardado. No se pudo refrescar la vista.");
+    }
     finally { setSaving(false); }
   }
 
