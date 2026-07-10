@@ -37,10 +37,15 @@ export type BodyMetricEntry = z.infer<typeof BodyMetricEntrySchema>;
 
 // Payload de carga: una lectura (fecha común) con N métricas. measuredAt en epoch ms
 // (convención del resto de la app; ver workoutSession.startedAt).
-export const MetricReadingSchema = z.object({
-  measuredAt: z.number().int().optional(),
-  entries: z.array(BodyMetricEntrySchema).min(1),
-});
+export const MetricReadingSchema = z
+  .object({
+    measuredAt: z.number().int().optional(),
+    entries: z.array(BodyMetricEntrySchema).min(1),
+  })
+  .refine(
+    (r) => new Set(r.entries.map((e) => e.metricType)).size === r.entries.length,
+    { message: "métrica duplicada en la lectura", path: ["entries"] },
+  );
 export type MetricReading = z.infer<typeof MetricReadingSchema>;
 
 // Fila persistida / devuelta por el backend.

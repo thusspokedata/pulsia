@@ -31,11 +31,13 @@ export function computePerformanceTrends(sessions: WorkoutSession[]): Performanc
     let sessionVolume = 0;
     for (const ex of s.exercises) {
       let best: { est1RM: number; w: number; reps: number } | null = null;
+      let heaviestInSession = 0;
       for (const set of ex.sets) {
         if (set.weightKg != null && !set.skipped) sessionVolume += set.reps * set.weightKg;
         if (!isWorkingSet(set)) continue;
         const est = estimate1RM(set.weightKg as number, set.reps);
         if (!best || est > best.est1RM) best = { est1RM: est, w: set.weightKg as number, reps: set.reps };
+        heaviestInSession = Math.max(heaviestInSession, set.weightKg as number);
       }
       if (best) {
         const trend = perExMap.get(ex.catalogId) ?? { catalogId: ex.catalogId, garminName: ex.garminName, points: [] };
@@ -44,7 +46,7 @@ export function computePerformanceTrends(sessions: WorkoutSession[]): Performanc
 
         const pr = prMap.get(ex.catalogId) ?? { catalogId: ex.catalogId, garminName: ex.garminName, best1RM: 0, heaviestKg: 0 };
         pr.best1RM = Math.max(pr.best1RM, best.est1RM);
-        pr.heaviestKg = Math.max(pr.heaviestKg, best.w);
+        pr.heaviestKg = Math.max(pr.heaviestKg, heaviestInSession);
         prMap.set(ex.catalogId, pr);
       }
     }
@@ -53,7 +55,11 @@ export function computePerformanceTrends(sessions: WorkoutSession[]): Performanc
 
   const perExercise = [...perExMap.values()]
     .filter((e) => e.points.length >= 2)
-    .sort((a, b) => b.points.length - a.points.length); // más frecuentes primero
+    .sort((a, b) => {
+      const byLength = b.points.length - a.points.length;
+      if (byLength !== 0) return byLength; // más frecuentes primero
+      return b.points.at(-1)!.measuredAt - a.points.at(-1)!.measuredAt; // desempate: más recientes primero
+    });
 
   return { perExercise, volumeSeries, prs: [...prMap.values()] };
 }

@@ -34,3 +34,15 @@ test("MetricReadingSchema exige al menos una entry y acepta measuredAt opcional"
   });
   expect(ok.success).toBe(true);
 });
+
+test("MetricReadingSchema rechaza metricType duplicado dentro de la misma lectura", () => {
+  const dup = MetricReadingSchema.safeParse({
+    entries: [{ metricType: "weight_kg", value: 80 }, { metricType: "weight_kg", value: 79 }],
+  });
+  expect(dup.success).toBe(false);
+
+  const distinct = MetricReadingSchema.safeParse({
+    entries: [{ metricType: "weight_kg", value: 80 }, { metricType: "waist_cm", value: 85 }],
+  });
+  expect(distinct.success).toBe(true);
+});
