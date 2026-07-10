@@ -1,7 +1,7 @@
 import type { BodyMetric, MetricType, WorkoutSession } from "@pulsia/shared";
 import { METRIC_LABELS, METRIC_UNITS, computePerformanceTrends } from "@pulsia/shared";
 
-const EIGHT_WEEKS_MS = 56 * 24 * 60 * 60 * 1000;
+export const PROGRESS_WINDOW_MS = 56 * 24 * 60 * 60 * 1000;
 
 function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
@@ -27,7 +27,7 @@ export function buildProgressSummary(input: {
   nowMs: number;
   windowMs?: number;
 }): string {
-  const windowMs = input.windowMs ?? EIGHT_WEEKS_MS;
+  const windowMs = input.windowMs ?? PROGRESS_WINDOW_MS;
   const since = input.nowMs - windowMs;
   const recentMetrics = input.metrics.filter((m) => m.measuredAt >= since);
 
