@@ -31,6 +31,11 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@types/jest"
         update-types: ["version-update:semver-major"]
+      # @babel/runtime lo gobierna la cadena de Expo/RN (expo, babel-preset-expo, metro-runtime fijan
+      # ^7.x). Babel 8 funciona hoy solo por casualidad (ninguna dep usa los helpers que 8 eliminó) y
+      # rompería en el bundling de prod ante un bump futuro. Sin majors hasta que Expo declare soporte.
+      - dependency-name: "@babel/runtime"
+        update-types: ["version-update:semver-major"]
     groups:
       # minor + patch juntos (mergeables de rutina). Los majors quedan SIN grupo
       # a propósito → dependabot abre un PR individual por cada uno, para revisarlos aparte.
