@@ -19,6 +19,7 @@ import { useHeartRate } from "../src/ble/useHeartRate";
 import { aggregateHr } from "../src/ble/hrAggregate";
 import { buildHrSeries } from "../src/session/hrSeries";
 import { getSoundsEnabled } from "../src/storage/sounds";
+import { restNotificationPlan, scheduleRestBell, cancelRestBell } from "../src/session/restNotification";
 import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
 import { parsePlannedReps } from "../src/session/plannedReps";
 import { colors, radius, spacing } from "../src/theme/tokens";
@@ -82,6 +83,7 @@ export default function SesionScreen() {
   const setStartRef = useRef(Date.now());
   const mounted = useRef(true);
   const soundsEnabledRef = useRef(true);
+  const [soundsEnabled, setSoundsEnabled] = useState(true);
   const restDoneRef = useRef(false);
   const bell = useAudioPlayer(require("../assets/bell.wav"));
   const hr = useHeartRate();
@@ -222,8 +224,27 @@ export default function SesionScreen() {
   useEffect(() => {
     void getSoundsEnabled().then((v) => {
       soundsEnabledRef.current = v;
+      setSoundsEnabled(v);
     });
   }, []);
+
+  // Notif nativa de fin de descanso (suena con la app en background). Atada a `restUntil`:
+  // se programa al haber descanso futuro y se cancela en el cleanup (skip/pausa/terminar/reprogramar).
+  // Cambiar de ejercicio NO toca `restUntil` → la notif sobrevive (fix #4).
+  useEffect(() => {
+    const plan = restNotificationPlan({ restUntil, soundsEnabled, now: Date.now() });
+    if (!plan.schedule) return;
+    let id: string | null = null;
+    let cancelled = false;
+    void scheduleRestBell(plan.date).then((nid) => {
+      if (cancelled) void cancelRestBell(nid);
+      else id = nid;
+    });
+    return () => {
+      cancelled = true;
+      if (id) void cancelRestBell(id);
+    };
+  }, [restUntil, soundsEnabled]);
 
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
