@@ -38,7 +38,7 @@ Como el build de vc8 re-basa el fingerprint igual, se aprovecha para subir **Typ
 - El handler **solo corre cuando llega una notificación con la app en foreground** → ahí se suprime el sonido porque la campana JS (`expo-audio`) ya lo maneja. En **background** el handler no corre y el sonido lo pone el OS vía el canal → **no hay doble campana**.
 
 **Canal Android al boot:**
-- Crear un canal (p. ej. `rest-bell`) con `sound: 'bell'` e importancia alta. Android hornea el sonido en el canal a la hora de crearlo.
+- Crear un canal (p. ej. `rest-bell`) con `sound: 'bell.wav'` e importancia alta. Android hornea el sonido en el canal a la hora de crearlo.
 
 **Permiso:**
 - `Notifications.requestPermissionsAsync()` (al montar la sesión o al boot). Si lo niegan, degradación limpia: queda el comportamiento actual (campana solo en foreground). No bloquea la sesión.
@@ -56,7 +56,7 @@ Como el build de vc8 re-basa el fingerprint igual, se aprovecha para subir **Typ
 
 ### Testabilidad
 
-- Extraer la **decisión** a `mobile/src/session/restNotification.ts` (función pura): dado `{ restUntil, prevId, soundsEnabled }` → `{ action: 'schedule', at } | { action: 'cancel', id } | { action: 'noop' }`. Test unitario puro (sin nativo).
+- Extraer la **decisión** a `mobile/src/session/restNotification.ts` (función pura): `restNotificationPlan({ restUntil, soundsEnabled, now })` → `{ schedule: false } | { schedule: true; date }`. Test unitario puro (sin nativo). La cancelación la maneja el cleanup del `useEffect` en `sesion.tsx` (no hace falta `prevId`/`cancel` en la función pura: el wrapper nativo (`cancelRestBell`) se invoca desde ahí, no desde la decisión).
 - Wrapper fino y side-effectful que traduce la decisión a llamadas de `expo-notifications`; en jest se mockea `expo-notifications` (patrón existente de mocks de módulos nativos, `--runInBand`).
 
 ### Impacto de fingerprint
