@@ -241,13 +241,17 @@ export default function SesionScreen() {
     if (!plan.schedule) return;
     let id: string | null = null;
     let cancelled = false;
-    void scheduleRestBell(plan.date).then((nid) => {
-      if (cancelled) void cancelRestBell(nid);
-      else id = nid;
-    });
+    // Llamadas nativas best-effort: si programar/cancelar falla, la campana JS en foreground
+    // sigue siendo el fallback; no dejamos una promesa rechazada sin manejar.
+    void scheduleRestBell(plan.date)
+      .then((nid) => {
+        if (cancelled) void cancelRestBell(nid).catch(() => {});
+        else id = nid;
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
-      if (id) void cancelRestBell(id);
+      if (id) void cancelRestBell(id).catch(() => {});
     };
   }, [restUntil, soundsEnabled, soundsLoaded]);
 

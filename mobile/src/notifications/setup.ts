@@ -15,16 +15,23 @@ export async function setupRestNotifications(): Promise<void> {
       shouldShowList: false,
     }),
   });
+  // Permiso y canal son best-effort e INDEPENDIENTES: si el permiso tira (raro, pero pasa en
+  // algunos OEMs) igual queremos crear el canal, y viceversa. Si algo falla, queda la campana
+  // solo-foreground (comportamiento previo).
   try {
     await Notifications.requestPermissionsAsync();
-    if (Platform.OS === "android") {
+  } catch {
+    // permiso best-effort
+  }
+  if (Platform.OS === "android") {
+    try {
       await Notifications.setNotificationChannelAsync(REST_CHANNEL_ID, {
         name: "Fin de descanso",
         importance: Notifications.AndroidImportance.HIGH,
         sound: "bell.wav",
       });
+    } catch {
+      // canal best-effort
     }
-  } catch {
-    // Permiso/canal best-effort: si falla, queda la campana solo-foreground (comportamiento previo).
   }
 }
