@@ -13,6 +13,6 @@
     "@garmin/fitsdk": "^21.208.0",
     "@types/bun": "^1.3.14",
     "bun-types": "^1.3.14",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   }
 }
