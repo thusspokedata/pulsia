@@ -11,11 +11,14 @@ function updateExercise(
   };
 }
 
-function withOpenSet(ex: SessionExercise, setStartMs: number): { ex: SessionExercise; idx: number } {
+// `initialReps` solo aplica al CREAR una serie nueva (no hay serie abierta todavía): permite
+// pre-llenar con las reps planificadas en lugar de arrancar en 0. Una serie ya abierta (resumida)
+// nunca se toca acá, así que no pisa reps ya registradas.
+function withOpenSet(ex: SessionExercise, setStartMs: number, initialReps: number = 0): { ex: SessionExercise; idx: number } {
   const openIdx = ex.sets.findIndex((s) => s.endedAt == null);
   if (openIdx >= 0) return { ex, idx: openIdx };
   const newSet: SetLog = {
-    setNumber: ex.sets.length + 1, reps: 0, weightKg: null, rpe: null,
+    setNumber: ex.sets.length + 1, reps: initialReps, weightKg: null, rpe: null,
     startedAt: setStartMs, endedAt: null, durationMs: null,
     repTimestamps: [], hrAvg: null, hrMax: null, skipped: false,
   };
@@ -46,9 +49,9 @@ export function startSession(input: {
   };
 }
 
-export function tapRep(session: WorkoutSession, args: { exerciseOrder: number; setStartMs: number; nowMs: number }): WorkoutSession {
+export function tapRep(session: WorkoutSession, args: { exerciseOrder: number; setStartMs: number; nowMs: number; initialReps?: number }): WorkoutSession {
   return updateExercise(session, args.exerciseOrder, (ex) => {
-    const { ex: withSet, idx } = withOpenSet(ex, args.setStartMs);
+    const { ex: withSet, idx } = withOpenSet(ex, args.setStartMs, args.initialReps ?? 0);
     const sets = withSet.sets.map((s, i) =>
       i === idx ? { ...s, reps: s.reps + 1, repTimestamps: [...s.repTimestamps, args.nowMs - s.startedAt] } : s,
     );
@@ -56,9 +59,9 @@ export function tapRep(session: WorkoutSession, args: { exerciseOrder: number; s
   });
 }
 
-export function adjustReps(session: WorkoutSession, args: { exerciseOrder: number; setStartMs: number; delta: number }): WorkoutSession {
+export function adjustReps(session: WorkoutSession, args: { exerciseOrder: number; setStartMs: number; delta: number; initialReps?: number }): WorkoutSession {
   return updateExercise(session, args.exerciseOrder, (ex) => {
-    const { ex: withSet, idx } = withOpenSet(ex, args.setStartMs);
+    const { ex: withSet, idx } = withOpenSet(ex, args.setStartMs, args.initialReps ?? 0);
     const sets = withSet.sets.map((s, i) =>
       i === idx ? { ...s, reps: Math.max(0, s.reps + args.delta) } : s,
     );

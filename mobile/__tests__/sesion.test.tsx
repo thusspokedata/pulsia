@@ -34,7 +34,11 @@ const mockSync = jest.fn(async (..._a: any[]) => 0);
 jest.mock("../src/sync/syncSessions", () => ({ syncPending: (...a: any[]) => mockSync(...a) }));
 
 const mockBellPlay = jest.fn();
-jest.mock("expo-audio", () => ({ useAudioPlayer: () => ({ seekTo: jest.fn(), play: (...a: any[]) => mockBellPlay(...a) }) }));
+const mockSetAudioModeAsync = jest.fn(async (..._a: any[]) => undefined);
+jest.mock("expo-audio", () => ({
+  useAudioPlayer: () => ({ seekTo: jest.fn(), play: (...a: any[]) => mockBellPlay(...a) }),
+  setAudioModeAsync: (...a: any[]) => mockSetAudioModeAsync(...a),
+}));
 
 jest.mock("../src/session/id", () => ({ newSessionId: () => "11111111-1111-4111-8111-111111111111" }));
 jest.mock("../src/storage/config", () => ({ getBackendUrl: async () => "http://backend.test" }));
@@ -121,12 +125,19 @@ test("arma la sesión del día y muestra el ejercicio actual", async () => {
   await waitFor(() => expect(screen.getAllByText("Barbell Bench Press").length).toBeGreaterThan(0));
 });
 
-test("tap incrementa las reps de la serie", async () => {
+test("tap incrementa las reps de la serie (arrancando desde las reps planificadas)", async () => {
+  // baseProgram planea reps "8-10" → la burbuja arranca pre-llenada en 8 y cada tap suma 1.
   await render(<SesionScreen />);
   await waitFor(() => screen.getByTestId("tap-rep"));
   await fireEvent.press(screen.getByTestId("tap-rep"));
   await fireEvent.press(screen.getByTestId("tap-rep"));
-  await waitFor(() => expect(screen.getByTestId("rep-count").props.children).toBe(2));
+  await waitFor(() => expect(screen.getByTestId("rep-count").props.children).toBe(10));
+});
+
+test("la burbuja de reps arranca pre-llenada con las reps planificadas, antes de tocar nada", async () => {
+  await render(<SesionScreen />);
+  // baseProgram planea reps "8-10" → parsePlannedReps da 8, sin necesidad de ningún tap.
+  await waitFor(() => expect(screen.getByTestId("rep-count").props.children).toBe(8));
 });
 
 test("terminar entrenamiento persiste a la cola y muestra el resumen (no navega hasta Listo)", async () => {
@@ -207,13 +218,14 @@ test("permite corregir las reps de una serie ya terminada", async () => {
   );
 });
 
-test("los botones ±reps ajustan la serie abierta", async () => {
+test("los botones ±reps ajustan la serie abierta (desde el seed de reps planificadas)", async () => {
+  // baseProgram planea reps "8-10" → arranca en 8; +5 → 13; -1 → 12.
   await render(<SesionScreen />);
   await waitFor(() => screen.getByTestId("reps-5"));
   await fireEvent.press(screen.getByTestId("reps-5"));
-  await waitFor(() => expect(screen.getByTestId("rep-count").props.children).toBe(5));
+  await waitFor(() => expect(screen.getByTestId("rep-count").props.children).toBe(13));
   await fireEvent.press(screen.getByTestId("reps--1"));
-  await waitFor(() => expect(screen.getByTestId("rep-count").props.children).toBe(4));
+  await waitFor(() => expect(screen.getByTestId("rep-count").props.children).toBe(12));
 });
 
 test("tras completar la última serie el ejercicio sigue editable (no auto-avanza)", async () => {
@@ -522,4 +534,57 @@ test("cambiar de ejercicio activo resetea el picker de cambio (no arrastra la el
   // Cambiar al segundo ejercicio (order 1) SIN confirmar → el picker se cierra/resetea.
   await fireEvent.press(screen.getByTestId("ex-item-1"));
   await waitFor(() => expect(screen.queryByTestId("confirmar-cambio")).toBeNull());
+});
+
+test("interactuar con las reps mientras está pausado auto-reanuda la sesión", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("pause-toggle"));
+  await fireEvent.press(screen.getByTestId("pause-toggle")); // pausa
+  await waitFor(() => expect(screen.getByText("Reanudar")).toBeTruthy());
+  // Tocar la burbuja de reps mientras está pausado: auto-reanuda (sin usar el botón "Reanudar")...
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await waitFor(() => expect(screen.getByText("Pausar")).toBeTruthy());
+  // ...y la interacción se aplica igual (arranca en 8 planificado + el tap = 9).
+  await waitFor(() => expect(screen.getByTestId("rep-count").props.children).toBe(9));
+});
+
+test("ajustar reps mientras está pausado también auto-reanuda", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("pause-toggle"));
+  await fireEvent.press(screen.getByTestId("pause-toggle")); // pausa
+  await waitFor(() => expect(screen.getByText("Reanudar")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("reps-1"));
+  await waitFor(() => expect(screen.getByText("Pausar")).toBeTruthy());
+});
+
+test("terminar serie mientras está pausado también auto-reanuda", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("pause-toggle")); // pausa
+  await waitFor(() => expect(screen.getByText("Reanudar")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => expect(screen.getByText("Pausar")).toBeTruthy());
+});
+
+test("cambiar de ejercicio activo NO corta el descanso ni la campana en curso", async () => {
+  mockProgram = twoExerciseProgram;
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  // Terminar una serie arranca el descanso (restSeconds = 90 → 90s) del ejercicio activo (order 0).
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => screen.getByTestId("rest-timer"));
+  // Cambiar al segundo ejercicio (order 1): el descanso NO debe desaparecer.
+  await fireEvent.press(screen.getByTestId("ex-item-1"));
+  await waitFor(() => expect(screen.getByTestId("rest-timer")).toBeTruthy());
+});
+
+test("configura el audio en mixWithOthers al montar (la campana no pausa música/podcasts)", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() =>
+    expect(mockSetAudioModeAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ interruptionMode: "mixWithOthers", playsInSilentMode: true }),
+    ),
+  );
 });

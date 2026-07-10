@@ -18,7 +18,8 @@ import { newSessionId } from "../src/session/id";
 import { useHeartRate } from "../src/ble/useHeartRate";
 import { aggregateHr } from "../src/ble/hrAggregate";
 import { getSoundsEnabled } from "../src/storage/sounds";
-import { useAudioPlayer } from "expo-audio";
+import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
+import { parsePlannedReps } from "../src/session/plannedReps";
 import { colors, radius, spacing } from "../src/theme/tokens";
 import { summarize } from "../src/session/summary";
 import { SessionSummary } from "../src/components/SessionSummary";
@@ -95,6 +96,19 @@ export default function SesionScreen() {
     return () => {
       mounted.current = false;
     };
+  }, []);
+
+  // La campana debe sonar POR ENCIMA de la música/podcast sin pausarlos (mixWithOthers), no
+  // pedir foco exclusivo. Best-effort: si el modo de audio no se puede configurar, no bloquea
+  // la sesión (la campana simplemente puede llegar a interrumpir el audio externo).
+  useEffect(() => {
+    void (async () => {
+      try {
+        await setAudioModeAsync({ interruptionMode: "mixWithOthers", playsInSilentMode: true });
+      } catch {
+        // ver comentario arriba
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -276,6 +290,7 @@ export default function SesionScreen() {
   const doneList = current ? current.sets.filter((s) => s.endedAt != null) : [];
 
   function onTap() {
+    resumeIfPaused();
     if (!current) return;
     // Ejercicio ya completo (todas las series planificadas hechas y sin serie abierta):
     // no crear una serie fantasma. Para corregir están las filas "Series hechas".
@@ -284,10 +299,18 @@ export default function SesionScreen() {
       setStartRef.current = Date.now();
       hr.resetSamples();
     }
-    apply(tapRep(sess, { exerciseOrder: current.order, setStartMs: setStartRef.current, nowMs: Date.now() }));
+    apply(
+      tapRep(sess, {
+        exerciseOrder: current.order,
+        setStartMs: setStartRef.current,
+        nowMs: Date.now(),
+        initialReps: parsePlannedReps(current.planned.reps),
+      }),
+    );
   }
 
   function onEndSet() {
+    resumeIfPaused();
     if (!current) return;
     const { hrAvg, hrMax } = aggregateHr(hr.getSamples());
     apply(
@@ -308,6 +331,7 @@ export default function SesionScreen() {
   }
 
   function onAdjustReps(delta: number) {
+    resumeIfPaused();
     if (!current) return;
     // Ejercicio ya completo: no-op (mismo criterio que onTap).
     if (!openSet && doneSets >= current.planned.sets) return;
@@ -315,7 +339,14 @@ export default function SesionScreen() {
       setStartRef.current = Date.now();
       hr.resetSamples();
     }
-    apply(adjustReps(sess, { exerciseOrder: current.order, setStartMs: setStartRef.current, delta }));
+    apply(
+      adjustReps(sess, {
+        exerciseOrder: current.order,
+        setStartMs: setStartRef.current,
+        delta,
+        initialReps: parsePlannedReps(current.planned.reps),
+      }),
+    );
   }
 
   function onSkip() {
@@ -344,31 +375,40 @@ export default function SesionScreen() {
     setChangeNote("");
   }
 
-  function onPauseToggle() {
+  // Reanuda si la sesión estaba pausada (no-op si no lo estaba). Extraído del botón "Reanudar"
+  // para poder dispararlo también desde cualquier interacción con las reps (tap/±reps/terminar
+  // serie) mientras está pausada, sin duplicar la lógica.
+  function resumeIfPaused() {
+    if (!paused) return;
     const now = Date.now();
-    if (paused) {
-      // Reanudar: acumular la duración de la pausa en curso.
-      pausedMsRef.current += now - pauseStartedRef.current;
-      setPaused(false);
-      // Retomar el descanso con lo que le quedaba (el contador estaba congelado).
-      if (restRemainingRef.current != null) {
-        restDoneRef.current = false; // permitir que la campana suene una vez al cruzar 0
-        setRestUntil(now + restRemainingRef.current);
-        restRemainingRef.current = null;
-      }
-      void setPauseState({ sessionId: sess.id, pausedMs: pausedMsRef.current, pausedAt: null });
-    } else {
-      // Pausar: marcar el inicio de la pausa.
-      pauseStartedRef.current = now;
-      setPaused(true);
-      // Congelar el descanso activo: guardar lo que resta y frenar el contador (así la campana
-      // no dispara mientras está pausado).
-      if (restUntil != null && restUntil > now) {
-        restRemainingRef.current = restUntil - now;
-        setRestUntil(null);
-      }
-      void setPauseState({ sessionId: sess.id, pausedMs: pausedMsRef.current, pausedAt: now });
+    // Acumular la duración de la pausa en curso.
+    pausedMsRef.current += now - pauseStartedRef.current;
+    setPaused(false);
+    // Retomar el descanso con lo que le quedaba (el contador estaba congelado).
+    if (restRemainingRef.current != null) {
+      restDoneRef.current = false; // permitir que la campana suene una vez al cruzar 0
+      setRestUntil(now + restRemainingRef.current);
+      restRemainingRef.current = null;
     }
+    void setPauseState({ sessionId: sess.id, pausedMs: pausedMsRef.current, pausedAt: null });
+  }
+
+  function onPauseToggle() {
+    if (paused) {
+      resumeIfPaused();
+      return;
+    }
+    // Pausar: marcar el inicio de la pausa.
+    const now = Date.now();
+    pauseStartedRef.current = now;
+    setPaused(true);
+    // Congelar el descanso activo: guardar lo que resta y frenar el contador (así la campana
+    // no dispara mientras está pausado).
+    if (restUntil != null && restUntil > now) {
+      restRemainingRef.current = restUntil - now;
+      setRestUntil(null);
+    }
+    void setPauseState({ sessionId: sess.id, pausedMs: pausedMsRef.current, pausedAt: now });
   }
 
   async function onFinish() {
@@ -462,12 +502,10 @@ export default function SesionScreen() {
                 key={e.order}
                 testID={`ex-item-${e.order}`}
                 onPress={() => {
+                  // Cambiar de ejercicio activo NO corta el descanso/campana en curso: el usuario
+                  // puede navegar entre ejercicios mientras descansa y la cuenta regresiva (y su
+                  // campana) siguen corriendo en segundo plano.
                   setActiveOrder(e.order);
-                  // Cortar el descanso/campana del ejercicio anterior al cambiar (incluido uno
-                  // congelado por pausa, para que no reaparezca al reanudar).
-                  setRestUntil(null);
-                  restRemainingRef.current = null;
-                  restDoneRef.current = true;
                 }}
                 style={{
                   flexDirection: "row",
@@ -517,7 +555,7 @@ export default function SesionScreen() {
             accessibilityRole="button"
             style={{ alignSelf: "center", width: 150, height: 150, borderRadius: 75, borderWidth: 3, borderColor: colors.accent, alignItems: "center", justifyContent: "center", marginVertical: spacing.md }}
           >
-            <Text testID="rep-count" style={{ color: colors.text, fontSize: 44, fontWeight: "700" }}>{openSet?.reps ?? 0}</Text>
+            <Text testID="rep-count" style={{ color: colors.text, fontSize: 44, fontWeight: "700" }}>{openSet?.reps ?? parsePlannedReps(current.planned.reps)}</Text>
             <Text style={{ color: colors.textMuted, fontSize: 10 }}>TOCÁ EN CADA REP</Text>
           </Pressable>
 
