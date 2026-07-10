@@ -26,7 +26,17 @@ const summary: SessionSummaryData = {
   avgHr: 125,
   maxHr: 145,
   perExercise: [
-    { order: 0, garminName: "Barbell Bench Press", plannedSets: 3, doneSets: 2, completed: false, reps: 18, volumeKg: 736 },
+    {
+      order: 0,
+      garminName: "Barbell Bench Press",
+      plannedSets: 3,
+      doneSets: 2,
+      completed: false,
+      reps: 18,
+      volumeKg: 736,
+      avgHr: 125,
+      maxHr: 145,
+    },
   ],
   perMuscle: [{ muscle: "chest", sets: 2 }],
   primaryMuscles: ["chest"],
@@ -61,4 +71,21 @@ test("la tabla por serie está colapsada por defecto y se abre con toggle-sets",
 test("no renderiza avg HR cuando no hay banda", async () => {
   await render(<SessionSummary summary={{ ...summary, avgHr: null, maxHr: null }} />);
   expect(screen.queryByTestId("summary-avghr")).toBeNull();
+});
+
+test("muestra FC por ejercicio cuando el ejercicio tiene datos de FC", async () => {
+  await render(<SessionSummary summary={summary} />);
+  expect(screen.getByTestId("exercise-row-0")).toBeTruthy();
+  expect(screen.getByTestId("exercise-hr-0")).toBeTruthy();
+  expect(screen.getByText("FC 125/145")).toBeTruthy();
+});
+
+test("no renderiza FC por ejercicio cuando el ejercicio no tiene datos de FC", async () => {
+  const noExHr: SessionSummaryData = {
+    ...summary,
+    perExercise: [{ ...summary.perExercise[0], avgHr: null, maxHr: null }],
+  };
+  await render(<SessionSummary summary={noExHr} />);
+  expect(screen.getByTestId("exercise-row-0")).toBeTruthy();
+  expect(screen.queryByTestId("exercise-hr-0")).toBeNull();
 });

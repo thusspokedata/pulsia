@@ -19,6 +19,8 @@ export interface ExerciseSummary {
   completed: boolean;
   reps: number;
   volumeKg: number; // volumen del ejercicio (Σ reps*peso; peso corporal cuenta 0)
+  avgHr: number | null;
+  maxHr: number | null;
 }
 
 export interface MuscleVolume {
@@ -82,6 +84,17 @@ export function summarize(session: WorkoutSession): SessionSummary {
     const reps = done.reduce((acc, s) => acc + s.reps, 0);
     const volumeKg = done.reduce((acc, s) => acc + (s.weightKg != null ? s.reps * s.weightKg : 0), 0);
     const completed = done.length >= ex.planned.sets;
+
+    // HR del ejercicio: misma convención que a nivel sesión (promedio redondeado de hrAvg
+    // no nulos; máximo de hrMax no nulos), pero considerando solo las series de este ejercicio.
+    const exHrAvgSets = done.filter((s) => s.hrAvg != null);
+    const avgHr =
+      exHrAvgSets.length > 0
+        ? Math.round(exHrAvgSets.reduce((acc, s) => acc + (s.hrAvg as number), 0) / exHrAvgSets.length)
+        : null;
+    const exHrMaxVals = done.map((s) => s.hrMax).filter((v): v is number => v != null);
+    const maxHr = exHrMaxVals.length > 0 ? Math.max(...exHrMaxVals) : null;
+
     return {
       order: ex.order,
       garminName: ex.garminName,
@@ -90,6 +103,8 @@ export function summarize(session: WorkoutSession): SessionSummary {
       completed,
       reps,
       volumeKg,
+      avgHr,
+      maxHr,
     };
   });
   const exercisesDone = perExercise.filter((e) => e.completed).length;

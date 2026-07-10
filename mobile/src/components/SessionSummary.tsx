@@ -87,6 +87,47 @@ export function SessionSummary({ summary }: { summary: SessionSummaryData }) {
         </View>
       </View>
 
+      {/* Por ejercicio */}
+      {summary.perExercise.length > 0 ? (
+        <View style={{ gap: spacing.xs }}>
+          <Text style={{ color: colors.textMuted, fontSize: 12 }}>Por ejercicio</Text>
+          <View style={{ gap: spacing.xs }}>
+            {summary.perExercise.map((ex) => {
+              const hasExHr = ex.avgHr != null || ex.maxHr != null;
+              return (
+                <View
+                  key={ex.order}
+                  testID={`exercise-row-${ex.order}`}
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    backgroundColor: colors.surface,
+                    borderRadius: radius.md,
+                    padding: spacing.md,
+                    gap: spacing.sm,
+                  }}
+                >
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ color: colors.text, fontSize: 13, fontWeight: "600" }} numberOfLines={1}>
+                      {ex.garminName}
+                    </Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+                      {ex.doneSets}/{ex.plannedSets} series · {num(ex.volumeKg)} kg
+                    </Text>
+                  </View>
+                  {hasExHr ? (
+                    <Text testID={`exercise-hr-${ex.order}`} style={{ color: colors.textMuted, fontSize: 11 }}>
+                      FC {ex.avgHr ?? "—"}/{ex.maxHr ?? "—"}
+                    </Text>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+
       {/* Mapa corporal (músculos trabajados) */}
       {summary.primaryMuscles.length > 0 || summary.secondaryMuscles.length > 0 ? (
         <View style={{ gap: spacing.xs }}>
