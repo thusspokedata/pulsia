@@ -8,6 +8,7 @@ export interface HeatmapCell {
   minutes: number;
   level: 0 | 1 | 2 | 3 | 4;
   inYear: boolean;
+  future: boolean; // día posterior a hoy (no se muestra en el año en curso)
 }
 
 export interface YearHeatmap {
@@ -33,8 +34,12 @@ export function availableYears(sessions: { startedAt: number }[]): number[] {
 // para que el resultado sea determinístico en tests.
 export function buildYearHeatmap(
   sessions: { startedAt: number; totalDurationMs: number | null }[],
-  year: number
+  year: number,
+  nowMs?: number
 ): YearHeatmap {
+  // Si se pasa `nowMs`, las celdas de días posteriores a hoy se marcan `future`
+  // (para no mostrar días que todavía no sucedieron en el año en curso).
+  const todayKey = nowMs != null ? dateKey(nowMs) : null;
   const minutesByDate = new Map<string, number>();
   for (const s of sessions) {
     if (new Date(s.startedAt).getFullYear() !== year) continue;
@@ -59,7 +64,8 @@ export function buildYearHeatmap(
       const key = dateKey(cursor.getTime());
       const rawMinutes = inYear ? minutesByDate.get(key) ?? 0 : 0;
       const minutes = Math.round(rawMinutes);
-      week.push({ date: key, minutes, level: levelFor(minutes), inYear });
+      const future = todayKey != null && key > todayKey;
+      week.push({ date: key, minutes, level: levelFor(minutes), inYear, future });
       cursor.setDate(cursor.getDate() + 1);
     }
     weeks.push(week);
