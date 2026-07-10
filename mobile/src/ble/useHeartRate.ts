@@ -11,6 +11,10 @@ export function useHeartRate(nowFn: () => number = Date.now) {
   const [bpm, setBpm] = useState<number | null>(null);
   const managerRef = useRef<BandManagerHandle | null>(null);
   const samplesRef = useRef<HrSample[]>([]);
+  // Log completo de la sesión (NO se resetea por serie, solo al empezar una sesión nueva):
+  // samplesRef es la ventana por-serie (se resetea en cada set), fullLogRef persiste toda la
+  // sesión (descansos incluidos) para construir la curva de FC del resumen.
+  const fullLogRef = useRef<HrSample[]>([]);
   const busyRef = useRef(false);
 
   const connect = useCallback(async () => {
@@ -29,7 +33,9 @@ export function useHeartRate(nowFn: () => number = Date.now) {
       await managerRef.current.connect(
         band.deviceId,
         (b) => {
-          samplesRef.current.push({ t: nowFn(), bpm: b });
+          const sample = { t: nowFn(), bpm: b };
+          samplesRef.current.push(sample);
+          fullLogRef.current.push(sample);
           setBpm(b);
           setStatus("connected");
         },
@@ -56,6 +62,10 @@ export function useHeartRate(nowFn: () => number = Date.now) {
   const resetSamples = useCallback(() => {
     samplesRef.current = [];
   }, []);
+  const getFullLog = useCallback(() => fullLogRef.current, []);
+  const resetFullLog = useCallback(() => {
+    fullLogRef.current = [];
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -64,5 +74,5 @@ export function useHeartRate(nowFn: () => number = Date.now) {
     };
   }, []);
 
-  return { status, bpm, connect, disconnect, reconnect: connect, getSamples, resetSamples };
+  return { status, bpm, connect, disconnect, reconnect: connect, getSamples, resetSamples, getFullLog, resetFullLog };
 }

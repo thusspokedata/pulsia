@@ -322,6 +322,17 @@ test("plan de 0 series no crashea y da completionPct 0", () => {
   expect(s.completionPct).toBe(0);
 });
 
+test("hrSeries pasa igual cuando la sesión la tiene", () => {
+  const series = [{ t: 0, bpm: 100 }, { t: 5000, bpm: 110 }];
+  const s = summarize(session({ exercises: sampleSession().exercises, hrSeries: series, endedAt: 12000, totalDurationMs: 11000 }));
+  expect(s.hrSeries).toEqual(series);
+});
+
+test("hrSeries null cuando la sesión no la tiene", () => {
+  const s = summarize(sampleSession());
+  expect(s.hrSeries).toBeNull();
+});
+
 test("durationMs fallback a endedAt-startedAt cuando totalDurationMs es null", () => {
   const ex = exercise({
     catalogId: "barbell_bench_press",

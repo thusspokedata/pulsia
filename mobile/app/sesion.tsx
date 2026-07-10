@@ -17,6 +17,7 @@ import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finish
 import { newSessionId } from "../src/session/id";
 import { useHeartRate } from "../src/ble/useHeartRate";
 import { aggregateHr } from "../src/ble/hrAggregate";
+import { buildHrSeries } from "../src/session/hrSeries";
 import { getSoundsEnabled } from "../src/storage/sounds";
 import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
 import { parsePlannedReps } from "../src/session/plannedReps";
@@ -210,6 +211,7 @@ export default function SesionScreen() {
         id: newSessionId(),
         nowMs: Date.now(),
       });
+      hr.resetFullLog(); // arranca el log de FC de sesión limpio (sobrevive los resets por-serie)
       setStartRef.current = Date.now();
       setActiveOrder(firstIncompleteOrder(s));
       apply(s);
@@ -418,7 +420,11 @@ export default function SesionScreen() {
     // Tiempo pausado total: acumulado + una pausa en curso (si la hay) hasta ahora.
     const pausedMs = pausedMsRef.current + (paused ? now - pauseStartedRef.current : 0);
     const s = closeOpenSets(sess, { activeOrder: current?.order ?? null, weightKg: parseNum(weight), rpe: parseNum(rpe), nowMs: now, hrAvg, hrMax });
-    const done = finishSession(s, { nowMs: now, pausedMs });
+    // Curva de FC de toda la sesión (descansos incluidos): downsample del log completo del
+    // BLE, adjuntado ANTES de finishSession para que sobreviva el spread de {...session}.
+    const fullLog = hr.getFullLog();
+    const sWithHr = fullLog.length > 0 ? { ...s, hrSeries: buildHrSeries(fullLog, s.startedAt) } : s;
+    const done = finishSession(sWithHr, { nowMs: now, pausedMs });
     try {
       await enqueueSession(done);
       await clearActiveSession();

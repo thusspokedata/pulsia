@@ -50,6 +50,7 @@ export interface SessionSummary {
   primaryMuscles: string[]; // músculos primarios distintos de ejercicios con series terminadas
   secondaryMuscles: string[]; // músculos secundarios distintos de ejercicios con series terminadas
   perSet: SetRow[];
+  hrSeries: { t: number; bpm: number }[] | null;
 }
 
 // Series terminadas (endedAt != null) de un ejercicio.
@@ -203,5 +204,6 @@ export function summarize(session: WorkoutSession): SessionSummary {
     primaryMuscles,
     secondaryMuscles,
     perSet,
+    hrSeries: session.hrSeries ?? null,
   };
 }

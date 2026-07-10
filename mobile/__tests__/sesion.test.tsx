@@ -92,6 +92,7 @@ jest.mock("../src/storage/profile", () => ({
 }));
 
 let mockHrSamples: { t: number; bpm: number }[] = [];
+let mockHrFullLog: { t: number; bpm: number }[] = [];
 let mockBpm: number | null = null;
 jest.mock("../src/ble/useHeartRate", () => ({
   useHeartRate: () => ({
@@ -102,6 +103,8 @@ jest.mock("../src/ble/useHeartRate", () => ({
     reconnect: jest.fn(),
     getSamples: () => mockHrSamples,
     resetSamples: jest.fn(),
+    getFullLog: () => mockHrFullLog,
+    resetFullLog: jest.fn(),
   }),
 }));
 
@@ -113,6 +116,7 @@ beforeEach(() => {
   mockProgramId = "22222222-2222-4222-8222-222222222222";
   mockOneOffProgramId = "33333333-3333-4333-8333-333333333333";
   mockHrSamples = [];
+  mockHrFullLog = [];
   mockBpm = null;
   mockProgram = baseProgram;
   mockParams = { week: "1", dayLabel: "Día 1", location: "gym" };
@@ -479,6 +483,32 @@ test("al terminar la serie guarda hrAvg/hrMax agregados de los samples", async (
     const set = last.exercises[0].sets[0];
     expect(set.hrAvg).toBe(81); // round((78+84)/2)
     expect(set.hrMax).toBe(84);
+  });
+});
+
+test("terminar entrenamiento adjunta hrSeries cuando hay log completo de FC", async () => {
+  // Los samples deben caer DESPUÉS del startedAt de la sesión (Date.now() al arrancar), como en
+  // producción; buildHrSeries descarta los previos. Timestamps futuros con margen holgado.
+  const base = Date.now() + 60_000;
+  mockHrFullLog = [{ t: base, bpm: 100 }, { t: base + 5_000, bpm: 110 }];
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("finish"));
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => {
+    const enqueued = mockEnqueue.mock.calls.at(-1)?.[0];
+    expect(enqueued.hrSeries).toBeDefined();
+    expect(enqueued.hrSeries.length).toBeGreaterThan(0);
+  });
+});
+
+test("terminar entrenamiento no adjunta hrSeries cuando no hay log de FC", async () => {
+  mockHrFullLog = [];
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("finish"));
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => {
+    const enqueued = mockEnqueue.mock.calls.at(-1)?.[0];
+    expect(enqueued.hrSeries).toBeUndefined();
   });
 });
 
