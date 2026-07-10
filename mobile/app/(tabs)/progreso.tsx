@@ -3,8 +3,13 @@ import { ScrollView, View, Text, TextInput, Pressable } from "react-native";
 import { getBackendUrl } from "../../src/storage/config";
 import { getLatestMetrics, getMetricSeries, postReading } from "../../src/api/metrics";
 import { getPerformance } from "../../src/api/progress";
+import { getSessions, type SessionListItem } from "../../src/api/sessions";
 import { LineChart } from "../../src/components/LineChart";
+import { YearHeatmap } from "../../src/components/YearHeatmap";
+import { BarChart } from "../../src/components/BarChart";
 import { buildReadingFromForm } from "../../src/session/metricForm";
+import { availableYears } from "../../src/session/heatmap";
+import { buildDailyMinutes } from "../../src/session/weeklyBars";
 import { METRIC_TYPES, METRIC_LABELS, METRIC_UNITS, type MetricType, type BodyMetric, type PerformanceTrends } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
@@ -18,6 +23,8 @@ export default function ProgresoScreen() {
   const [form, setForm] = useState<Partial<Record<MetricType, string>>>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [sessions, setSessions] = useState<SessionListItem[]>([]);
+  const [heatmapYear, setHeatmapYear] = useState<number | null>(null);
 
   async function loadSeries(url: string, type: MetricType) {
     const data = await getMetricSeries(url, type);
@@ -35,6 +42,12 @@ export default function ProgresoScreen() {
         setPerf(await getPerformance(url));
         await loadSeries(url, selected);
       } catch { setError("No se pudo cargar el progreso"); }
+      try {
+        const sess = await getSessions(url);
+        setSessions(sess);
+        const years = availableYears(sess);
+        if (years.length > 0) setHeatmapYear(years[0]);
+      } catch { setError((prev) => prev ?? "No se pudo cargar el historial de entrenamientos"); }
     })();
   }, []);
 
@@ -138,6 +151,20 @@ export default function ProgresoScreen() {
         style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
         <Text style={{ color: "#fff", fontWeight: "600" }}>{saving ? "Guardando…" : "Guardar medición"}</Text>
       </Pressable>
+
+      <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text }}>Días entrenados</Text>
+      {sessions.length === 0 ? (
+        <Text style={{ color: colors.textMuted }}>Todavía no hay entrenamientos registrados.</Text>
+      ) : (
+        <YearHeatmap sessions={sessions} year={heatmapYear ?? new Date().getFullYear()} onSelectYear={setHeatmapYear} />
+      )}
+
+      <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text }}>Tiempo por día (últimas 4 semanas)</Text>
+      {sessions.length === 0 ? (
+        <Text style={{ color: colors.textMuted }}>Todavía no hay entrenamientos registrados.</Text>
+      ) : (
+        <BarChart data={buildDailyMinutes(sessions, Date.now())} />
+      )}
     </ScrollView>
   );
 }
