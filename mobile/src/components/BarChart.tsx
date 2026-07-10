@@ -1,9 +1,18 @@
 import { View, Text } from "react-native";
-import Svg, { Rect, Line } from "react-native-svg";
+import Svg, { Rect, Line, Text as SvgText } from "react-native-svg";
 import { colors, spacing } from "../theme/tokens";
 import type { DailyMinutes } from "../session/weeklyBars";
 
 const WEEKDAY_LABELS = ["D", "L", "M", "M", "J", "V", "S"];
+
+// x del centro de la barra `i`-ésima, usando el mismo padding/step que las
+// barras. Compartido por el dibujo de las barras y las etiquetas de día para
+// que ambos queden alineados sin importar el ancho de los datos.
+export function barCenterX(i: number, dataLength: number, width: number, padding: number): number {
+  const innerW = width - padding * 2;
+  const step = innerW / dataLength;
+  return padding + i * step + step / 2;
+}
 
 // Barras verticales para una serie diaria (p.ej. últimas 4 semanas). Reusa la
 // idea de viewBox responsive de chart.ts, pero acá el eje X es categórico
@@ -15,7 +24,8 @@ export function BarChart({ data, height = 140 }: { data: DailyMinutes[]; height?
 
   const width = Math.max(320, data.length * 12);
   const padding = 16;
-  const maxMinutes = Math.max(1, ...data.map((d) => d.minutes));
+  const realMax = Math.max(0, ...data.map((d) => d.minutes));
+  const maxMinutes = Math.max(1, realMax); // clamp solo para el cálculo de altura (evita div/0)
   const innerW = width - padding * 2;
   const innerH = height - padding * 2 - 14; // deja lugar a los ticks de día abajo
   const barGap = 2;
@@ -24,7 +34,7 @@ export function BarChart({ data, height = 140 }: { data: DailyMinutes[]; height?
   return (
     <View>
       <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: spacing.xs }}>
-        Máx: {Math.round(maxMinutes)} min
+        {realMax > 0 ? `Máx: ${Math.round(realMax)} min` : "Sin datos"}
       </Text>
       <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
         <Line
@@ -52,16 +62,21 @@ export function BarChart({ data, height = 140 }: { data: DailyMinutes[]; height?
             />
           );
         })}
-      </Svg>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: padding }}>
         {data.map((d, i) =>
           i % 7 === 0 ? (
-            <Text key={d.date} style={{ color: colors.textMuted, fontSize: 10 }}>
+            <SvgText
+              key={d.date}
+              x={barCenterX(i, data.length, width, padding)}
+              y={height - 2}
+              fontSize={10}
+              fill={colors.textMuted}
+              textAnchor="middle"
+            >
               {WEEKDAY_LABELS[new Date(d.date + "T00:00:00").getDay()]}
-            </Text>
+            </SvgText>
           ) : null
         )}
-      </View>
+      </Svg>
     </View>
   );
 }
