@@ -54,6 +54,17 @@ export function buildYearHeatmap(
   start.setDate(start.getDate() - start.getDay()); // domingo anterior o igual
   const end = new Date(dec31);
   end.setDate(end.getDate() + (6 - end.getDay())); // sábado posterior o igual
+  // Solo el año EN CURSO se recorta a la semana de HOY (no generamos semanas futuras → sin franja
+  // vacía a la derecha). Años pasados: completo. Años futuros (sesión con fecha adelantada): completo
+  // — sin el guard, el recorte movería `end` al año actual y la grilla quedaría vacía.
+  if (nowMs != null) {
+    const today = new Date(nowMs);
+    if (today.getFullYear() === year) {
+      const todaySat = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      todaySat.setDate(todaySat.getDate() + (6 - todaySat.getDay())); // sábado de la semana de hoy
+      if (todaySat < end) end.setTime(todaySat.getTime());
+    }
+  }
 
   const weeks: HeatmapCell[][] = [];
   const cursor = new Date(start);

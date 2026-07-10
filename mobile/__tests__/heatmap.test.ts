@@ -74,17 +74,37 @@ test("availableYears con lista vacía → []", () => {
   expect(availableYears([])).toEqual([]);
 });
 
-test("con nowMs, los días posteriores a hoy quedan future:true (hoy y pasado false)", () => {
-  const now = new Date("2026-06-15T12:00:00").getTime();
+test("con nowMs, recorta a la semana de hoy (sin semanas futuras) y marca future en la semana en curso", () => {
+  const now = new Date("2026-06-15T12:00:00").getTime(); // lunes 15/06/2026
   const { weeks } = buildYearHeatmap([], 2026, now);
   const flat = weeks.flat();
+  // Dentro de la semana de hoy: mañana es futuro; hoy y ayer no.
   expect(flat.find((c) => c.date === "2026-06-16")!.future).toBe(true);
   expect(flat.find((c) => c.date === "2026-06-15")!.future).toBe(false); // hoy no es futuro
   expect(flat.find((c) => c.date === "2026-06-14")!.future).toBe(false);
-  expect(flat.find((c) => c.date === "2026-12-31")!.future).toBe(true);
+  // No se generan semanas posteriores a la de hoy → no hay celdas de julio ni diciembre.
+  expect(flat.find((c) => c.date === "2026-07-01")).toBeUndefined();
+  expect(flat.find((c) => c.date === "2026-12-31")).toBeUndefined();
+  // La última celda del año en curso es el sábado de la semana de hoy (20/06/2026).
+  const lastInYear = flat.filter((c) => c.inYear).at(-1)!;
+  expect(lastInYear.date).toBe("2026-06-20");
 });
 
 test("sin nowMs, ninguna celda es future (retro-compatible)", () => {
   const { weeks } = buildYearHeatmap([], 2026);
   expect(weeks.flat().every((c) => c.future === false)).toBe(true);
+});
+
+test("un año futuro (sesión con fecha adelantada) NO se recorta → grilla no vacía", () => {
+  const now = new Date("2026-06-15T12:00:00").getTime();
+  const { weeks } = buildYearHeatmap([], 2027, now); // año posterior al de hoy
+  const inYear = weeks.flat().filter((c) => c.inYear);
+  expect(inYear.length).toBeGreaterThanOrEqual(365); // año completo, no vacío
+});
+
+test("un año pasado se muestra completo (no se recorta)", () => {
+  const now = new Date("2026-06-15T12:00:00").getTime();
+  const { weeks } = buildYearHeatmap([], 2024, now);
+  const inYear = weeks.flat().filter((c) => c.inYear);
+  expect(inYear.length).toBeGreaterThanOrEqual(365);
 });
