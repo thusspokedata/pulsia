@@ -50,6 +50,13 @@
       "when": 1783630216486,
       "tag": "0006_nice_sentry",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783676060523,
+      "tag": "0007_wet_talos",
+      "breakpoints": true
     }
   ]
 }

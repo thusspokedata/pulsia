@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, jsonb, timestamp, integer, bigint, boolean, doublePrecision } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, jsonb, timestamp, integer, bigint, boolean, doublePrecision, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import type { TrainingProfile, Program, PlannedExercise } from "@pulsia/shared";
 
@@ -34,6 +34,17 @@ export const athleteMemory = pgTable("athlete_memory", {
   content: text("content").default("").notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+export const bodyMetric = pgTable("body_metric", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  metricType: text("metric_type").notNull(),
+  value: doublePrecision("value").notNull(),
+  measuredAt: bigint("measured_at", { mode: "number" }).notNull(), // epoch ms
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  byUserTypeTime: index("body_metric_user_type_time_idx").on(t.userId, t.metricType, t.measuredAt),
+}));
 
 export const programs = pgTable("programs", {
   id: uuid("id").defaultRandom().primaryKey(),
