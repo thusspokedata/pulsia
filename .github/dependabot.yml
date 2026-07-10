@@ -8,15 +8,25 @@ updates:
     ignore:
       # Estas deps las gobierna Expo SDK: se bumpean con `expo install` durante
       # un upgrade de SDK, no sueltas por dependabot (rompen el build nativo / exigen APK nuevo).
+      # OJO: se ignoran solo los *version updates* (los 3 semver-*), NO los security updates
+      # — un `ignore` sin update-types también silenciaría los PRs de CVE de estos paquetes.
       - dependency-name: "react"
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
       - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
       - dependency-name: "react-native"
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
       - dependency-name: "react-native-*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
       - dependency-name: "@react-native-async-storage/async-storage"
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
       - dependency-name: "expo"
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
       - dependency-name: "expo-*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
       - dependency-name: "jest-expo"
-      # jest está pineado a 29 por compatibilidad con jest-expo 57: sin majors.
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
+      # jest está pineado a 29 por compatibilidad con jest-expo 57: sin majors (security igual pasa).
       - dependency-name: "jest"
         update-types: ["version-update:semver-major"]
       - dependency-name: "@types/jest"
