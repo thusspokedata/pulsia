@@ -1,6 +1,8 @@
 // Heatmap anual estilo GitHub ("Días entrenados"). Suma minutos entrenados por día
 // (fecha LOCAL, derivada de startedAt) y los bucketiza en niveles de intensidad.
 
+import { dateKey } from "./dateKey";
+
 export interface HeatmapCell {
   date: string; // YYYY-MM-DD (fecha local)
   minutes: number;
@@ -10,14 +12,6 @@ export interface HeatmapCell {
 
 export interface YearHeatmap {
   weeks: HeatmapCell[][]; // columnas = semanas (domingo→sábado), filas = 7 días
-}
-
-function dateKey(ms: number): string {
-  const d = new Date(ms);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 function levelFor(minutes: number): 0 | 1 | 2 | 3 | 4 {

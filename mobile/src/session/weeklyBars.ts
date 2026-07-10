@@ -1,16 +1,10 @@
 // Barras de tiempo entrenado por día, últimas N semanas (default 4 = 28 días).
 
+import { dateKey } from "./dateKey";
+
 export interface DailyMinutes {
   date: string; // YYYY-MM-DD (fecha local)
   minutes: number;
-}
-
-function dateKey(ms: number): string {
-  const d = new Date(ms);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 // Recibe `nowMs` como input (no llama Date.now()) para que el resultado sea
