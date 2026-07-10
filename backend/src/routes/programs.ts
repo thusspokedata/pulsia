@@ -4,11 +4,11 @@ import { OneOffRequestSchema, TrainingProfileSchema } from "@pulsia/shared";
 import { programs, settings, generationJobs } from "../db/schema";
 import { resolveAiKey } from "../ai/resolveKey";
 import { generateProgramForProfile } from "../ai/generate";
-import { getRecentSessions } from "../sessions/repository";
+import { getRecentSessions, getSessionsSince } from "../sessions/repository";
 import { buildTrainingHistorySummary } from "../ai/history";
 import { getMemory } from "../memory/repository";
 import { getMetricsSince } from "../metrics/repository";
-import { buildProgressSummary } from "../ai/progress";
+import { buildProgressSummary, PROGRESS_WINDOW_MS } from "../ai/progress";
 import { refreshAthleteMemory } from "../memory/service";
 import { runGenerationJob } from "../programs/generateJob";
 import type { AppDeps } from "../app";
@@ -39,11 +39,16 @@ export function programsRoutes(deps: AppDeps) {
 
     // Resumen numérico de progreso (métricas corporales + fuerza/volumen) para que la IA lo observe.
     // Mismo camino que la generación async (generateJob.ts); best-effort (si no hay datos, queda "").
-    const since = Date.now() - 56 * 24 * 60 * 60 * 1000;
-    const metrics = await getMetricsSince(deps.db, userId, since);
+    // Ventana por fecha (no las últimas 6 sesiones): con entrenos frecuentes, 6 sesiones pueden cubrir
+    // mucho menos que la ventana de progreso y subestimar la tendencia.
+    const since = Date.now() - PROGRESS_WINDOW_MS;
+    const [metrics, sessionsForProgress] = await Promise.all([
+      getMetricsSince(deps.db, userId, since),
+      getSessionsSince(deps.db, userId, since),
+    ]);
     const progressSummary = buildProgressSummary({
       metrics,
-      sessions: recent,
+      sessions: sessionsForProgress,
       heightCm: parsed.data.heightCm ?? null,
       nowMs: Date.now(),
     });

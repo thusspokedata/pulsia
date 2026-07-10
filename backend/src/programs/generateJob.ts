@@ -1,12 +1,12 @@
 import { eq } from "drizzle-orm";
 import type { TrainingProfile } from "@pulsia/shared";
 import { programs, generationJobs } from "../db/schema";
-import { getRecentSessions } from "../sessions/repository";
+import { getRecentSessions, getSessionsSince } from "../sessions/repository";
 import { buildTrainingHistorySummary } from "../ai/history";
 import { getMemory } from "../memory/repository";
 import { refreshAthleteMemory } from "../memory/service";
 import { generateProgramForProfile } from "../ai/generate";
-import { buildProgressSummary } from "../ai/progress";
+import { buildProgressSummary, PROGRESS_WINDOW_MS } from "../ai/progress";
 import { getMetricsSince } from "../metrics/repository";
 import type { AppDeps } from "../app";
 
@@ -24,9 +24,12 @@ export async function runGenerationJob(
     const recent = await getRecentSessions(deps.db, userId, 6);
     const historySummary = buildTrainingHistorySummary(recent);
     const memory = await getMemory(deps.db, userId);
-    const since = Date.now() - 56 * 24 * 60 * 60 * 1000;
-    const metrics = await getMetricsSince(deps.db, userId, since);
-    const progressSummary = buildProgressSummary({ metrics, sessions: recent, heightCm: profile.heightCm ?? null, nowMs: Date.now() });
+    const since = Date.now() - PROGRESS_WINDOW_MS;
+    const [metrics, sessionsForProgress] = await Promise.all([
+      getMetricsSince(deps.db, userId, since),
+      getSessionsSince(deps.db, userId, since),
+    ]);
+    const progressSummary = buildProgressSummary({ metrics, sessions: sessionsForProgress, heightCm: profile.heightCm ?? null, nowMs: Date.now() });
     const program = await generateProgramForProfile({ profile, apiKey, model, ai: deps.aiClient, historySummary, memory, progressSummary });
     const inserted = await deps.db
       .insert(programs)

@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { rowsToSession, getRecentSessions, listSessions } from "./repository";
+import { rowsToSession, getRecentSessions, getSessionsSince, listSessions } from "./repository";
 
 // Fila anidada tal como la devuelve db.query.workoutSession.findFirst({ with: ... }).
 const nestedRow = {
@@ -54,6 +54,16 @@ test("getRecentSessions mapea filas a WorkoutSession[] (limit)", async () => {
   const out = await getRecentSessions(db, "u", 6);
   expect(out).toHaveLength(1);
   expect(out[0].exercises[0].order).toBe(0);
+});
+
+test("getSessionsSince mapea filas a WorkoutSession[] (sin límite de cantidad)", async () => {
+  let seenArgs: any = null;
+  const db: any = { query: { workoutSession: { findMany: async (args: any) => { seenArgs = args; return [nestedRow]; } } } };
+  const out = await getSessionsSince(db, "u", 1782900000000 - 1);
+  expect(out).toHaveLength(1);
+  expect(out[0].exercises[0].order).toBe(0);
+  // A diferencia de getRecentSessions, no cappea por cantidad: la ventana de fecha ya acota el resultado.
+  expect(seenArgs.limit).toBeUndefined();
 });
 
 test("listSessions incluye completionPct y proyecta liviano (sin exercises)", async () => {
