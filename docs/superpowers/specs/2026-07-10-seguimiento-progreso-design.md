@@ -50,7 +50,7 @@ Tabla nueva `body_metric` (filas tipadas, migración drizzle **0007**):
 | `userId` | uuid fk → users | scoping por usuario (cascade) |
 | `metricType` | text | uno de los tipos soportados (validado por `MetricTypeSchema`) |
 | `value` | real | la unidad la implica el tipo (kg / % / cm) |
-| `measuredAt` | timestamp | fecha de la lectura (default `now`); una lectura = varias filas con el mismo `measuredAt` |
+| `measuredAt` | bigint (epoch ms) | fecha de la lectura (default `now()` en el cliente/servidor); una lectura = varias filas con el mismo `measuredAt`; misma convención que `workoutSession.startedAt` |
 | `createdAt` | timestamp | default `now` |
 
 - **Sin columna `unit`**: la unidad es función del tipo, resuelta en `shared` (`METRIC_UNITS`). Evita divergencias.
@@ -72,7 +72,7 @@ Tabla nueva `body_metric` (filas tipadas, migración drizzle **0007**):
 
 ## IA — resumen de progreso (solo en generación / refresh de memoria)
 
-Módulo nuevo `backend/src/ai/progress.ts`: `buildProgressSummary({ bodyMetrics, sessions, profile }) → string`. Texto compacto, p.ej.:
+Módulo nuevo `backend/src/ai/progress.ts`: `buildProgressSummary({ metrics, sessions, heightCm, nowMs }) → string`. Texto compacto, p.ej.:
 
 ```
 Progreso medido (últimas ~8 semanas):
