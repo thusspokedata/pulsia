@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import Svg, { Rect } from "react-native-svg";
 import { availableYears, buildYearHeatmap, type HeatmapCell } from "../session/heatmap";
@@ -30,11 +31,21 @@ interface Props {
 export function YearHeatmap({ sessions, year, onSelectYear }: Props) {
   const years = availableYears(sessions);
 
+  // Fecha de referencia para ocultar los días futuros. Se refresca en la próxima medianoche
+  // local, así el nuevo "hoy" aparece aunque la pantalla quede montada al cambiar de día.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const d = new Date(nowMs);
+    const nextMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 1).getTime();
+    const t = setTimeout(() => setNowMs(Date.now()), Math.max(0, nextMidnight - Date.now()));
+    return () => clearTimeout(t);
+  }, [nowMs]);
+
   if (years.length === 0) {
     return <Text style={{ color: colors.textMuted, padding: spacing.md }}>Todavía no hay entrenamientos registrados.</Text>;
   }
 
-  const { weeks } = buildYearHeatmap(sessions, year, Date.now());
+  const { weeks } = buildYearHeatmap(sessions, year, nowMs);
   const width = weeks.length * STEP;
   const height = 7 * STEP;
 
