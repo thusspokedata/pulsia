@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte } from "drizzle-orm";
 import type { WorkoutSession } from "@pulsia/shared";
 import { sessionCompletionPct } from "@pulsia/shared";
 import type { Db } from "../db/client";
@@ -91,6 +91,18 @@ export async function getRecentSessions(db: Db, userId: string, limit = 6): Prom
     where: eq(workoutSession.userId, userId),
     orderBy: (w, { desc }) => [desc(w.startedAt)],
     limit,
+    with: { exercises: { orderBy: (e, { asc }) => [asc(e.orderIndex)], with: { sets: { orderBy: (s, { asc }) => [asc(s.setNumber)] } } } },
+  });
+  return rows.map(rowsToSession);
+}
+
+// Sesiones desde `sinceMs` (sin límite de cantidad: la ventana de tiempo ya las acota). Se usa para
+// el cómputo de progreso (tendencias de fuerza/volumen), a diferencia de getRecentSessions (que
+// limita por cantidad y se usa para el detalle de las últimas sesiones en historySummary).
+export async function getSessionsSince(db: Db, userId: string, sinceMs: number): Promise<WorkoutSession[]> {
+  const rows = await db.query.workoutSession.findMany({
+    where: and(eq(workoutSession.userId, userId), gte(workoutSession.startedAt, sinceMs)),
+    orderBy: (w, { desc }) => [desc(w.startedAt)],
     with: { exercises: { orderBy: (e, { asc }) => [asc(e.orderIndex)], with: { sets: { orderBy: (s, { asc }) => [asc(s.setNumber)] } } } },
   });
   return rows.map(rowsToSession);

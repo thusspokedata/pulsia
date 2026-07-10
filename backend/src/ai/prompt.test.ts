@@ -59,3 +59,14 @@ test("sin memory no incluye el bloque de memoria", () => {
   const p = buildGenerationPrompt(profile);
   expect(p).not.toContain("Memoria del atleta");
 });
+
+test("buildGenerationPrompt incluye el bloque de progreso cuando se pasa", () => {
+  const out = buildGenerationPrompt(profile, undefined, undefined, "Progreso medido:\n- Peso: 82 → 79 kg");
+  expect(out).toContain("Progreso medido");
+  expect(out).toContain("79 kg");
+});
+
+test("buildGenerationPrompt sin progreso queda intacto", () => {
+  const out = buildGenerationPrompt(profile);
+  expect(out).not.toContain("Progreso medido");
+});

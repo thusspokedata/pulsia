@@ -49,6 +49,10 @@ export async function getLatestMetrics(
   return pickLatestPerType(rows);
 }
 
+export async function getMetricsSince(db: Db, userId: string, sinceMs: number): Promise<BodyMetric[]> {
+  return getMetrics(db, userId, { from: sinceMs });
+}
+
 export async function deleteMetric(db: Db, userId: string, id: string): Promise<boolean> {
   const rows = await db
     .delete(bodyMetric)
