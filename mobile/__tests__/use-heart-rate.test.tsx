@@ -52,6 +52,28 @@ test("con banda: conecta, recibe bpm/sample y refleja la desconexión", async ()
 test("resetSamples vacía el buffer de la serie", async () => {
   const { result } = await renderHook(() => useHeartRate());
   await act(async () => { await result.current.connect(); });
-  act(() => result.current.resetSamples());
+  await waitFor(() => expect(result.current.status).toBe("connected"));
+  // act async (no sync): un act() sync sin state update deja una promesa suelta que
+  // contamina el próximo renderHook() de este archivo (RNTL + React 19).
+  await act(async () => { result.current.resetSamples(); });
   expect(result.current.getSamples()).toEqual([]);
+});
+
+test("el log completo (getFullLog) recibe cada sample y NO se vacía con resetSamples", async () => {
+  const { result } = await renderHook(() => useHeartRate());
+  await act(async () => { await result.current.connect(); });
+  await waitFor(() => expect(result.current.status).toBe("connected"));
+  expect(result.current.getFullLog().map((s) => s.bpm)).toEqual([88]);
+  // resetSamples es el reset por-serie: debe limpiar solo samplesRef, no el log completo.
+  await act(async () => { result.current.resetSamples(); });
+  expect(result.current.getSamples()).toEqual([]);
+  expect(result.current.getFullLog().map((s) => s.bpm)).toEqual([88]);
+});
+
+test("resetFullLog vacía el log completo (arranque de una sesión nueva)", async () => {
+  const { result } = await renderHook(() => useHeartRate());
+  await act(async () => { await result.current.connect(); });
+  await waitFor(() => expect(result.current.status).toBe("connected"));
+  await act(async () => { result.current.resetFullLog(); });
+  expect(result.current.getFullLog()).toEqual([]);
 });

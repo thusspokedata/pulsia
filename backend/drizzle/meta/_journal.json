@@ -57,6 +57,13 @@
       "when": 1783676060523,
       "tag": "0007_wet_talos",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783707279818,
+      "tag": "0008_fair_sharon_carter",
+      "breakpoints": true
     }
   ]
 }

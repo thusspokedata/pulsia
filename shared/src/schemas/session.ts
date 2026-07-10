@@ -33,6 +33,12 @@ export const SessionExerciseSchema = z.object({
   substitutedFromId: z.string().nullable().default(null),
 });
 
+// t: ms relativo al startedAt de la sesión (misma convención que repTimestamps en SetLogSchema).
+export const HrSeriesPointSchema = z.object({
+  t: z.number().int().min(0),
+  bpm: z.number().int().min(0),
+});
+
 export const WorkoutSessionSchema = z.object({
   id: z.string().uuid(),
   programId: z.string().uuid(),
@@ -44,9 +50,11 @@ export const WorkoutSessionSchema = z.object({
   totalDurationMs: z.number().int().min(0).nullable(),
   notes: z.string().default(""),
   exercises: z.array(SessionExerciseSchema),
+  hrSeries: z.array(HrSeriesPointSchema).optional(),
 });
 
 export type SetLog = z.infer<typeof SetLogSchema>;
 export type PlannedExercise = z.infer<typeof PlannedExerciseSchema>;
 export type SessionExercise = z.infer<typeof SessionExerciseSchema>;
+export type HrSeriesPoint = z.infer<typeof HrSeriesPointSchema>;
 export type WorkoutSession = z.infer<typeof WorkoutSessionSchema>;

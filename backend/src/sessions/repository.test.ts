@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
-import { rowsToSession, getRecentSessions, getSessionsSince, listSessions } from "./repository";
+import { rowsToSession, getRecentSessions, getSessionsSince, listSessions, upsertSession } from "./repository";
+import type { WorkoutSession } from "@pulsia/shared";
 
 // Fila anidada tal como la devuelve db.query.workoutSession.findFirst({ with: ... }).
 const nestedRow = {
@@ -41,6 +42,14 @@ test("rowsToSession convierte filas anidadas a WorkoutSession", () => {
   // No filtra campos de DB al shape compartido:
   expect((s as any).createdAt).toBeUndefined();
   expect((s.exercises[0] as any).sessionId).toBeUndefined();
+  // Filas viejas sin hrSeries: se mapea a undefined (no null), como espera el schema .optional().
+  expect(s.hrSeries).toBeUndefined();
+});
+
+test("rowsToSession mapea hrSeries cuando la fila lo trae", () => {
+  const row = { ...nestedRow, hrSeries: [{ t: 0, bpm: 120 }, { t: 5000, bpm: 130 }] };
+  const s = rowsToSession(row as any);
+  expect(s.hrSeries).toEqual([{ t: 0, bpm: 120 }, { t: 5000, bpm: 130 }]);
 });
 
 test("rowsToSession mapea note y substitutedFromId", () => {
@@ -64,6 +73,63 @@ test("getSessionsSince mapea filas a WorkoutSession[] (sin límite de cantidad)"
   expect(out[0].exercises[0].order).toBe(0);
   // A diferencia de getRecentSessions, no cappea por cantidad: la ventana de fecha ya acota el resultado.
   expect(seenArgs.limit).toBeUndefined();
+});
+
+test("upsertSession pasa hrSeries al insert de workoutSession", async () => {
+  let insertedValues: any = null;
+  const tx: any = {
+    delete: () => ({ where: async () => {} }),
+    insert: () => ({
+      values: (v: any) => {
+        insertedValues = v;
+        return { returning: async () => [{ id: "ex-1" }] };
+      },
+    }),
+  };
+  const db: any = { transaction: async (fn: any) => fn(tx) };
+  const s: WorkoutSession = {
+    id: "11111111-1111-4111-8111-111111111111",
+    programId: "22222222-2222-4222-8222-222222222222",
+    weekNumber: 1,
+    dayLabel: "Día 1",
+    location: "gym",
+    startedAt: 1782900000000,
+    endedAt: null,
+    totalDurationMs: null,
+    notes: "",
+    exercises: [],
+    hrSeries: [{ t: 0, bpm: 120 }, { t: 5000, bpm: 130 }],
+  };
+  await upsertSession(db, "u", s);
+  expect(insertedValues.hrSeries).toEqual([{ t: 0, bpm: 120 }, { t: 5000, bpm: 130 }]);
+});
+
+test("upsertSession inserta hrSeries null cuando la sesión no la trae", async () => {
+  let insertedValues: any = null;
+  const tx: any = {
+    delete: () => ({ where: async () => {} }),
+    insert: () => ({
+      values: (v: any) => {
+        insertedValues = v;
+        return { returning: async () => [{ id: "ex-1" }] };
+      },
+    }),
+  };
+  const db: any = { transaction: async (fn: any) => fn(tx) };
+  const s: WorkoutSession = {
+    id: "11111111-1111-4111-8111-111111111111",
+    programId: "22222222-2222-4222-8222-222222222222",
+    weekNumber: 1,
+    dayLabel: "Día 1",
+    location: "gym",
+    startedAt: 1782900000000,
+    endedAt: null,
+    totalDurationMs: null,
+    notes: "",
+    exercises: [],
+  };
+  await upsertSession(db, "u", s);
+  expect(insertedValues.hrSeries).toBeNull();
 });
 
 test("listSessions incluye completionPct y proyecta liviano (sin exercises)", async () => {

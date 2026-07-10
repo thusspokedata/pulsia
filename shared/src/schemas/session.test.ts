@@ -53,6 +53,44 @@ test("rechaza location inválida", () => {
   expect(WorkoutSessionSchema.safeParse(bad).success).toBe(false);
 });
 
+test("parsea sesión válida sin hrSeries (compat hacia atrás)", () => {
+  const parsed = WorkoutSessionSchema.safeParse(validSession);
+  expect(parsed.success).toBe(true);
+  if (parsed.success) {
+    expect(parsed.data.hrSeries).toBeUndefined();
+  }
+});
+
+test("parsea sesión válida con hrSeries y hace round-trip de los puntos", () => {
+  const withHr = {
+    ...validSession,
+    hrSeries: [
+      { t: 0, bpm: 120 },
+      { t: 5000, bpm: 130 },
+    ],
+  };
+  const parsed = WorkoutSessionSchema.safeParse(withHr);
+  expect(parsed.success).toBe(true);
+  if (parsed.success) {
+    expect(parsed.data.hrSeries).toEqual([
+      { t: 0, bpm: 120 },
+      { t: 5000, bpm: 130 },
+    ]);
+  }
+});
+
+test("rechaza hrSeries con t negativo", () => {
+  const bad = structuredClone(validSession) as any;
+  bad.hrSeries = [{ t: -1, bpm: 100 }];
+  expect(WorkoutSessionSchema.safeParse(bad).success).toBe(false);
+});
+
+test("rechaza hrSeries con bpm negativo", () => {
+  const bad = structuredClone(validSession) as any;
+  bad.hrSeries = [{ t: 0, bpm: -5 }];
+  expect(WorkoutSessionSchema.safeParse(bad).success).toBe(false);
+});
+
 test("SessionExercise tiene note y substitutedFromId con defaults", () => {
   const parsed = SessionExerciseSchema.parse({
     catalogId: "x", garminName: "X", order: 0,

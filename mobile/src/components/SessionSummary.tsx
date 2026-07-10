@@ -3,6 +3,8 @@ import { View, Text, Pressable } from "react-native";
 import type { SessionSummary as SessionSummaryData } from "../session/summary";
 import { colors, radius, spacing } from "../theme/tokens";
 import { MuscleMap } from "./MuscleMap";
+import { LineChart } from "./LineChart";
+import type { XY } from "../session/chart";
 
 function fmt(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -45,6 +47,10 @@ export function SessionSummary({ summary }: { summary: SessionSummaryData }) {
   const hasHr = summary.avgHr != null || summary.maxHr != null;
   const load =
     summary.sessionLoadRpe != null ? `${summary.sessionLoadRpe}` : `${num(summary.totalVolumeKg)} kg`;
+  const hrCurve: XY[] | null =
+    summary.hrSeries != null && summary.hrSeries.length >= 2
+      ? summary.hrSeries.map((p) => ({ x: p.t / 60000, y: p.bpm }))
+      : null;
 
   return (
     <View testID="summary" style={{ gap: spacing.lg }}>
@@ -125,6 +131,17 @@ export function SessionSummary({ summary }: { summary: SessionSummaryData }) {
               );
             })}
           </View>
+        </View>
+      ) : null}
+
+      {/* Curva de FC de toda la sesión (descansos incluidos); solo si hay >= 2 puntos */}
+      {hrCurve ? (
+        <View testID="summary-hr-curve" style={{ gap: spacing.xs }}>
+          <Text style={{ color: colors.textMuted, fontSize: 12 }}>Frecuencia cardíaca (sesión)</Text>
+          <LineChart data={hrCurve} unit="bpm" />
+          <Text style={{ color: colors.textMuted, fontSize: 11, textAlign: "right" }}>
+            {`0–${Math.round(hrCurve[hrCurve.length - 1].x)} min`}
+          </Text>
         </View>
       ) : null}
 

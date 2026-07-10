@@ -44,6 +44,7 @@ const summary: SessionSummaryData = {
   perSet: [
     { setNumber: 1, exerciseName: "Barbell Bench Press", durationMs: 3000, restMs: 1000, reps: 10, weightKg: 40, volumeKg: 400 },
   ],
+  hrSeries: null,
 };
 
 test("muestra % cumplimiento, volumen y avg HR", async () => {
@@ -88,4 +89,23 @@ test("no renderiza FC por ejercicio cuando el ejercicio no tiene datos de FC", a
   await render(<SessionSummary summary={noExHr} />);
   expect(screen.getByTestId("exercise-row-0")).toBeTruthy();
   expect(screen.queryByTestId("exercise-hr-0")).toBeNull();
+});
+
+test("muestra la curva de FC de sesión cuando hrSeries tiene >= 2 puntos", async () => {
+  const withHrSeries: SessionSummaryData = {
+    ...summary,
+    hrSeries: [{ t: 0, bpm: 100 }, { t: 5000, bpm: 110 }],
+  };
+  await render(<SessionSummary summary={withHrSeries} />);
+  expect(screen.getByTestId("summary-hr-curve")).toBeTruthy();
+});
+
+test("no muestra la curva de FC de sesión cuando hrSeries es null", async () => {
+  await render(<SessionSummary summary={{ ...summary, hrSeries: null }} />);
+  expect(screen.queryByTestId("summary-hr-curve")).toBeNull();
+});
+
+test("no muestra la curva de FC de sesión cuando hrSeries tiene menos de 2 puntos", async () => {
+  await render(<SessionSummary summary={{ ...summary, hrSeries: [{ t: 0, bpm: 100 }] }} />);
+  expect(screen.queryByTestId("summary-hr-curve")).toBeNull();
 });
