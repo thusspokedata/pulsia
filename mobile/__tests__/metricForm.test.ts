@@ -42,3 +42,13 @@ test("buildBpReadingFromForm devuelve reading null si no hay ningún valor váli
   expect(r.reading).toBeNull();
   expect(r.invalid).toEqual([]);
 });
+
+test("buildBpReadingFromForm rechaza alta <= baja con un error claro", () => {
+  const r = buildBpReadingFromForm({ alta: "80", baja: "120" }, 1000);
+  expect(r.reading).toBeNull();
+  expect(r.error).toBeTruthy();
+
+  const ok = buildBpReadingFromForm({ alta: "120", baja: "80", pulso: "65" }, 1000);
+  expect(ok.reading?.entries.length).toBe(3);
+  expect(ok.error).toBeUndefined();
+});

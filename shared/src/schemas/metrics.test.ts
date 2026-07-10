@@ -60,3 +60,19 @@ test("MetricReadingSchema rechaza metricType duplicado dentro de la misma lectur
   });
   expect(distinct.success).toBe(true);
 });
+
+test("MetricReadingSchema exige presión alta > baja cuando vienen ambas", () => {
+  const bad = MetricReadingSchema.safeParse({
+    entries: [{ metricType: "bp_systolic", value: 80 }, { metricType: "bp_diastolic", value: 120 }],
+  });
+  expect(bad.success).toBe(false);
+
+  const ok = MetricReadingSchema.safeParse({
+    entries: [{ metricType: "bp_systolic", value: 120 }, { metricType: "bp_diastolic", value: 80 }],
+  });
+  expect(ok.success).toBe(true);
+
+  // Solo una de las dos → no aplica la regla cruzada.
+  const onlySys = MetricReadingSchema.safeParse({ entries: [{ metricType: "bp_systolic", value: 120 }] });
+  expect(onlySys.success).toBe(true);
+});

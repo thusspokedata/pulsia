@@ -52,6 +52,15 @@ export const MetricReadingSchema = z
   .refine(
     (r) => new Set(r.entries.map((e) => e.metricType)).size === r.entries.length,
     { message: "métrica duplicada en la lectura", path: ["entries"] },
+  )
+  .refine(
+    (r) => {
+      // Si vienen ambas presiones, la sistólica (alta) debe ser mayor que la diastólica (baja).
+      const sys = r.entries.find((e) => e.metricType === "bp_systolic");
+      const dia = r.entries.find((e) => e.metricType === "bp_diastolic");
+      return !sys || !dia || sys.value > dia.value;
+    },
+    { message: "la presión alta debe ser mayor que la baja", path: ["entries"] },
   );
 export type MetricReading = z.infer<typeof MetricReadingSchema>;
 

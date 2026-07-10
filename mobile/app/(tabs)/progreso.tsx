@@ -111,7 +111,8 @@ export default function ProgresoScreen() {
   async function onSaveBp() {
     const url = baseUrl.current;
     if (!url) return;
-    const { reading, invalid } = buildBpReadingFromForm(bpForm, Date.now());
+    const { reading, invalid, error: bpError } = buildBpReadingFromForm(bpForm, Date.now());
+    if (bpError) { setError(bpError); return; }
     if (!reading) { setError("Cargá al menos un valor válido"); return; }
     setBpSaving(true); setError(null);
     try {

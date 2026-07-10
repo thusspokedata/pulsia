@@ -3,6 +3,7 @@ import { BODY_METRIC_TYPES, BP_METRIC_TYPES, METRIC_RANGES, type MetricReading, 
 export interface BuildReadingResult {
   reading: MetricReading | null;
   invalid: MetricType[];
+  error?: string;
 }
 
 export function buildReadingFromForm(form: Partial<Record<MetricType, string>>, measuredAt: number): BuildReadingResult {
@@ -48,6 +49,12 @@ export function buildBpReadingFromForm(form: BpForm, measuredAt: number): BuildR
       continue;
     }
     entries.push({ metricType: t, value });
+  }
+  // La presión alta (sistólica) debe ser mayor que la baja (diastólica) si vienen ambas.
+  const sys = entries.find((e) => e.metricType === "bp_systolic");
+  const dia = entries.find((e) => e.metricType === "bp_diastolic");
+  if (sys && dia && sys.value <= dia.value) {
+    return { reading: null, invalid, error: "La presión alta debe ser mayor que la baja" };
   }
   return { reading: entries.length ? { measuredAt, entries } : null, invalid };
 }
