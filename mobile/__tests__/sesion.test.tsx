@@ -536,6 +536,19 @@ test("cambiar de ejercicio activo resetea el picker de cambio (no arrastra la el
   await waitFor(() => expect(screen.queryByTestId("confirmar-cambio")).toBeNull());
 });
 
+test("cambiar de ejercicio activo NO corta el descanso ni la campana en curso", async () => {
+  mockProgram = twoExerciseProgram;
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  // Terminar una serie arranca el descanso (restSeconds = 90 → 90s) del ejercicio activo (order 0).
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => screen.getByTestId("rest-timer"));
+  // Cambiar al segundo ejercicio (order 1): el descanso NO debe desaparecer.
+  await fireEvent.press(screen.getByTestId("ex-item-1"));
+  await waitFor(() => expect(screen.getByTestId("rest-timer")).toBeTruthy());
+});
+
 test("configura el audio en mixWithOthers al montar (la campana no pausa música/podcasts)", async () => {
   await render(<SesionScreen />);
   await waitFor(() =>

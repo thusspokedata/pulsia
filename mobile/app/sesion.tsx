@@ -490,12 +490,10 @@ export default function SesionScreen() {
                 key={e.order}
                 testID={`ex-item-${e.order}`}
                 onPress={() => {
+                  // Cambiar de ejercicio activo NO corta el descanso/campana en curso: el usuario
+                  // puede navegar entre ejercicios mientras descansa y la cuenta regresiva (y su
+                  // campana) siguen corriendo en segundo plano.
                   setActiveOrder(e.order);
-                  // Cortar el descanso/campana del ejercicio anterior al cambiar (incluido uno
-                  // congelado por pausa, para que no reaparezca al reanudar).
-                  setRestUntil(null);
-                  restRemainingRef.current = null;
-                  restDoneRef.current = true;
                 }}
                 style={{
                   flexDirection: "row",
