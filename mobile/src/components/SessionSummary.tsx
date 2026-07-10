@@ -139,6 +139,9 @@ export function SessionSummary({ summary }: { summary: SessionSummaryData }) {
         <View testID="summary-hr-curve" style={{ gap: spacing.xs }}>
           <Text style={{ color: colors.textMuted, fontSize: 12 }}>Frecuencia cardíaca (sesión)</Text>
           <LineChart data={hrCurve} unit="bpm" />
+          <Text style={{ color: colors.textMuted, fontSize: 11, textAlign: "right" }}>
+            {`0–${Math.round(hrCurve[hrCurve.length - 1].x)} min`}
+          </Text>
         </View>
       ) : null}
 
