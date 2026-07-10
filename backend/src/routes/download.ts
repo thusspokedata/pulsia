@@ -11,7 +11,16 @@ export function downloadRoutes(deps: AppDeps) {
   const r = new Hono();
   r.get("/", async (c) => {
     const release = await getLatestRelease(deps.db);
-    const qrSvg = release && isSafeApkUrl(release.apkUrl) ? await QRCode.toString(release.apkUrl, { type: "svg", margin: 1 }) : "";
+    // QR best-effort: un apkUrl patológico (largo/capacidad) podría hacer throw; en ese caso
+    // servimos la página sin QR en vez de un 500 (consistente con el fallback de URL inválida).
+    let qrSvg = "";
+    if (release && isSafeApkUrl(release.apkUrl)) {
+      try {
+        qrSvg = await QRCode.toString(release.apkUrl, { type: "svg", margin: 1 });
+      } catch {
+        qrSvg = "";
+      }
+    }
     return c.html(renderDownloadPage(release, qrSvg));
   });
   return r;
