@@ -3,6 +3,14 @@ import { MetricReadingSchema, MetricTypeSchema } from "@pulsia/shared";
 import { insertReading, getMetrics, getLatestMetrics, deleteMetric } from "../metrics/repository";
 import type { AppDeps } from "../app";
 
+// Devuelve undefined si el query param está ausente o no es un número válido
+// (evita que un valor no numérico se cuele como NaN hasta gte/lte).
+function parseQueryNumber(raw: string | undefined): number | undefined {
+  if (raw == null) return undefined;
+  const n = Number(raw);
+  return Number.isNaN(n) ? undefined : n;
+}
+
 export function metricsRoutes(deps: AppDeps) {
   const r = new Hono<{ Variables: { userId: string } }>();
 
@@ -21,8 +29,8 @@ export function metricsRoutes(deps: AppDeps) {
       if (!t.success) return c.json({ error: "Tipo de métrica inválido" }, 400);
       type = t.data;
     }
-    const from = c.req.query("from") ? Number(c.req.query("from")) : undefined;
-    const to = c.req.query("to") ? Number(c.req.query("to")) : undefined;
+    const from = parseQueryNumber(c.req.query("from"));
+    const to = parseQueryNumber(c.req.query("to"));
     return c.json(await getMetrics(deps.db, c.get("userId"), { type, from, to }));
   });
 
