@@ -150,6 +150,47 @@ test("avgHr redondeado y maxHr; null si no hay banda", () => {
   expect(s2.maxHr).toBeNull();
 });
 
+test("perExercise: avgHr/maxHr calculados por ejercicio (misma convención que a nivel sesión)", () => {
+  const s = summarize(sampleSession());
+  // bench: hrAvg 120,130 => avg 125; hrMax 130,145 => max 145
+  expect(s.perExercise[0].avgHr).toBe(125);
+  expect(s.perExercise[0].maxHr).toBe(145);
+  // row: sin series terminadas => null
+  expect(s.perExercise[1].avgHr).toBeNull();
+  expect(s.perExercise[1].maxHr).toBeNull();
+});
+
+test("perExercise: avgHr/maxHr null cuando el ejercicio no tiene datos de FC", () => {
+  const noHr = exercise({
+    catalogId: "barbell_bench_press",
+    garminName: "Barbell Bench Press",
+    order: 0,
+    planned: { sets: 1, reps: "8", targetLoad: "x", restSeconds: 60 },
+    sets: [setLog({ setNumber: 1, startedAt: 2000, endedAt: 4000, durationMs: 2000, reps: 8, weightKg: 40 })],
+  });
+  const s = summarize(session({ exercises: [noHr], endedAt: 5000, totalDurationMs: 4000 }));
+  expect(s.perExercise[0].avgHr).toBeNull();
+  expect(s.perExercise[0].maxHr).toBeNull();
+});
+
+test("perExercise: con series mixtas (algunas sin FC) promedia/max solo las no-null", () => {
+  const mixed = exercise({
+    catalogId: "barbell_bench_press",
+    garminName: "Barbell Bench Press",
+    order: 0,
+    planned: { sets: 3, reps: "8", targetLoad: "x", restSeconds: 60 },
+    sets: [
+      setLog({ setNumber: 1, startedAt: 2000, endedAt: 3000, durationMs: 1000, reps: 8, weightKg: 40, hrAvg: 100, hrMax: 110 }),
+      setLog({ setNumber: 2, startedAt: 4000, endedAt: 5000, durationMs: 1000, reps: 8, weightKg: 40, hrAvg: null, hrMax: null }),
+      setLog({ setNumber: 3, startedAt: 6000, endedAt: 7000, durationMs: 1000, reps: 8, weightKg: 40, hrAvg: 140, hrMax: 150 }),
+    ],
+  });
+  const s = summarize(session({ exercises: [mixed], endedAt: 8000, totalDurationMs: 7000 }));
+  // avg de (100,140) => 120; max de (110,150) => 150
+  expect(s.perExercise[0].avgHr).toBe(120);
+  expect(s.perExercise[0].maxHr).toBe(150);
+});
+
 test("perMuscle cuenta series por músculo primario vía catálogo, ordenado desc", () => {
   // bench (chest) 2 series terminadas; añadimos un row con 1 serie terminada (back).
   const bench = exercise({
