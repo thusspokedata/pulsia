@@ -1,14 +1,30 @@
 import type { AppRelease } from "../appRelease/repository";
 
+// Escapa texto para HTML (incluye comillas → seguro también en atributos).
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Solo http/https para el APK (evita javascript: u otros esquemas aunque el valor venga
+// del PUT admin-gated: defensa en profundidad).
+export function isSafeApkUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url.trim());
+}
+
 // Render puro de la página pública de descarga. El SVG del QR se genera en la ruta
 // (async) y se inyecta ya listo; acá solo se arma el HTML.
 export function renderDownloadPage(release: AppRelease, qrSvg: string): string {
-  const shell = (body: string) => `<!DOCTYPE html>
+  const shell = (title: string, body: string) => `<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Pulsia · descargar</title>
+<title>${title}</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -30,15 +46,20 @@ export function renderDownloadPage(release: AppRelease, qrSvg: string): string {
 </html>`;
 
   if (!release) {
-    return shell(`<h1>Pulsia</h1><p class="label">Aún no hay una versión publicada.</p>`);
+    return shell("Pulsia · descargar", `<h1>Pulsia</h1><p class="label">Aún no hay una versión publicada.</p>`);
   }
-  const label = release.label ? `<p class="label">${release.label}</p>` : "";
+  const title = `Pulsia · última versión vc${release.versionCode}`;
+  const label = release.label ? `<p class="label">${escapeHtml(release.label)}</p>` : "";
+  const downloadBlock = isSafeApkUrl(release.apkUrl)
+    ? `<div class="qr">${qrSvg}</div>
+     <a class="btn" href="${escapeHtml(release.apkUrl)}">Descargar APK</a>
+     <p class="hint">Escaneá el QR desde el teléfono o tocá Descargar.</p>`
+    : `<p class="hint">La URL de descarga configurada no es válida.</p>`;
   return shell(
+    title,
     `<h1>Pulsia</h1>
      <p class="label">Última versión: <span class="ver">vc${release.versionCode}</span></p>
      ${label}
-     <div class="qr">${qrSvg}</div>
-     <a class="btn" href="${release.apkUrl}">Descargar APK</a>
-     <p class="hint">Escaneá el QR desde el teléfono o tocá Descargar.</p>`,
+     ${downloadBlock}`,
   );
 }
