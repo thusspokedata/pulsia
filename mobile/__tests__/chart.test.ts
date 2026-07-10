@@ -16,3 +16,11 @@ test("scalePoints con un solo punto lo centra sin dividir por cero", () => {
   expect(Number.isFinite(out[0].x)).toBe(true);
   expect(Number.isFinite(out[0].y)).toBe(true);
 });
+
+test("scalePoints centra verticalmente una serie plana con más de un punto", () => {
+  const pts = [{ x: 0, y: 50 }, { x: 5, y: 50 }, { x: 10, y: 50 }];
+  const out = scalePoints(pts, { width: 100, height: 100, padding: 10 });
+  for (const p of out) {
+    expect(p.y).toBeCloseTo(50, 5);
+  }
+});

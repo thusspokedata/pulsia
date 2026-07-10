@@ -10,12 +10,13 @@ export function scalePoints(points: XY[], box: ChartBox): XY[] {
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
   const spanX = maxX - minX || 1;
-  const spanY = maxY - minY || 1;
+  const spanY = maxY - minY;
+  const flatY = points.length > 1 && spanY === 0;
   const w = width - padding * 2;
   const h = height - padding * 2;
   return points.map((p) => ({
     x: points.length === 1 ? width / 2 : padding + ((p.x - minX) / spanX) * w,
-    y: points.length === 1 ? height / 2 : padding + (1 - (p.y - minY) / spanY) * h,
+    y: points.length === 1 || flatY ? height / 2 : padding + (1 - (p.y - minY) / (spanY || 1)) * h,
   }));
 }
 
