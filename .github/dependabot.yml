@@ -5,9 +5,28 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    ignore:
+      # Estas deps las gobierna Expo SDK: se bumpean con `expo install` durante
+      # un upgrade de SDK, no sueltas por dependabot (rompen el build nativo / exigen APK nuevo).
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      - dependency-name: "react-native"
+      - dependency-name: "react-native-*"
+      - dependency-name: "@react-native-async-storage/async-storage"
+      - dependency-name: "expo"
+      - dependency-name: "expo-*"
+      - dependency-name: "jest-expo"
+      # jest está pineado a 29 por compatibilidad con jest-expo 57: sin majors.
+      - dependency-name: "jest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/jest"
+        update-types: ["version-update:semver-major"]
     groups:
-      npm-version-updates:
+      # minor + patch juntos (mergeables de rutina). Los majors quedan SIN grupo
+      # a propósito → dependabot abre un PR individual por cada uno, para revisarlos aparte.
+      npm-minor-patch:
         applies-to: version-updates
+        update-types: ["minor", "patch"]
         patterns: ["*"]
       npm-security-updates:
         applies-to: security-updates
