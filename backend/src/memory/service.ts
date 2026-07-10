@@ -22,8 +22,11 @@ export async function refreshAthleteMemory(
 ): Promise<string> {
   if (!ai.updateMemory) throw new Error("Actualización de memoria no disponible.");
   const current = opts?.current ?? (await getMemory(db, userId));
-  const recent = await getRecentSessions(db, userId, 6);
-  const historySummary = opts?.historySummary ?? buildTrainingHistorySummary(recent);
+  // Las sesiones recientes solo se traen si algún resumen falta en `opts` (el caller de /generate ya
+  // pasa ambos → evita la query con joins en el refresh de background). Memoizado para no repetirla.
+  let recentCache: Awaited<ReturnType<typeof getRecentSessions>> | undefined;
+  const getRecent = async () => (recentCache ??= await getRecentSessions(db, userId, 6));
+  const historySummary = opts?.historySummary ?? buildTrainingHistorySummary(await getRecent());
   let progressSummary = opts?.progressSummary;
   if (progressSummary == null) {
     const since = Date.now() - 56 * 24 * 60 * 60 * 1000;
@@ -31,7 +34,7 @@ export async function refreshAthleteMemory(
     // No hay repo de perfil: se lee inline (mismo patrón que routes/profile.ts).
     const profileRow = await db.query.profiles.findFirst({ where: eq(profiles.userId, userId) });
     const heightCm = profileRow?.data?.heightCm ?? null;
-    progressSummary = buildProgressSummary({ metrics, sessions: recent, heightCm, nowMs: Date.now() });
+    progressSummary = buildProgressSummary({ metrics, sessions: await getRecent(), heightCm, nowMs: Date.now() });
   }
   const updated = await ai.updateMemory({ current, historySummary, progressSummary, apiKey, model });
   await upsertMemory(db, userId, updated);
