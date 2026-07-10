@@ -657,3 +657,13 @@ test("saltar el descanso cancela la campana nativa programada", async () => {
   await fireEvent.press(screen.getByTestId("skip-rest")); // limpia restUntil → cleanup cancela la notif
   await waitFor(() => expect(mockCancel).toHaveBeenCalledWith("notif-1"));
 });
+
+test("terminar la sesión cancela la campana nativa programada (el resumen no desmonta)", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("end-set")); // arranca el descanso → programa la notif
+  await waitFor(() => expect(mockSchedule).toHaveBeenCalled());
+  await fireEvent.press(screen.getByTestId("finish")); // el resumen se muestra en el mismo componente (sin unmount)
+  await waitFor(() => expect(mockCancel).toHaveBeenCalledWith("notif-1"));
+});

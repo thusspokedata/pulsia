@@ -438,6 +438,10 @@ export default function SesionScreen() {
     // Ninguna serie debe quedar con endedAt=null en el payload (ver closeOpenSets en el motor).
     const { hrAvg, hrMax } = aggregateHr(hr.getSamples());
     const now = Date.now();
+    // Al terminar: cortar el descanso para que el efecto cancele la notif nativa programada
+    // (el resumen se muestra en este mismo componente, no hay unmount que dispare el cleanup).
+    restDoneRef.current = true;
+    setRestUntil(null);
     // Tiempo pausado total: acumulado + una pausa en curso (si la hay) hasta ahora.
     const pausedMs = pausedMsRef.current + (paused ? now - pauseStartedRef.current : 0);
     const s = closeOpenSets(sess, { activeOrder: current?.order ?? null, weightKg: parseNum(weight), rpe: parseNum(rpe), nowMs: now, hrAvg, hrMax });
