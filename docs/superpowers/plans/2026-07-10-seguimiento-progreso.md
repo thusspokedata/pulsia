@@ -324,10 +324,9 @@ Agregar `index` al import de `drizzle-orm/pg-core` (la primera línea del archiv
 Run: `cd backend && bun run db:generate`
 Expected: crea `backend/drizzle/0007_*.sql` con el `CREATE TABLE "body_metric"` + índice. Verificar el SQL a ojo.
 
-- [ ] **Step 3: Aplicar y verificar en dev**
+- [ ] **Step 3: Verificar el SQL generado (sin aplicar)**
 
-Run: `cd backend && bun run db:migrate` (contra la Postgres dev de `docker compose up -d`)
-Expected: aplica 0007 sin error.
+`db:generate` es offline (diffea el schema contra `drizzle/meta/`). NO correr `db:migrate` local (la Postgres de dev puede no estar levantada; la migración se aplica sola en el deploy — el contenedor auto-migra). Abrir el `0007_*.sql` generado y confirmar a ojo: `CREATE TABLE "body_metric"` con las columnas correctas + el índice + la FK a `users` con `on delete cascade`.
 
 - [ ] **Step 4: Commit**
 
@@ -342,50 +341,52 @@ git commit -S -m "feat(backend): tabla body_metric + migración 0007"
 - Create: `backend/src/metrics/repository.ts`
 - Test: `backend/src/metrics/repository.test.ts`
 
-- [ ] **Step 1: Escribir el test que falla** (usa el harness de DB de tests existente; mirá cómo `backend/src/sessions/repository.test.ts` obtiene un `db` y un `userId` y replicá ese patrón — helper de setup, usuario sembrado)
+- [ ] **Step 1: Escribir el test que falla**
+
+⚠️ **Convención del repo (importante):** los tests de backend NO usan una DB real. Testean funciones **puras** o pasan un `db` **falso** con los métodos stubbeados (ver `backend/src/sessions/repository.test.ts` y `backend/src/app.test.ts`). Acá: se extrae la lógica pura (`pickLatestPerType`, y el armado de filas en `insertReading`) y se testea con un `db` falso que captura/devuelve lo necesario.
 
 ```ts
 // backend/src/metrics/repository.test.ts
-import { expect, test, beforeAll } from "bun:test";
-import { makeTestDb, seedUser } from "../test/helpers"; // ⚠️ usar el MISMO helper que sessions/repository.test.ts
-import { insertReading, getMetrics, getLatestMetrics, deleteMetric } from "./repository";
+import { expect, test } from "bun:test";
+import { insertReading, getMetrics, deleteMetric, pickLatestPerType } from "./repository";
 
-let db: Awaited<ReturnType<typeof makeTestDb>>;
-let userId: string;
-beforeAll(async () => {
-  db = await makeTestDb();
-  userId = await seedUser(db);
-});
-
-test("insertReading crea una fila por entry con measuredAt común", async () => {
-  const rows = await insertReading(db, userId, {
+test("insertReading arma una fila por entry con measuredAt común y mapea al shape compartido", async () => {
+  let captured: any[] = [];
+  const db: any = { insert: () => ({ values: (v: any[]) => { captured = v; return { returning: async () => v.map((r, i) => ({ id: `id-${i}`, ...r })) }; } }) };
+  const rows = await insertReading(db, "u1", {
     measuredAt: 1000,
     entries: [{ metricType: "weight_kg", value: 80 }, { metricType: "waist_cm", value: 85 }],
   });
-  expect(rows.length).toBe(2);
-  expect(rows.every((r) => r.measuredAt === 1000)).toBe(true);
+  expect(captured.length).toBe(2);
+  expect(captured.every((r) => r.measuredAt === 1000 && r.userId === "u1")).toBe(true);
+  expect(rows[0]).toEqual({ id: "id-0", metricType: "weight_kg", value: 80, measuredAt: 1000 });
 });
 
-test("getMetrics filtra por tipo y ordena por measuredAt asc", async () => {
-  await insertReading(db, userId, { measuredAt: 3000, entries: [{ metricType: "weight_kg", value: 79 }] });
-  const series = await getMetrics(db, userId, { type: "weight_kg" });
-  expect(series.map((m) => m.measuredAt)).toEqual([1000, 3000]);
+test("getMetrics mapea filas de la DB al shape BodyMetric", async () => {
+  const dbRows = [{ id: "a", userId: "u1", metricType: "weight_kg", value: 79, measuredAt: 3000, createdAt: new Date() }];
+  const db: any = { select: () => ({ from: () => ({ where: () => ({ orderBy: async () => dbRows }) }) }) };
+  const series = await getMetrics(db, "u1", { type: "weight_kg" });
+  expect(series).toEqual([{ id: "a", metricType: "weight_kg", value: 79, measuredAt: 3000 }]);
 });
 
-test("getLatestMetrics devuelve el último valor por tipo", async () => {
-  const latest = await getLatestMetrics(db, userId);
-  expect(latest.weight_kg?.value).toBe(79);
-  expect(latest.waist_cm?.value).toBe(85);
+test("pickLatestPerType elige el más reciente por tipo (filas ordenadas desc)", () => {
+  const rows = [
+    { metricType: "weight_kg", value: 79, measuredAt: 3000 },
+    { metricType: "weight_kg", value: 80, measuredAt: 1000 },
+    { metricType: "waist_cm", value: 85, measuredAt: 2000 },
+  ] as any;
+  const latest = pickLatestPerType(rows);
+  expect(latest.weight_kg).toEqual({ value: 79, measuredAt: 3000 });
+  expect(latest.waist_cm).toEqual({ value: 85, measuredAt: 2000 });
 });
 
-test("deleteMetric scopeado por usuario", async () => {
-  const [row] = await insertReading(db, userId, { measuredAt: 4000, entries: [{ metricType: "weight_kg", value: 78 }] });
-  expect(await deleteMetric(db, userId, row.id)).toBe(true);
-  expect(await deleteMetric(db, "00000000-0000-4000-8000-000000000000", row.id)).toBe(false);
+test("deleteMetric devuelve true/false según haya borrado", async () => {
+  const dbHit: any = { delete: () => ({ where: () => ({ returning: async () => [{ id: "x" }] }) }) };
+  const dbMiss: any = { delete: () => ({ where: () => ({ returning: async () => [] }) }) };
+  expect(await deleteMetric(dbHit, "u1", "x")).toBe(true);
+  expect(await deleteMetric(dbMiss, "u1", "x")).toBe(false);
 });
 ```
-
-> Nota para el implementador: si `backend/src/test/helpers` no existe con esos nombres, abrí `backend/src/sessions/repository.test.ts` y reproducí EXACTAMENTE su forma de crear `db` y sembrar un usuario. No inventes un harness nuevo.
 
 - [ ] **Step 2: Correr el test para verificar que falla**
 
@@ -425,6 +426,18 @@ export async function getMetrics(
   return rows.map(toBodyMetric);
 }
 
+// Puro: dado filas ordenadas por measuredAt DESC, toma la primera (más reciente) por tipo.
+export function pickLatestPerType(
+  rows: { metricType: string; value: number; measuredAt: number }[],
+): Partial<Record<MetricType, { value: number; measuredAt: number }>> {
+  const out: Partial<Record<MetricType, { value: number; measuredAt: number }>> = {};
+  for (const r of rows) {
+    const t = r.metricType as MetricType;
+    if (!out[t]) out[t] = { value: r.value, measuredAt: r.measuredAt };
+  }
+  return out;
+}
+
 export async function getLatestMetrics(
   db: Db, userId: string,
 ): Promise<Partial<Record<MetricType, { value: number; measuredAt: number }>>> {
@@ -432,12 +445,7 @@ export async function getLatestMetrics(
     .select().from(bodyMetric)
     .where(eq(bodyMetric.userId, userId))
     .orderBy(desc(bodyMetric.measuredAt));
-  const out: Partial<Record<MetricType, { value: number; measuredAt: number }>> = {};
-  for (const r of rows) {
-    const t = r.metricType as MetricType;
-    if (!out[t]) out[t] = { value: r.value, measuredAt: r.measuredAt };
-  }
-  return out;
+  return pickLatestPerType(rows);
 }
 
 export async function deleteMetric(db: Db, userId: string, id: string): Promise<boolean> {
@@ -468,40 +476,44 @@ git commit -S -m "feat(backend): repositorio de métricas corporales"
 - Modify: `backend/src/app.ts` (auth + route de `/metrics` y `/progress`)
 - Test: `backend/src/routes/metrics.test.ts` (seguir el patrón de `backend/src/routes/*.test.ts` — crear la app con `createApp` y `fetch` contra ella)
 
-- [ ] **Step 1: Escribir el test que falla** (replicar el patrón exacto de un `routes/*.test.ts` existente para instanciar `createApp` con deps de test)
+- [ ] **Step 1: Escribir el test que falla**
+
+⚠️ **Convención del repo:** las rutas se testean con `createApp(deps)` pasando un `db` **falso** (stubs de los métodos que la ruta usa) y `config.singleUserMode: true` para saltear el auth (ver `backend/src/app.test.ts`). NO hay DB real ni `makeTestApp`.
 
 ```ts
 // backend/src/routes/metrics.test.ts
-import { expect, test, beforeAll } from "bun:test";
-import { makeTestApp } from "../test/appHelper"; // ⚠️ usar el MISMO helper que routes/sessions.test.ts
-let app: Awaited<ReturnType<typeof makeTestApp>>["app"];
-let authHeader: Record<string, string>;
-beforeAll(async () => {
-  ({ app, authHeader } = await makeTestApp());
-});
+import { expect, test } from "bun:test";
+import { createApp } from "../app";
 
-test("POST /metrics + GET /metrics devuelven la serie", async () => {
-  const post = await app.request("/metrics", {
-    method: "POST", headers: { ...authHeader, "content-type": "application/json" },
+const baseConfig = { encryptionKey: "a".repeat(64), defaultModel: "claude-sonnet-4-6", inviteCode: "x", sessionTtlDays: 4, singleUserMode: true };
+const aiClient = { generateProgram: async () => ({ name: "x", weeks: [] }) };
+
+test("POST /metrics inserta y responde 200 con las filas", async () => {
+  const db: any = { insert: () => ({ values: (v: any[]) => ({ returning: async () => v.map((r, i) => ({ id: `id-${i}`, ...r })) }) }) };
+  const app = createApp({ db, config: baseConfig, aiClient } as any);
+  const res = await app.request("/metrics", {
+    method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ measuredAt: 1000, entries: [{ metricType: "weight_kg", value: 80 }] }),
   });
-  expect(post.status).toBe(200);
-  const get = await app.request("/metrics?type=weight_kg", { headers: authHeader });
-  const series = await get.json();
-  expect(series.length).toBe(1);
-  expect(series[0].value).toBe(80);
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body[0].value).toBe(80);
 });
 
 test("POST /metrics rechaza payload inválido con 400", async () => {
+  const db: any = {};
+  const app = createApp({ db, config: baseConfig, aiClient } as any);
   const res = await app.request("/metrics", {
-    method: "POST", headers: { ...authHeader, "content-type": "application/json" },
+    method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ entries: [] }),
   });
   expect(res.status).toBe(400);
 });
 
 test("GET /progress/performance responde 200 con la forma esperada", async () => {
-  const res = await app.request("/progress/performance", { headers: authHeader });
+  const db: any = { query: { workoutSession: { findMany: async () => [] } } };
+  const app = createApp({ db, config: baseConfig, aiClient } as any);
+  const res = await app.request("/progress/performance", {});
   expect(res.status).toBe(200);
   const body = await res.json();
   expect(body).toHaveProperty("perExercise");
@@ -510,7 +522,7 @@ test("GET /progress/performance responde 200 con la forma esperada", async () =>
 });
 ```
 
-> Nota: si `makeTestApp`/`appHelper` no existen con ese nombre, mirá cómo `backend/src/routes/sessions.test.ts` monta la app de test y su header de auth, y reproducilo.
+> Nota: `getMetrics` en el POST no se ejerce; el `db` falso solo necesita stubbear lo que cada test toca. Para `/progress/performance`, `getRecentSessions` usa `db.query.workoutSession.findMany` (ver `sessions/repository.ts`).
 
 - [ ] **Step 2: Correr el test para verificar que falla**
 
