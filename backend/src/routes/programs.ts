@@ -7,6 +7,8 @@ import { generateProgramForProfile } from "../ai/generate";
 import { getRecentSessions } from "../sessions/repository";
 import { buildTrainingHistorySummary } from "../ai/history";
 import { getMemory } from "../memory/repository";
+import { getMetricsSince } from "../metrics/repository";
+import { buildProgressSummary } from "../ai/progress";
 import { refreshAthleteMemory } from "../memory/service";
 import { runGenerationJob } from "../programs/generateJob";
 import type { AppDeps } from "../app";
@@ -35,9 +37,20 @@ export function programsRoutes(deps: AppDeps) {
     // el camino crítico debe ser una única llamada.
     const memory = await getMemory(deps.db, userId);
 
+    // Resumen numérico de progreso (métricas corporales + fuerza/volumen) para que la IA lo observe.
+    // Mismo camino que la generación async (generateJob.ts); best-effort (si no hay datos, queda "").
+    const since = Date.now() - 56 * 24 * 60 * 60 * 1000;
+    const metrics = await getMetricsSince(deps.db, userId, since);
+    const progressSummary = buildProgressSummary({
+      metrics,
+      sessions: recent,
+      heightCm: parsed.data.heightCm ?? null,
+      nowMs: Date.now(),
+    });
+
     let program;
     try {
-      program = await generateProgramForProfile({ profile: parsed.data, apiKey, model, ai: deps.aiClient, historySummary, memory });
+      program = await generateProgramForProfile({ profile: parsed.data, apiKey, model, ai: deps.aiClient, historySummary, memory, progressSummary });
     } catch (e) {
       return c.json({ error: (e as Error).message }, 502);
     }
@@ -49,7 +62,7 @@ export function programsRoutes(deps: AppDeps) {
 
     // Refresh de memoria en background (best-effort, no bloquea la respuesta). Actualiza la memoria
     // del atleta para las PRÓXIMAS generaciones; si falla, no afecta esta respuesta.
-    void refreshAthleteMemory(deps.db, deps.aiClient, userId, apiKey, model, { current: memory, historySummary })
+    void refreshAthleteMemory(deps.db, deps.aiClient, userId, apiKey, model, { current: memory, historySummary, progressSummary })
       .catch((e) => console.warn("refresh de memoria (background) falló:", (e as Error).message));
 
     return c.json({ id: inserted[0].id, program });
