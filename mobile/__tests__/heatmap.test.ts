@@ -73,3 +73,18 @@ test("availableYears dedupea y ordena desc", () => {
 test("availableYears con lista vacía → []", () => {
   expect(availableYears([])).toEqual([]);
 });
+
+test("con nowMs, los días posteriores a hoy quedan future:true (hoy y pasado false)", () => {
+  const now = new Date("2026-06-15T12:00:00").getTime();
+  const { weeks } = buildYearHeatmap([], 2026, now);
+  const flat = weeks.flat();
+  expect(flat.find((c) => c.date === "2026-06-16")!.future).toBe(true);
+  expect(flat.find((c) => c.date === "2026-06-15")!.future).toBe(false); // hoy no es futuro
+  expect(flat.find((c) => c.date === "2026-06-14")!.future).toBe(false);
+  expect(flat.find((c) => c.date === "2026-12-31")!.future).toBe(true);
+});
+
+test("sin nowMs, ninguna celda es future (retro-compatible)", () => {
+  const { weeks } = buildYearHeatmap([], 2026);
+  expect(weeks.flat().every((c) => c.future === false)).toBe(true);
+});

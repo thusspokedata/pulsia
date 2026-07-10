@@ -17,7 +17,7 @@ const LEVEL_COLORS: Record<0 | 1 | 2 | 3 | 4, string> = {
 };
 
 function cellColor(cell: HeatmapCell): string {
-  if (!cell.inYear) return "transparent";
+  if (!cell.inYear || cell.future) return "transparent"; // días fuera del año o aún no sucedidos: vacíos
   return LEVEL_COLORS[cell.level];
 }
 
@@ -34,7 +34,7 @@ export function YearHeatmap({ sessions, year, onSelectYear }: Props) {
     return <Text style={{ color: colors.textMuted, padding: spacing.md }}>Todavía no hay entrenamientos registrados.</Text>;
   }
 
-  const { weeks } = buildYearHeatmap(sessions, year);
+  const { weeks } = buildYearHeatmap(sessions, year, Date.now());
   const width = weeks.length * STEP;
   const height = 7 * STEP;
 
