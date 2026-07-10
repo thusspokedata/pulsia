@@ -19,6 +19,7 @@ import { useHeartRate } from "../src/ble/useHeartRate";
 import { aggregateHr } from "../src/ble/hrAggregate";
 import { getSoundsEnabled } from "../src/storage/sounds";
 import { useAudioPlayer } from "expo-audio";
+import { parsePlannedReps } from "../src/session/plannedReps";
 import { colors, radius, spacing } from "../src/theme/tokens";
 import { summarize } from "../src/session/summary";
 import { SessionSummary } from "../src/components/SessionSummary";
@@ -284,7 +285,14 @@ export default function SesionScreen() {
       setStartRef.current = Date.now();
       hr.resetSamples();
     }
-    apply(tapRep(sess, { exerciseOrder: current.order, setStartMs: setStartRef.current, nowMs: Date.now() }));
+    apply(
+      tapRep(sess, {
+        exerciseOrder: current.order,
+        setStartMs: setStartRef.current,
+        nowMs: Date.now(),
+        initialReps: parsePlannedReps(current.planned.reps),
+      }),
+    );
   }
 
   function onEndSet() {
@@ -315,7 +323,14 @@ export default function SesionScreen() {
       setStartRef.current = Date.now();
       hr.resetSamples();
     }
-    apply(adjustReps(sess, { exerciseOrder: current.order, setStartMs: setStartRef.current, delta }));
+    apply(
+      adjustReps(sess, {
+        exerciseOrder: current.order,
+        setStartMs: setStartRef.current,
+        delta,
+        initialReps: parsePlannedReps(current.planned.reps),
+      }),
+    );
   }
 
   function onSkip() {
@@ -517,7 +532,7 @@ export default function SesionScreen() {
             accessibilityRole="button"
             style={{ alignSelf: "center", width: 150, height: 150, borderRadius: 75, borderWidth: 3, borderColor: colors.accent, alignItems: "center", justifyContent: "center", marginVertical: spacing.md }}
           >
-            <Text testID="rep-count" style={{ color: colors.text, fontSize: 44, fontWeight: "700" }}>{openSet?.reps ?? 0}</Text>
+            <Text testID="rep-count" style={{ color: colors.text, fontSize: 44, fontWeight: "700" }}>{openSet?.reps ?? parsePlannedReps(current.planned.reps)}</Text>
             <Text style={{ color: colors.textMuted, fontSize: 10 }}>TOCÁ EN CADA REP</Text>
           </Pressable>
 

@@ -68,6 +68,31 @@ test("adjustReps no baja de 0", () => {
   expect(s.exercises[0].sets[0].reps).toBe(0);
 });
 
+test("tapRep con initialReps pre-llena una serie NUEVA (no una ya abierta)", () => {
+  let s = start();
+  s = tapRep(s, { exerciseOrder: 0, setStartMs: 2000, nowMs: 2000, initialReps: 8 });
+  expect(s.exercises[0].sets[0].reps).toBe(9); // 8 pre-llenado + el tap
+  // Un segundo tap sobre la MISMA serie (ya abierta) ignora initialReps: sigue sumando de a 1.
+  s = tapRep(s, { exerciseOrder: 0, setStartMs: 2000, nowMs: 3000, initialReps: 8 });
+  expect(s.exercises[0].sets[0].reps).toBe(10);
+});
+
+test("adjustReps con initialReps arranca desde el valor planificado", () => {
+  let s = start();
+  s = adjustReps(s, { exerciseOrder: 0, setStartMs: 2000, delta: 1, initialReps: 8 });
+  expect(s.exercises[0].sets[0].reps).toBe(9);
+});
+
+test("initialReps solo aplica al crear la serie: resumir una serie ya cerrada no la pisa", () => {
+  let s = start();
+  s = tapRep(s, { exerciseOrder: 0, setStartMs: 2000, nowMs: 2000 }); // serie 1, sin seed
+  s = endSet(s, { exerciseOrder: 0, weightKg: 40, rpe: 8, nowMs: 5000 });
+  // Serie 2 nueva: acá SÍ aplica el seed.
+  s = tapRep(s, { exerciseOrder: 0, setStartMs: 6000, nowMs: 6000, initialReps: 8 });
+  expect(s.exercises[0].sets[1].reps).toBe(9);
+  expect(s.exercises[0].sets[0].reps).toBe(1); // la serie 1 cerrada no cambió
+});
+
 test("endSet cierra la serie con peso/rpe y durationMs", () => {
   let s = start();
   s = tapRep(s, { exerciseOrder: 0, setStartMs: 2000, nowMs: 2000 });
