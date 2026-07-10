@@ -10,6 +10,8 @@ import { requireAuth } from "./auth/middleware";
 import { sessionsRoutes } from "./routes/sessions";
 import { memoryRoutes } from "./routes/memory";
 import { appReleaseRoutes } from "./routes/appRelease";
+import { metricsRoutes } from "./routes/metrics";
+import { progressRoutes } from "./routes/progress";
 import { SINGLE_USER_ID } from "./constants";
 
 export interface AppConfig {
@@ -54,11 +56,17 @@ export function createApp(deps: AppDeps) {
   app.use("/app/*", auth);
   app.use("/sessions", auth);
   app.use("/sessions/*", auth);
+  app.use("/metrics", auth);
+  app.use("/metrics/*", auth);
+  app.use("/progress", auth);
+  app.use("/progress/*", auth);
   app.route("/settings", settingsRoutes(deps));
   app.route("/programs", programsRoutes(deps));
   app.route("/profile", profileRoutes(deps));
   app.route("/sessions", sessionsRoutes(deps));
   app.route("/memory", memoryRoutes(deps));
   app.route("/app", appReleaseRoutes(deps));
+  app.route("/metrics", metricsRoutes(deps));
+  app.route("/progress", progressRoutes(deps));
   return app;
 }
