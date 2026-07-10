@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../src/auth/AuthContext";
 import { colors } from "../src/theme/tokens";
+import { setupRestNotifications } from "../src/notifications/setup";
 
 const queryClient = new QueryClient();
 
@@ -39,6 +40,9 @@ function Guarded() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    void setupRestNotifications();
+  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
