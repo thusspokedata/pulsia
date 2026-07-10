@@ -85,6 +85,7 @@ export const workoutSession = pgTable("workout_session", {
   endedAt: bigint("ended_at", { mode: "number" }),
   totalDurationMs: integer("total_duration_ms"),
   notes: text("notes").default("").notNull(),
+  hrSeries: jsonb("hr_series").$type<{ t: number; bpm: number }[]>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
