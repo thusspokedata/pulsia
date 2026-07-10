@@ -94,3 +94,17 @@ test("sin nowMs, ninguna celda es future (retro-compatible)", () => {
   const { weeks } = buildYearHeatmap([], 2026);
   expect(weeks.flat().every((c) => c.future === false)).toBe(true);
 });
+
+test("un año futuro (sesión con fecha adelantada) NO se recorta → grilla no vacía", () => {
+  const now = new Date("2026-06-15T12:00:00").getTime();
+  const { weeks } = buildYearHeatmap([], 2027, now); // año posterior al de hoy
+  const inYear = weeks.flat().filter((c) => c.inYear);
+  expect(inYear.length).toBeGreaterThanOrEqual(365); // año completo, no vacío
+});
+
+test("un año pasado se muestra completo (no se recorta)", () => {
+  const now = new Date("2026-06-15T12:00:00").getTime();
+  const { weeks } = buildYearHeatmap([], 2024, now);
+  const inYear = weeks.flat().filter((c) => c.inYear);
+  expect(inYear.length).toBeGreaterThanOrEqual(365);
+});
