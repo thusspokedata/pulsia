@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import Svg, { Rect } from "react-native-svg";
 import { availableYears, buildYearHeatmap, type HeatmapCell } from "../session/heatmap";
@@ -49,6 +49,9 @@ export function YearHeatmap({ sessions, year, onSelectYear }: Props) {
   const width = weeks.length * STEP;
   const height = 7 * STEP;
 
+  // Primera vista = lo más reciente: el grid arranca scrolleado al final (últimos días entrenados).
+  const gridRef = useRef<ScrollView>(null);
+
   return (
     <View style={{ gap: spacing.sm }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
@@ -69,7 +72,12 @@ export function YearHeatmap({ sessions, year, onSelectYear }: Props) {
         })}
       </ScrollView>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <ScrollView
+        ref={gridRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        onContentSizeChange={() => gridRef.current?.scrollToEnd({ animated: false })}
+      >
         <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
           {weeks.map((week, col) =>
             week.map((cell, row) => (
