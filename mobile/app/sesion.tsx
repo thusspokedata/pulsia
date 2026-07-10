@@ -290,6 +290,7 @@ export default function SesionScreen() {
   const doneList = current ? current.sets.filter((s) => s.endedAt != null) : [];
 
   function onTap() {
+    resumeIfPaused();
     if (!current) return;
     // Ejercicio ya completo (todas las series planificadas hechas y sin serie abierta):
     // no crear una serie fantasma. Para corregir están las filas "Series hechas".
@@ -309,6 +310,7 @@ export default function SesionScreen() {
   }
 
   function onEndSet() {
+    resumeIfPaused();
     if (!current) return;
     const { hrAvg, hrMax } = aggregateHr(hr.getSamples());
     apply(
@@ -329,6 +331,7 @@ export default function SesionScreen() {
   }
 
   function onAdjustReps(delta: number) {
+    resumeIfPaused();
     if (!current) return;
     // Ejercicio ya completo: no-op (mismo criterio que onTap).
     if (!openSet && doneSets >= current.planned.sets) return;
@@ -372,31 +375,40 @@ export default function SesionScreen() {
     setChangeNote("");
   }
 
-  function onPauseToggle() {
+  // Reanuda si la sesión estaba pausada (no-op si no lo estaba). Extraído del botón "Reanudar"
+  // para poder dispararlo también desde cualquier interacción con las reps (tap/±reps/terminar
+  // serie) mientras está pausada, sin duplicar la lógica.
+  function resumeIfPaused() {
+    if (!paused) return;
     const now = Date.now();
-    if (paused) {
-      // Reanudar: acumular la duración de la pausa en curso.
-      pausedMsRef.current += now - pauseStartedRef.current;
-      setPaused(false);
-      // Retomar el descanso con lo que le quedaba (el contador estaba congelado).
-      if (restRemainingRef.current != null) {
-        restDoneRef.current = false; // permitir que la campana suene una vez al cruzar 0
-        setRestUntil(now + restRemainingRef.current);
-        restRemainingRef.current = null;
-      }
-      void setPauseState({ sessionId: sess.id, pausedMs: pausedMsRef.current, pausedAt: null });
-    } else {
-      // Pausar: marcar el inicio de la pausa.
-      pauseStartedRef.current = now;
-      setPaused(true);
-      // Congelar el descanso activo: guardar lo que resta y frenar el contador (así la campana
-      // no dispara mientras está pausado).
-      if (restUntil != null && restUntil > now) {
-        restRemainingRef.current = restUntil - now;
-        setRestUntil(null);
-      }
-      void setPauseState({ sessionId: sess.id, pausedMs: pausedMsRef.current, pausedAt: now });
+    // Acumular la duración de la pausa en curso.
+    pausedMsRef.current += now - pauseStartedRef.current;
+    setPaused(false);
+    // Retomar el descanso con lo que le quedaba (el contador estaba congelado).
+    if (restRemainingRef.current != null) {
+      restDoneRef.current = false; // permitir que la campana suene una vez al cruzar 0
+      setRestUntil(now + restRemainingRef.current);
+      restRemainingRef.current = null;
     }
+    void setPauseState({ sessionId: sess.id, pausedMs: pausedMsRef.current, pausedAt: null });
+  }
+
+  function onPauseToggle() {
+    if (paused) {
+      resumeIfPaused();
+      return;
+    }
+    // Pausar: marcar el inicio de la pausa.
+    const now = Date.now();
+    pauseStartedRef.current = now;
+    setPaused(true);
+    // Congelar el descanso activo: guardar lo que resta y frenar el contador (así la campana
+    // no dispara mientras está pausado).
+    if (restUntil != null && restUntil > now) {
+      restRemainingRef.current = restUntil - now;
+      setRestUntil(null);
+    }
+    void setPauseState({ sessionId: sess.id, pausedMs: pausedMsRef.current, pausedAt: now });
   }
 
   async function onFinish() {

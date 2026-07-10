@@ -536,6 +536,37 @@ test("cambiar de ejercicio activo resetea el picker de cambio (no arrastra la el
   await waitFor(() => expect(screen.queryByTestId("confirmar-cambio")).toBeNull());
 });
 
+test("interactuar con las reps mientras está pausado auto-reanuda la sesión", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("pause-toggle"));
+  await fireEvent.press(screen.getByTestId("pause-toggle")); // pausa
+  await waitFor(() => expect(screen.getByText("Reanudar")).toBeTruthy());
+  // Tocar la burbuja de reps mientras está pausado: auto-reanuda (sin usar el botón "Reanudar")...
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await waitFor(() => expect(screen.getByText("Pausar")).toBeTruthy());
+  // ...y la interacción se aplica igual (arranca en 8 planificado + el tap = 9).
+  await waitFor(() => expect(screen.getByTestId("rep-count").props.children).toBe(9));
+});
+
+test("ajustar reps mientras está pausado también auto-reanuda", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("pause-toggle"));
+  await fireEvent.press(screen.getByTestId("pause-toggle")); // pausa
+  await waitFor(() => expect(screen.getByText("Reanudar")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("reps-1"));
+  await waitFor(() => expect(screen.getByText("Pausar")).toBeTruthy());
+});
+
+test("terminar serie mientras está pausado también auto-reanuda", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("pause-toggle")); // pausa
+  await waitFor(() => expect(screen.getByText("Reanudar")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => expect(screen.getByText("Pausar")).toBeTruthy());
+});
+
 test("cambiar de ejercicio activo NO corta el descanso ni la campana en curso", async () => {
   mockProgram = twoExerciseProgram;
   await render(<SesionScreen />);
