@@ -15,6 +15,12 @@ Object.defineProperty(Platform, "OS", { value: "android", configurable: true });
 
 import { setupRestNotifications } from "../src/notifications/setup";
 
+beforeEach(() => {
+  mockSetHandler.mockClear();
+  mockRequestPerms.mockClear();
+  mockSetChannel.mockClear();
+});
+
 test("fija el handler que suprime el sonido en foreground", async () => {
   await setupRestNotifications();
   expect(mockSetHandler).toHaveBeenCalledTimes(1);
