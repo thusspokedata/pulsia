@@ -747,11 +747,21 @@ export function buildProgressSummary(input: {
     return `${e.garminName}: 1RMe ${fmt(first)}→${fmt(last)} kg (${sign}${fmt(delta)})`;
   });
 
-  if (bodyLines.length === 0 && strengthLines.length === 0) return "";
+  // Volumen medio por sesión: primer vs último punto de la ventana.
+  let volumeLine: string | null = null;
+  if (trends.volumeSeries.length >= 2) {
+    const fmtK = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : fmt(n));
+    const first = trends.volumeSeries[0].volumeKg;
+    const last = trends.volumeSeries[trends.volumeSeries.length - 1].volumeKg;
+    volumeLine = `Volumen/sesión: ${fmtK(first)} → ${fmtK(last)} kg`;
+  }
+
+  if (bodyLines.length === 0 && strengthLines.length === 0 && !volumeLine) return "";
 
   const parts = ["Progreso medido (últimas ~8 semanas):"];
   for (const l of bodyLines) parts.push(`- ${l}`);
   if (strengthLines.length) parts.push(`- Fuerza (1RM estimado): ${strengthLines.join("; ")}`);
+  if (volumeLine) parts.push(`- ${volumeLine}`);
   return parts.join("\n");
 }
 ```
@@ -872,8 +882,10 @@ export async function refreshAthleteMemory(
   if (progressSummary == null) {
     const since = Date.now() - 56 * 24 * 60 * 60 * 1000;
     const metrics = await getMetricsSince(db, userId, since);
-    const profile = await getProfile(db, userId); // usar el repo de perfil existente
-    progressSummary = buildProgressSummary({ metrics, sessions: recent, heightCm: profile?.heightCm ?? null, nowMs: Date.now() });
+    // No hay repo de perfil: se lee inline (mismo patrón que routes/profile.ts).
+    const profileRow = await db.query.profiles.findFirst({ where: eq(profiles.userId, userId) });
+    const heightCm = profileRow?.data?.heightCm ?? null;
+    progressSummary = buildProgressSummary({ metrics, sessions: recent, heightCm, nowMs: Date.now() });
   }
   const updated = await ai.updateMemory({ current, historySummary, progressSummary, apiKey, model });
   await upsertMemory(db, userId, updated);
@@ -881,7 +893,7 @@ export async function refreshAthleteMemory(
 }
 ```
 
-> El implementador: importar `getMetricsSince`, `buildProgressSummary`, y el getter de perfil que ya exista (mirar cómo `programs`/`profile` leen el perfil; reusar ese). No duplicar.
+> El implementador: importar `getMetricsSince` (de `../metrics/repository`), `buildProgressSummary` (de `../ai/progress`), `eq` (de `drizzle-orm`) y `profiles` (de `../db/schema`). NO crear un módulo de perfil nuevo — leer inline como arriba.
 
 `generateJob.ts` — computar el progreso y propagarlo:
 
@@ -1227,6 +1239,13 @@ export default function ProgresoScreen() {
               <LineChart data={e.points.map((p) => ({ x: p.measuredAt, y: p.est1RM }))} unit="kg" />
             </View>
           ))}
+        </>
+      ) : null}
+
+      {perf && perf.volumeSeries.length > 0 ? (
+        <>
+          <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text }}>Volumen por sesión</Text>
+          <LineChart data={perf.volumeSeries.map((v) => ({ x: v.measuredAt, y: v.volumeKg }))} unit="kg" />
         </>
       ) : null}
 
