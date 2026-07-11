@@ -25,11 +25,21 @@ test("el prompt solo ofrece ejercicios permitidos por el equipamiento", () => {
   expect(prompt).toContain("barbell_bench_press");
 });
 
-test("incluye edad/peso/altura cuando están presentes", () => {
+test("incluye edad/altura cuando están presentes; el peso no se duplica en el prompt", () => {
   const prompt = buildGenerationPrompt({ ...profile, age: 34, weightKg: 78, heightCm: 180 });
   expect(prompt).toContain("Edad: 34 años");
-  expect(prompt).toContain("Peso: 78 kg");
+  expect(prompt).not.toContain("- Peso:");
   expect(prompt).toContain("Altura: 180 cm");
+});
+
+test("incluye el sexo cuando está presente", () => {
+  const prompt = buildGenerationPrompt({ ...profile, sex: "female" });
+  expect(prompt).toContain("Sexo: femenino");
+});
+
+test("no incluye línea de sexo cuando no está", () => {
+  const prompt = buildGenerationPrompt({ ...profile });
+  expect(prompt).not.toContain("Sexo:");
 });
 
 test("no incluye las líneas antropométricas cuando faltan", () => {
