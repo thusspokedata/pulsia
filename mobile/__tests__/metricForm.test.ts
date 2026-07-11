@@ -1,4 +1,5 @@
-import { buildReadingFromForm, buildBpReadingFromForm } from "../src/session/metricForm";
+import { buildReadingFromForm, buildBpReadingFromForm, buildReadingForTypes } from "../src/session/metricForm";
+import { ACTIVITY_METRIC_TYPES } from "@pulsia/shared";
 
 test("arma la lectura solo con los campos completados y válidos", () => {
   const r = buildReadingFromForm({ weight_kg: "80.5", waist_cm: "", body_fat_pct: "abc" }, 1000);
@@ -51,4 +52,10 @@ test("buildBpReadingFromForm rechaza alta <= baja con un error claro", () => {
   const ok = buildBpReadingFromForm({ alta: "120", baja: "80", pulso: "65" }, 1000);
   expect(ok.reading?.entries.length).toBe(3);
   expect(ok.error).toBeUndefined();
+});
+
+test("buildReadingForTypes arma una lectura con la fecha dada", () => {
+  const { reading } = buildReadingForTypes({ steps: "8000", sleep_hours: "7" }, ACTIVITY_METRIC_TYPES, 555);
+  expect(reading?.measuredAt).toBe(555);
+  expect(reading?.entries).toEqual([{ metricType: "steps", value: 8000 }, { metricType: "sleep_hours", value: 7 }]);
 });

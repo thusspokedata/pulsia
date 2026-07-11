@@ -23,6 +23,24 @@ export function buildReadingFromForm(form: Partial<Record<MetricType, string>>, 
   return { reading: entries.length ? { measuredAt, entries } : null, invalid };
 }
 
+export function buildReadingForTypes(
+  form: Partial<Record<MetricType, string>>,
+  types: readonly MetricType[],
+  measuredAt: number,
+): BuildReadingResult {
+  const entries: { metricType: MetricType; value: number }[] = [];
+  const invalid: MetricType[] = [];
+  for (const t of types) {
+    const raw = form[t]?.trim();
+    if (!raw) continue;
+    const value = Number(raw);
+    const [min, max] = METRIC_RANGES[t];
+    if (!Number.isFinite(value) || value < min || value > max) { invalid.push(t); continue; }
+    entries.push({ metricType: t, value });
+  }
+  return { reading: entries.length ? { measuredAt, entries } : null, invalid };
+}
+
 export interface BpForm {
   alta?: string;
   baja?: string;
