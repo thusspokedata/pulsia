@@ -8,10 +8,11 @@ import { LineChart } from "../../src/components/LineChart";
 import { MultiLineChart } from "../../src/components/MultiLineChart";
 import { YearHeatmap } from "../../src/components/YearHeatmap";
 import { BarChart } from "../../src/components/BarChart";
-import { buildReadingFromForm, buildBpReadingFromForm, type BpForm } from "../../src/session/metricForm";
+import { buildReadingFromForm, buildBpReadingFromForm, buildReadingForTypes, type BpForm } from "../../src/session/metricForm";
+import { dayAtNoon, dayLabel } from "../../src/session/metricDate";
 import { availableYears } from "../../src/session/heatmap";
 import { buildDailyMinutes } from "../../src/session/weeklyBars";
-import { BODY_METRIC_TYPES, METRIC_LABELS, METRIC_UNITS, type MetricType, type BodyMetric, type PerformanceTrends } from "@pulsia/shared";
+import { BODY_METRIC_TYPES, ACTIVITY_METRIC_TYPES, SUBJECTIVE_METRIC_TYPES, METRIC_LABELS, METRIC_UNITS, type MetricType, type BodyMetric, type PerformanceTrends } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
 const BP_COLOR_SYSTOLIC = colors.accent;
@@ -35,6 +36,11 @@ export default function ProgresoScreen() {
   const [bpPulseSeries, setBpPulseSeries] = useState<BodyMetric[]>([]);
   const [bpForm, setBpForm] = useState<BpForm>({});
   const [bpSaving, setBpSaving] = useState(false);
+  const [dayOffset, setDayOffset] = useState(0);
+  const [actForm, setActForm] = useState<Partial<Record<MetricType, string>>>({});
+  const [subjForm, setSubjForm] = useState<Partial<Record<MetricType, string>>>({});
+  const [actSaving, setActSaving] = useState(false);
+  const [subjSaving, setSubjSaving] = useState(false);
 
   async function loadSeries(url: string, type: MetricType) {
     const data = await getMetricSeries(url, type);
@@ -135,6 +141,38 @@ export default function ProgresoScreen() {
     finally { setBpSaving(false); }
   }
 
+  async function onSaveFlow(
+    form: Partial<Record<MetricType, string>>,
+    types: readonly MetricType[],
+    setFormFn: (v: Partial<Record<MetricType, string>>) => void,
+    setSavingFn: (v: boolean) => void,
+  ) {
+    const url = baseUrl.current;
+    if (!url) return;
+    const measuredAt = dayAtNoon(dayOffset, Date.now());
+    const { reading, invalid } = buildReadingForTypes(form, types, measuredAt);
+    if (!reading) { setError("Cargá al menos un valor válido"); return; }
+    setSavingFn(true); setError(null);
+    try {
+      await postReading(url, reading);
+      setFormFn({});
+      if (invalid.length > 0) {
+        setError(`Revisá: ${invalid.map((t) => METRIC_LABELS[t]).join(", ")}`);
+      }
+    } catch {
+      setSavingFn(false);
+      setError("No se pudo guardar la medición");
+      return;
+    }
+    try {
+      setLatest(await getLatestMetrics(url));
+      await loadSeries(url, selected);
+    } catch {
+      setError((prev) => prev ?? "Guardado. No se pudo refrescar la vista.");
+    }
+    finally { setSavingFn(false); }
+  }
+
   const chartData = series.map((m) => ({ x: m.measuredAt, y: m.value }));
   const bpCurrent = latest.bp_systolic && latest.bp_diastolic
     ? `${latest.bp_systolic.value} / ${latest.bp_diastolic.value}${latest.bp_pulse ? ` · ${latest.bp_pulse.value} bpm` : ""}`
@@ -146,7 +184,7 @@ export default function ProgresoScreen() {
 
       <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text }}>Valores actuales</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-        {BODY_METRIC_TYPES.map((t) => (
+        {[...BODY_METRIC_TYPES, ...ACTIVITY_METRIC_TYPES, ...SUBJECTIVE_METRIC_TYPES].map((t) => (
           <View key={t} style={{ backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, minWidth: 100 }}>
             <Text style={{ color: colors.textMuted, fontSize: 12 }}>{METRIC_LABELS[t]}</Text>
             <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600" }}>
@@ -158,7 +196,7 @@ export default function ProgresoScreen() {
 
       <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text }}>Tendencia</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
-        {BODY_METRIC_TYPES.map((t) => (
+        {[...BODY_METRIC_TYPES, ...ACTIVITY_METRIC_TYPES, ...SUBJECTIVE_METRIC_TYPES].map((t) => (
           <Pressable key={t} onPress={() => onSelect(t)}
             style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: selected === t ? colors.accent : colors.surface }}>
             <Text style={{ color: selected === t ? "#fff" : colors.text, fontSize: 13 }}>{METRIC_LABELS[t]}</Text>
@@ -209,6 +247,63 @@ export default function ProgresoScreen() {
       <Pressable onPress={onSaveBp} disabled={bpSaving}
         style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: bpSaving ? 0.6 : 1 }}>
         <Text style={{ color: "#fff", fontWeight: "600" }}>{bpSaving ? "Guardando…" : "Guardar presión"}</Text>
+      </Pressable>
+
+      <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text }}>Registro diario</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.sm }}>
+        <Pressable testID="date-prev" onPress={() => setDayOffset((o) => o + 1)}
+          style={{ paddingVertical: 6, paddingHorizontal: 14, borderRadius: radius.sm, backgroundColor: colors.bg }}>
+          <Text style={{ color: colors.text, fontSize: 18 }}>◀</Text>
+        </Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+          <Text testID="date-label" style={{ color: colors.text, fontWeight: "600" }}>{dayLabel(dayOffset, Date.now())}</Text>
+          {dayOffset !== 0 ? (
+            <Pressable testID="date-hoy" onPress={() => setDayOffset(0)}
+              style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.accent }}>
+              <Text style={{ color: "#fff", fontSize: 12 }}>Hoy</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        <Pressable testID="date-next" onPress={() => setDayOffset((o) => Math.max(0, o - 1))} disabled={dayOffset === 0}
+          style={{ paddingVertical: 6, paddingHorizontal: 14, borderRadius: radius.sm, backgroundColor: colors.bg, opacity: dayOffset === 0 ? 0.4 : 1 }}>
+          <Text style={{ color: colors.text, fontSize: 18 }}>▶</Text>
+        </Pressable>
+      </View>
+
+      <Text style={{ fontSize: 16, fontWeight: "600", color: colors.text }}>Actividad y recuperación</Text>
+      {ACTIVITY_METRIC_TYPES.map((t) => (
+        <View key={t} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ color: colors.text }}>{METRIC_LABELS[t]} ({METRIC_UNITS[t]})</Text>
+          <TextInput
+            testID={`act-input-${t}`}
+            keyboardType="numeric" value={actForm[t] ?? ""}
+            onChangeText={(v) => setActForm((f) => ({ ...f, [t]: v }))}
+            placeholder="—" placeholderTextColor={colors.textMuted}
+            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 8, width: 100, color: colors.text }}
+          />
+        </View>
+      ))}
+      <Pressable testID="act-save" onPress={() => onSaveFlow(actForm, ACTIVITY_METRIC_TYPES, setActForm, setActSaving)} disabled={actSaving}
+        style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: actSaving ? 0.6 : 1 }}>
+        <Text style={{ color: "#fff", fontWeight: "600" }}>{actSaving ? "Guardando…" : "Guardar actividad"}</Text>
+      </Pressable>
+
+      <Text style={{ fontSize: 16, fontWeight: "600", color: colors.text }}>Cómo te sentís</Text>
+      {SUBJECTIVE_METRIC_TYPES.map((t) => (
+        <View key={t} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ color: colors.text }}>{METRIC_LABELS[t]} ({METRIC_UNITS[t]})</Text>
+          <TextInput
+            testID={`subj-input-${t}`}
+            keyboardType="numeric" value={subjForm[t] ?? ""}
+            onChangeText={(v) => setSubjForm((f) => ({ ...f, [t]: v }))}
+            placeholder="—" placeholderTextColor={colors.textMuted}
+            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 8, width: 100, color: colors.text }}
+          />
+        </View>
+      ))}
+      <Pressable testID="subj-save" onPress={() => onSaveFlow(subjForm, SUBJECTIVE_METRIC_TYPES, setSubjForm, setSubjSaving)} disabled={subjSaving}
+        style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: subjSaving ? 0.6 : 1 }}>
+        <Text style={{ color: "#fff", fontWeight: "600" }}>{subjSaving ? "Guardando…" : "Guardar"}</Text>
       </Pressable>
 
       {perf && perf.perExercise.length > 0 ? (
