@@ -7,20 +7,8 @@ export interface BuildReadingResult {
 }
 
 export function buildReadingFromForm(form: Partial<Record<MetricType, string>>, measuredAt: number): BuildReadingResult {
-  const entries: { metricType: MetricType; value: number }[] = [];
-  const invalid: MetricType[] = [];
-  for (const t of BODY_METRIC_TYPES) {
-    const raw = form[t]?.trim();
-    if (!raw) continue;
-    const value = Number(raw);
-    const [min, max] = METRIC_RANGES[t];
-    if (!Number.isFinite(value) || value < min || value > max) {
-      invalid.push(t);
-      continue;
-    }
-    entries.push({ metricType: t, value });
-  }
-  return { reading: entries.length ? { measuredAt, entries } : null, invalid };
+  // Composición corporal: reutiliza el builder genérico sobre BODY_METRIC_TYPES.
+  return buildReadingForTypes(form, BODY_METRIC_TYPES, measuredAt);
 }
 
 export function buildReadingForTypes(
