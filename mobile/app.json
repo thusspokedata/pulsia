@@ -32,6 +32,10 @@
         }
       ],
       "expo-audio",
+      [
+        "expo-notifications",
+        { "sounds": ["./assets/bell.wav"] }
+      ],
       "expo-secure-store"
     ],
     "ios": {

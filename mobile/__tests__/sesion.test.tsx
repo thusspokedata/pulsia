@@ -40,6 +40,27 @@ jest.mock("expo-audio", () => ({
   setAudioModeAsync: (...a: any[]) => mockSetAudioModeAsync(...a),
 }));
 
+jest.mock("expo-notifications", () => ({
+  SchedulableTriggerInputTypes: { DATE: "date" },
+  scheduleNotificationAsync: jest.fn(),
+  cancelScheduledNotificationAsync: jest.fn(),
+  setNotificationHandler: jest.fn(),
+  requestPermissionsAsync: jest.fn(),
+  setNotificationChannelAsync: jest.fn(),
+  AndroidImportance: { HIGH: 4 },
+}));
+
+const mockSchedule = jest.fn(async (..._a: any[]) => "notif-1");
+const mockCancel = jest.fn(async (..._a: any[]) => undefined);
+jest.mock("../src/session/restNotification", () => {
+  const actual = jest.requireActual("../src/session/restNotification");
+  return {
+    ...actual,
+    scheduleRestBell: (...a: any[]) => mockSchedule(...a),
+    cancelRestBell: (...a: any[]) => mockCancel(...a),
+  };
+});
+
 jest.mock("../src/session/id", () => ({ newSessionId: () => "11111111-1111-4111-8111-111111111111" }));
 jest.mock("../src/storage/config", () => ({ getBackendUrl: async () => "http://backend.test" }));
 jest.mock("../src/api/sessions", () => ({ getLastWeights: async () => ({ barbell_bench_press: 42 }) }));
@@ -617,4 +638,32 @@ test("configura el audio en mixWithOthers al montar (la campana no pausa música
       expect.objectContaining({ interruptionMode: "mixWithOthers", playsInSilentMode: true }),
     ),
   );
+});
+
+test("al terminar una serie se programa la campana nativa de fin de descanso", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("end-set")); // arranca el descanso → programa la notif
+  await waitFor(() => expect(mockSchedule).toHaveBeenCalled());
+});
+
+test("saltar el descanso cancela la campana nativa programada", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => expect(mockSchedule).toHaveBeenCalled());
+  await fireEvent.press(screen.getByTestId("skip-rest")); // limpia restUntil → cleanup cancela la notif
+  await waitFor(() => expect(mockCancel).toHaveBeenCalledWith("notif-1"));
+});
+
+test("terminar la sesión cancela la campana nativa programada (el resumen no desmonta)", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  await fireEvent.press(screen.getByTestId("end-set")); // arranca el descanso → programa la notif
+  await waitFor(() => expect(mockSchedule).toHaveBeenCalled());
+  await fireEvent.press(screen.getByTestId("finish")); // el resumen se muestra en el mismo componente (sin unmount)
+  await waitFor(() => expect(mockCancel).toHaveBeenCalledWith("notif-1"));
 });

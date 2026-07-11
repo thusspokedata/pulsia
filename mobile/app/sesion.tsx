@@ -19,6 +19,7 @@ import { useHeartRate } from "../src/ble/useHeartRate";
 import { aggregateHr } from "../src/ble/hrAggregate";
 import { buildHrSeries } from "../src/session/hrSeries";
 import { getSoundsEnabled } from "../src/storage/sounds";
+import { restNotificationPlan, scheduleRestBell, cancelRestBell } from "../src/session/restNotification";
 import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
 import { parsePlannedReps } from "../src/session/plannedReps";
 import { colors, radius, spacing } from "../src/theme/tokens";
@@ -82,6 +83,8 @@ export default function SesionScreen() {
   const setStartRef = useRef(Date.now());
   const mounted = useRef(true);
   const soundsEnabledRef = useRef(true);
+  const [soundsEnabled, setSoundsEnabled] = useState(true);
+  const [soundsLoaded, setSoundsLoaded] = useState(false);
   const restDoneRef = useRef(false);
   const bell = useAudioPlayer(require("../assets/bell.wav"));
   const hr = useHeartRate();
@@ -222,8 +225,35 @@ export default function SesionScreen() {
   useEffect(() => {
     void getSoundsEnabled().then((v) => {
       soundsEnabledRef.current = v;
+      setSoundsEnabled(v);
+      setSoundsLoaded(true);
     });
   }, []);
+
+  // Notif nativa de fin de descanso (suena con la app en background). Atada a `restUntil`:
+  // se programa al haber descanso futuro y se cancela en el cleanup (skip/pausa/terminar/reprogramar).
+  // Cambiar de ejercicio NO toca `restUntil` → la notif sobrevive (fix #4).
+  useEffect(() => {
+    // No programar hasta cargar la preferencia de sonidos: el default `true` podría agendar una
+    // campana para un usuario que la tiene apagada durante la ventana async del getSoundsEnabled().
+    if (!soundsLoaded) return;
+    const plan = restNotificationPlan({ restUntil, soundsEnabled, now: Date.now() });
+    if (!plan.schedule) return;
+    let id: string | null = null;
+    let cancelled = false;
+    // Llamadas nativas best-effort: si programar/cancelar falla, la campana JS en foreground
+    // sigue siendo el fallback; no dejamos una promesa rechazada sin manejar.
+    void scheduleRestBell(plan.date)
+      .then((nid) => {
+        if (cancelled) void cancelRestBell(nid).catch(() => {});
+        else id = nid;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      if (id) void cancelRestBell(id).catch(() => {});
+    };
+  }, [restUntil, soundsEnabled, soundsLoaded]);
 
   useEffect(() => {
     const t = setInterval(() => setNowMs(Date.now()), 1000);
@@ -417,6 +447,10 @@ export default function SesionScreen() {
     // Ninguna serie debe quedar con endedAt=null en el payload (ver closeOpenSets en el motor).
     const { hrAvg, hrMax } = aggregateHr(hr.getSamples());
     const now = Date.now();
+    // Al terminar: cortar el descanso para que el efecto cancele la notif nativa programada
+    // (el resumen se muestra en este mismo componente, no hay unmount que dispare el cleanup).
+    restDoneRef.current = true;
+    setRestUntil(null);
     // Tiempo pausado total: acumulado + una pausa en curso (si la hay) hasta ahora.
     const pausedMs = pausedMsRef.current + (paused ? now - pauseStartedRef.current : 0);
     const s = closeOpenSets(sess, { activeOrder: current?.order ?? null, weightKg: parseNum(weight), rpe: parseNum(rpe), nowMs: now, hrAvg, hrMax });
