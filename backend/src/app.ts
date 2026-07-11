@@ -12,6 +12,7 @@ import { memoryRoutes } from "./routes/memory";
 import { appReleaseRoutes } from "./routes/appRelease";
 import { metricsRoutes } from "./routes/metrics";
 import { progressRoutes } from "./routes/progress";
+import { downloadRoutes } from "./routes/download";
 import { SINGLE_USER_ID } from "./constants";
 
 export interface AppConfig {
@@ -35,6 +36,7 @@ export interface AppDeps {
 export function createApp(deps: AppDeps) {
   const app = new Hono<{ Variables: { userId: string } }>();
   app.get("/health", (c) => c.json({ status: "ok" }));
+  app.route("/download", downloadRoutes(deps)); // PÚBLICA: fuera del middleware `auth`
   app.route("/auth", authRoutes(deps));
   // En modo single-user se saltea el login y se usa el usuario por defecto; si no,
   // se exige un token de sesión válido (multi-usuario).
