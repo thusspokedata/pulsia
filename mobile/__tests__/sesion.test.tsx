@@ -150,6 +150,14 @@ test("arma la sesión del día y muestra el ejercicio actual", async () => {
   await waitFor(() => expect(screen.getAllByText("Barbell Bench Press").length).toBeGreaterThan(0));
 });
 
+test("el ejercicio activo muestra el nombre en español + el inglés como secundario", async () => {
+  await render(<SesionScreen />);
+  // El nombre en español aparece en la fila de la lista y como título del activo.
+  expect((await screen.findAllByText("Press de banca con barra")).length).toBeGreaterThan(0);
+  // El inglés queda como secundario (solo bajo el título del activo).
+  expect(screen.getByText("Barbell Bench Press")).toBeTruthy();
+});
+
 test("tap incrementa las reps de la serie (arrancando desde las reps planificadas)", async () => {
   // baseProgram planea reps "8-10" → la burbuja arranca pre-llenada en 8 y cada tap suma 1.
   await render(<SesionScreen />);
