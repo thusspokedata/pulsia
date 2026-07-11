@@ -601,11 +601,11 @@ export default function SesionScreen() {
 
       {current ? (
         <>
-          <Text style={{ color: colors.text, fontSize: 18, fontWeight: "600" }}>
+          <Text testID="active-exercise-name" style={{ color: colors.text, fontSize: 18, fontWeight: "600" }}>
             {esName(current.catalogId, current.garminName)}
           </Text>
-          {exerciseNameEs(current.catalogId) != null && (
-            <Text style={{ color: colors.textMuted, fontSize: 12 }}>{current.garminName}</Text>
+          {esName(current.catalogId, current.garminName) !== current.garminName && (
+            <Text testID="active-exercise-name-en" style={{ color: colors.textMuted, fontSize: 12 }}>{current.garminName}</Text>
           )}
           <Text style={{ color: colors.textMuted, fontSize: 12 }}>Serie {doneSets + 1} de {current.planned.sets}</Text>
           <View style={{ alignSelf: "flex-start", backgroundColor: colors.accentSoft, borderRadius: radius.pill, paddingVertical: 3, paddingHorizontal: spacing.sm }}>

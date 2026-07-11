@@ -56,7 +56,8 @@ Run:
 ```bash
 cd /Users/kilo/desarrollo26/pulsia
 bunx tsc --noEmit -p shared 2>/dev/null || (cd shared && bunx tsc --noEmit)
-node -e "const m=require('./shared/src/catalog/exercises.es.ts'); " 2>/dev/null; grep -cE '^\s+[a-z0-9_]+:' shared/src/catalog/exercises.es.ts
+# Cuenta las keys (incluye ids que empiezan con dígito → van entre comillas). Portable a BSD grep (macOS): [[:space:]], no \s.
+grep -cE '^[[:space:]]+"?[A-Za-z0-9_]+"?:' shared/src/catalog/exercises.es.ts
 ```
 Expected: el `grep -c` debe dar **230** (una línea por entrada). Typecheck limpio.
 

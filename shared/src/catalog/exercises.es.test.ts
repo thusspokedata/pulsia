@@ -9,12 +9,15 @@ test("cobertura: TODOS los ids del catálogo tienen traducción no vacía", () =
   expect(faltantes).toEqual([]);
 });
 
-test("exerciseNameEs devuelve el español de un id conocido", () => {
-  const first = EXERCISE_CATALOG[0];
-  expect(exerciseNameEs(first.id)).toBe(EXERCISE_NAMES_ES[first.id]);
-  expect(typeof exerciseNameEs(first.id)).toBe("string");
+test("exerciseNameEs devuelve el español (valor concreto) de un id conocido", () => {
+  expect(exerciseNameEs("barbell_bench_press")).toBe("Press de banca con barra");
 });
 
 test("exerciseNameEs devuelve undefined para un id inexistente", () => {
   expect(exerciseNameEs("id-que-no-existe-xyz")).toBeUndefined();
+});
+
+test("exerciseNameEs no devuelve miembros heredados del prototipo", () => {
+  expect(exerciseNameEs("toString")).toBeUndefined();
+  expect(exerciseNameEs("constructor")).toBeUndefined();
 });

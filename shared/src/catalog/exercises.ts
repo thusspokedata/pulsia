@@ -6,7 +6,10 @@ export const EXERCISE_CATALOG: CatalogExercise[] = EXERCISE_CATALOG_DATA;
 
 // Nombre en español del ejercicio por catalogId; undefined si no hay traducción (el caller cae al inglés).
 export function exerciseNameEs(catalogId: string): string | undefined {
-  return EXERCISE_NAMES_ES[catalogId];
+  // Own-property check: evita devolver miembros heredados del prototipo (p.ej. "toString").
+  return Object.prototype.hasOwnProperty.call(EXERCISE_NAMES_ES, catalogId)
+    ? EXERCISE_NAMES_ES[catalogId]
+    : undefined;
 }
 
 export function getExerciseById(id: string): CatalogExercise | undefined {
