@@ -29,7 +29,7 @@ export async function runGenerationJob(
       getMetricsSince(deps.db, userId, since),
       getSessionsSince(deps.db, userId, since),
     ]);
-    const progressSummary = buildProgressSummary({ metrics, sessions: sessionsForProgress, heightCm: profile.heightCm ?? null, nowMs: Date.now() });
+    const progressSummary = buildProgressSummary({ metrics, sessions: sessionsForProgress, heightCm: profile.heightCm ?? null, nowMs: Date.now(), profileWeightKg: profile.weightKg ?? null });
     const program = await generateProgramForProfile({ profile, apiKey, model, ai: deps.aiClient, historySummary, memory, progressSummary });
     const inserted = await deps.db
       .insert(programs)

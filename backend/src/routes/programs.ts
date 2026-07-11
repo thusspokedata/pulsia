@@ -51,6 +51,7 @@ export function programsRoutes(deps: AppDeps) {
       sessions: sessionsForProgress,
       heightCm: parsed.data.heightCm ?? null,
       nowMs: Date.now(),
+      profileWeightKg: parsed.data.weightKg ?? null,
     });
 
     let program;

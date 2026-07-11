@@ -20,3 +20,25 @@ test("incluye delta de peso e IMC derivado cuando hay altura", () => {
   expect(out).toContain("79.5");
   expect(out.toLowerCase()).toContain("imc");
 });
+
+test("métricas de flujo: promedio reciente (7 días) y umbrales, no delta", () => {
+  const NOW = 1_000 * day;
+  const out = buildProgressSummary({
+    metrics: [
+      { id: "1", metricType: "steps", value: 6000, measuredAt: NOW - 1 * day },
+      { id: "2", metricType: "steps", value: 10000, measuredAt: NOW - 2 * day },
+      { id: "3", metricType: "sleep_hours", value: 5, measuredAt: NOW - 1 * day },
+      { id: "4", metricType: "sleep_hours", value: 8, measuredAt: NOW - 2 * day },
+    ],
+    sessions: [], heightCm: null, nowMs: NOW,
+  });
+  expect(out).toContain("Pasos: ~8000");
+  expect(out).toContain("1 de 2 días < 8.000");
+  expect(out).toContain("1 de 2 noches < 6 h");
+});
+
+test("peso: usa el profileWeightKg de fallback cuando no hay medición weight_kg", () => {
+  const NOW = 1_000 * day;
+  const out = buildProgressSummary({ metrics: [], sessions: [], heightCm: 180, nowMs: NOW, profileWeightKg: 80 });
+  expect(out).toContain("80");
+});
