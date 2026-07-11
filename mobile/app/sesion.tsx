@@ -631,7 +631,7 @@ export default function SesionScreen() {
             ))}
           </View>
 
-          <View style={{ flexDirection: "row", gap: spacing.sm, justifyContent: "center", alignItems: "flex-end" }}>
+          <View style={{ flexDirection: "row", gap: spacing.sm, justifyContent: "center", alignItems: "flex-start" }}>
             <View style={{ alignItems: "center", gap: 2 }}>
               <Text style={{ color: colors.textMuted, fontSize: 11 }}>Peso (kg)</Text>
               <TextInput testID="weight" style={input} placeholder="kg" keyboardType="numeric" value={weight} onChangeText={setWeight} />
