@@ -1,5 +1,7 @@
 import { catalogForEquipment, type TrainingProfile, type Equipment } from "@pulsia/shared";
 
+const SEX_ES: Record<string, string> = { male: "masculino", female: "femenino", other: "otro", prefer_not_to_say: "prefiere no decir" };
+
 export function buildGenerationPrompt(
   profile: TrainingProfile,
   historySummary?: string,
@@ -20,8 +22,8 @@ export function buildGenerationPrompt(
     "Perfil del atleta:",
     `- Experiencia: ${profile.experience}`,
     `- Objetivo: ${profile.goal}`,
+    ...(profile.sex != null ? [`- Sexo: ${SEX_ES[profile.sex]}`] : []),
     ...(profile.age != null ? [`- Edad: ${profile.age} años`] : []),
-    ...(profile.weightKg != null ? [`- Peso: ${profile.weightKg} kg`] : []),
     ...(profile.heightCm != null ? [`- Altura: ${profile.heightCm} cm`] : []),
     `- Días por semana: ${profile.daysPerWeek}`,
     `- Minutos por sesión: ${profile.sessionMinutes}`,

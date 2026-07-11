@@ -18,6 +18,12 @@ const GOAL = [
   { value: "fat_loss", label: "Pérdida de grasa" },
   { value: "general_fitness", label: "Fitness general" },
 ];
+const SEX = [
+  { value: "male", label: "Masculino" },
+  { value: "female", label: "Femenino" },
+  { value: "other", label: "Otro" },
+  { value: "prefer_not_to_say", label: "Prefiero no decir" },
+];
 const EQUIPMENT = [
   { value: "bodyweight", label: "Peso corporal" },
   { value: "dumbbell", label: "Mancuernas" },
@@ -34,6 +40,7 @@ const EQUIPMENT = [
 export default function PerfilScreen() {
   const [experience, setExperience] = useState("beginner");
   const [goal, setGoal] = useState("general_fitness");
+  const [sex, setSex] = useState<string | undefined>(undefined);
   const [daysPerWeek, setDaysPerWeek] = useState("3");
   const [sessionMinutes, setSessionMinutes] = useState("45");
   const [age, setAge] = useState("");
@@ -50,6 +57,7 @@ export default function PerfilScreen() {
       if (!p) return;
       setExperience(p.experience);
       setGoal(p.goal);
+      setSex(p.sex);
       setDaysPerWeek(String(p.daysPerWeek));
       setSessionMinutes(String(p.sessionMinutes));
       setAge(p.age != null ? String(p.age) : "");
@@ -67,6 +75,7 @@ export default function PerfilScreen() {
     const candidate = {
       experience,
       goal,
+      sex,
       age: numOrUndef(age),
       weightKg: numOrUndef(weightKg),
       heightCm: numOrUndef(heightCm),
@@ -111,13 +120,14 @@ export default function PerfilScreen() {
 
       <View><Text style={label}>Experiencia</Text><ChipGroup single options={EXPERIENCE} selected={[experience]} onChange={(v) => setExperience(v[0])} /></View>
       <View><Text style={label}>Objetivo</Text><ChipGroup single options={GOAL} selected={[goal]} onChange={(v) => setGoal(v[0])} /></View>
+      <View><Text style={label}>Sexo</Text><ChipGroup single options={SEX} selected={sex ? [sex] : []} onChange={(v) => setSex(v[0])} /></View>
       <View style={{ flexDirection: "row", gap: spacing.md }}>
         <View style={{ flex: 1 }}><Text style={label}>Días/semana</Text><TextInput style={input} keyboardType="number-pad" value={daysPerWeek} onChangeText={setDaysPerWeek} /></View>
         <View style={{ flex: 1 }}><Text style={label}>Min/sesión</Text><TextInput style={input} keyboardType="number-pad" value={sessionMinutes} onChangeText={setSessionMinutes} /></View>
       </View>
       <View style={{ flexDirection: "row", gap: spacing.md }}>
         <View style={{ flex: 1 }}><Text style={label}>Edad (opc.)</Text><TextInput style={input} keyboardType="number-pad" value={age} onChangeText={setAge} placeholder="años" /></View>
-        <View style={{ flex: 1 }}><Text style={label}>Peso kg (opc.)</Text><TextInput style={input} keyboardType="numeric" value={weightKg} onChangeText={setWeightKg} placeholder="kg" /></View>
+        <View style={{ flex: 1 }}><Text style={label}>Peso inicial (se actualiza con tus mediciones)</Text><TextInput style={input} keyboardType="numeric" value={weightKg} onChangeText={setWeightKg} placeholder="kg" /></View>
         <View style={{ flex: 1 }}><Text style={label}>Altura cm (opc.)</Text><TextInput style={input} keyboardType="number-pad" value={heightCm} onChangeText={setHeightCm} placeholder="cm" /></View>
       </View>
       <View><Text style={label}>Equipamiento gimnasio</Text><ChipGroup options={EQUIPMENT} selected={gymEquipment} onChange={setGymEquipment} /></View>

@@ -54,3 +54,9 @@ test("son opcionales: valida sin ellos", () => {
 test("rechaza edad fuera de rango", () => {
   expect(() => TrainingProfileSchema.parse({ ...base, age: 5 })).toThrow();
 });
+
+test("sex es opcional y valida el enum", () => {
+  expect(TrainingProfileSchema.safeParse({ ...base, sex: "female" }).success).toBe(true);
+  expect(TrainingProfileSchema.safeParse({ ...base }).success).toBe(true);
+  expect(TrainingProfileSchema.safeParse({ ...base, sex: "otro" }).success).toBe(false);
+});

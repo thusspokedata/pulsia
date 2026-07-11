@@ -30,6 +30,16 @@ test("guarda la edad opcional cuando se ingresa", async () => {
   });
 });
 
+test("guarda el sexo elegido en el perfil", async () => {
+  await render(<PerfilScreen />);
+  await fireEvent.press(screen.getByTestId("chip-female"));
+  await fireEvent.press(screen.getByText("Guardar perfil"));
+  await waitFor(async () => {
+    const p = JSON.parse((await AsyncStorage.getItem("pulsia.profile")) as string);
+    expect(p.sex).toBe("female");
+  });
+});
+
 test("el link de memoria navega a /memoria", async () => {
   await render(<PerfilScreen />);
   await waitFor(() => screen.getByTestId("perfil-memoria-link"));

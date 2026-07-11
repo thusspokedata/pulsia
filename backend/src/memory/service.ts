@@ -39,7 +39,7 @@ export async function refreshAthleteMemory(
     // No hay repo de perfil: se lee inline (mismo patrón que routes/profile.ts).
     const profileRow = await db.query.profiles.findFirst({ where: eq(profiles.userId, userId) });
     const heightCm = profileRow?.data?.heightCm ?? null;
-    progressSummary = buildProgressSummary({ metrics, sessions: sessionsForProgress, heightCm, nowMs: Date.now() });
+    progressSummary = buildProgressSummary({ metrics, sessions: sessionsForProgress, heightCm, nowMs: Date.now(), profileWeightKg: profileRow?.data?.weightKg ?? null });
   }
   const updated = await ai.updateMemory({ current, historySummary, progressSummary, apiKey, model });
   await upsertMemory(db, userId, updated);

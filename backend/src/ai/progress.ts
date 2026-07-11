@@ -1,10 +1,27 @@
 import type { BodyMetric, MetricType, WorkoutSession } from "@pulsia/shared";
-import { METRIC_LABELS, METRIC_UNITS, computePerformanceTrends } from "@pulsia/shared";
+import { METRIC_LABELS, METRIC_UNITS, FLOW_METRIC_TYPES, computePerformanceTrends } from "@pulsia/shared";
 
 export const PROGRESS_WINDOW_MS = 56 * 24 * 60 * 60 * 1000;
 
+const FLOW_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const SLEEP_MIN_H = 6;
+const STEPS_MIN = 8000;
+const FLOW_SET = new Set<MetricType>(FLOW_METRIC_TYPES);
+
 function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+// Métricas de flujo diario: promedio de la ventana corta + señal de umbral (no delta).
+function flowLine(type: MetricType, points: BodyMetric[], nowMs: number): string | null {
+  const since = nowMs - FLOW_WINDOW_MS;
+  const recent = points.filter((p) => p.measuredAt >= since);
+  if (recent.length === 0) return null;
+  const avg = recent.reduce((s, p) => s + p.value, 0) / recent.length;
+  let line = `${METRIC_LABELS[type]}: ~${fmt(avg)} ${METRIC_UNITS[type]} (prom. últimos 7 días)`;
+  if (type === "sleep_hours") { const bad = recent.filter((p) => p.value < SLEEP_MIN_H).length; if (bad > 0) line += `; ${bad} de ${recent.length} noches < 6 h`; }
+  if (type === "steps") { const bad = recent.filter((p) => p.value < STEPS_MIN).length; if (bad > 0) line += `; ${bad} de ${recent.length} días < 8.000`; }
+  return line;
 }
 
 // Para un tipo: valor más reciente vs más antiguo dentro de la ventana.
@@ -26,6 +43,7 @@ export function buildProgressSummary(input: {
   heightCm?: number | null;
   nowMs: number;
   windowMs?: number;
+  profileWeightKg?: number | null;
 }): string {
   const windowMs = input.windowMs ?? PROGRESS_WINDOW_MS;
   const since = input.nowMs - windowMs;
@@ -40,16 +58,24 @@ export function buildProgressSummary(input: {
 
   const bodyLines: string[] = [];
   for (const [type, pts] of byType) {
+    if (FLOW_SET.has(type)) continue;
     const line = metricLine(type, pts);
     if (line) bodyLines.push(line);
   }
 
-  // IMC derivado del último peso + altura del perfil.
+  // Métricas de flujo diario: promedio de la ventana corta (7 días) + umbrales, no delta.
+  const flowByType = new Map<MetricType, BodyMetric[]>();
+  for (const m of input.metrics) { if (!FLOW_SET.has(m.metricType)) continue; const arr = flowByType.get(m.metricType) ?? []; arr.push(m); flowByType.set(m.metricType, arr); }
+  for (const t of FLOW_METRIC_TYPES) { const pts = flowByType.get(t); if (pts) { const l = flowLine(t, pts, input.nowMs); if (l) bodyLines.push(l); } }
+
+  // Peso: última medición weight_kg, o el peso del perfil como fallback. IMC si hay altura.
   const weightPts = byType.get("weight_kg");
-  if (weightPts && weightPts.length > 0 && input.heightCm && input.heightCm > 0) {
-    const lastW = [...weightPts].sort((a, b) => a.measuredAt - b.measuredAt).at(-1)!.value;
-    const bmi = lastW / (input.heightCm / 100) ** 2;
-    bodyLines.push(`IMC: ${bmi.toFixed(1)}`);
+  const lastW = (weightPts && weightPts.length > 0)
+    ? [...weightPts].sort((a, b) => a.measuredAt - b.measuredAt).at(-1)!.value
+    : (input.profileWeightKg ?? null);
+  if (lastW != null) {
+    if (!weightPts || weightPts.length === 0) bodyLines.unshift(`${METRIC_LABELS["weight_kg"]}: ${fmt(lastW)} ${METRIC_UNITS["weight_kg"]}`);
+    if (input.heightCm && input.heightCm > 0) { const bmi = lastW / (input.heightCm / 100) ** 2; bodyLines.push(`IMC: ${bmi.toFixed(1)}`); }
   }
 
   // Fuerza: top ~5 ejercicios por frecuencia, delta de 1RMe en la ventana.

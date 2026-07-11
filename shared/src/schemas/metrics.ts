@@ -7,7 +7,14 @@ export const BODY_METRIC_TYPES = [
 
 export const BP_METRIC_TYPES = ["bp_systolic", "bp_diastolic", "bp_pulse"] as const;
 
-export const METRIC_TYPES = [...BODY_METRIC_TYPES, ...BP_METRIC_TYPES] as const;
+export const ACTIVITY_METRIC_TYPES = ["steps", "floors", "sleep_hours", "sleep_quality", "resting_hr"] as const;
+export const SUBJECTIVE_METRIC_TYPES = ["stress", "mood", "energy"] as const;
+// Métricas de "flujo diario" (promedio reciente, NO delta de tendencia).
+export const FLOW_METRIC_TYPES = [...ACTIVITY_METRIC_TYPES, ...SUBJECTIVE_METRIC_TYPES] as const;
+
+export const METRIC_TYPES = [
+  ...BODY_METRIC_TYPES, ...BP_METRIC_TYPES, ...ACTIVITY_METRIC_TYPES, ...SUBJECTIVE_METRIC_TYPES,
+] as const;
 export type MetricType = (typeof METRIC_TYPES)[number];
 
 export const MetricTypeSchema = z.enum(METRIC_TYPES);
@@ -16,12 +23,16 @@ export const METRIC_UNITS: Record<MetricType, string> = {
   weight_kg: "kg", body_fat_pct: "%", skeletal_muscle_mass_kg: "kg",
   bone_mass_kg: "kg", body_water_pct: "%", waist_cm: "cm",
   bp_systolic: "mmHg", bp_diastolic: "mmHg", bp_pulse: "bpm",
+  steps: "pasos", floors: "pisos", sleep_hours: "h", sleep_quality: "/5", resting_hr: "bpm",
+  stress: "/5", mood: "/5", energy: "/5",
 };
 
 export const METRIC_LABELS: Record<MetricType, string> = {
   weight_kg: "Peso", body_fat_pct: "% grasa", skeletal_muscle_mass_kg: "Masa muscular",
   bone_mass_kg: "Masa ósea", body_water_pct: "Agua corporal", waist_cm: "Cintura",
   bp_systolic: "Presión alta", bp_diastolic: "Presión baja", bp_pulse: "Pulso",
+  steps: "Pasos", floors: "Pisos", sleep_hours: "Sueño", sleep_quality: "Calidad de sueño",
+  resting_hr: "FC en reposo", stress: "Estrés", mood: "Ánimo", energy: "Energía",
 };
 
 // Rangos sanos para atajar typos de carga (no son límites médicos).
@@ -29,6 +40,8 @@ export const METRIC_RANGES: Record<MetricType, [number, number]> = {
   weight_kg: [20, 400], body_fat_pct: [2, 70], skeletal_muscle_mass_kg: [5, 100],
   bone_mass_kg: [0.5, 10], body_water_pct: [20, 80], waist_cm: [30, 250],
   bp_systolic: [60, 260], bp_diastolic: [30, 160], bp_pulse: [30, 220],
+  steps: [0, 100000], floors: [0, 500], sleep_hours: [0, 24], sleep_quality: [1, 5],
+  resting_hr: [30, 120], stress: [1, 5], mood: [1, 5], energy: [1, 5],
 };
 
 export const BodyMetricEntrySchema = z
