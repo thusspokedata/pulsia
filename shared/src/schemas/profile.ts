@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const ExperienceSchema = z.enum(["beginner", "intermediate", "advanced"]);
 export const GoalSchema = z.enum(["hypertrophy", "strength", "endurance", "fat_loss", "general_fitness"]);
+export const SexSchema = z.enum(["male", "female", "other", "prefer_not_to_say"]);
 
 export const EquipmentSchema = z.enum([
   "bodyweight",
@@ -19,6 +20,7 @@ export const EquipmentSchema = z.enum([
 export const TrainingProfileSchema = z.object({
   experience: ExperienceSchema,
   goal: GoalSchema,
+  sex: SexSchema.optional(),
   // Datos antropométricos opcionales: dan contexto a la IA (cargas relativas al peso, volumen/recuperación por edad).
   age: z.number().int().min(12).max(100).optional(),
   weightKg: z.number().min(30).max(300).optional(),
