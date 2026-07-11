@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, Alert } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import type { WorkoutSession, SessionExercise, Equipment } from "@pulsia/shared";
-import { alternativesFor } from "@pulsia/shared";
+import { alternativesFor, exerciseNameEs } from "@pulsia/shared";
 import { getStoredProgram, setStoredProgram } from "../src/storage/program";
 import { getStoredProgramId } from "../src/storage/programId";
 import { getStoredOneOffProgram, getStoredOneOffProgramId, clearOneOff } from "../src/storage/oneOffProgram";
@@ -312,6 +312,8 @@ export default function SesionScreen() {
   }
 
   const sess = session; // narrowed a WorkoutSession (los handlers son closures y no estrechan `session`)
+  // Nombre en español (principal) con fallback al inglés.
+  const esName = (catalogId: string, en: string) => exerciseNameEs(catalogId) ?? en;
   // Ejercicio activo explícito: NO auto-avanza. Al terminar la última serie el ejercicio
   // sigue activo (editable). El avance es tocar otro ejercicio en la lista de abajo.
   const fallback = firstIncomplete(sess);
@@ -575,7 +577,7 @@ export default function SesionScreen() {
                 }}
               >
                 <Text style={{ color: isActive ? colors.accentText : colors.text, fontSize: 13, flexShrink: 1 }}>
-                  {e.garminName}
+                  {esName(e.catalogId, e.garminName)}
                   {e.skipped ? " (saltado)" : ""}
                 </Text>
                 <Text style={{ color: colors.textMuted, fontSize: 12 }}>
@@ -599,7 +601,12 @@ export default function SesionScreen() {
 
       {current ? (
         <>
-          <Text style={{ color: colors.text, fontSize: 18, fontWeight: "600" }}>{current.garminName}</Text>
+          <Text testID="active-exercise-name" style={{ color: colors.text, fontSize: 18, fontWeight: "600" }}>
+            {esName(current.catalogId, current.garminName)}
+          </Text>
+          {esName(current.catalogId, current.garminName) !== current.garminName && (
+            <Text testID="active-exercise-name-en" style={{ color: colors.textMuted, fontSize: 12 }}>{current.garminName}</Text>
+          )}
           <Text style={{ color: colors.textMuted, fontSize: 12 }}>Serie {doneSets + 1} de {current.planned.sets}</Text>
           <View style={{ alignSelf: "flex-start", backgroundColor: colors.accentSoft, borderRadius: radius.pill, paddingVertical: 3, paddingHorizontal: spacing.sm }}>
             <Text style={{ color: colors.accentText, fontSize: 11 }}>Objetivo {current.planned.sets}×{current.planned.reps} · {current.planned.targetLoad} · desc {current.planned.restSeconds}s</Text>
@@ -681,7 +688,7 @@ export default function SesionScreen() {
                     style={{ paddingVertical: spacing.xs }}
                   >
                     <Text style={{ color: pickChoice?.catalogId === e.id ? colors.accent : colors.text, fontSize: 14 }}>
-                      {e.garminName}
+                      {esName(e.id, e.garminName)}
                     </Text>
                   </Pressable>
                 ));
