@@ -225,6 +225,21 @@ test("peso no numérico no guarda NaN (queda null)", async () => {
   });
 });
 
+test("'Terminar serie' guarda directo con las reps del plan sin tocar +1/−1", async () => {
+  // baseProgram planea reps "8-10" → parsePlannedReps da 8. Sin tocar nada, "Terminar serie"
+  // debe materializar y cerrar la serie con reps 8 (antes no guardaba nada).
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("end-set"));
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => {
+    const last = mockSetActive.mock.calls.at(-1)?.[0];
+    const sets = last.exercises[0].sets;
+    expect(sets.length).toBe(1);
+    expect(sets[0].endedAt).not.toBeNull();
+    expect(sets[0].reps).toBe(8);
+  });
+});
+
 test("permite corregir las reps de una serie ya terminada", async () => {
   await render(<SesionScreen />);
   await waitFor(() => screen.getByTestId("tap-rep"));

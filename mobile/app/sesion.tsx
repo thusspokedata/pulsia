@@ -344,9 +344,25 @@ export default function SesionScreen() {
   function onEndSet() {
     resumeIfPaused();
     if (!current) return;
+    // Sin serie abierta y ejercicio ya completo: no crear una serie fantasma.
+    if (!openSet && doneSets >= current.planned.sets) return;
+    // Si no se tocó ninguna rep, materializar la serie con las reps mostradas (las planificadas)
+    // para que "Terminar serie" guarde directo (antes había que tocar +1/−1 primero).
+    let base = sess;
+    if (!openSet) {
+      setStartRef.current = Date.now();
+      hr.resetSamples(); // serie instantánea: no arrastrar HR de la serie/descanso previos
+      base = adjustReps(sess, {
+        exerciseOrder: current.order,
+        setStartMs: setStartRef.current,
+        delta: 0,
+        initialReps: parsePlannedReps(current.planned.reps),
+      });
+    }
+    // Aggregar DESPUÉS del reset: en el path instantáneo la serie queda sin HR (samples limpios).
     const { hrAvg, hrMax } = aggregateHr(hr.getSamples());
     apply(
-      endSet(sess, {
+      endSet(base, {
         exerciseOrder: current.order,
         weightKg: parseNum(weight),
         rpe: parseNum(rpe),
@@ -617,7 +633,7 @@ export default function SesionScreen() {
             ))}
           </View>
 
-          <View style={{ flexDirection: "row", gap: spacing.sm, justifyContent: "center", alignItems: "flex-end" }}>
+          <View style={{ flexDirection: "row", gap: spacing.sm, justifyContent: "center", alignItems: "flex-start" }}>
             <View style={{ alignItems: "center", gap: 2 }}>
               <Text style={{ color: colors.textMuted, fontSize: 11 }}>Peso (kg)</Text>
               <TextInput testID="weight" style={input} placeholder="kg" keyboardType="numeric" value={weight} onChangeText={setWeight} />
