@@ -7,7 +7,7 @@
 Que el usuario suba a la app los reportes de ECG que genera su **AliveCor KardiaMobile 6L** (PDF), para que:
 1. Queden en un **historial** en la DB (visible al usuario) — norte de la [[athlete-ai-memory]].
 2. La **IA los interprete**: extrae el veredicto del propio Kardia + FC + fecha, y agrega una lectura en lenguaje natural, **anclada al veredicto de Kardia** (algoritmo aprobado por la FDA), **NUNCA como diagnóstico propio**, con disclaimer.
-3. Los veredictos recientes **alimenten la generación** de rutinas (contexto: FA reciente → evitar alta intensidad, sugerir médico).
+3. Los veredictos recientes **alimenten la generación** de rutinas como **contexto informativo** (NO como indicación clínica ni base para prescribir/restringir ejercicio por su cuenta): ante hallazgos cardíacos la conducta correcta es **sugerir consultar a un médico**, no ajustar la intensidad autónomamente.
 
 Como no todo el mundo tiene el aparato, la sección se **activa en Configuración**; por defecto no aparece.
 
@@ -29,7 +29,7 @@ Como no todo el mundo tiene el aparato, la sección se **activa en Configuració
 - **Almacenamiento:** el PDF como `bytea` en Postgres (simple, entra en los backups de la DB; los PDFs de Kardia son chicos ~100-300 KB).
 - **Toggle:** setting **por-usuario en el backend** (`settings.ecgEnabled`), sincroniza entre dispositivos.
 - **Análisis async** (como la generación de programas): subir devuelve al instante; la interpretación corre en background y se pollea.
-- **PDFs con contraseña de Kardia:** en vez de pedir el PDF sin password, el usuario guarda **una vez** su contraseña de PDF de Kardia (encriptada en reposo, patrón `aiApiKeyEncrypted`), y el backend **desbloquea el PDF con `qpdf`** al analizarlo y al servirlo. Se guarda el **PDF original (cifrado) tal cual** y se descifra **on-demand** (respeta la protección elegida por el usuario; queda cifrado en reposo).
+- **PDFs con contraseña de Kardia:** en vez de pedir el PDF sin password, el usuario guarda **una vez** su contraseña de PDF de Kardia (encriptada en reposo con `ENCRYPTION_KEY`, patrón `aiApiKeyEncrypted`), y el backend **desbloquea el PDF con `qpdf`** al analizarlo y al servirlo. **Almacenamiento del PDF:** se guarda **tal cual se subió** (el blob NO se cifra a nivel app) — los PDFs protegidos por contraseña conservan su propia protección; los no protegidos quedan en claro. Aceptable porque la DB vive en la **Pi privada single-tenant del usuario** (dueño de los datos, sin intermediarios, sin otros usuarios locales) — decisión explícita del usuario. La **contraseña de Kardia** sí se cifra en reposo.
 
 ## Diseño
 
