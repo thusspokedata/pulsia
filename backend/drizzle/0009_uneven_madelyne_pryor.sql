@@ -3,7 +3,7 @@ CREATE TABLE "ecg_recording" (
 	"user_id" uuid NOT NULL,
 	"pdf" "bytea" NOT NULL,
 	"mime" text NOT NULL,
-	"status" text DEFAULT 'pending' NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL CONSTRAINT "ecg_status_check" CHECK ("status" IN ('pending','done','failed')),
 	"kardia_verdict" text,
 	"avg_hr" real,
 	"recorded_at" text,

@@ -7,7 +7,7 @@ import type { AppDeps } from "../app";
 
 const BodySchema = z.object({
   aiApiKey: z.string().min(1).optional(),
-  aiModel: z.string().default("claude-sonnet-4-6"),
+  aiModel: z.string().optional(),
   ecgEnabled: z.boolean().optional(),
   kardiaPdfPassword: z.string().optional(),
 });
@@ -26,7 +26,8 @@ export function settingsRoutes(deps: AppDeps) {
     const aiApiKeyEncrypted = aiApiKey ? encryptSecret(aiApiKey, key) : undefined;
     const kardiaPwEncrypted = kardiaPdfPassword ? encryptSecret(kardiaPdfPassword, key) : undefined;
 
-    const fields: Record<string, unknown> = { aiModel };
+    const fields: Record<string, unknown> = {};
+    if (aiModel !== undefined) fields.aiModel = aiModel;
     if (aiApiKeyEncrypted !== undefined) fields.aiApiKeyEncrypted = aiApiKeyEncrypted;
     if (kardiaPwEncrypted !== undefined) fields.kardiaPwEncrypted = kardiaPwEncrypted;
     if (ecgEnabled !== undefined) fields.ecgEnabled = ecgEnabled;

@@ -122,6 +122,11 @@ export class AnthropicAiClient implements AiClient {
     if (!block || block.type !== "tool_use") {
       throw new Error("La IA no devolvió el análisis del ECG.");
     }
-    return EcgAnalysisSchema.parse(block.input);
+    const analysis = EcgAnalysisSchema.parse(block.input);
+    const DISCLAIMER = "Esto no reemplaza la evaluación de un médico. Ante cualquier hallazgo preocupante, consultá a un profesional de la salud.";
+    const interpretation = /m[ée]dico|profesional de la salud/i.test(analysis.interpretation)
+      ? analysis.interpretation
+      : `${analysis.interpretation}\n\n⚠️ ${DISCLAIMER}`;
+    return { ...analysis, interpretation };
   }
 }

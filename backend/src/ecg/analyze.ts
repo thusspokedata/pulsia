@@ -20,7 +20,10 @@ export async function runEcgAnalysis(deps: AppDeps, recordingId: string, userId:
     const apiKey = resolveAiKey(settingsRow, deps.config);
     if (!apiKey) throw new Error("No hay API key de IA disponible.");
     if (!deps.aiClient.interpretEcg) throw new Error("El cliente de IA no soporta interpretEcg.");
-    const analysis = await deps.aiClient.interpretEcg({ pdfBase64: decrypted.toString("base64"), apiKey, historySummary });
+    const analysis = await Promise.race([
+      deps.aiClient.interpretEcg({ pdfBase64: decrypted.toString("base64"), apiKey, historySummary }),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("La interpretación del ECG excedió el tiempo límite.")), 120_000)),
+    ]);
     await deps.db.update(ecgRecording).set({
       status: "done", kardiaVerdict: analysis.kardiaVerdict, avgHr: analysis.avgHeartRate,
       recordedAt: analysis.recordedAt, interpretation: analysis.interpretation, error: null,

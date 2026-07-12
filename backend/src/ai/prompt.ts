@@ -61,7 +61,7 @@ export function buildGenerationPrompt(
         ]
       : []),
     ...(ecgSummary && ecgSummary.trim()
-      ? ["", `Salud cardíaca reciente (informativo, no clínico): ${ecgSummary}`]
+      ? ["", `Contexto de salud cardíaca (SOLO informativo — NO es indicación clínica ni base para prescribir o restringir ejercicio): ${ecgSummary}. Ante hallazgos cardíacos, la conducta correcta es sugerir consultar a un médico, no ajustar la intensidad por tu cuenta.`]
       : []),
     "Devolvé el resultado llamando a la herramienta provista.",
   ].join("\n");

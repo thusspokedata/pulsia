@@ -13,11 +13,13 @@ export async function maybeDecryptPdf(pdf: Buffer, password?: string | null): Pr
   const proc = Bun.spawn(["qpdf", `--password=${password}`, "--decrypt", "-", "-"], {
     stdin: pdf, stdout: "pipe", stderr: "pipe",
   });
+  const killer = setTimeout(() => { try { proc.kill(); } catch {} }, 30_000);
   const [out, err, code] = await Promise.all([
     new Response(proc.stdout).arrayBuffer(),
     new Response(proc.stderr).text(),
     proc.exited,
   ]);
+  clearTimeout(killer);
   if (code !== 0) {
     throw new Error("No se pudo descifrar el PDF (¿contraseña incorrecta?): " + err.slice(0, 200));
   }

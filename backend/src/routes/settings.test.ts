@@ -91,6 +91,31 @@ test("GET /settings devuelve ecgEnabled + hasKardiaPw (no el valor)", async () =
   expect(JSON.stringify(body)).not.toContain("1234");
 });
 
+test("POST /settings con {ecgEnabled} SIN aiModel no resetea el aiModel existente", async () => {
+  const db = fakeDb();
+  const app = createApp(baseDeps(db) as any);
+  // Primero se guarda un aiModel custom
+  await app.request("/settings", {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({ aiApiKey: "sk-ant-secret", aiModel: "claude-opus-4-8" }),
+  });
+  // Luego se togglea ecgEnabled sin mandar aiModel
+  const res = await app.request("/settings", {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({ ecgEnabled: true }),
+  });
+  expect(res.status).toBe(200);
+  const stored = db._store["settings"];
+  expect(stored.ecgEnabled).toBe(true);
+  expect(stored.aiModel).toBe("claude-opus-4-8");
+
+  const get = await app.request("/settings", { headers: authHeaders });
+  const body = await get.json();
+  expect(body.aiModel).toBe("claude-opus-4-8");
+});
+
 test("POST /settings con {ecgEnabled} SIN aiApiKey no borra la key existente", async () => {
   const db = fakeDb();
   const app = createApp(baseDeps(db) as any);
