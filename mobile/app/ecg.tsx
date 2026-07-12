@@ -10,6 +10,9 @@ import { getToken } from "../src/storage/authToken";
 import { colors, radius, spacing } from "../src/theme/tokens";
 
 const POLL_MS = 3000;
+// Cota superior del poll: ~2 min (40 intentos × 3s). Evita pollear para siempre
+// si el backend nunca resuelve el análisis.
+const MAX_POLL_ATTEMPTS = 40;
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 function fmtDate(rec: EcgRecording): string {
@@ -32,6 +35,8 @@ export default function EcgScreen() {
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [pdfNote, setPdfNote] = useState<string | null>(null);
   const baseUrl = useRef<string | null>(null);
+  // Evita solapar requests del poll si uno todavía está en vuelo.
+  const inFlight = useRef(false);
 
   async function loadList(url: string) {
     try {
@@ -46,16 +51,22 @@ export default function EcgScreen() {
   useEffect(() => {
     let active = true;
     (async () => {
-      const url = await getBackendUrl();
-      if (!active) return;
-      baseUrl.current = url;
-      if (!url) {
-        setListError("Configurá el backend");
-        setLoading(false);
-        return;
+      try {
+        const url = await getBackendUrl();
+        if (!active) return;
+        baseUrl.current = url;
+        if (!url) {
+          setListError("Configurá el backend");
+          return;
+        }
+        await loadList(url);
+      } catch {
+        // Si algo falla antes de cargar la lista, no dejamos la pantalla trabada
+        // en "Cargando…".
+        if (active) setListError("No se pudieron cargar los ECG.");
+      } finally {
+        if (active) setLoading(false);
       }
-      await loadList(url);
-      if (active) setLoading(false);
     })();
     return () => {
       active = false;
@@ -68,13 +79,29 @@ export default function EcgScreen() {
     const url = baseUrl.current;
     if (!url) return;
     let active = true;
+    let attempts = 0;
+    inFlight.current = false;
     const timer = setInterval(async () => {
+      // Guard de solapamiento: si un request sigue en vuelo, salteamos este tick.
+      if (inFlight.current) return;
+      if (attempts >= MAX_POLL_ATTEMPTS) {
+        clearInterval(timer);
+        if (active) {
+          setAnalyzeError("El análisis está tardando; volvé a entrar más tarde.");
+          setAnalyzingId(null);
+        }
+        return;
+      }
+      attempts += 1;
+      inFlight.current = true;
       let rec: EcgRecording;
       try {
         rec = await getEcg(url, analyzingId);
       } catch {
         // Blip transitorio: seguimos polleando el mismo id.
         return;
+      } finally {
+        inFlight.current = false;
       }
       if (!active || rec.status === "pending") return;
       clearInterval(timer);
@@ -118,9 +145,19 @@ export default function EcgScreen() {
       const token = await getToken();
       const dest = `${FileSystem.cacheDirectory ?? ""}ecg-${id}.pdf`;
       // El endpoint del PDF exige el Bearer token; downloadAsync permite mandar headers.
-      await FileSystem.downloadAsync(ecgPdfUrl(url, id), dest, {
+      const result = await FileSystem.downloadAsync(ecgPdfUrl(url, id), dest, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
+      // Si el status no es 200, el archivo descargado es un cuerpo de error, no un PDF:
+      // no lo compartimos. 422 = PDF protegido; el resto, error genérico.
+      if (result.status !== 200) {
+        setPdfNote(
+          result.status === 422
+            ? "No se pudo obtener el PDF (¿está protegido? Revisá tu contraseña de Kardia)."
+            : "No se pudo obtener el PDF.",
+        );
+        return;
+      }
       // Abrir con el share-sheet del sistema (deja elegir un visor de PDF). Fallback: avisar
       // que quedó descargado si el dispositivo no tiene share disponible.
       if (await Sharing.isAvailableAsync()) {
@@ -204,7 +241,7 @@ export default function EcgScreen() {
               >
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={{ color: colors.textMuted, fontSize: 12 }}>{fmtDate(rec)}</Text>
-                  {rec.analysis ? (
+                  {rec.status === "done" && rec.analysis ? (
                     <>
                       <Text style={{ color: colors.accentText, fontSize: 15, fontWeight: "700" }}>
                         {rec.analysis.kardiaVerdict}
@@ -213,10 +250,13 @@ export default function EcgScreen() {
                         {rec.analysis.interpretation}
                       </Text>
                     </>
+                  ) : rec.status === "pending" ? (
+                    <Text style={{ color: colors.textMuted, fontSize: 13 }}>Analizando…</Text>
+                  ) : rec.status === "failed" ? (
+                    <Text style={{ color: colors.textMuted, fontSize: 13 }}>El análisis falló</Text>
                   ) : (
-                    <Text style={{ color: colors.textMuted, fontSize: 13 }}>
-                      {rec.status === "failed" ? "El análisis falló" : "Analizando…"}
-                    </Text>
+                    // done sin análisis (o cualquier estado inesperado): fallback neutral.
+                    <Text style={{ color: colors.textMuted, fontSize: 13 }}>Sin datos de análisis.</Text>
                   )}
                 </View>
                 <Pressable

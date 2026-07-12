@@ -29,6 +29,10 @@ export default function ConfiguracionScreen() {
   const bandMgr = useRef<BandManagerHandle | null>(null);
   const scanTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const foundRef = useRef<FoundDevice[]>([]);
+  // Evita que la hidratación tardía de getSettings pise un toggle que el usuario
+  // ya tocó (y evita setState tras desmontar).
+  const ecgTouched = useRef(false);
+  const mounted = useRef(true);
 
   function clearScanTimer() {
     if (scanTimer.current) {
@@ -42,6 +46,8 @@ export default function ConfiguracionScreen() {
       if (u) setUrl(u);
       getSettings(u ?? "")
         .then((s) => {
+          // No pisar un toggle que el usuario ya tocó, ni actualizar tras desmontar.
+          if (!mounted.current || ecgTouched.current) return;
           setEcgEnabled(s.ecgEnabled);
         })
         .catch(() => { /* best-effort: si falla, ECG queda desactivado */ });
@@ -49,6 +55,7 @@ export default function ConfiguracionScreen() {
     getPairedBand().then((b) => setPairedName(b?.name ?? null));
     getSoundsEnabled().then(setSoundsEnabledState);
     return () => {
+      mounted.current = false;
       clearScanTimer();
       bandMgr.current?.destroy();
       bandMgr.current = null;
@@ -149,6 +156,7 @@ export default function ConfiguracionScreen() {
   }
 
   async function onToggleEcg() {
+    ecgTouched.current = true;
     const next = !ecgEnabled;
     setEcgEnabled(next);
     try {
@@ -160,10 +168,11 @@ export default function ConfiguracionScreen() {
   }
 
   async function onSaveKardiaPw() {
-    const pw = kardiaPw.trim();
-    if (!pw) return;
+    // No trimear: la contraseña del PDF puede tener espacios al inicio/fin y
+    // debe guardarse exactamente como el usuario la tipeó.
+    if (kardiaPw.length === 0) return;
     try {
-      await saveSettings(url, { kardiaPdfPassword: pw });
+      await saveSettings(url, { kardiaPdfPassword: kardiaPw });
       setStatus("Contraseña de Kardia guardada");
     } catch {
       setStatus("Error al guardar la contraseña de Kardia");
