@@ -212,8 +212,9 @@ banda hace falta un dev client:
   solo el aviso de rate-limit) y sin comentarios/threads abiertos, **mergear solo (squash)**. Siempre
   aplicar primero los cambios que pida. Si un PR nuevo no recibe review (rate-limit), **`@coderabbitai
   review`** en el PR lo destraba. (Ver memoria `workflow-prs-coderabbit`.)
-- **Ejecución subagent-driven siempre** (memoria `execution-subagent-driven`). Nota: los subagentes
-  a veces re-delegan y no terminan → verificar el estado real (git log/tests) y completar directo si hace falta.
+- **Ejecución subagent-driven siempre** (memoria `execution-subagent-driven`). **NUNCA preguntar qué modo
+  de ejecución** — arrancar directo subagent-driven (pedido explícito del usuario, 2026-07-12). Nota: los
+  subagentes a veces re-delegan y no terminan → verificar el estado real (git log/tests) y completar directo si hace falta.
 - **Commits firmados `git commit -S`.** NUNCA atribución a Claude/Anthropic ni Co-Authored-By.
 - **TDD** siempre. Specs en `docs/superpowers/specs/`, planes en `docs/superpowers/plans/`.
 
