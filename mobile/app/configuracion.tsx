@@ -5,7 +5,7 @@ import { getBackendUrl, setBackendUrl } from "../src/storage/config";
 import { logout } from "../src/api/auth";
 import { useAuth } from "../src/auth/AuthContext";
 import { testConnection } from "../src/api/health";
-import { saveSettings } from "../src/api/settings";
+import { saveSettings, getSettings } from "../src/api/settings";
 import { getPairedBand, setPairedBand, clearPairedBand } from "../src/storage/pairedBand";
 import { getSoundsEnabled, setSoundsEnabled } from "../src/storage/sounds";
 import { createBandManager, type BandManagerHandle, type FoundDevice } from "../src/ble/bandManager";
@@ -24,9 +24,15 @@ export default function ConfiguracionScreen() {
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [soundsEnabled, setSoundsEnabledState] = useState(true);
+  const [ecgEnabled, setEcgEnabled] = useState(false);
+  const [kardiaPw, setKardiaPw] = useState("");
   const bandMgr = useRef<BandManagerHandle | null>(null);
   const scanTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const foundRef = useRef<FoundDevice[]>([]);
+  // Evita que la hidratación tardía de getSettings pise un toggle que el usuario
+  // ya tocó (y evita setState tras desmontar).
+  const ecgTouched = useRef(false);
+  const mounted = useRef(true);
 
   function clearScanTimer() {
     if (scanTimer.current) {
@@ -38,10 +44,18 @@ export default function ConfiguracionScreen() {
   useEffect(() => {
     getBackendUrl().then((u) => {
       if (u) setUrl(u);
+      getSettings(u ?? "")
+        .then((s) => {
+          // No pisar un toggle que el usuario ya tocó, ni actualizar tras desmontar.
+          if (!mounted.current || ecgTouched.current) return;
+          setEcgEnabled(s.ecgEnabled);
+        })
+        .catch(() => { /* best-effort: si falla, ECG queda desactivado */ });
     });
     getPairedBand().then((b) => setPairedName(b?.name ?? null));
     getSoundsEnabled().then(setSoundsEnabledState);
     return () => {
+      mounted.current = false;
       clearScanTimer();
       bandMgr.current?.destroy();
       bandMgr.current = null;
@@ -141,6 +155,30 @@ export default function ConfiguracionScreen() {
     }
   }
 
+  async function onToggleEcg() {
+    ecgTouched.current = true;
+    const next = !ecgEnabled;
+    setEcgEnabled(next);
+    try {
+      await saveSettings(url, { ecgEnabled: next });
+    } catch {
+      // Rollback UI para no desincronizar UI↔backend si la escritura falla.
+      setEcgEnabled(!next);
+    }
+  }
+
+  async function onSaveKardiaPw() {
+    // No trimear: la contraseña del PDF puede tener espacios al inicio/fin y
+    // debe guardarse exactamente como el usuario la tipeó.
+    if (kardiaPw.length === 0) return;
+    try {
+      await saveSettings(url, { kardiaPdfPassword: kardiaPw });
+      setStatus("Contraseña de Kardia guardada");
+    } catch {
+      setStatus("Error al guardar la contraseña de Kardia");
+    }
+  }
+
   const input = {
     borderWidth: 1,
     borderColor: colors.border,
@@ -224,6 +262,41 @@ export default function ConfiguracionScreen() {
             {soundsEnabled ? "Activados" : "Desactivados"}
           </Text>
         </Pressable>
+      </View>
+
+      <View style={{ gap: spacing.sm }}>
+        <Text style={{ color: colors.textMuted }}>ECG / Corazón</Text>
+        <Pressable
+          testID="ecg-toggle"
+          onPress={onToggleEcg}
+          style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.md }}
+        >
+          <Text style={{ color: colors.text }}>Registrar y analizar ECG</Text>
+          <Text style={{ color: ecgEnabled ? colors.accentText : colors.textMuted }}>
+            {ecgEnabled ? "Activado" : "Desactivado"}
+          </Text>
+        </Pressable>
+        {ecgEnabled && (
+          <>
+            <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+              Si tus PDFs de Kardia tienen contraseña, guardala acá para poder abrirlos.
+            </Text>
+            <TextInput
+              testID="kardia-password"
+              style={input}
+              placeholder="Contraseña del PDF de Kardia (opcional)"
+              autoCapitalize="none"
+              secureTextEntry
+              value={kardiaPw}
+              onChangeText={setKardiaPw}
+              onSubmitEditing={onSaveKardiaPw}
+              onBlur={onSaveKardiaPw}
+            />
+            <Pressable testID="ecg-screen-link" onPress={() => router.push("/ecg")} style={button}>
+              <Text style={{ color: "#fff" }}>Ver mis ECG</Text>
+            </Pressable>
+          </>
+        )}
       </View>
 
       {status && <Text style={{ color: colors.accentText }}>{status}</Text>}

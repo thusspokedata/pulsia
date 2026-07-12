@@ -1,13 +1,19 @@
 import { apiFetch } from "./client";
 
 export interface SettingsInput {
-  aiApiKey: string;
-  aiModel: string;
+  // Todos opcionales: el backend no sobrescribe campos ausentes. `aiApiKey` es
+  // opcional para poder togglear ECG sin mandar una api key vacía.
+  aiApiKey?: string;
+  aiModel?: string;
+  ecgEnabled?: boolean;
+  kardiaPdfPassword?: string;
 }
 
 export interface SettingsStatus {
   hasApiKey: boolean;
   aiModel: string;
+  ecgEnabled: boolean;
+  hasKardiaPw: boolean;
 }
 
 export async function saveSettings(baseUrl: string, input: SettingsInput): Promise<void> {
