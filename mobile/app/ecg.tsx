@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert, Linking } from "react-native";
+import { ScrollView, View, Text, Pressable, ActivityIndicator, Alert } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import type { EcgRecording } from "@pulsia/shared";
 import { uploadEcg, listEcg, getEcg, deleteEcg, ecgPdfUrl } from "../src/api/ecg";
 import { getBackendUrl } from "../src/storage/config";
@@ -120,13 +121,12 @@ export default function EcgScreen() {
       await FileSystem.downloadAsync(ecgPdfUrl(url, id), dest, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      // Sin visor nativo instalado (no agregamos deps nativas): intentamos abrir con el
-      // sistema; si no puede, avisamos que quedó descargado en el cache del dispositivo.
-      const canOpen = await Linking.canOpenURL(dest).catch(() => false);
-      if (canOpen) {
-        await Linking.openURL(dest);
+      // Abrir con el share-sheet del sistema (deja elegir un visor de PDF). Fallback: avisar
+      // que quedó descargado si el dispositivo no tiene share disponible.
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(dest, { mimeType: "application/pdf", UTI: "com.adobe.pdf" });
       } else {
-        setPdfNote("PDF descargado en el dispositivo (no hay visor para abrirlo automáticamente).");
+        setPdfNote("PDF descargado en el dispositivo.");
       }
     } catch {
       setPdfNote("No se pudo descargar el PDF.");
