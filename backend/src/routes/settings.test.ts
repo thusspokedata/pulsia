@@ -8,7 +8,11 @@ function fakeDb() {
     _store: store,
     insert: () => ({
       values: (v: any) => ({
-        onConflictDoUpdate: async ({ set }: any) => { store["settings"] = { ...v, ...set }; },
+        onConflictDoUpdate: async ({ set }: any) => {
+          // Simula upsert: si ya existe la fila, sólo aplica `set` sobre lo previo
+          // (no reemplaza columnas no incluidas); si no existe, usa `values`.
+          store["settings"] = store["settings"] ? { ...store["settings"], ...set } : { ...v, ...set };
+        },
       }),
     }),
     update: () => ({ set: () => ({ where: async () => {} }) }),
@@ -55,4 +59,84 @@ test("GET /settings no devuelve la key en claro", async () => {
   const body = await res.json();
   expect(body.hasApiKey).toBe(true);
   expect(JSON.stringify(body)).not.toContain("sk-ant-secret");
+});
+
+test("POST /settings persiste ecgEnabled + contraseña Kardia (encriptada)", async () => {
+  const db = fakeDb();
+  const app = createApp(baseDeps(db) as any);
+  const res = await app.request("/settings", {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({ aiApiKey: "sk-ant-secret", ecgEnabled: true, kardiaPdfPassword: "1234" }),
+  });
+  expect(res.status).toBe(200);
+  const stored = db._store["settings"];
+  expect(stored.ecgEnabled).toBe(true);
+  expect(stored.kardiaPwEncrypted).not.toContain("1234");
+  expect(decryptSecret(stored.kardiaPwEncrypted, KEY)).toBe("1234");
+});
+
+test("GET /settings devuelve ecgEnabled + hasKardiaPw (no el valor)", async () => {
+  const db = fakeDb();
+  const app = createApp(baseDeps(db) as any);
+  await app.request("/settings", {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({ aiApiKey: "sk-ant-secret", ecgEnabled: true, kardiaPdfPassword: "1234" }),
+  });
+  const res = await app.request("/settings", { headers: authHeaders });
+  const body = await res.json();
+  expect(body.ecgEnabled).toBe(true);
+  expect(body.hasKardiaPw).toBe(true);
+  expect(JSON.stringify(body)).not.toContain("1234");
+});
+
+test("POST /settings con {ecgEnabled} SIN aiModel no resetea el aiModel existente", async () => {
+  const db = fakeDb();
+  const app = createApp(baseDeps(db) as any);
+  // Primero se guarda un aiModel custom
+  await app.request("/settings", {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({ aiApiKey: "sk-ant-secret", aiModel: "claude-opus-4-8" }),
+  });
+  // Luego se togglea ecgEnabled sin mandar aiModel
+  const res = await app.request("/settings", {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({ ecgEnabled: true }),
+  });
+  expect(res.status).toBe(200);
+  const stored = db._store["settings"];
+  expect(stored.ecgEnabled).toBe(true);
+  expect(stored.aiModel).toBe("claude-opus-4-8");
+
+  const get = await app.request("/settings", { headers: authHeaders });
+  const body = await get.json();
+  expect(body.aiModel).toBe("claude-opus-4-8");
+});
+
+test("POST /settings con {ecgEnabled} SIN aiApiKey no borra la key existente", async () => {
+  const db = fakeDb();
+  const app = createApp(baseDeps(db) as any);
+  // Primero se guarda la key
+  await app.request("/settings", {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({ aiApiKey: "sk-ant-secret" }),
+  });
+  // Luego se togglea ecgEnabled sin mandar la key
+  const res = await app.request("/settings", {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({ ecgEnabled: true }),
+  });
+  expect(res.status).toBe(200);
+  const stored = db._store["settings"];
+  expect(stored.ecgEnabled).toBe(true);
+  expect(decryptSecret(stored.aiApiKeyEncrypted, KEY)).toBe("sk-ant-secret");
+
+  const get = await app.request("/settings", { headers: authHeaders });
+  const body = await get.json();
+  expect(body.hasApiKey).toBe(true);
 });

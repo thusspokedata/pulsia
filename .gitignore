@@ -5,3 +5,4 @@ dist/
 .env.local
 backend/.env
 .DS_Store
+.superpowers/

@@ -7,6 +7,7 @@ export function buildGenerationPrompt(
   historySummary?: string,
   memory?: string,
   progressSummary?: string,
+  ecgSummary?: string,
 ): string {
   const allEquipment = Array.from(
     new Set<Equipment>([...profile.gymEquipment, ...profile.homeEquipment]),
@@ -58,6 +59,9 @@ export function buildGenerationPrompt(
           "Progreso medido del atleta (métricas corporales y de fuerza en el tiempo): tenelo en cuenta para ajustar cargas, volumen y objetivo del plan.",
           progressSummary,
         ]
+      : []),
+    ...(ecgSummary && ecgSummary.trim()
+      ? ["", `Contexto de salud cardíaca (SOLO informativo — NO es indicación clínica ni base para prescribir o restringir ejercicio): ${ecgSummary}. Ante hallazgos cardíacos, la conducta correcta es sugerir consultar a un médico, no ajustar la intensidad por tu cuenta.`]
       : []),
     "Devolvé el resultado llamando a la herramienta provista.",
   ].join("\n");

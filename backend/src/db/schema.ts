@@ -1,6 +1,10 @@
-import { pgTable, uuid, text, jsonb, timestamp, integer, bigint, boolean, doublePrecision, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, jsonb, timestamp, integer, bigint, boolean, doublePrecision, real, index, customType } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import type { TrainingProfile, Program, PlannedExercise } from "@pulsia/shared";
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() { return "bytea"; },
+});
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -20,6 +24,8 @@ export const settings = pgTable("settings", {
   userId: uuid("user_id").primaryKey().references(() => users.id),
   aiApiKeyEncrypted: text("ai_api_key_encrypted"),
   aiModel: text("ai_model").default("claude-sonnet-4-6").notNull(),
+  ecgEnabled: boolean("ecg_enabled").notNull().default(false),
+  kardiaPwEncrypted: text("kardia_pw_encrypted"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
@@ -60,6 +66,20 @@ export const generationJobs = pgTable("generation_jobs", {
   userId: uuid("user_id").references(() => users.id).notNull(),
   status: text("status").notNull(), // 'pending' | 'done' | 'error'
   programId: uuid("program_id").references(() => programs.id),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const ecgRecording = pgTable("ecg_recording", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  pdf: bytea("pdf").notNull(),
+  mime: text("mime").notNull(),
+  status: text("status").notNull().default("pending"),
+  kardiaVerdict: text("kardia_verdict"),
+  avgHr: real("avg_hr"),
+  recordedAt: text("recorded_at"),
+  interpretation: text("interpretation"),
   error: text("error"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

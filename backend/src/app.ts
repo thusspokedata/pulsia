@@ -11,6 +11,7 @@ import { sessionsRoutes } from "./routes/sessions";
 import { memoryRoutes } from "./routes/memory";
 import { appReleaseRoutes } from "./routes/appRelease";
 import { metricsRoutes } from "./routes/metrics";
+import { ecgRoutes } from "./routes/ecg";
 import { progressRoutes } from "./routes/progress";
 import { downloadRoutes } from "./routes/download";
 import { SINGLE_USER_ID } from "./constants";
@@ -60,6 +61,8 @@ export function createApp(deps: AppDeps) {
   app.use("/sessions/*", auth);
   app.use("/metrics", auth);
   app.use("/metrics/*", auth);
+  app.use("/ecg", auth);
+  app.use("/ecg/*", auth);
   app.use("/progress", auth);
   app.use("/progress/*", auth);
   app.route("/settings", settingsRoutes(deps));
@@ -69,6 +72,7 @@ export function createApp(deps: AppDeps) {
   app.route("/memory", memoryRoutes(deps));
   app.route("/app", appReleaseRoutes(deps));
   app.route("/metrics", metricsRoutes(deps));
+  app.route("/ecg", ecgRoutes(deps));
   app.route("/progress", progressRoutes(deps));
   return app;
 }

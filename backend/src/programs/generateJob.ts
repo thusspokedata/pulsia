@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { TrainingProfile } from "@pulsia/shared";
-import { programs, generationJobs } from "../db/schema";
+import { programs, generationJobs, settings } from "../db/schema";
 import { getRecentSessions, getSessionsSince } from "../sessions/repository";
 import { buildTrainingHistorySummary } from "../ai/history";
 import { getMemory } from "../memory/repository";
@@ -8,6 +8,8 @@ import { refreshAthleteMemory } from "../memory/service";
 import { generateProgramForProfile } from "../ai/generate";
 import { buildProgressSummary, PROGRESS_WINDOW_MS } from "../ai/progress";
 import { getMetricsSince } from "../metrics/repository";
+import { priorEcgFor } from "../ecg/repository";
+import { buildEcgSummary } from "../ai/ecgSummary";
 import type { AppDeps } from "../app";
 
 // Corre la generación (una llamada a la IA), guarda el programa y actualiza el job.
@@ -30,7 +32,14 @@ export async function runGenerationJob(
       getSessionsSince(deps.db, userId, since),
     ]);
     const progressSummary = buildProgressSummary({ metrics, sessions: sessionsForProgress, heightCm: profile.heightCm ?? null, nowMs: Date.now(), profileWeightKg: profile.weightKg ?? null });
-    const program = await generateProgramForProfile({ profile, apiKey, model, ai: deps.aiClient, historySummary, memory, progressSummary });
+    // Contexto ECG (Kardia) sólo si el usuario lo habilitó en Configuración; si no hay registros, queda undefined.
+    const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
+    let ecgSummary: string | undefined;
+    if (settingsRow?.ecgEnabled) {
+      const recordings = await priorEcgFor(deps.db, userId);
+      ecgSummary = buildEcgSummary(recordings) || undefined;
+    }
+    const program = await generateProgramForProfile({ profile, apiKey, model, ai: deps.aiClient, historySummary, memory, progressSummary, ecgSummary });
     const inserted = await deps.db
       .insert(programs)
       .values({ userId, name: program.name, data: program, profileSnapshot: profile })

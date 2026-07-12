@@ -10,6 +10,8 @@ import { getMemory } from "../memory/repository";
 import { getMetricsSince } from "../metrics/repository";
 import { buildProgressSummary, PROGRESS_WINDOW_MS } from "../ai/progress";
 import { refreshAthleteMemory } from "../memory/service";
+import { priorEcgFor } from "../ecg/repository";
+import { buildEcgSummary } from "../ai/ecgSummary";
 import { runGenerationJob } from "../programs/generateJob";
 import type { AppDeps } from "../app";
 
@@ -54,9 +56,16 @@ export function programsRoutes(deps: AppDeps) {
       profileWeightKg: parsed.data.weightKg ?? null,
     });
 
+    // Contexto ECG (Kardia) sólo si el usuario lo habilitó en Configuración; si no hay registros, queda undefined.
+    let ecgSummary: string | undefined;
+    if (row?.ecgEnabled) {
+      const recordings = await priorEcgFor(deps.db, userId);
+      ecgSummary = buildEcgSummary(recordings) || undefined;
+    }
+
     let program;
     try {
-      program = await generateProgramForProfile({ profile: parsed.data, apiKey, model, ai: deps.aiClient, historySummary, memory, progressSummary });
+      program = await generateProgramForProfile({ profile: parsed.data, apiKey, model, ai: deps.aiClient, historySummary, memory, progressSummary, ecgSummary });
     } catch (e) {
       return c.json({ error: (e as Error).message }, 502);
     }

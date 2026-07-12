@@ -14,6 +14,7 @@ function fakeDb() {
       workoutSession: { findMany: async () => [] },
       athleteMemory: { findFirst: async () => null },
       profiles: { findFirst: async () => null },
+      settings: { findFirst: async () => null },
     },
     select: () => ({ from: () => ({ where: () => ({ orderBy: async () => [] }) }) }),
     insert: () => ({ values: () => ({ returning: async () => inserted, onConflictDoUpdate: async () => {} }) }),

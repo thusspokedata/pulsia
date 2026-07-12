@@ -19,12 +19,13 @@ export async function generateProgramForProfile(input: {
   historySummary?: string;
   memory?: string;
   progressSummary?: string;
+  ecgSummary?: string;
   oneOff?: OneOffArgs;
 }): Promise<Program> {
-  const { profile, apiKey, model, ai, historySummary, memory, progressSummary, oneOff } = input;
+  const { profile, apiKey, model, ai, historySummary, memory, progressSummary, ecgSummary, oneOff } = input;
   let lastBad: string[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
-    const program = await ai.generateProgram({ profile, apiKey, model, historySummary, memory, progressSummary, oneOff });
+    const program = await ai.generateProgram({ profile, apiKey, model, historySummary, memory, progressSummary, ecgSummary, oneOff });
     lastBad = unknownCatalogIds(program);
     if (lastBad.length === 0) return program;
   }
