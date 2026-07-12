@@ -30,7 +30,15 @@ export function ecgRoutes(deps: AppDeps) {
     const pdf = Buffer.from(parsed.data.pdfBase64, "base64");
     if (!pdf.subarray(0, 5).toString("latin1").startsWith("%PDF")) return c.json({ error: "No parece un PDF" }, 400);
     if (pdf.length > 10 * 1024 * 1024) return c.json({ error: "PDF demasiado grande (máx 10 MB)" }, 400);
-    const row = await insertEcg(deps.db, userId, pdf, "application/pdf");
+    let row;
+    try {
+      row = await insertEcg(deps.db, userId, pdf, "application/pdf");
+    } catch (e) {
+      // Falla al persistir (constraint de DB, FK del usuario, conexión caída…): logueamos el
+      // detalle real en el servidor y devolvemos un error legible en vez de un 500 opaco.
+      console.error("error al guardar el ECG:", (e as Error).message);
+      return c.json({ error: "No se pudo guardar el ECG en la base de datos." }, 500);
+    }
     void runEcgAnalysis(deps, row.id, userId);
     return c.json({ id: row.id, status: "pending" });
   });
