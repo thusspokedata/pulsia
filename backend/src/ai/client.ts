@@ -15,6 +15,7 @@ export interface AiClient {
     historySummary?: string;
     memory?: string;
     progressSummary?: string;
+    ecgSummary?: string;
     oneOff?: OneOffArgs;
   }): Promise<Program>;
   updateMemory?(input: {
@@ -32,13 +33,14 @@ export interface AiClient {
 }
 
 export class AnthropicAiClient implements AiClient {
-  async generateProgram({ profile, apiKey, model, historySummary, memory, progressSummary, oneOff }: {
+  async generateProgram({ profile, apiKey, model, historySummary, memory, progressSummary, ecgSummary, oneOff }: {
     profile: TrainingProfile;
     apiKey: string;
     model: string;
     historySummary?: string;
     memory?: string;
     progressSummary?: string;
+    ecgSummary?: string;
     oneOff?: OneOffArgs;
   }): Promise<Program> {
     const client = new Anthropic({ apiKey });
@@ -51,7 +53,7 @@ export class AnthropicAiClient implements AiClient {
     };
     const content = oneOff
       ? buildOneOffPrompt(profile, oneOff)
-      : buildGenerationPrompt(profile, historySummary, memory, progressSummary);
+      : buildGenerationPrompt(profile, historySummary, memory, progressSummary, ecgSummary);
     const res = await client.messages.create({
       model,
       max_tokens: 16000,
