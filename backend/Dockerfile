@@ -16,6 +16,9 @@ RUN bun install
 COPY shared shared
 COPY backend backend
 
+# qpdf para descifrar PDFs de ECG protegidos con contraseña.
+RUN apt-get update && apt-get install -y --no-install-recommends qpdf && rm -rf /var/lib/apt/lists/*
+
 # Correr como usuario no-root (la imagen oven/bun trae el usuario "bun").
 RUN chown -R bun:bun /app
 USER bun
