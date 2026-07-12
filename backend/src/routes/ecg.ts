@@ -59,8 +59,15 @@ export function ecgRoutes(deps: AppDeps) {
     let pdf: Buffer;
     try {
       pdf = await maybeDecryptPdf(row.pdf as Buffer, password);
-    } catch {
-      return c.json({ error: "El PDF está protegido; guardá tu contraseña de Kardia en Configuración." }, 422);
+    } catch (e) {
+      const msg = (e as Error).message ?? "";
+      // Error de contraseña/protección → 422 (lo resuelve el usuario). Fallas de infra (qpdf ausente,
+      // timeout, PDF corrupto) → 500, y se loguean.
+      if (/contraseña|protegido/i.test(msg)) {
+        return c.json({ error: "El PDF está protegido; guardá tu contraseña de Kardia en Configuración." }, 422);
+      }
+      console.warn("error al procesar el PDF de ECG:", msg);
+      return c.json({ error: "No se pudo procesar el PDF." }, 500);
     }
     return c.body(new Uint8Array(pdf), 200, { "content-type": "application/pdf" });
   });

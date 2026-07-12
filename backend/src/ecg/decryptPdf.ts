@@ -14,12 +14,16 @@ export async function maybeDecryptPdf(pdf: Buffer, password?: string | null): Pr
     stdin: pdf, stdout: "pipe", stderr: "pipe",
   });
   const killer = setTimeout(() => { try { proc.kill(); } catch {} }, 30_000);
-  const [out, err, code] = await Promise.all([
-    new Response(proc.stdout).arrayBuffer(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  clearTimeout(killer);
+  let out: ArrayBuffer, err: string, code: number;
+  try {
+    [out, err, code] = await Promise.all([
+      new Response(proc.stdout).arrayBuffer(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+  } finally {
+    clearTimeout(killer); // limpiar siempre, incluso si la recolección de stdout/stderr rechaza
+  }
   if (code !== 0) {
     throw new Error("No se pudo descifrar el PDF (¿contraseña incorrecta?): " + err.slice(0, 200));
   }
