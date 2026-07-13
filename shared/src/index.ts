@@ -8,3 +8,4 @@ export * from "./session/completion";
 export * from "./schemas/metrics";
 export * from "./schemas/ecg";
 export * from "./progress/trends";
+export * from "./schemas/nutrition";
