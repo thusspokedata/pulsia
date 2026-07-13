@@ -1,0 +1,1 @@
+CREATE INDEX "meal_item_meal_idx" ON "meal_item" USING btree ("meal_id");
