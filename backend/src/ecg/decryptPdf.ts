@@ -1,7 +1,7 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { unlink } from "node:fs/promises";
+import { writeFile, unlink } from "node:fs/promises";
 
 // Detección simple: un PDF cifrado tiene un diccionario /Encrypt en el trailer.
 export function isEncryptedPdf(pdf: Buffer): boolean {
@@ -20,7 +20,9 @@ export async function maybeDecryptPdf(pdf: Buffer, password?: string | null): Pr
   // reportaba como "¿contraseña incorrecta?" y despistaba. Escribimos el PDF a un archivo temporal
   // y le pasamos ese path como input; la salida sí puede ir a stdout ("-").
   const tmpPath = join(tmpdir(), `ecg-${randomUUID()}.pdf`);
-  await Bun.write(tmpPath, pdf);
+  // mode 0600: es dato médico cifrado; evitamos que quede world-readable en /tmp compartido
+  // durante la breve ventana antes del unlink.
+  await writeFile(tmpPath, pdf, { mode: 0o600 });
   try {
     const proc = Bun.spawn(["qpdf", `--password=${password}`, "--decrypt", tmpPath, "-"], {
       stdout: "pipe", stderr: "pipe",
