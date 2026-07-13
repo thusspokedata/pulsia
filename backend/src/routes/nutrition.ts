@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { FoodInputSchema, MealInputSchema } from "@pulsia/shared";
 import {
-  insertFood, listFoods, getFood, updateFood, deleteFood,
+  insertFood, listFoods, updateFood, deleteFood,
   createMeal, listMeals, updateMeal, deleteMeal, getMealOwner,
 } from "../nutrition/repository";
 import { resolveAiKey } from "../ai/resolveKey";
