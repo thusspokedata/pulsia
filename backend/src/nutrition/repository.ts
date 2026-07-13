@@ -8,6 +8,9 @@ type FoodRow = typeof food.$inferSelect;
 type MealRow = typeof meal.$inferSelect;
 type MealItemRow = typeof mealItem.$inferSelect;
 
+// Errores esperados por input del cliente (foodId ajeno/inexistente, unidad/base incoherente) → 409, no 500.
+export class MealValidationError extends Error {}
+
 export function toFood(row: FoodRow): Food {
   return {
     id: row.id, name: row.name, basis: row.basis as Food["basis"],
@@ -32,11 +35,16 @@ export function toMeal(row: MealRow, items: MealItemRow[]): Meal {
 export function snapshotItems(items: MealItemInput[], catalog: Map<string, FoodRow>) {
   return items.map((it) => {
     const f = catalog.get(it.foodId);
-    if (!f) throw new Error(`Alimento no encontrado en el catálogo: ${it.foodId}`);
-    const m = foodMacrosForQuantity(
-      { basis: f.basis as Food["basis"], kcal: f.kcal, protein_g: f.proteinG, carbs_g: f.carbsG, fat_g: f.fatG, unitWeightG: f.unitWeightG },
-      it.quantity, it.quantityUnit,
-    );
+    if (!f) throw new MealValidationError(`Alimento no encontrado en el catálogo: ${it.foodId}`);
+    let m: ReturnType<typeof foodMacrosForQuantity>;
+    try {
+      m = foodMacrosForQuantity(
+        { basis: f.basis as Food["basis"], kcal: f.kcal, protein_g: f.proteinG, carbs_g: f.carbsG, fat_g: f.fatG, unitWeightG: f.unitWeightG },
+        it.quantity, it.quantityUnit,
+      );
+    } catch (e) {
+      throw new MealValidationError((e as Error).message);
+    }
     return {
       foodId: f.id, foodName: f.name, quantity: it.quantity, quantityUnit: it.quantityUnit,
       grams: m.grams, kcal: m.kcal, proteinG: m.protein_g, carbsG: m.carbs_g, fatG: m.fat_g,
@@ -83,12 +91,14 @@ export async function createMeal(db: Db, userId: string, input: MealInput): Prom
   const ids = [...new Set(input.items.map((i) => i.foodId))];
   const foods = await db.select().from(food).where(and(eq(food.userId, userId), inArray(food.id, ids)));
   const catalog = new Map(foods.map((f) => [f.id, f]));
-  const snapped = snapshotItems(input.items, catalog); // tira si algún foodId no es del usuario
-  const [mealRow] = await db.insert(meal).values({
-    userId, eatenAt: input.eatenAt, mealType: input.mealType ?? null, note: input.note ?? null,
-  }).returning();
-  const itemRows = await db.insert(mealItem).values(snapped.map((s) => ({ ...s, mealId: mealRow.id }))).returning();
-  return toMeal(mealRow, itemRows);
+  const snapped = snapshotItems(input.items, catalog); // tira MealValidationError si algún foodId no es del usuario
+  return db.transaction(async (tx) => {
+    const [mealRow] = await tx.insert(meal).values({
+      userId, eatenAt: input.eatenAt, mealType: input.mealType ?? null, note: input.note ?? null,
+    }).returning();
+    const itemRows = await tx.insert(mealItem).values(snapped.map((s) => ({ ...s, mealId: mealRow.id }))).returning();
+    return toMeal(mealRow, itemRows);
+  });
 }
 
 export async function listMeals(db: Db, userId: string, from?: number, to?: number): Promise<Meal[]> {
@@ -114,10 +124,12 @@ export async function updateMeal(db: Db, userId: string, id: string, input: Meal
   const ids = [...new Set(input.items.map((i) => i.foodId))];
   const foods = await db.select().from(food).where(and(eq(food.userId, userId), inArray(food.id, ids)));
   const snapped = snapshotItems(input.items, new Map(foods.map((f) => [f.id, f])));
-  await db.update(meal).set({ eatenAt: input.eatenAt, mealType: input.mealType ?? null, note: input.note ?? null })
-    .where(eq(meal.id, id));
-  await db.delete(mealItem).where(eq(mealItem.mealId, id));
-  await db.insert(mealItem).values(snapped.map((s) => ({ ...s, mealId: id })));
+  await db.transaction(async (tx) => {
+    await tx.update(meal).set({ eatenAt: input.eatenAt, mealType: input.mealType ?? null, note: input.note ?? null })
+      .where(eq(meal.id, id));
+    await tx.delete(mealItem).where(eq(mealItem.mealId, id));
+    await tx.insert(mealItem).values(snapped.map((s) => ({ ...s, mealId: id })));
+  });
   const [row] = await db.select().from(meal).where(eq(meal.id, id));
   const items = await db.select().from(mealItem).where(eq(mealItem.mealId, id));
   return toMeal(row, items);

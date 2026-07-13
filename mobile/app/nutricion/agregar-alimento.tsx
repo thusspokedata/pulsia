@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ScrollView, View, Text, TextInput, Pressable, ActivityIndicator, Alert } from "react-native";
+import { ScrollView, View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { getBackendUrl } from "../../src/storage/config";
@@ -60,6 +60,9 @@ export default function AgregarAlimentoScreen() {
     };
     if (!input.name || [input.kcal, input.protein_g, input.carbs_g, input.fat_g].some((n) => Number.isNaN(n) || n < 0)) {
       setError("Completá nombre y macros (kcal/proteína/carbos/grasa) con números válidos."); return;
+    }
+    if (form.unitWeightG.trim() !== "" && (input.unitWeightG == null || Number.isNaN(input.unitWeightG) || input.unitWeightG <= 0)) {
+      setError("El peso por unidad tiene que ser un número mayor a 0."); return;
     }
     if (!baseUrl.current) return;
     setSaving(true);

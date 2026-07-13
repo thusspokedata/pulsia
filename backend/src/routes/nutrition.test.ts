@@ -26,6 +26,7 @@ function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: a
     update: () => ({ set: () => ({ where: () => { const p: any = Promise.resolve([]); p.returning = async () => (opts.foodRow ? [opts.foodRow] : []); return p; } }) }),
     delete: () => ({ where: () => { const p: any = Promise.resolve(undefined); p.returning = async () => [{ id: FOOD_ID }]; return p; } }),
     select: () => ({ from: () => ({ where: () => ({ orderBy: async () => opts.foods ?? [], then: (r: any) => r(opts.foods ?? []) }) }) }),
+    transaction: async (fn: any) => fn(db),
     query: {
       food: { findFirst: async () => opts.foodRow ?? null },
       meal: { findFirst: async () => (opts.meals?.[0] ? { userId: opts.meals[0].userId } : null) },

@@ -4,6 +4,7 @@ import { FoodInputSchema, MealInputSchema } from "@pulsia/shared";
 import {
   insertFood, listFoods, updateFood, deleteFood,
   createMeal, listMeals, updateMeal, deleteMeal, getMealOwner,
+  MealValidationError,
 } from "../nutrition/repository";
 import { resolveAiKey } from "../ai/resolveKey";
 import { settings } from "../db/schema";
@@ -73,8 +74,10 @@ export function nutritionRoutes(deps: AppDeps) {
     try {
       return c.json(await createMeal(deps.db, c.get("userId"), parsed.data));
     } catch (e) {
-      // snapshotItems tira si un foodId no pertenece al usuario / no existe.
-      return c.json({ error: (e as Error).message }, 409);
+      // snapshotItems tira MealValidationError si un foodId no pertenece al usuario / unidad incoherente.
+      if (e instanceof MealValidationError) return c.json({ error: e.message }, 409);
+      console.warn("createMeal falló:", (e as Error).message);
+      return c.json({ error: "No se pudo guardar la comida." }, 500);
     }
   });
 
@@ -94,7 +97,9 @@ export function nutritionRoutes(deps: AppDeps) {
       const updated = await updateMeal(deps.db, c.get("userId"), c.req.param("id"), parsed.data);
       return updated ? c.json(updated) : c.json({ error: "No encontrada" }, 404);
     } catch (e) {
-      return c.json({ error: (e as Error).message }, 409);
+      if (e instanceof MealValidationError) return c.json({ error: e.message }, 409);
+      console.warn("updateMeal falló:", (e as Error).message);
+      return c.json({ error: "No se pudo guardar la comida." }, 500);
     }
   });
 
