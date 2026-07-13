@@ -58,6 +58,9 @@ export default function PerfilScreen() {
   // cargado para detectar si el usuario lo editó (y recién ahí registrar una medición nueva).
   const backendUrl = useRef<string | null>(null);
   const loadedWeight = useRef<string>("");
+  // Si el usuario ya tocó el campo, no lo pisamos con el valor del backend (el fetch puede
+  // tardar hasta 15s y llegar después de que empezó a escribir).
+  const weightEdited = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -89,8 +92,11 @@ export default function PerfilScreen() {
       } catch {
         // offline / sin backend → nos quedamos con el peso local
       }
-      setWeightKg(weightStr);
-      loadedWeight.current = weightStr;
+      // No pisar lo que el usuario haya escrito mientras el fetch estaba en vuelo.
+      if (!weightEdited.current) {
+        setWeightKg(weightStr);
+        loadedWeight.current = weightStr;
+      }
     })();
   }, []);
 
@@ -164,7 +170,7 @@ export default function PerfilScreen() {
       </View>
       <View style={{ flexDirection: "row", gap: spacing.md }}>
         <View style={{ flex: 1 }}><Text style={label}>Edad (opc.)</Text><TextInput style={input} keyboardType="number-pad" value={age} onChangeText={setAge} placeholder="años" /></View>
-        <View style={{ flex: 1 }}><Text style={label}>Peso actual (última medición)</Text><TextInput style={input} keyboardType="numeric" value={weightKg} onChangeText={setWeightKg} placeholder="kg" /></View>
+        <View style={{ flex: 1 }}><Text style={label}>Peso actual (última medición)</Text><TextInput style={input} keyboardType="numeric" value={weightKg} onChangeText={(v) => { weightEdited.current = true; setWeightKg(v); }} placeholder="kg" /></View>
         <View style={{ flex: 1 }}><Text style={label}>Altura cm (opc.)</Text><TextInput style={input} keyboardType="number-pad" value={heightCm} onChangeText={setHeightCm} placeholder="cm" /></View>
       </View>
       <View><Text style={label}>Equipamiento gimnasio</Text><ChipGroup options={EQUIPMENT} selected={gymEquipment} onChange={setGymEquipment} /></View>
