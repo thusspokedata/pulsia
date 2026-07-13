@@ -58,6 +58,67 @@ test("el disclaimer médico está visible", async () => {
   expect(screen.getByText(/no reemplaza la evaluación de un médico/i)).toBeTruthy();
 });
 
+test("Subir ECG: si uploadEcg falla, muestra el motivo real del backend (no un texto genérico)", async () => {
+  (listEcg as jest.Mock).mockResolvedValue([]);
+  (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+    canceled: false,
+    assets: [{ uri: "file:///picked.pdf", name: "ecg.pdf", lastModified: 0 }],
+  });
+  (FileSystem.readAsStringAsync as jest.Mock).mockResolvedValue("base64data");
+  (uploadEcg as jest.Mock).mockRejectedValue(new Error("PDF demasiado grande (máx 10 MB)"));
+
+  render(<EcgScreen />);
+  await waitFor(() => expect(listEcg).toHaveBeenCalled());
+
+  await act(async () => {
+    fireEvent.press(screen.getByTestId("upload-ecg"));
+  });
+
+  await waitFor(() => expect(screen.getByText("PDF demasiado grande (máx 10 MB)")).toBeTruthy());
+});
+
+test("Subir ECG: si la subida excede el timeout (AbortError), muestra el aviso de timeout", async () => {
+  (listEcg as jest.Mock).mockResolvedValue([]);
+  (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+    canceled: false,
+    assets: [{ uri: "file:///picked.pdf", name: "ecg.pdf", lastModified: 0 }],
+  });
+  (FileSystem.readAsStringAsync as jest.Mock).mockResolvedValue("base64data");
+  // apiFetch aborta el request al vencer el timeout → un Error con name "AbortError".
+  const abort = new Error("Aborted");
+  abort.name = "AbortError";
+  (uploadEcg as jest.Mock).mockRejectedValue(abort);
+
+  render(<EcgScreen />);
+  await waitFor(() => expect(listEcg).toHaveBeenCalled());
+
+  await act(async () => {
+    fireEvent.press(screen.getByTestId("upload-ecg"));
+  });
+
+  await waitFor(() => expect(screen.getByText(/La subida tardó demasiado/)).toBeTruthy());
+});
+
+test("Subir ECG: si falla la lectura del archivo, avisa y no llama a uploadEcg", async () => {
+  (listEcg as jest.Mock).mockResolvedValue([]);
+  (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+    canceled: false,
+    assets: [{ uri: "file:///picked.pdf", name: "ecg.pdf", lastModified: 0 }],
+  });
+  (FileSystem.readAsStringAsync as jest.Mock).mockRejectedValue(new Error("read fail"));
+
+  render(<EcgScreen />);
+  await waitFor(() => expect(listEcg).toHaveBeenCalled());
+
+  await act(async () => {
+    fireEvent.press(screen.getByTestId("upload-ecg"));
+  });
+
+  await waitFor(() => expect(screen.getByText("No se pudo leer el archivo seleccionado.")).toBeTruthy());
+  // La lectura falló antes de la red: no se intenta subir.
+  expect(uploadEcg).not.toHaveBeenCalled();
+});
+
 test("Subir ECG: elige archivo → lee base64 → uploadEcg → pollea getEcg hasta done (muestra Analizando…)", async () => {
   (listEcg as jest.Mock)
     .mockResolvedValueOnce([]) // lista inicial vacía

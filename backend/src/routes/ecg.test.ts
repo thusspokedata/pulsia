@@ -70,6 +70,20 @@ test("POST /ecg con un PDF válido → 200 { id, status: 'pending' } y encola el
   expect(db._inserts.some((i: any) => i.table === ecgRecording)).toBe(true);
 });
 
+test("POST /ecg si falla el guardado en DB → 500 con { error } legible", async () => {
+  const db = fakeDb();
+  // insert() explota (p.ej. violación de FK del usuario): la ruta debe devolver 500 JSON,
+  // no propagar un 500 opaco de Hono.
+  db.insert = () => ({ values: () => { throw new Error("insert or update on table violates foreign key constraint"); } });
+  const app = createApp(deps(db) as any);
+  const res = await app.request("/ecg", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pdfBase64: PDF_BASE64 }),
+  });
+  expect(res.status).toBe(500);
+  const body = await res.json();
+  expect(typeof body.error).toBe("string");
+});
+
 test("POST /ecg con base64 que no es un PDF → 400", async () => {
   const app = createApp(deps(fakeDb()) as any);
   const res = await app.request("/ecg", {

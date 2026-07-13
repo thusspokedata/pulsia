@@ -128,12 +128,25 @@ export default function EcgScreen() {
       return;
     }
     if (picked.canceled || !picked.assets || picked.assets.length === 0) return;
+    let base64: string;
     try {
-      const base64 = await FileSystem.readAsStringAsync(picked.assets[0].uri, { encoding: "base64" });
+      base64 = await FileSystem.readAsStringAsync(picked.assets[0].uri, { encoding: "base64" });
+    } catch {
+      setAnalyzeError("No se pudo leer el archivo seleccionado.");
+      return;
+    }
+    try {
       const { id } = await uploadEcg(url, base64);
       setAnalyzingId(id);
-    } catch {
-      setAnalyzeError("No se pudo subir el ECG. Reintentá.");
+    } catch (e) {
+      // Mostramos el motivo real (mensaje del backend, timeout o error de red) en vez de un
+      // texto genérico, para que el usuario sepa qué pasó y se pueda diagnosticar.
+      const err = e as Error;
+      setAnalyzeError(
+        err.name === "AbortError"
+          ? "La subida tardó demasiado. Revisá tu conexión y reintentá."
+          : err.message || "No se pudo subir el ECG. Reintentá.",
+      );
     }
   }
 
