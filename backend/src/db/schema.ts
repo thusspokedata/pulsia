@@ -123,7 +123,9 @@ export const mealItem = pgTable("meal_item", {
   proteinG: real("protein_g").notNull(),
   carbsG: real("carbs_g").notNull(),
   fatG: real("fat_g").notNull(),
-});
+}, (t) => ({
+  byMeal: index("meal_item_meal_idx").on(t.mealId),
+}));
 
 export const mealRelations = relations(meal, ({ many }) => ({
   items: many(mealItem),
