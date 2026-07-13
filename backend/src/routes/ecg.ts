@@ -25,11 +25,28 @@ export function ecgRoutes(deps: AppDeps) {
   r.post("/", async (c) => {
     const userId = c.get("userId");
     const parsed = UploadSchema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
-    if (parsed.data.pdfBase64.length > 14_000_000) return c.json({ error: "PDF demasiado grande (máx 10 MB)" }, 400);
+    if (!parsed.success) {
+      console.warn("POST /ecg 400: body inválido", JSON.stringify(parsed.error.issues));
+      return c.json({ error: parsed.error.issues }, 400);
+    }
+    const b64len = parsed.data.pdfBase64.length;
+    if (b64len > 14_000_000) {
+      console.warn(`POST /ecg 400: base64 muy grande (${b64len} chars)`);
+      return c.json({ error: "PDF demasiado grande (máx 10 MB)" }, 400);
+    }
     const pdf = Buffer.from(parsed.data.pdfBase64, "base64");
-    if (!pdf.subarray(0, 5).toString("latin1").startsWith("%PDF")) return c.json({ error: "No parece un PDF" }, 400);
-    if (pdf.length > 10 * 1024 * 1024) return c.json({ error: "PDF demasiado grande (máx 10 MB)" }, 400);
+    // Log de diagnóstico: confirma que la request llegó y muestra tamaño + cabecera real del
+    // archivo (los primeros bytes), para ver de un vistazo si de verdad es un PDF (%PDF-...).
+    const head = pdf.subarray(0, 8).toString("latin1");
+    console.log(`POST /ecg: recibido pdf=${pdf.length}B header=${JSON.stringify(head)} (b64=${b64len})`);
+    if (!pdf.subarray(0, 5).toString("latin1").startsWith("%PDF")) {
+      console.warn(`POST /ecg 400: no arranca con %PDF (header=${JSON.stringify(head)})`);
+      return c.json({ error: "No parece un PDF" }, 400);
+    }
+    if (pdf.length > 10 * 1024 * 1024) {
+      console.warn(`POST /ecg 400: PDF ${pdf.length}B > 10MB`);
+      return c.json({ error: "PDF demasiado grande (máx 10 MB)" }, 400);
+    }
     let row;
     try {
       row = await insertEcg(deps.db, userId, pdf, "application/pdf");
@@ -39,6 +56,7 @@ export function ecgRoutes(deps: AppDeps) {
       console.error("error al guardar el ECG:", (e as Error).message);
       return c.json({ error: "No se pudo guardar el ECG en la base de datos." }, 500);
     }
+    console.log(`POST /ecg 200: guardado ${row.id} (pending), análisis encolado`);
     void runEcgAnalysis(deps, row.id, userId);
     return c.json({ id: row.id, status: "pending" });
   });
