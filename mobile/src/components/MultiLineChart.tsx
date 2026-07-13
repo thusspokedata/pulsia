@@ -31,13 +31,13 @@ export function MultiLineChart({ series, height = 176 }: { series: MultiLineChar
   const spanY = maxY - minY;
   const plotH = height - GT - GB;
   const plotW = W - GL - GR;
-  const single = all.length === 1;
+  const flatX = maxX === minX; // un solo punto O varios con el mismo timestamp
 
   const yPix = (v: number) => (spanY === 0 ? GT + plotH / 2 : GT + (1 - (v - minY) / spanY) * plotH);
-  const xPix = (x: number) => (single ? GL + plotW / 2 : GL + ((x - minX) / (maxX - minX || 1)) * plotW);
+  const xPix = (x: number) => (flatX ? GL + plotW / 2 : GL + ((x - minX) / (maxX - minX)) * plotW);
   const ticks = innerTicks(minY, maxY, 4);
 
-  const xLabels: { x: number; ts: number; anchor: "start" | "middle" | "end" }[] = single
+  const xLabels: { x: number; ts: number; anchor: "start" | "middle" | "end" }[] = flatX
     ? [{ x: xPix(minX), ts: minX, anchor: "middle" }]
     : [
         { x: GL, ts: minX, anchor: "start" },

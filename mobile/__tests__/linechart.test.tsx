@@ -30,6 +30,12 @@ test("con fechas irregulares, la etiqueta X del medio usa el punto medio TEMPORA
   expect(labelText("linechart-xmid")).not.toBe(shortDate(d2)); // no es "2 ene"
 });
 
+test("varios puntos con el mismo timestamp (X plano) → una sola etiqueta X, sin duplicar el medio", async () => {
+  const d = new Date(2026, 0, 10).getTime();
+  await render(<LineChart data={[{ x: d, y: 70 }, { x: d, y: 72 }, { x: d, y: 71 }]} unit="kg" />);
+  expect(screen.queryByTestId("linechart-xmid")).toBeNull(); // no hay etiqueta del medio en X plano
+});
+
 test("sin datos muestra el placeholder", async () => {
   await render(<LineChart data={[]} />);
   expect(screen.getByText("Sin datos todavía.")).toBeTruthy();

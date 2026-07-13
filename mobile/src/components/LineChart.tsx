@@ -22,15 +22,15 @@ export function LineChart({ data, height = 176, unit = "" }: { data: XY[]; heigh
   const spanY = maxY - minY;
   const plotH = height - GT - GB;
   const plotW = W - GL - GR;
-  const single = data.length === 1;
+  const flatX = maxX === minX; // un solo punto O varios con el mismo timestamp (p.ej. mismo día)
 
   const yPix = (v: number) => (spanY === 0 ? GT + plotH / 2 : GT + (1 - (v - minY) / spanY) * plotH);
-  const xPix = (x: number) => (single ? GL + plotW / 2 : GL + ((x - minX) / (maxX - minX || 1)) * plotW);
+  const xPix = (x: number) => (flatX ? GL + plotW / 2 : GL + ((x - minX) / (maxX - minX)) * plotW);
 
   const pts = data.map((d) => ({ x: xPix(d.x), y: yPix(d.y) }));
   const ticks = innerTicks(minY, maxY, 4);
 
-  const xLabels: { x: number; ts: number; anchor: "start" | "middle" | "end"; testID?: string }[] = single
+  const xLabels: { x: number; ts: number; anchor: "start" | "middle" | "end"; testID?: string }[] = flatX
     ? [{ x: xPix(minX), ts: minX, anchor: "middle" }]
     : [
         { x: GL, ts: minX, anchor: "start" },
