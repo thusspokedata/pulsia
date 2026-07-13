@@ -1,3 +1,8 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { unlink } from "node:fs/promises";
+
 // Detección simple: un PDF cifrado tiene un diccionario /Encrypt en el trailer.
 export function isEncryptedPdf(pdf: Buffer): boolean {
   return pdf.toString("latin1").includes("/Encrypt");
@@ -10,22 +15,32 @@ export async function maybeDecryptPdf(pdf: Buffer, password?: string | null): Pr
   if (!password) {
     throw new Error("El PDF está protegido con contraseña. Guardá tu contraseña de Kardia en Configuración.");
   }
-  const proc = Bun.spawn(["qpdf", `--password=${password}`, "--decrypt", "-", "-"], {
-    stdin: pdf, stdout: "pipe", stderr: "pipe",
-  });
-  const killer = setTimeout(() => { try { proc.kill(); } catch {} }, 30_000);
-  let out: ArrayBuffer, err: string, code: number;
+  // qpdf NO soporta leer de stdin ("outfile may be - ...; reading from stdin is not supported").
+  // Antes le pasábamos "-" como input y fallaba con `open -: No such file or directory`, que se
+  // reportaba como "¿contraseña incorrecta?" y despistaba. Escribimos el PDF a un archivo temporal
+  // y le pasamos ese path como input; la salida sí puede ir a stdout ("-").
+  const tmpPath = join(tmpdir(), `ecg-${randomUUID()}.pdf`);
+  await Bun.write(tmpPath, pdf);
   try {
-    [out, err, code] = await Promise.all([
-      new Response(proc.stdout).arrayBuffer(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ]);
+    const proc = Bun.spawn(["qpdf", `--password=${password}`, "--decrypt", tmpPath, "-"], {
+      stdout: "pipe", stderr: "pipe",
+    });
+    const killer = setTimeout(() => { try { proc.kill(); } catch {} }, 30_000);
+    let out: ArrayBuffer, err: string, code: number;
+    try {
+      [out, err, code] = await Promise.all([
+        new Response(proc.stdout).arrayBuffer(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+    } finally {
+      clearTimeout(killer); // limpiar siempre, incluso si la recolección de stdout/stderr rechaza
+    }
+    if (code !== 0) {
+      throw new Error("No se pudo descifrar el PDF (¿contraseña incorrecta?): " + err.slice(0, 200));
+    }
+    return Buffer.from(out);
   } finally {
-    clearTimeout(killer); // limpiar siempre, incluso si la recolección de stdout/stderr rechaza
+    await unlink(tmpPath).catch(() => {}); // el temp (PDF cifrado) se borra siempre
   }
-  if (code !== 0) {
-    throw new Error("No se pudo descifrar el PDF (¿contraseña incorrecta?): " + err.slice(0, 200));
-  }
-  return Buffer.from(out);
 }
