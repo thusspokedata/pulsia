@@ -41,7 +41,14 @@
         }
       ],
       "expo-secure-store",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "La app usa tus fotos para reconocer alimentos.",
+          "cameraPermission": "La app usa la cámara para fotografiar alimentos y sus etiquetas."
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true
