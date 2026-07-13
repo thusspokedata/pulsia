@@ -23,7 +23,7 @@
 
 **Backend**
 - Modify `backend/src/db/schema.ts` — tablas `food`, `meal`, `mealItem` + relations.
-- Create `backend/src/db/migrations/0010_*.sql` — generada por drizzle-kit.
+- Create `backend/drizzle/0010_*.sql` — generada por drizzle-kit.
 - Create `backend/src/nutrition/repository.ts` — CRUD foods + meals con snapshot.
 - Create `backend/src/nutrition/repository.test.ts`.
 - Create `backend/src/ai/nutrition.ts` — `buildFoodPrompt`.
@@ -453,12 +453,12 @@ git commit -S -m "feat(backend): tablas food/meal/meal_item en el schema drizzle
 ### Task 4: Migración 0010
 
 **Files:**
-- Create: `backend/src/db/migrations/0010_*.sql` (nombre autogenerado)
+- Create: `backend/drizzle/0010_*.sql` (nombre autogenerado)
 
 - [ ] **Step 1: Generate migration**
 
 Run: `cd backend && bun run db:generate`
-Expected: crea `src/db/migrations/0010_<nombre>.sql` con `CREATE TABLE food/meal/meal_item` + índices + FKs, y actualiza `meta/`.
+Expected: crea `backend/drizzle/0010_<nombre>.sql` con `CREATE TABLE food/meal/meal_item` + índices + FKs, y actualiza `meta/`.
 
 - [ ] **Step 2: Inspect the SQL**
 
@@ -473,7 +473,7 @@ Expected: aplica 0010 sin error.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add backend/src/db/migrations/
+git add backend/drizzle/
 git commit -S -m "feat(backend): migración 0010 (food, meal, meal_item)"
 ```
 
@@ -668,6 +668,8 @@ export async function deleteMeal(db: Db, userId: string, id: string): Promise<bo
   return rows.length > 0;
 }
 ```
+
+> Nota: en el código final `createMeal` y `updateMeal` envuelven sus escrituras (insert de la comida + ítems, o update + delete + re-insert) en `db.transaction`, para que un fallo no deje una comida sin ítems.
 
 - [ ] **Step 4: Run test to verify it passes**
 

@@ -19,6 +19,10 @@ test("FoodExtractionSchema rechaza kcal negativas", () => {
   expect(FoodExtractionSchema.safeParse({ ...extraction, kcal: -1 }).success).toBe(false);
 });
 
+test("FoodExtractionSchema rechaza un nombre en blanco (trim)", () => {
+  expect(FoodExtractionSchema.safeParse({ ...extraction, name: "   " }).success).toBe(false);
+});
+
 test("unitWeightG puede ser null (líquido/a granel)", () => {
   const liquid = { ...extraction, name: "Leche", basis: "per_100ml", unitWeightG: null };
   expect(FoodExtractionSchema.parse(liquid).unitWeightG).toBeNull();

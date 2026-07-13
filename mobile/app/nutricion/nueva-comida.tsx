@@ -44,7 +44,7 @@ export default function NuevaComidaScreen() {
     setError(null);
     if (rows.length === 0) { setError("Agregá al menos un alimento."); return; }
     if (rows.some((r) => r.quantity <= 0)) { setError("Las cantidades tienen que ser mayores a 0."); return; }
-    if (!baseUrl.current) return;
+    if (!baseUrl.current) { setError("No se pudo conectar con el servidor."); return; }
     setSaving(true);
     try {
       await createMeal(baseUrl.current, buildMealInput({ eatenAt: eatenAt.current, mealType, note, rows }));

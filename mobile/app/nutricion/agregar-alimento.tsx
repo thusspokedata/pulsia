@@ -34,7 +34,7 @@ export default function AgregarAlimentoScreen() {
     if (res.canceled || !res.assets[0]?.base64) return;
     const asset = res.assets[0];
     const mime = asset.mimeType && ["image/jpeg", "image/png", "image/webp"].includes(asset.mimeType) ? asset.mimeType : "image/jpeg";
-    if (!baseUrl.current) return;
+    if (!baseUrl.current) { setError("No se pudo conectar con el servidor."); return; }
     setAnalyzing(true);
     try {
       const ex = await extractFood(baseUrl.current, asset.base64!, mime);
@@ -64,7 +64,7 @@ export default function AgregarAlimentoScreen() {
     if (form.unitWeightG.trim() !== "" && (input.unitWeightG == null || Number.isNaN(input.unitWeightG) || input.unitWeightG <= 0)) {
       setError("El peso por unidad tiene que ser un número mayor a 0."); return;
     }
-    if (!baseUrl.current) return;
+    if (!baseUrl.current) { setError("No se pudo conectar con el servidor."); return; }
     setSaving(true);
     try {
       await createFood(baseUrl.current, input);

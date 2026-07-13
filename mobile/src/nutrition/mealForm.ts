@@ -18,18 +18,24 @@ export function itemPreview(food: Food, quantity: number, unit: QuantityUnit) {
 }
 
 export function mealTotals(rows: MealRow[]) {
-  return rows.reduce(
+  const sum = rows.reduce(
     (acc, r) => {
       const m = foodMacrosForQuantity(r.food, r.quantity, r.unit);
-      return {
-        kcal: acc.kcal + m.kcal,
-        protein_g: Math.round((acc.protein_g + m.protein_g) * 10) / 10,
-        carbs_g: Math.round((acc.carbs_g + m.carbs_g) * 10) / 10,
-        fat_g: Math.round((acc.fat_g + m.fat_g) * 10) / 10,
-      };
+      acc.kcal += m.kcal;
+      acc.protein_g += m.protein_g;
+      acc.carbs_g += m.carbs_g;
+      acc.fat_g += m.fat_g;
+      return acc;
     },
     { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
   );
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  return {
+    kcal: sum.kcal,
+    protein_g: round1(sum.protein_g),
+    carbs_g: round1(sum.carbs_g),
+    fat_g: round1(sum.fat_g),
+  };
 }
 
 export function buildMealInput(args: {

@@ -172,7 +172,7 @@ export function foodMacrosForQuantity(
   - `POST /nutrition/foods/extract` — body `{ imageBase64, mediaType }`. Valida mediaType (`image/jpeg|png|webp`) + tamaño (≤ ~10 MB). Llama `ai.extractFood` **sincrónico** y devuelve el `FoodExtraction` (**no guarda nada**). En error de IA → 502 con mensaje claro.
   - `POST /nutrition/foods` — crea el alimento en el catálogo desde el `FoodInput` confirmado/editado. Devuelve el `Food`.
   - `GET /nutrition/foods` — lista el catálogo del usuario (para el selector).
-  - `PATCH /nutrition/foods/:id` — editar (corregir un alimento). `DELETE /nutrition/foods/:id` — borrar (los `meal_item` snapshotados sobreviven vía `food_id set null`).
+  - `DELETE /nutrition/foods/:id` — borrar (los `meal_item` snapshotados sobreviven vía `food_id set null`). **v1: no hay `PATCH` de catálogo** — corregir un alimento = borrarlo y volver a cargarlo (edición vía `PATCH` diferida a v2).
   - `POST /nutrition/meals` — crea la comida + ítems (server hace el snapshot). Devuelve el `Meal`.
   - `GET /nutrition/meals?from=<ms>&to=<ms>` — comidas del rango (para la vista del día). Ordenadas por `eaten_at`.
   - `PATCH /nutrition/meals/:id` — editar (horario/tipo/nota/ítems; re-snapshotea). `DELETE /nutrition/meals/:id`.
@@ -183,7 +183,7 @@ export function foodMacrosForQuantity(
 - **Cliente API:** `mobile/src/api/nutrition.ts` (extract, foods CRUD, meals CRUD).
 - **Vista del día (tab):** navegador de fechas `◀ día ▶` + "Hoy" (mismo patrón que Progreso, mediodía como referencia, sin días futuros) → lista de **comidas de ese día ordenadas por hora** (hora · tipo · alimentos · kcal de la comida · nota si hay). Arriba, **totales del día** (kcal + proteína/carbos/grasa). Botones: **"Nueva comida"** y **"Agregar alimento"** (catálogo).
 - **Agregar alimento (`app/nutricion/agregar-alimento.tsx`):** `ImagePicker` (cámara o galería) → base64 → `POST /foods/extract` con spinner "Analizando…" → **form de revisión** con todos los campos editables (nombre, sólido/líquido, kcal + 3 macros por 100, peso por unidad, badge `label`/`estimate`) → confirmar → `POST /foods`. El mismo form, abierto vacío, permite **carga manual sin foto**.
-- **Catálogo (`app/nutricion/catalogo.tsx`):** lista/buscador de alimentos; tap → editar (`PATCH`) o borrar (`DELETE`).
+- **Catálogo (`app/nutricion/catalogo.tsx`):** lista/buscador de alimentos; tap → borrar (`DELETE`). Editar un alimento = borrarlo y volver a agregarlo (no hay `PATCH` en v1).
 - **Nueva comida (`app/nutricion/nueva-comida.tsx`):** horario (default: ahora) + tipo opcional → agregar alimentos **desde el catálogo** (buscador); por cada ítem, cantidad + selector de unidad (unidad/g/ml según `basis` y `unitWeightG`); **preview en vivo** de kcal/macros por ítem y **total** (vía `foodMacrosForQuantity`, la misma función pura del backend) → nota opcional → guardar (`POST /meals`).
 
 ### 4. Extensibilidad / hooks para los sub-proyectos futuros

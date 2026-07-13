@@ -72,15 +72,6 @@ export async function getFood(db: Db, userId: string, id: string): Promise<Food 
   return row ? toFood(row) : null;
 }
 
-export async function updateFood(db: Db, userId: string, id: string, input: FoodInput): Promise<Food | null> {
-  const rows = await db.update(food).set({
-    name: input.name, basis: input.basis, kcal: input.kcal,
-    proteinG: input.protein_g, carbsG: input.carbs_g, fatG: input.fat_g,
-    unitWeightG: input.unitWeightG, source: input.source,
-  }).where(and(eq(food.id, id), eq(food.userId, userId))).returning();
-  return rows[0] ? toFood(rows[0]) : null;
-}
-
 export async function deleteFood(db: Db, userId: string, id: string): Promise<boolean> {
   const rows = await db.delete(food).where(and(eq(food.id, id), eq(food.userId, userId))).returning({ id: food.id });
   return rows.length > 0;
@@ -96,7 +87,9 @@ export async function createMeal(db: Db, userId: string, input: MealInput): Prom
     const [mealRow] = await tx.insert(meal).values({
       userId, eatenAt: input.eatenAt, mealType: input.mealType ?? null, note: input.note ?? null,
     }).returning();
-    const itemRows = await tx.insert(mealItem).values(snapped.map((s) => ({ ...s, mealId: mealRow.id }))).returning();
+    const itemRows = snapped.length
+      ? await tx.insert(mealItem).values(snapped.map((s) => ({ ...s, mealId: mealRow.id }))).returning()
+      : [];
     return toMeal(mealRow, itemRows);
   });
 }
@@ -128,7 +121,7 @@ export async function updateMeal(db: Db, userId: string, id: string, input: Meal
     await tx.update(meal).set({ eatenAt: input.eatenAt, mealType: input.mealType ?? null, note: input.note ?? null })
       .where(eq(meal.id, id));
     await tx.delete(mealItem).where(eq(mealItem.mealId, id));
-    await tx.insert(mealItem).values(snapped.map((s) => ({ ...s, mealId: id })));
+    if (snapped.length) await tx.insert(mealItem).values(snapped.map((s) => ({ ...s, mealId: id })));
   });
   const [row] = await db.select().from(meal).where(eq(meal.id, id));
   const items = await db.select().from(mealItem).where(eq(mealItem.mealId, id));

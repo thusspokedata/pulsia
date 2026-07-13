@@ -28,7 +28,7 @@ export default function NutricionScreen() {
   const load = useCallback(async (off: number) => {
     const url = await getBackendUrl(); baseUrl.current = url;
     const { from, to } = dayBounds(off);
-    try { setMeals(await listMeals(url, from, to)); } catch (e) { setError((e as Error).message); }
+    try { setMeals(await listMeals(url, from, to)); setError(null); } catch (e) { setError((e as Error).message); }
   }, []);
 
   useFocusEffect(useCallback(() => { void load(offset); }, [load, offset]));

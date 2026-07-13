@@ -18,19 +18,13 @@ export async function createFood(baseUrl: string, input: FoodInput): Promise<Foo
 
 export async function listFoods(baseUrl: string): Promise<Food[]> {
   const res = await apiFetch(baseUrl, "/nutrition/foods");
-  if (!res.ok) throw new Error("No se pudo cargar el catálogo.");
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo cargar el catálogo."));
   return (await res.json()) as Food[];
-}
-
-export async function updateFood(baseUrl: string, id: string, input: FoodInput): Promise<Food> {
-  const res = await apiFetch(baseUrl, `/nutrition/foods/${id}`, { method: "PATCH", body: JSON.stringify(input) });
-  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo actualizar el alimento."));
-  return (await res.json()) as Food;
 }
 
 export async function deleteFood(baseUrl: string, id: string): Promise<void> {
   const res = await apiFetch(baseUrl, `/nutrition/foods/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("No se pudo borrar el alimento.");
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo borrar el alimento."));
 }
 
 export async function createMeal(baseUrl: string, input: MealInput): Promise<Meal> {
@@ -41,13 +35,13 @@ export async function createMeal(baseUrl: string, input: MealInput): Promise<Mea
 
 export async function listMeals(baseUrl: string, from: number, to: number): Promise<Meal[]> {
   const res = await apiFetch(baseUrl, `/nutrition/meals?from=${from}&to=${to}`);
-  if (!res.ok) throw new Error("No se pudieron cargar las comidas.");
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudieron cargar las comidas."));
   return (await res.json()) as Meal[];
 }
 
 export async function deleteMeal(baseUrl: string, id: string): Promise<void> {
   const res = await apiFetch(baseUrl, `/nutrition/meals/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("No se pudo borrar la comida.");
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo borrar la comida."));
 }
 
 async function errorMessage(res: Response, fallback: string): Promise<string> {

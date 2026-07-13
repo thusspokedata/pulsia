@@ -15,7 +15,7 @@ export default function CatalogoScreen() {
   const load = useCallback(async () => {
     const url = await getBackendUrl();
     baseUrl.current = url;
-    try { setFoods(await listFoods(url)); } catch (e) { setError((e as Error).message); }
+    try { setFoods(await listFoods(url)); setError(null); } catch (e) { setError((e as Error).message); }
   }, []);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
@@ -42,7 +42,8 @@ export default function CatalogoScreen() {
       <TextInput value={q} onChangeText={setQ} placeholder="Buscar…" placeholderTextColor={colors.icon}
         style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.md, color: colors.text }} />
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
-      {filtered.length === 0 && <Text style={{ color: colors.textMuted }}>Todavía no hay alimentos. Agregá el primero con una foto.</Text>}
+      {foods.length === 0 && <Text style={{ color: colors.textMuted }}>Todavía no hay alimentos. Agregá el primero con una foto.</Text>}
+      {foods.length > 0 && filtered.length === 0 && <Text style={{ color: colors.textMuted }}>No se encontraron alimentos para "{q}".</Text>}
       {filtered.map((f) => (
         <View key={f.id} style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <View style={{ flex: 1 }}>

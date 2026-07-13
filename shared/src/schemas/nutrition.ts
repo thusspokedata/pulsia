@@ -20,7 +20,7 @@ const macrosPer100 = {
 
 // Lo que la IA extrae de la foto (output estructurado). Sin id/userId.
 export const FoodExtractionSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().trim().min(1),
   basis: FoodBasisSchema,
   ...macrosPer100,
   // "1 unidad" en la base del alimento (g si per_100g, ml si per_100ml). null si no es contable.
