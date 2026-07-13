@@ -1,11 +1,12 @@
 import { z } from "zod";
 import type { Program, TrainingProfile } from "@pulsia/shared";
 import Anthropic from "@anthropic-ai/sdk";
-import { ProgramSchema, EcgAnalysisSchema } from "@pulsia/shared";
+import { ProgramSchema, EcgAnalysisSchema, FoodExtractionSchema } from "@pulsia/shared";
 import { buildGenerationPrompt } from "./prompt";
 import { buildOneOffPrompt, type OneOffArgs } from "./oneoff";
 import { buildMemoryUpdatePrompt } from "./memory";
 import { buildEcgPrompt } from "./ecg";
+import { buildFoodPrompt } from "./nutrition";
 
 export interface AiClient {
   generateProgram(input: {
@@ -30,6 +31,11 @@ export interface AiClient {
     apiKey: string;
     historySummary?: string;
   }): Promise<import("@pulsia/shared").EcgAnalysis>;
+  extractFood?(input: {
+    imageBase64: string;
+    mediaType: string;
+    apiKey: string;
+  }): Promise<import("@pulsia/shared").FoodExtraction>;
 }
 
 export class AnthropicAiClient implements AiClient {
@@ -128,5 +134,39 @@ export class AnthropicAiClient implements AiClient {
       ? analysis.interpretation
       : `${analysis.interpretation}\n\n⚠️ ${DISCLAIMER}`;
     return { ...analysis, interpretation };
+  }
+
+  async extractFood({ imageBase64, mediaType, apiKey }: {
+    imageBase64: string;
+    mediaType: string;
+    apiKey: string;
+  }) {
+    const client = new Anthropic({ apiKey });
+    const { $schema, ...inputSchema } = z.toJSONSchema(FoodExtractionSchema) as Record<string, unknown>;
+    const tool = {
+      name: "return_food",
+      description: "Devuelve los datos nutricionales del alimento de la foto.",
+      input_schema: inputSchema as any,
+    };
+    const res = await client.messages.create({
+      model: "claude-opus-4-8",
+      max_tokens: 1024,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "return_food" },
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: mediaType as any, data: imageBase64 } },
+            { type: "text", text: buildFoodPrompt() },
+          ],
+        },
+      ],
+    });
+    const block = res.content.find((b) => b.type === "tool_use");
+    if (!block || block.type !== "tool_use") {
+      throw new Error("La IA no devolvió los datos del alimento.");
+    }
+    return FoodExtractionSchema.parse(block.input);
   }
 }
