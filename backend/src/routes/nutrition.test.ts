@@ -92,3 +92,24 @@ test("POST /nutrition/meals 409 si el foodId no es del usuario", async () => {
   });
   expect(res.status).toBe(409);
 });
+
+const MEAL_ID = "22222222-2222-4222-8222-222222222222";
+const validMealBody = JSON.stringify({ eatenAt: 1, items: [{ foodId: FOOD_ID, quantity: 1, quantityUnit: "unit" }] });
+
+// El contrato nuevo: PATCH /meals ya no pre-chequea getMealOwner (evita fuga 409 vs 404);
+// updateMeal devuelve null para comida inexistente o de otro usuario → 404 uniforme.
+test("PATCH /nutrition/meals/:id 404 si la comida no existe", async () => {
+  const app = createApp(deps(fakeDb())); // sin meals → getMealOwner null → updateMeal null
+  const res = await app.request(`/nutrition/meals/${MEAL_ID}`, {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: validMealBody,
+  });
+  expect(res.status).toBe(404);
+});
+
+test("PATCH /nutrition/meals/:id 404 si la comida es de otro usuario (no filtra existencia)", async () => {
+  const app = createApp(deps(fakeDb({ meals: [{ userId: "otro-usuario" }] })));
+  const res = await app.request(`/nutrition/meals/${MEAL_ID}`, {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: validMealBody,
+  });
+  expect(res.status).toBe(404); // NO 409 — mismo status que "no existe"
+});

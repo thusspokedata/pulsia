@@ -36,7 +36,7 @@ Todo mergeado en `main`, backend deployado, **APK vc9 released + activado**. Spe
 - **Comidas** (dominio 2 del roadmap): la infra de subir archivos de ECG **la habilita** (foto + IA visión).
 - **Coros / push a relojes** (decidido futuro): nombres Coros + mandar el programa al reloj (Garmin Training API / Coros Training Hub API, requieren partner/dev). Los nombres del catálogo ya son estándar.
 - **Datos de salud — Next:** nutrición numérica, auto-captura vía Health Connect/Garmin/Coros, HRV + readiness score compuesto.
-- **Menores:** borrar los usuarios ops (`ops-releases@pulsia.internal`, `ops-releases-vc9@pulsia.internal`); mostrar el último peso de Progreso en el perfil; upsert-por-día de métricas diarias.
+- **Menores:** borrar los usuarios ops (`ops-releases@pulsia.internal`, `ops-releases-vc9@pulsia.internal`); upsert-por-día de métricas diarias.
 
 ## 0a. Estado de la sesión 2026-07-10/11 (sesión PREVIA — la MÁS reciente es §0-hoy, arriba)
 
@@ -91,7 +91,7 @@ El usuario quiere a futuro (a) que los nombres coincidan con Coros cuando use Co
 
 ### Backlog / próximo
 - **Datos de salud — Next** (un agente hizo un catálogo priorizado, ver la conversación): seguir con **nutrición** numérica (protein/kcal/agua como métricas, antes del pipeline de fotos — fase 2); a futuro **auto-captura** vía Health Connect / Garmin / Coros (las métricas manuales se auto-llenan, misma tabla) + HRV + **readiness score** compuesto (norte [[athlete-ai-memory]]); check-in subjetivo ya está.
-- **Menores pendientes:** upsert-por-día de métricas diarias (hoy append); escalas 1–5 con selector visual; extender el selector de fecha a composición corporal/presión.
+- **Menores pendientes:** mostrar el último peso de Progreso EN el perfil (se relabeló el campo pero no se muestra el valor live); upsert-por-día de métricas diarias (hoy append); escalas 1–5 con selector visual; extender el selector de fecha a composición corporal/presión.
 - **Batch 3 — rutinas propias:** constructor manual (elegir ejercicios del catálogo + series/reps/descanso). Feature grande, spec propio.
 - **Fases de progreso:** Fase 2 = comidas (foto + IA); Fase 3 = respiración/relajación + coach proactivo.
 
