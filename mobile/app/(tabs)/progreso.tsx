@@ -8,11 +8,11 @@ import { LineChart } from "../../src/components/LineChart";
 import { MultiLineChart } from "../../src/components/MultiLineChart";
 import { YearHeatmap } from "../../src/components/YearHeatmap";
 import { BarChart } from "../../src/components/BarChart";
-import { buildReadingFromForm, buildBpReadingFromForm, buildReadingForTypes, type BpForm } from "../../src/session/metricForm";
+import { buildReadingFromForm, buildBpReadingFromForm, buildReadingForTypes, valuesForDay, type BpForm } from "../../src/session/metricForm";
 import { dayAtNoon, dayLabel } from "../../src/session/metricDate";
 import { availableYears } from "../../src/session/heatmap";
 import { buildDailyMinutes } from "../../src/session/weeklyBars";
-import { BODY_METRIC_TYPES, ACTIVITY_METRIC_TYPES, SUBJECTIVE_METRIC_TYPES, METRIC_LABELS, METRIC_UNITS, type MetricType, type BodyMetric, type PerformanceTrends } from "@pulsia/shared";
+import { BODY_METRIC_TYPES, ACTIVITY_METRIC_TYPES, SUBJECTIVE_METRIC_TYPES, FLOW_METRIC_TYPES, METRIC_LABELS, METRIC_UNITS, type MetricType, type BodyMetric, type PerformanceTrends } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
 const BP_COLOR_SYSTOLIC = colors.accent;
@@ -41,10 +41,19 @@ export default function ProgresoScreen() {
   const [subjForm, setSubjForm] = useState<Partial<Record<MetricType, string>>>({});
   const [actSaving, setActSaving] = useState(false);
   const [subjSaving, setSubjSaving] = useState(false);
+  // Cache de las series de flujo (actividad + subjetivo) para precargar el registro diario por día.
+  const [flowSeries, setFlowSeries] = useState<Partial<Record<MetricType, BodyMetric[]>>>({});
 
   async function loadSeries(url: string, type: MetricType) {
     const data = await getMetricSeries(url, type);
     if (latestReqRef.current === type) setSeries(data);
+  }
+
+  async function loadFlowSeries(url: string) {
+    const entries = await Promise.all(
+      FLOW_METRIC_TYPES.map((t) => getMetricSeries(url, t).then((s) => [t, s] as const)),
+    );
+    setFlowSeries(Object.fromEntries(entries));
   }
 
   async function loadBpSeries(url: string) {
@@ -67,7 +76,7 @@ export default function ProgresoScreen() {
       try {
         setLatest(await getLatestMetrics(url));
         setPerf(await getPerformance(url));
-        await Promise.all([loadSeries(url, selected), loadBpSeries(url)]);
+        await Promise.all([loadSeries(url, selected), loadBpSeries(url), loadFlowSeries(url)]);
       } catch { setError("No se pudo cargar el progreso"); }
       try {
         const sess = await getSessions(url);
@@ -77,6 +86,14 @@ export default function ProgresoScreen() {
       } catch { setError((prev) => prev ?? "No se pudo cargar el historial de entrenamientos"); }
     })();
   }, []);
+
+  // Al cambiar de día (o al cargarse las series), precargar el registro diario con lo que ya
+  // haya registrado ESE día, en vez de dejar los inputs vacíos.
+  useEffect(() => {
+    const noon = dayAtNoon(dayOffset, Date.now());
+    setActForm(valuesForDay(flowSeries, ACTIVITY_METRIC_TYPES, noon));
+    setSubjForm(valuesForDay(flowSeries, SUBJECTIVE_METRIC_TYPES, noon));
+  }, [dayOffset, flowSeries]);
 
   async function onSelect(type: MetricType) {
     setSelected(type);
@@ -166,7 +183,7 @@ export default function ProgresoScreen() {
     }
     try {
       setLatest(await getLatestMetrics(url));
-      await loadSeries(url, selected);
+      await Promise.all([loadSeries(url, selected), loadFlowSeries(url)]);
     } catch {
       setError((prev) => prev ?? "Guardado. No se pudo refrescar la vista.");
     }
