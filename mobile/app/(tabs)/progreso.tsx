@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ScrollView, View, Text, TextInput, Pressable } from "react-native";
 import { getBackendUrl } from "../../src/storage/config";
 import { getLatestMetrics, getMetricSeries, postReading } from "../../src/api/metrics";
@@ -19,6 +19,25 @@ import { colors, radius, spacing } from "../../src/theme/tokens";
 const BP_COLOR_SYSTOLIC = colors.accent;
 const BP_COLOR_DIASTOLIC = "#3B6FA0";
 const BP_COLOR_PULSE = "#C77D3A";
+
+// Cada bloque de la pantalla en una tarjeta, para diferenciar bien las secciones.
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View
+      style={{
+        backgroundColor: colors.surface,
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        borderColor: colors.border,
+        padding: spacing.lg,
+        gap: spacing.md,
+      }}
+    >
+      <Text style={{ fontSize: 16, fontWeight: "600", color: colors.text }}>{title}</Text>
+      {children}
+    </View>
+  );
+}
 
 export default function ProgresoScreen() {
   const baseUrl = useRef<string | null>(null);
@@ -200,179 +219,184 @@ export default function ProgresoScreen() {
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
       {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
 
-      <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text }}>Valores actuales</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-        {[...BODY_METRIC_TYPES, ...ACTIVITY_METRIC_TYPES, ...SUBJECTIVE_METRIC_TYPES].map((t) => (
-          <View key={t} style={{ backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, minWidth: 100 }}>
-            <Text style={{ color: colors.textMuted, fontSize: 12 }}>{METRIC_LABELS[t]}</Text>
-            <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600" }}>
-              {latest[t] ? `${latest[t]!.value} ${METRIC_UNITS[t]}` : "—"}
-            </Text>
+      <Section title="Valores actuales">
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+          {[...BODY_METRIC_TYPES, ...ACTIVITY_METRIC_TYPES, ...SUBJECTIVE_METRIC_TYPES].map((t) => (
+            <View key={t} style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.md, padding: spacing.md, minWidth: 100 }}>
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>{METRIC_LABELS[t]}</Text>
+              <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600" }}>
+                {latest[t] ? `${latest[t]!.value} ${METRIC_UNITS[t]}` : "—"}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </Section>
+
+      <Section title="Tendencia">
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
+          {[...BODY_METRIC_TYPES, ...ACTIVITY_METRIC_TYPES, ...SUBJECTIVE_METRIC_TYPES].map((t) => (
+            <Pressable key={t} onPress={() => onSelect(t)}
+              style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: selected === t ? colors.accent : colors.surfaceMuted }}>
+              <Text style={{ color: selected === t ? "#fff" : colors.text, fontSize: 13 }}>{METRIC_LABELS[t]}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <LineChart data={chartData} unit={METRIC_UNITS[selected]} />
+      </Section>
+
+      <Section title="Presión arterial">
+        <View style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.md, padding: spacing.md }}>
+          <Text style={{ color: colors.textMuted, fontSize: 12 }}>Actual</Text>
+          <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600" }}>{bpCurrent}</Text>
+        </View>
+        <MultiLineChart
+          series={[
+            { label: "Alta", color: BP_COLOR_SYSTOLIC, unit: "mmHg", data: bpSystolicSeries.map((m) => ({ x: m.measuredAt, y: m.value })) },
+            { label: "Baja", color: BP_COLOR_DIASTOLIC, unit: "mmHg", data: bpDiastolicSeries.map((m) => ({ x: m.measuredAt, y: m.value })) },
+            { label: "Pulso", color: BP_COLOR_PULSE, unit: "bpm", data: bpPulseSeries.map((m) => ({ x: m.measuredAt, y: m.value })) },
+          ]}
+        />
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ color: colors.text }}>Alta (mmHg)</Text>
+          <TextInput
+            keyboardType="decimal-pad" value={bpForm.alta ?? ""}
+            onChangeText={(v) => setBpForm((f) => ({ ...f, alta: v }))}
+            placeholder="—" placeholderTextColor={colors.textMuted}
+            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 8, width: 100, color: colors.text }}
+          />
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ color: colors.text }}>Baja (mmHg)</Text>
+          <TextInput
+            keyboardType="decimal-pad" value={bpForm.baja ?? ""}
+            onChangeText={(v) => setBpForm((f) => ({ ...f, baja: v }))}
+            placeholder="—" placeholderTextColor={colors.textMuted}
+            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 8, width: 100, color: colors.text }}
+          />
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ color: colors.text }}>Pulso (bpm)</Text>
+          <TextInput
+            keyboardType="decimal-pad" value={bpForm.pulso ?? ""}
+            onChangeText={(v) => setBpForm((f) => ({ ...f, pulso: v }))}
+            placeholder="—" placeholderTextColor={colors.textMuted}
+            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 8, width: 100, color: colors.text }}
+          />
+        </View>
+        <Pressable onPress={onSaveBp} disabled={bpSaving}
+          style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: bpSaving ? 0.6 : 1 }}>
+          <Text style={{ color: "#fff", fontWeight: "600" }}>{bpSaving ? "Guardando…" : "Guardar presión"}</Text>
+        </Pressable>
+      </Section>
+
+      <Section title="Registro diario">
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surfaceMuted, borderRadius: radius.md, padding: spacing.sm }}>
+          <Pressable testID="date-prev" onPress={() => setDayOffset((o) => o + 1)}
+            style={{ paddingVertical: 6, paddingHorizontal: 14, borderRadius: radius.sm, backgroundColor: colors.surface }}>
+            <Text style={{ color: colors.text, fontSize: 18 }}>◀</Text>
+          </Pressable>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+            <Text testID="date-label" style={{ color: colors.text, fontWeight: "600" }}>{dayLabel(dayOffset, Date.now())}</Text>
+            {dayOffset !== 0 ? (
+              <Pressable testID="date-hoy" onPress={() => setDayOffset(0)}
+                style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.accent }}>
+                <Text style={{ color: "#fff", fontSize: 12 }}>Hoy</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          <Pressable testID="date-next" onPress={() => setDayOffset((o) => Math.max(0, o - 1))} disabled={dayOffset === 0}
+            style={{ paddingVertical: 6, paddingHorizontal: 14, borderRadius: radius.sm, backgroundColor: colors.surface, opacity: dayOffset === 0 ? 0.4 : 1 }}>
+            <Text style={{ color: colors.text, fontSize: 18 }}>▶</Text>
+          </Pressable>
+        </View>
+
+        <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>Actividad y recuperación</Text>
+        {ACTIVITY_METRIC_TYPES.map((t) => (
+          <View key={t} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={{ color: colors.text }}>{METRIC_LABELS[t]} ({METRIC_UNITS[t]})</Text>
+            <TextInput
+              testID={`act-input-${t}`}
+              keyboardType="numeric" value={actForm[t] ?? ""}
+              onChangeText={(v) => setActForm((f) => ({ ...f, [t]: v }))}
+              placeholder="—" placeholderTextColor={colors.textMuted}
+              style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 8, width: 100, color: colors.text }}
+            />
           </View>
         ))}
-      </View>
+        <Pressable testID="act-save" onPress={() => onSaveFlow(actForm, ACTIVITY_METRIC_TYPES, setActForm, setActSaving)} disabled={actSaving}
+          style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: actSaving ? 0.6 : 1 }}>
+          <Text style={{ color: "#fff", fontWeight: "600" }}>{actSaving ? "Guardando…" : "Guardar actividad"}</Text>
+        </Pressable>
 
-      <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text }}>Tendencia</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
-        {[...BODY_METRIC_TYPES, ...ACTIVITY_METRIC_TYPES, ...SUBJECTIVE_METRIC_TYPES].map((t) => (
-          <Pressable key={t} onPress={() => onSelect(t)}
-            style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: selected === t ? colors.accent : colors.surface }}>
-            <Text style={{ color: selected === t ? "#fff" : colors.text, fontSize: 13 }}>{METRIC_LABELS[t]}</Text>
-          </Pressable>
+        <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>Cómo te sentís</Text>
+        {SUBJECTIVE_METRIC_TYPES.map((t) => (
+          <View key={t} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={{ color: colors.text }}>{METRIC_LABELS[t]} ({METRIC_UNITS[t]})</Text>
+            <TextInput
+              testID={`subj-input-${t}`}
+              keyboardType="numeric" value={subjForm[t] ?? ""}
+              onChangeText={(v) => setSubjForm((f) => ({ ...f, [t]: v }))}
+              placeholder="—" placeholderTextColor={colors.textMuted}
+              style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 8, width: 100, color: colors.text }}
+            />
+          </View>
         ))}
-      </View>
-      <LineChart data={chartData} unit={METRIC_UNITS[selected]} />
-
-      <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text }}>Presión arterial</Text>
-      <View style={{ backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md }}>
-        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Actual</Text>
-        <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600" }}>{bpCurrent}</Text>
-      </View>
-      <MultiLineChart
-        series={[
-          { label: "Alta", color: BP_COLOR_SYSTOLIC, unit: "mmHg", data: bpSystolicSeries.map((m) => ({ x: m.measuredAt, y: m.value })) },
-          { label: "Baja", color: BP_COLOR_DIASTOLIC, unit: "mmHg", data: bpDiastolicSeries.map((m) => ({ x: m.measuredAt, y: m.value })) },
-          { label: "Pulso", color: BP_COLOR_PULSE, unit: "bpm", data: bpPulseSeries.map((m) => ({ x: m.measuredAt, y: m.value })) },
-        ]}
-      />
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Text style={{ color: colors.text }}>Alta (mmHg)</Text>
-        <TextInput
-          keyboardType="decimal-pad" value={bpForm.alta ?? ""}
-          onChangeText={(v) => setBpForm((f) => ({ ...f, alta: v }))}
-          placeholder="—" placeholderTextColor={colors.textMuted}
-          style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 8, width: 100, color: colors.text }}
-        />
-      </View>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Text style={{ color: colors.text }}>Baja (mmHg)</Text>
-        <TextInput
-          keyboardType="decimal-pad" value={bpForm.baja ?? ""}
-          onChangeText={(v) => setBpForm((f) => ({ ...f, baja: v }))}
-          placeholder="—" placeholderTextColor={colors.textMuted}
-          style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 8, width: 100, color: colors.text }}
-        />
-      </View>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Text style={{ color: colors.text }}>Pulso (bpm)</Text>
-        <TextInput
-          keyboardType="decimal-pad" value={bpForm.pulso ?? ""}
-          onChangeText={(v) => setBpForm((f) => ({ ...f, pulso: v }))}
-          placeholder="—" placeholderTextColor={colors.textMuted}
-          style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 8, width: 100, color: colors.text }}
-        />
-      </View>
-      <Pressable onPress={onSaveBp} disabled={bpSaving}
-        style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: bpSaving ? 0.6 : 1 }}>
-        <Text style={{ color: "#fff", fontWeight: "600" }}>{bpSaving ? "Guardando…" : "Guardar presión"}</Text>
-      </Pressable>
-
-      <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text }}>Registro diario</Text>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.sm }}>
-        <Pressable testID="date-prev" onPress={() => setDayOffset((o) => o + 1)}
-          style={{ paddingVertical: 6, paddingHorizontal: 14, borderRadius: radius.sm, backgroundColor: colors.bg }}>
-          <Text style={{ color: colors.text, fontSize: 18 }}>◀</Text>
+        <Pressable testID="subj-save" onPress={() => onSaveFlow(subjForm, SUBJECTIVE_METRIC_TYPES, setSubjForm, setSubjSaving)} disabled={subjSaving}
+          style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: subjSaving ? 0.6 : 1 }}>
+          <Text style={{ color: "#fff", fontWeight: "600" }}>{subjSaving ? "Guardando…" : "Guardar"}</Text>
         </Pressable>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-          <Text testID="date-label" style={{ color: colors.text, fontWeight: "600" }}>{dayLabel(dayOffset, Date.now())}</Text>
-          {dayOffset !== 0 ? (
-            <Pressable testID="date-hoy" onPress={() => setDayOffset(0)}
-              style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.accent }}>
-              <Text style={{ color: "#fff", fontSize: 12 }}>Hoy</Text>
-            </Pressable>
-          ) : null}
-        </View>
-        <Pressable testID="date-next" onPress={() => setDayOffset((o) => Math.max(0, o - 1))} disabled={dayOffset === 0}
-          style={{ paddingVertical: 6, paddingHorizontal: 14, borderRadius: radius.sm, backgroundColor: colors.bg, opacity: dayOffset === 0 ? 0.4 : 1 }}>
-          <Text style={{ color: colors.text, fontSize: 18 }}>▶</Text>
-        </Pressable>
-      </View>
-
-      <Text style={{ fontSize: 16, fontWeight: "600", color: colors.text }}>Actividad y recuperación</Text>
-      {ACTIVITY_METRIC_TYPES.map((t) => (
-        <View key={t} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ color: colors.text }}>{METRIC_LABELS[t]} ({METRIC_UNITS[t]})</Text>
-          <TextInput
-            testID={`act-input-${t}`}
-            keyboardType="numeric" value={actForm[t] ?? ""}
-            onChangeText={(v) => setActForm((f) => ({ ...f, [t]: v }))}
-            placeholder="—" placeholderTextColor={colors.textMuted}
-            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 8, width: 100, color: colors.text }}
-          />
-        </View>
-      ))}
-      <Pressable testID="act-save" onPress={() => onSaveFlow(actForm, ACTIVITY_METRIC_TYPES, setActForm, setActSaving)} disabled={actSaving}
-        style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: actSaving ? 0.6 : 1 }}>
-        <Text style={{ color: "#fff", fontWeight: "600" }}>{actSaving ? "Guardando…" : "Guardar actividad"}</Text>
-      </Pressable>
-
-      <Text style={{ fontSize: 16, fontWeight: "600", color: colors.text }}>Cómo te sentís</Text>
-      {SUBJECTIVE_METRIC_TYPES.map((t) => (
-        <View key={t} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ color: colors.text }}>{METRIC_LABELS[t]} ({METRIC_UNITS[t]})</Text>
-          <TextInput
-            testID={`subj-input-${t}`}
-            keyboardType="numeric" value={subjForm[t] ?? ""}
-            onChangeText={(v) => setSubjForm((f) => ({ ...f, [t]: v }))}
-            placeholder="—" placeholderTextColor={colors.textMuted}
-            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 8, width: 100, color: colors.text }}
-          />
-        </View>
-      ))}
-      <Pressable testID="subj-save" onPress={() => onSaveFlow(subjForm, SUBJECTIVE_METRIC_TYPES, setSubjForm, setSubjSaving)} disabled={subjSaving}
-        style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: subjSaving ? 0.6 : 1 }}>
-        <Text style={{ color: "#fff", fontWeight: "600" }}>{subjSaving ? "Guardando…" : "Guardar"}</Text>
-      </Pressable>
+      </Section>
 
       {perf && perf.perExercise.length > 0 ? (
-        <>
-          <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text }}>Fuerza (1RM estimado)</Text>
+        <Section title="Fuerza (1RM estimado)">
           {perf.perExercise.slice(0, 5).map((e) => (
             <View key={e.catalogId} style={{ gap: spacing.xs }}>
               <Text style={{ color: colors.text }}>{e.garminName}</Text>
               <LineChart data={e.points.map((p) => ({ x: p.measuredAt, y: p.est1RM }))} unit="kg" />
             </View>
           ))}
-        </>
+        </Section>
       ) : null}
 
       {perf && perf.volumeSeries.length > 0 ? (
-        <>
-          <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text }}>Volumen por sesión</Text>
+        <Section title="Volumen por sesión">
           <LineChart data={perf.volumeSeries.map((v) => ({ x: v.measuredAt, y: v.volumeKg }))} unit="kg" />
-        </>
+        </Section>
       ) : null}
 
-      <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text }}>Registrar medición</Text>
-      {BODY_METRIC_TYPES.map((t) => (
-        <View key={t} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={{ color: colors.text }}>{METRIC_LABELS[t]} ({METRIC_UNITS[t]})</Text>
-          <TextInput
-            keyboardType="decimal-pad" value={form[t] ?? ""}
-            onChangeText={(v) => setForm((f) => ({ ...f, [t]: v }))}
-            placeholder="—" placeholderTextColor={colors.textMuted}
-            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 8, width: 100, color: colors.text }}
-          />
-        </View>
-      ))}
-      <Pressable onPress={onSave} disabled={saving}
-        style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
-        <Text style={{ color: "#fff", fontWeight: "600" }}>{saving ? "Guardando…" : "Guardar medición"}</Text>
-      </Pressable>
+      <Section title="Registrar medición">
+        {BODY_METRIC_TYPES.map((t) => (
+          <View key={t} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={{ color: colors.text }}>{METRIC_LABELS[t]} ({METRIC_UNITS[t]})</Text>
+            <TextInput
+              keyboardType="decimal-pad" value={form[t] ?? ""}
+              onChangeText={(v) => setForm((f) => ({ ...f, [t]: v }))}
+              placeholder="—" placeholderTextColor={colors.textMuted}
+              style={{ borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: 8, width: 100, color: colors.text }}
+            />
+          </View>
+        ))}
+        <Pressable onPress={onSave} disabled={saving}
+          style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
+          <Text style={{ color: "#fff", fontWeight: "600" }}>{saving ? "Guardando…" : "Guardar medición"}</Text>
+        </Pressable>
+      </Section>
 
-      <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text }}>Días entrenados</Text>
-      {sessions.length === 0 ? (
-        <Text style={{ color: colors.textMuted }}>Todavía no hay entrenamientos registrados.</Text>
-      ) : (
-        <YearHeatmap sessions={sessions} year={heatmapYear ?? new Date().getFullYear()} onSelectYear={setHeatmapYear} />
-      )}
+      <Section title="Días entrenados">
+        {sessions.length === 0 ? (
+          <Text style={{ color: colors.textMuted }}>Todavía no hay entrenamientos registrados.</Text>
+        ) : (
+          <YearHeatmap sessions={sessions} year={heatmapYear ?? new Date().getFullYear()} onSelectYear={setHeatmapYear} />
+        )}
+      </Section>
 
-      <Text style={{ fontSize: 18, fontWeight: "600", color: colors.text }}>Tiempo por día (últimas 4 semanas)</Text>
-      {sessions.length === 0 ? (
-        <Text style={{ color: colors.textMuted }}>Todavía no hay entrenamientos registrados.</Text>
-      ) : (
-        <BarChart data={buildDailyMinutes(sessions, Date.now())} />
-      )}
+      <Section title="Tiempo por día (últimas 4 semanas)">
+        {sessions.length === 0 ? (
+          <Text style={{ color: colors.textMuted }}>Todavía no hay entrenamientos registrados.</Text>
+        ) : (
+          <BarChart data={buildDailyMinutes(sessions, Date.now())} />
+        )}
+      </Section>
     </ScrollView>
   );
 }
