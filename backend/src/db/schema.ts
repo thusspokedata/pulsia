@@ -84,6 +84,54 @@ export const ecgRecording = pgTable("ecg_recording", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const food = pgTable("food", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  name: text("name").notNull(),
+  basis: text("basis").notNull(), // 'per_100g' | 'per_100ml'
+  kcal: real("kcal").notNull(),
+  proteinG: real("protein_g").notNull(),
+  carbsG: real("carbs_g").notNull(),
+  fatG: real("fat_g").notNull(),
+  unitWeightG: real("unit_weight_g"), // nullable
+  source: text("source").notNull(), // 'label' | 'estimate'
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  byUser: index("food_user_idx").on(t.userId),
+}));
+
+export const meal = pgTable("meal", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  eatenAt: bigint("eaten_at", { mode: "number" }).notNull(), // epoch ms
+  mealType: text("meal_type"), // nullable
+  note: text("note"), // nullable
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  byUserTime: index("meal_user_time_idx").on(t.userId, t.eatenAt),
+}));
+
+export const mealItem = pgTable("meal_item", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  mealId: uuid("meal_id").references(() => meal.id, { onDelete: "cascade" }).notNull(),
+  foodId: uuid("food_id").references(() => food.id, { onDelete: "set null" }), // el snapshot sobrevive
+  foodName: text("food_name").notNull(),
+  quantity: real("quantity").notNull(),
+  quantityUnit: text("quantity_unit").notNull(),
+  grams: real("grams").notNull(),
+  kcal: real("kcal").notNull(),
+  proteinG: real("protein_g").notNull(),
+  carbsG: real("carbs_g").notNull(),
+  fatG: real("fat_g").notNull(),
+});
+
+export const mealRelations = relations(meal, ({ many }) => ({
+  items: many(mealItem),
+}));
+export const mealItemRelations = relations(mealItem, ({ one }) => ({
+  meal: one(meal, { fields: [mealItem.mealId], references: [meal.id] }),
+}));
+
 export const exerciseCatalog = pgTable("exercise_catalog", {
   id: text("id").primaryKey(),
   garminCategory: text("garmin_category").notNull(),
