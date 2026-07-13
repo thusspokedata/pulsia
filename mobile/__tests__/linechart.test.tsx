@@ -7,15 +7,15 @@ function labelText(testID: string): string {
   return (screen.getByTestId(testID).props.children as any).props.children;
 }
 
-test("muestra etiquetas de mín/máx del eje Y con la unidad", async () => {
+test("muestra los valores mín/máx del eje Y", async () => {
   await render(<LineChart data={[{ x: 0, y: 60 }, { x: 1, y: 120 }]} unit="bpm" />);
-  expect(labelText("linechart-max")).toBe("120 bpm");
-  expect(labelText("linechart-min")).toBe("60 bpm");
+  expect(labelText("linechart-max")).toBe("120");
+  expect(labelText("linechart-min")).toBe("60");
 });
 
 test("sin variación (mín == máx) solo muestra el máx", async () => {
   await render(<LineChart data={[{ x: 0, y: 80 }, { x: 1, y: 80 }]} unit="kg" />);
-  expect(labelText("linechart-max")).toBe("80 kg");
+  expect(labelText("linechart-max")).toBe("80");
   expect(screen.queryByTestId("linechart-min")).toBeNull();
 });
 

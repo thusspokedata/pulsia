@@ -1,38 +1,87 @@
 import { View, Text } from "react-native";
-import Svg, { Path, Circle, Text as SvgText } from "react-native-svg";
-import { scalePoints, toPath, type XY } from "../session/chart";
+import Svg, { Path, Circle, Line, G, Text as SvgText } from "react-native-svg";
+import { toPath, type XY } from "../session/chart";
+import { innerTicks, shortDate } from "../session/chartAxis";
 import { colors, spacing } from "../theme/tokens";
 
 function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-export function LineChart({ data, height = 160, unit = "" }: { data: XY[]; height?: number; unit?: string }) {
-  const width = 320;
+const W = 320;
+const GL = 34; // gutter izquierdo (etiquetas del eje Y)
+const GR = 8; // gutter derecho
+const GT = 14; // gutter superior (deja lugar a la unidad)
+const GB = 16; // gutter inferior (fechas del eje X)
+
+// Gráfico de línea con ejes: gridlines + valores en Y, fechas en X. Marca fina en color de acento.
+export function LineChart({ data, height = 176, unit = "" }: { data: XY[]; height?: number; unit?: string }) {
   if (data.length === 0) {
     return <Text style={{ color: colors.textMuted, padding: spacing.md }}>Sin datos todavía.</Text>;
   }
-  const pts = scalePoints(data, { width, height, padding: 16 });
-  // Etiquetas del eje Y (mín/máx del dato) con `unit`, para poder leer la escala de la curva.
   const ys = data.map((d) => d.y);
-  const maxY = Math.max(...ys);
-  const minY = Math.min(...ys);
-  const suffix = unit ? ` ${unit}` : "";
+  const xs = data.map((d) => d.x);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const spanY = maxY - minY;
+  const plotH = height - GT - GB;
+  const plotW = W - GL - GR;
+  const single = data.length === 1;
+
+  const yPix = (v: number) => (spanY === 0 ? GT + plotH / 2 : GT + (1 - (v - minY) / spanY) * plotH);
+  const xPix = (x: number) => (single ? GL + plotW / 2 : GL + ((x - minX) / (maxX - minX || 1)) * plotW);
+
+  const pts = data.map((d) => ({ x: xPix(d.x), y: yPix(d.y) }));
+  const ticks = innerTicks(minY, maxY, 4);
+
+  const xLabels: { x: number; ts: number; anchor: "start" | "middle" | "end" }[] = single
+    ? [{ x: xPix(minX), ts: minX, anchor: "middle" }]
+    : [
+        { x: GL, ts: minX, anchor: "start" },
+        ...(data.length >= 3
+          ? [{ x: GL + plotW / 2, ts: data[Math.floor(data.length / 2)].x, anchor: "middle" as const }]
+          : []),
+        { x: W - GR, ts: maxX, anchor: "end" },
+      ];
+
   return (
     <View>
-      <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
+      <Svg width="100%" height={height} viewBox={`0 0 ${W} ${height}`}>
+        {unit ? <SvgText x={2} y={9} fontSize={10} fill={colors.textMuted}>{unit}</SvgText> : null}
+
+        <G>
+          <Line x1={GL} y1={yPix(maxY)} x2={W - GR} y2={yPix(maxY)} stroke={colors.border} strokeWidth={1} />
+          <SvgText testID="linechart-max" x={GL - 4} y={yPix(maxY) + 3} fontSize={10} fill={colors.textMuted} textAnchor="end">
+            {fmt(maxY)}
+          </SvgText>
+        </G>
+
+        {ticks.map((v, i) => (
+          <G key={`tick-${i}`}>
+            <Line x1={GL} y1={yPix(v)} x2={W - GR} y2={yPix(v)} stroke={colors.border} strokeWidth={1} opacity={0.5} />
+            <SvgText x={GL - 4} y={yPix(v) + 3} fontSize={10} fill={colors.textMuted} textAnchor="end">{fmt(v)}</SvgText>
+          </G>
+        ))}
+
+        {spanY !== 0 ? (
+          <G>
+            <Line x1={GL} y1={yPix(minY)} x2={W - GR} y2={yPix(minY)} stroke={colors.border} strokeWidth={1} />
+            <SvgText testID="linechart-min" x={GL - 4} y={yPix(minY) + 3} fontSize={10} fill={colors.textMuted} textAnchor="end">
+              {fmt(minY)}
+            </SvgText>
+          </G>
+        ) : null}
+
+        {xLabels.map((l, i) => (
+          <SvgText key={`x-${i}`} x={l.x} y={height - 3} fontSize={10} fill={colors.textMuted} textAnchor={l.anchor}>
+            {shortDate(l.ts)}
+          </SvgText>
+        ))}
+
         <Path d={toPath(pts)} stroke={colors.accent} strokeWidth={2} fill="none" />
         {pts.map((p, i) => (
-          <Circle key={i} cx={p.x} cy={p.y} r={3} fill={colors.accent} />
+          <Circle key={`p-${i}`} cx={p.x} cy={p.y} r={3} fill={colors.accent} />
         ))}
-        <SvgText testID="linechart-max" x={width - 2} y={12} fontSize={11} fill={colors.textMuted} textAnchor="end">
-          {`${fmt(maxY)}${suffix}`}
-        </SvgText>
-        {maxY !== minY ? (
-          <SvgText testID="linechart-min" x={width - 2} y={height - 4} fontSize={11} fill={colors.textMuted} textAnchor="end">
-            {`${fmt(minY)}${suffix}`}
-          </SvgText>
-        ) : null}
       </Svg>
     </View>
   );

@@ -15,9 +15,10 @@ import { buildDailyMinutes } from "../../src/session/weeklyBars";
 import { BODY_METRIC_TYPES, ACTIVITY_METRIC_TYPES, SUBJECTIVE_METRIC_TYPES, FLOW_METRIC_TYPES, METRIC_LABELS, METRIC_UNITS, type MetricType, type BodyMetric, type PerformanceTrends } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
+// Trío categórico distinguible (incl. daltonismo): teal (acento), azul, ámbar.
 const BP_COLOR_SYSTOLIC = colors.accent;
-const BP_COLOR_DIASTOLIC = "#2E6E8E";
-const BP_COLOR_PULSE = "#6B8E4E";
+const BP_COLOR_DIASTOLIC = "#3B6FA0";
+const BP_COLOR_PULSE = "#C77D3A";
 
 export default function ProgresoScreen() {
   const baseUrl = useRef<string | null>(null);
