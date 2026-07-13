@@ -19,7 +19,7 @@ export async function listEcg(db: Db, userId: string) {
 export async function priorEcgFor(db: Db, userId: string) {
   return db.query.ecgRecording.findMany({
     where: and(eq(ecgRecording.userId, userId), eq(ecgRecording.status, "done")),
-    columns: { recordedAt: true, kardiaVerdict: true },
+    columns: { recordedAt: true, kardiaVerdict: true, avgHr: true, createdAt: true },
   });
 }
 export async function deleteEcg(db: Db, id: string) {
