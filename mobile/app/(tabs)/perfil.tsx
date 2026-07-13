@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScrollView, View, Text, TextInput, Pressable } from "react-native";
 import { router } from "expo-router";
 import { TrainingProfileSchema, type TrainingProfile } from "@pulsia/shared";
 import { getProfile, setProfile } from "../../src/storage/profile";
+import { getBackendUrl } from "../../src/storage/config";
+import { getLatestMetrics, postReading } from "../../src/api/metrics";
+import { weightToRecordOnSave } from "../../src/profile/weightMeasurement";
 import { ChipGroup } from "../../src/components/ChipGroup";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
@@ -51,23 +54,44 @@ export default function PerfilScreen() {
   const [limitations, setLimitations] = useState("");
   const [saved, setSaved] = useState<TrainingProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // El peso es fuente única: se muestra la última medición del backend. Guardamos el valor
+  // cargado para detectar si el usuario lo editó (y recién ahí registrar una medición nueva).
+  const backendUrl = useRef<string | null>(null);
+  const loadedWeight = useRef<string>("");
 
   useEffect(() => {
-    getProfile().then((p) => {
-      if (!p) return;
-      setExperience(p.experience);
-      setGoal(p.goal);
-      setSex(p.sex);
-      setDaysPerWeek(String(p.daysPerWeek));
-      setSessionMinutes(String(p.sessionMinutes));
-      setAge(p.age != null ? String(p.age) : "");
-      setWeightKg(p.weightKg != null ? String(p.weightKg) : "");
-      setHeightCm(p.heightCm != null ? String(p.heightCm) : "");
-      setGymEquipment(p.gymEquipment);
-      setHomeEquipment(p.homeEquipment);
-      setLimitations(p.limitations.join("\n"));
-      setSaved(p);
-    });
+    (async () => {
+      const p = await getProfile();
+      if (p) {
+        setExperience(p.experience);
+        setGoal(p.goal);
+        setSex(p.sex);
+        setDaysPerWeek(String(p.daysPerWeek));
+        setSessionMinutes(String(p.sessionMinutes));
+        setAge(p.age != null ? String(p.age) : "");
+        setHeightCm(p.heightCm != null ? String(p.heightCm) : "");
+        setGymEquipment(p.gymEquipment);
+        setHomeEquipment(p.homeEquipment);
+        setLimitations(p.limitations.join("\n"));
+        setSaved(p);
+      }
+      // Peso: preferimos la última medición weight_kg del backend (misma fuente que "Valores
+      // actuales" en Progreso). Fallback al peso del perfil local si no hay backend/medición.
+      let weightStr = p?.weightKg != null ? String(p.weightKg) : "";
+      try {
+        const url = await getBackendUrl();
+        backendUrl.current = url;
+        if (url) {
+          const latest = await getLatestMetrics(url);
+          const w = latest.weight_kg?.value;
+          if (w != null) weightStr = String(w);
+        }
+      } catch {
+        // offline / sin backend → nos quedamos con el peso local
+      }
+      setWeightKg(weightStr);
+      loadedWeight.current = weightStr;
+    })();
   }, []);
 
   async function onSave() {
@@ -96,6 +120,19 @@ export default function PerfilScreen() {
       setError(null);
     } catch {
       setError("No se pudo guardar el perfil. Intentá de nuevo.");
+      return;
+    }
+    // Si el peso cambió respecto de lo cargado, registrarlo como medición weight_kg (fuente única).
+    // No rompemos el guardado del perfil si esto falla (offline, etc.).
+    const url = backendUrl.current;
+    const toRecord = weightToRecordOnSave(loadedWeight.current, weightKg);
+    if (url && toRecord != null) {
+      try {
+        await postReading(url, { measuredAt: Date.now(), entries: [{ metricType: "weight_kg", value: toRecord }] });
+        loadedWeight.current = String(toRecord);
+      } catch {
+        setError("Perfil guardado, pero no se pudo registrar la medición de peso.");
+      }
     }
   }
 
@@ -127,7 +164,7 @@ export default function PerfilScreen() {
       </View>
       <View style={{ flexDirection: "row", gap: spacing.md }}>
         <View style={{ flex: 1 }}><Text style={label}>Edad (opc.)</Text><TextInput style={input} keyboardType="number-pad" value={age} onChangeText={setAge} placeholder="años" /></View>
-        <View style={{ flex: 1 }}><Text style={label}>Peso inicial (se actualiza con tus mediciones)</Text><TextInput style={input} keyboardType="numeric" value={weightKg} onChangeText={setWeightKg} placeholder="kg" /></View>
+        <View style={{ flex: 1 }}><Text style={label}>Peso actual (última medición)</Text><TextInput style={input} keyboardType="numeric" value={weightKg} onChangeText={setWeightKg} placeholder="kg" /></View>
         <View style={{ flex: 1 }}><Text style={label}>Altura cm (opc.)</Text><TextInput style={input} keyboardType="number-pad" value={heightCm} onChangeText={setHeightCm} placeholder="cm" /></View>
       </View>
       <View><Text style={label}>Equipamiento gimnasio</Text><ChipGroup options={EQUIPMENT} selected={gymEquipment} onChange={setGymEquipment} /></View>
