@@ -22,3 +22,8 @@ export function innerTicks(min: number, max: number, count = 4): number[] {
 export function shortDate(ts: number): string {
   return new Date(ts).toLocaleDateString("es-AR", { day: "numeric", month: "short" });
 }
+
+// Formato de valores del eje Y: entero tal cual, si no un decimal.
+export function fmtNum(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}

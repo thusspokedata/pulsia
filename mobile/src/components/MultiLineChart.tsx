@@ -1,7 +1,7 @@
 import { View, Text } from "react-native";
 import Svg, { Path, Circle, Line, G, Text as SvgText } from "react-native-svg";
 import { toPath, type XY } from "../session/chart";
-import { innerTicks, shortDate } from "../session/chartAxis";
+import { innerTicks, shortDate, fmtNum } from "../session/chartAxis";
 import { colors, spacing } from "../theme/tokens";
 
 export interface MultiLineChartSeries {
@@ -9,10 +9,6 @@ export interface MultiLineChartSeries {
   color: string;
   unit?: string;
   data: XY[];
-}
-
-function fmt(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
 const W = 320;
@@ -58,7 +54,7 @@ export function MultiLineChart({ series, height = 176 }: { series: MultiLineChar
               x1={GL} y1={yPix(v)} x2={W - GR} y2={yPix(v)}
               stroke={colors.border} strokeWidth={1} opacity={v === maxY || v === minY ? 1 : 0.5}
             />
-            <SvgText x={GL - 4} y={yPix(v) + 3} fontSize={10} fill={colors.textMuted} textAnchor="end">{fmt(v)}</SvgText>
+            <SvgText x={GL - 4} y={yPix(v) + 3} fontSize={10} fill={colors.textMuted} textAnchor="end">{fmtNum(v)}</SvgText>
           </G>
         ))}
 

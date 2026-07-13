@@ -1,12 +1,8 @@
 import { View, Text } from "react-native";
 import Svg, { Path, Circle, Line, G, Text as SvgText } from "react-native-svg";
 import { toPath, type XY } from "../session/chart";
-import { innerTicks, shortDate } from "../session/chartAxis";
+import { innerTicks, shortDate, fmtNum } from "../session/chartAxis";
 import { colors, spacing } from "../theme/tokens";
-
-function fmt(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
-}
 
 const W = 320;
 const GL = 34; // gutter izquierdo (etiquetas del eje Y)
@@ -34,12 +30,12 @@ export function LineChart({ data, height = 176, unit = "" }: { data: XY[]; heigh
   const pts = data.map((d) => ({ x: xPix(d.x), y: yPix(d.y) }));
   const ticks = innerTicks(minY, maxY, 4);
 
-  const xLabels: { x: number; ts: number; anchor: "start" | "middle" | "end" }[] = single
+  const xLabels: { x: number; ts: number; anchor: "start" | "middle" | "end"; testID?: string }[] = single
     ? [{ x: xPix(minX), ts: minX, anchor: "middle" }]
     : [
         { x: GL, ts: minX, anchor: "start" },
         ...(data.length >= 3
-          ? [{ x: GL + plotW / 2, ts: data[Math.floor(data.length / 2)].x, anchor: "middle" as const }]
+          ? [{ x: GL + plotW / 2, ts: minX + (maxX - minX) / 2, anchor: "middle" as const, testID: "linechart-xmid" }]
           : []),
         { x: W - GR, ts: maxX, anchor: "end" },
       ];
@@ -52,14 +48,14 @@ export function LineChart({ data, height = 176, unit = "" }: { data: XY[]; heigh
         <G>
           <Line x1={GL} y1={yPix(maxY)} x2={W - GR} y2={yPix(maxY)} stroke={colors.border} strokeWidth={1} />
           <SvgText testID="linechart-max" x={GL - 4} y={yPix(maxY) + 3} fontSize={10} fill={colors.textMuted} textAnchor="end">
-            {fmt(maxY)}
+            {fmtNum(maxY)}
           </SvgText>
         </G>
 
         {ticks.map((v, i) => (
           <G key={`tick-${i}`}>
             <Line x1={GL} y1={yPix(v)} x2={W - GR} y2={yPix(v)} stroke={colors.border} strokeWidth={1} opacity={0.5} />
-            <SvgText x={GL - 4} y={yPix(v) + 3} fontSize={10} fill={colors.textMuted} textAnchor="end">{fmt(v)}</SvgText>
+            <SvgText x={GL - 4} y={yPix(v) + 3} fontSize={10} fill={colors.textMuted} textAnchor="end">{fmtNum(v)}</SvgText>
           </G>
         ))}
 
@@ -67,13 +63,13 @@ export function LineChart({ data, height = 176, unit = "" }: { data: XY[]; heigh
           <G>
             <Line x1={GL} y1={yPix(minY)} x2={W - GR} y2={yPix(minY)} stroke={colors.border} strokeWidth={1} />
             <SvgText testID="linechart-min" x={GL - 4} y={yPix(minY) + 3} fontSize={10} fill={colors.textMuted} textAnchor="end">
-              {fmt(minY)}
+              {fmtNum(minY)}
             </SvgText>
           </G>
         ) : null}
 
         {xLabels.map((l, i) => (
-          <SvgText key={`x-${i}`} x={l.x} y={height - 3} fontSize={10} fill={colors.textMuted} textAnchor={l.anchor}>
+          <SvgText key={`x-${i}`} testID={l.testID} x={l.x} y={height - 3} fontSize={10} fill={colors.textMuted} textAnchor={l.anchor}>
             {shortDate(l.ts)}
           </SvgText>
         ))}
