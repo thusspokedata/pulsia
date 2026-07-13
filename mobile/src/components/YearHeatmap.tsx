@@ -8,13 +8,13 @@ const CELL = 12;
 const GAP = 3;
 const STEP = CELL + GAP;
 
-// 4 tonos de acento (level 1→4) + un gris muy claro para level 0 / celdas vacías.
+// Rampa de teal claro→oscuro (level 1→4, más actividad = más oscuro) + gris para level 0 / vacías.
 const LEVEL_COLORS: Record<0 | 1 | 2 | 3 | 4, string> = {
   0: colors.border,
-  1: "#F0B79A",
-  2: "#E68A5C",
-  3: colors.accent,
-  4: "#993C1D",
+  1: "#CFE9EA",
+  2: "#86C6CB",
+  3: "#2E959D",
+  4: colors.accent,
 };
 
 function cellColor(cell: HeatmapCell): string {
