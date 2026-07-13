@@ -13,6 +13,7 @@ import { appReleaseRoutes } from "./routes/appRelease";
 import { metricsRoutes } from "./routes/metrics";
 import { ecgRoutes } from "./routes/ecg";
 import { progressRoutes } from "./routes/progress";
+import { nutritionRoutes } from "./routes/nutrition";
 import { downloadRoutes } from "./routes/download";
 import { SINGLE_USER_ID } from "./constants";
 
@@ -65,6 +66,8 @@ export function createApp(deps: AppDeps) {
   app.use("/ecg/*", auth);
   app.use("/progress", auth);
   app.use("/progress/*", auth);
+  app.use("/nutrition", auth);
+  app.use("/nutrition/*", auth);
   app.route("/settings", settingsRoutes(deps));
   app.route("/programs", programsRoutes(deps));
   app.route("/profile", profileRoutes(deps));
@@ -74,5 +77,6 @@ export function createApp(deps: AppDeps) {
   app.route("/metrics", metricsRoutes(deps));
   app.route("/ecg", ecgRoutes(deps));
   app.route("/progress", progressRoutes(deps));
+  app.route("/nutrition", nutritionRoutes(deps));
   return app;
 }
