@@ -64,3 +64,28 @@ export function buildBpReadingFromForm(form: BpForm, measuredAt: number): BuildR
   }
   return { reading: entries.length ? { measuredAt, entries } : null, invalid };
 }
+
+// Precarga del "Registro diario": dado el cache de series por tipo y el mediodía del día
+// seleccionado, devuelve los valores ya registrados ESE día (como strings, para los inputs).
+// Match por día calendario [00:00, 24h). Si hay más de un punto en el día, toma el último.
+export function valuesForDay(
+  seriesByType: Partial<Record<MetricType, { value: number; measuredAt: number }[]>>,
+  types: readonly MetricType[],
+  dayNoonMs: number,
+): Partial<Record<MetricType, string>> {
+  const start = new Date(dayNoonMs);
+  start.setHours(0, 0, 0, 0);
+  const dayStart = start.getTime();
+  const dayEnd = dayStart + 24 * 60 * 60 * 1000;
+  const out: Partial<Record<MetricType, string>> = {};
+  for (const t of types) {
+    const pts = seriesByType[t];
+    if (!pts || pts.length === 0) continue;
+    const last = pts
+      .filter((p) => p.measuredAt >= dayStart && p.measuredAt < dayEnd)
+      .sort((a, b) => a.measuredAt - b.measuredAt)
+      .at(-1);
+    if (last) out[t] = String(last.value);
+  }
+  return out;
+}
