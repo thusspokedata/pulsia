@@ -8,6 +8,7 @@ const IMG_BASE64 = Buffer.from("fake jpeg bytes").toString("base64");
 const bananaRow = {
   id: FOOD_ID, userId: "single-user", name: "Banana", basis: "per_100g",
   kcal: 89, proteinG: 1.1, carbsG: 23, fatG: 0.3, unitWeightG: 120, source: "estimate", createdAt: new Date(0),
+  saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, saltG: 0,
 };
 
 function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: any } = {}) {
@@ -62,14 +63,17 @@ test("POST /nutrition/foods/extract rechaza mediaType inválido", async () => {
   expect(res.status).toBe(400);
 });
 
-test("POST /nutrition/foods crea un alimento", async () => {
-  const app = createApp(deps(fakeDb()));
+test("POST /nutrition/foods crea un alimento con micros", async () => {
+  const db = fakeDb();
+  const app = createApp(deps(db));
   const res = await app.request("/nutrition/foods", {
     method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: "Banana", basis: "per_100g", kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120, source: "estimate" }),
+    body: JSON.stringify({ name: "Muesli", basis: "per_100g", kcal: 442, protein_g: 9.9, carbs_g: 63, fat_g: 14.8, unitWeightG: null, source: "label", saturated_fat_g: 4.2, sugars_g: 14, fiber_g: 8.4, salt_g: 0.2 }),
   });
   expect(res.status).toBe(200);
-  expect(await res.json()).toMatchObject({ name: "Banana", id: expect.any(String) });
+  // el insert recibió los micros mapeados a las columnas drizzle
+  const inserted = db._inserts.at(-1).rows[0];
+  expect(inserted).toMatchObject({ sugarsG: 14, fiberG: 8.4, saturatedFatG: 4.2, saltG: 0.2 });
 });
 
 test("POST /nutrition/meals snapshotea macros desde el catálogo (ignora los del cliente)", async () => {
@@ -82,6 +86,7 @@ test("POST /nutrition/meals snapshotea macros desde el catálogo (ignora los del
   expect(res.status).toBe(200);
   const body = await res.json();
   expect(body.items[0]).toMatchObject({ foodName: "Banana", grams: 120, kcal: 107 });
+  expect(body.items[0]).toMatchObject({ sugars_g: 14.4, fiber_g: 3.1 }); // 12/2.6 * 1.2
 });
 
 test("POST /nutrition/meals 409 si el foodId no es del usuario", async () => {

@@ -5,6 +5,7 @@ import { getBackendUrl } from "../../src/storage/config";
 import { listMeals, deleteMeal } from "../../src/api/nutrition";
 import { dayAtNoon, dayLabel } from "../../src/session/metricDate";
 import type { Meal } from "@pulsia/shared";
+import { sumNullableMicro } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
 function dayBounds(offset: number): { from: number; to: number; noon: number } {
@@ -34,10 +35,17 @@ export default function NutricionScreen() {
   useFocusEffect(useCallback(() => { void load(offset); }, [load, offset]));
 
   function mealKcal(m: Meal): number { return m.items.reduce((a, it) => a + it.kcal, 0); }
-  const dayTotals = meals.reduce((acc, m) => {
-    for (const it of m.items) { acc.kcal += it.kcal; acc.p += it.protein_g; acc.c += it.carbs_g; acc.g += it.fat_g; }
-    return acc;
-  }, { kcal: 0, p: 0, c: 0, g: 0 });
+  const items = meals.flatMap((m) => m.items);
+  const dayMicro = (key: "saturated_fat_g" | "sugars_g" | "fiber_g" | "salt_g"): number | null =>
+    sumNullableMicro(items.map((it) => it[key]));
+  const dayTotals = {
+    kcal: items.reduce((a, it) => a + it.kcal, 0),
+    p: items.reduce((a, it) => a + it.protein_g, 0),
+    c: items.reduce((a, it) => a + it.carbs_g, 0),
+    g: items.reduce((a, it) => a + it.fat_g, 0),
+    sugars_g: dayMicro("sugars_g"), fiber_g: dayMicro("fiber_g"),
+    saturated_fat_g: dayMicro("saturated_fat_g"), salt_g: dayMicro("salt_g"),
+  };
 
   async function remove(m: Meal) {
     Alert.alert("Borrar comida", "¿Borrar esta comida?", [
@@ -67,6 +75,16 @@ export default function NutricionScreen() {
       <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg }}>
         <Text style={{ color: colors.text, fontSize: 22, fontWeight: "700" }}>{dayTotals.kcal} kcal</Text>
         <Text style={{ color: colors.textMuted }}>P {Math.round(dayTotals.p)}g · C {Math.round(dayTotals.c)}g · G {Math.round(dayTotals.g)}g</Text>
+        {(dayTotals.sugars_g != null || dayTotals.fiber_g != null || dayTotals.saturated_fat_g != null || dayTotals.salt_g != null) && (
+          <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+            {[
+              dayTotals.sugars_g != null ? `azúc ${dayTotals.sugars_g}g` : null,
+              dayTotals.fiber_g != null ? `fibra ${dayTotals.fiber_g}g` : null,
+              dayTotals.saturated_fat_g != null ? `sat ${dayTotals.saturated_fat_g}g` : null,
+              dayTotals.salt_g != null ? `sal ${dayTotals.salt_g}g` : null,
+            ].filter(Boolean).join(" · ")}
+          </Text>
+        )}
       </View>
 
       <View style={{ flexDirection: "row", gap: spacing.sm }}>

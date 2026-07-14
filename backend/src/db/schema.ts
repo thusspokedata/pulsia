@@ -93,6 +93,10 @@ export const food = pgTable("food", {
   proteinG: real("protein_g").notNull(),
   carbsG: real("carbs_g").notNull(),
   fatG: real("fat_g").notNull(),
+  saturatedFatG: real("saturated_fat_g"), // nullable
+  sugarsG: real("sugars_g"),
+  fiberG: real("fiber_g"),
+  saltG: real("salt_g"),
   unitWeightG: real("unit_weight_g"), // nullable
   source: text("source").notNull(), // 'label' | 'estimate'
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -123,6 +127,10 @@ export const mealItem = pgTable("meal_item", {
   proteinG: real("protein_g").notNull(),
   carbsG: real("carbs_g").notNull(),
   fatG: real("fat_g").notNull(),
+  saturatedFatG: real("saturated_fat_g"),
+  sugarsG: real("sugars_g"),
+  fiberG: real("fiber_g"),
+  saltG: real("salt_g"),
 }, (t) => ({
   byMeal: index("meal_item_meal_idx").on(t.mealId),
 }));

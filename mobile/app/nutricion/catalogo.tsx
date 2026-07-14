@@ -50,6 +50,10 @@ export default function CatalogoScreen() {
             <Text style={{ color: colors.text, fontWeight: "600" }}>{f.name}</Text>
             <Text style={{ color: colors.textMuted, fontSize: 12 }}>
               {f.kcal} kcal · P{f.protein_g} C{f.carbs_g} G{f.fat_g} /100{f.basis === "per_100ml" ? "ml" : "g"}
+              {f.sugars_g != null ? ` · azúc ${f.sugars_g}` : ""}
+              {f.fiber_g != null ? ` · fibra ${f.fiber_g}` : ""}
+              {f.saturated_fat_g != null ? ` · sat ${f.saturated_fat_g}` : ""}
+              {f.salt_g != null ? ` · sal ${f.salt_g}` : ""}
               {f.unitWeightG != null ? ` · 1 u ≈ ${f.unitWeightG}${f.basis === "per_100ml" ? "ml" : "g"}` : ""}
             </Text>
           </View>
