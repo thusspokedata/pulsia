@@ -11,7 +11,7 @@ const bananaRow = {
   saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, saltG: 0,
 };
 
-function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: any; mealFull?: any; water?: any[] } = {}) {
+function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: any; mealFull?: any; water?: any[]; goal?: any } = {}) {
   const inserts: any[] = [];
   const db: any = {
     _inserts: inserts,
@@ -21,6 +21,7 @@ function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: a
         inserts.push({ table, rows });
         const p: any = Promise.resolve(rows);
         p.returning = async () => rows;
+        p.onConflictDoUpdate = async () => undefined;
         return p;
       },
     }),
@@ -32,6 +33,7 @@ function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: a
       food: { findFirst: async () => opts.foodRow ?? null },
       meal: { findFirst: async () => opts.mealFull ?? (opts.meals?.[0] ? { userId: opts.meals[0].userId } : null) },
       settings: { findFirst: async () => ({ aiApiKeyEncrypted: null }) },
+      nutritionGoal: { findFirst: async () => opts.goal ?? null },
     },
   };
   return db;
@@ -200,4 +202,27 @@ test("GET /nutrition/water lista las cargas del rango", async () => {
 test("DELETE /nutrition/water/:id → 200", async () => {
   const res = await createApp(deps(fakeDb())).request("/nutrition/water/11111111-1111-4111-8111-111111111111", { method: "DELETE" });
   expect(res.status).toBe(200);
+});
+
+test("GET /nutrition/goal devuelve mantenimiento por defecto", async () => {
+  const res = await createApp(deps(fakeDb())).request("/nutrition/goal");
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ objective: "maintain", rateKgPerWeek: 0, manualKcal: null });
+});
+
+test("PUT /nutrition/goal guarda y devuelve el objetivo", async () => {
+  const res = await createApp(deps(fakeDb())).request("/nutrition/goal", {
+    method: "PUT", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ objective: "lose", rateKgPerWeek: 0.5, manualKcal: null }),
+  });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toMatchObject({ objective: "lose", rateKgPerWeek: 0.5 });
+});
+
+test("PUT /nutrition/goal rechaza objetivo inválido", async () => {
+  const res = await createApp(deps(fakeDb())).request("/nutrition/goal", {
+    method: "PUT", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ objective: "bulk", rateKgPerWeek: 0.5 }),
+  });
+  expect(res.status).toBe(400);
 });

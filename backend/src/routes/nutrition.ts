@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { FoodInputSchema, MealInputSchema, WaterLogInputSchema } from "@pulsia/shared";
+import { FoodInputSchema, MealInputSchema, WaterLogInputSchema, NutritionGoalInputSchema } from "@pulsia/shared";
 import {
   insertFood, listFoods, getFood, updateFood, deleteFood,
   createMeal, listMeals, updateMeal, deleteMeal, getMealById,
   insertWater, listWater, deleteWater,
+  getGoalInput, upsertGoalInput,
   MealValidationError,
 } from "../nutrition/repository";
 import { resolveAiKey } from "../ai/resolveKey";
@@ -132,6 +133,17 @@ export function nutritionRoutes(deps: AppDeps) {
   r.delete("/water/:id", async (c) => {
     const ok = await deleteWater(deps.db, c.get("userId"), c.req.param("id"));
     return ok ? c.json({ ok: true }) : c.json({ error: "No encontrado" }, 404);
+  });
+
+  // ---- Objetivo nutricional (metas) ----
+  r.get("/goal", async (c) => {
+    return c.json(await getGoalInput(deps.db, c.get("userId")));
+  });
+
+  r.put("/goal", async (c) => {
+    const parsed = NutritionGoalInputSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Objetivo inválido", detail: parsed.error.issues }, 400);
+    return c.json(await upsertGoalInput(deps.db, c.get("userId"), parsed.data));
   });
 
   return r;

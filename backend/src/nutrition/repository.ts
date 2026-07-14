@@ -1,7 +1,7 @@
 import { and, asc, eq, gte, lte, inArray } from "drizzle-orm";
-import { food, meal, mealItem, waterLog } from "../db/schema";
+import { food, meal, mealItem, waterLog, nutritionGoal } from "../db/schema";
 import { foodMacrosForQuantity } from "@pulsia/shared";
-import type { Food, FoodInput, Meal, MealItem, MealItemInput, MealInput, QuantityUnit, WaterLog, WaterLogInput } from "@pulsia/shared";
+import type { Food, FoodInput, Meal, MealItem, MealItemInput, MealInput, NutritionGoalInput, QuantityUnit, WaterLog, WaterLogInput } from "@pulsia/shared";
 import type { Db } from "../db/client";
 
 type FoodRow = typeof food.$inferSelect;
@@ -193,4 +193,25 @@ export async function listWater(db: Db, userId: string, from?: number, to?: numb
 export async function deleteWater(db: Db, userId: string, id: string): Promise<boolean> {
   const rows = await db.delete(waterLog).where(and(eq(waterLog.id, id), eq(waterLog.userId, userId))).returning({ id: waterLog.id });
   return rows.length > 0;
+}
+
+// ---- Objetivo nutricional (metas) ----
+const DEFAULT_GOAL: NutritionGoalInput = { objective: "maintain", rateKgPerWeek: 0, manualKcal: null };
+
+export async function getGoalInput(db: Db, userId: string): Promise<NutritionGoalInput> {
+  const row = await db.query.nutritionGoal.findFirst({ where: eq(nutritionGoal.userId, userId) });
+  if (!row) return DEFAULT_GOAL;
+  return {
+    objective: row.objective as NutritionGoalInput["objective"],
+    rateKgPerWeek: row.rateKgPerWeek,
+    manualKcal: row.manualKcal ?? null,
+  };
+}
+
+export async function upsertGoalInput(db: Db, userId: string, input: NutritionGoalInput): Promise<NutritionGoalInput> {
+  const values = { objective: input.objective, rateKgPerWeek: input.rateKgPerWeek, manualKcal: input.manualKcal ?? null };
+  await db.insert(nutritionGoal)
+    .values({ userId, ...values })
+    .onConflictDoUpdate({ target: nutritionGoal.userId, set: { ...values, updatedAt: new Date() } });
+  return values;
 }

@@ -88,3 +88,23 @@ test("deleteWater devuelve true si borró, false si no", async () => {
   expect(await deleteWater(dbHit, "u", "w1")).toBe(true);
   expect(await deleteWater(dbMiss, "u", "w1")).toBe(false);
 });
+
+import { getGoalInput, upsertGoalInput } from "./repository";
+
+test("getGoalInput devuelve mantenimiento por defecto si no hay fila", async () => {
+  const db: any = { query: { nutritionGoal: { findFirst: async () => null } } };
+  expect(await getGoalInput(db, "u")).toEqual({ objective: "maintain", rateKgPerWeek: 0, manualKcal: null });
+});
+
+test("getGoalInput mapea la fila guardada", async () => {
+  const db: any = { query: { nutritionGoal: { findFirst: async () => ({ userId: "u", objective: "lose", rateKgPerWeek: 0.5, manualKcal: null }) } } };
+  expect(await getGoalInput(db, "u")).toEqual({ objective: "lose", rateKgPerWeek: 0.5, manualKcal: null });
+});
+
+test("upsertGoalInput inserta con onConflict y devuelve el input", async () => {
+  const calls: any[] = [];
+  const db: any = { insert: () => ({ values(v: any) { calls.push(v); return { onConflictDoUpdate: async () => {} }; } }) };
+  const out = await upsertGoalInput(db, "u", { objective: "gain", rateKgPerWeek: 0.25, manualKcal: null });
+  expect(out).toEqual({ objective: "gain", rateKgPerWeek: 0.25, manualKcal: null });
+  expect(calls[0]).toMatchObject({ userId: "u", objective: "gain", rateKgPerWeek: 0.25 });
+});
