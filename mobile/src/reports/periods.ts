@@ -5,11 +5,10 @@ export interface Period { kind: ReportKind; start: number; end: number; label: s
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
-// Día local (offset 0 = hoy, offset negativo = días hacia atrás — mismo criterio que el
-// navegador del tab de Nutrición). `dayAtNoon` cuenta sus días hacia atrás con el signo opuesto,
-// así que se le pasa `-offset`.
+// Día local. Convención: offset POSITIVO = días hacia atrás (offset 0 = hoy, 1 = ayer),
+// igual que `dayAtNoon`/`dayLabel` y `dayBounds` del tab de Nutrición.
 export function dayPeriod(offset: number, now: number): Period {
-  const noon = dayAtNoon(-offset, now);
+  const noon = dayAtNoon(offset, now);
   const start = noon - 12 * 3600_000;
   const end = start + 24 * 3600_000 - 1;
   const d = new Date(noon);

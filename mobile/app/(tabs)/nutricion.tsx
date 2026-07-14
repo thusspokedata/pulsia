@@ -53,10 +53,10 @@ export default function NutricionScreen() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <Pressable onPress={() => setOffset((o) => o - 1)}><Text style={{ color: colors.accent, fontSize: 18 }}>◀</Text></Pressable>
+        <Pressable onPress={() => setOffset((o) => o + 1)}><Text style={{ color: colors.accent, fontSize: 18 }}>◀</Text></Pressable>
         <Text style={{ color: colors.text, fontWeight: "600" }}>{dayLabel(offset, Date.now())}</Text>
-        <Pressable onPress={() => setOffset((o) => Math.min(0, o + 1))} disabled={offset >= 0}>
-          <Text style={{ color: offset >= 0 ? colors.icon : colors.accent, fontSize: 18 }}>▶</Text>
+        <Pressable onPress={() => setOffset((o) => Math.max(0, o - 1))} disabled={offset <= 0}>
+          <Text style={{ color: offset <= 0 ? colors.icon : colors.accent, fontSize: 18 }}>▶</Text>
         </Pressable>
       </View>
 
