@@ -1,3 +1,4 @@
+import { StyleSheet } from "react-native";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
@@ -58,6 +59,16 @@ test("el toggle de ECG guarda ecgEnabled y muestra password + link a /ecg al act
   const link = await screen.findByTestId("ecg-screen-link");
   await fireEvent.press(link);
   expect(router.push).toHaveBeenCalledWith("/ecg");
+});
+
+test("la pantalla scrollea y deja aire abajo (secciones del fondo alcanzables)", async () => {
+  await render(<ConfiguracionScreen />);
+  const scroll = await screen.findByTestId("configuracion-scroll");
+  const style = StyleSheet.flatten(scroll.props.contentContainerStyle);
+  expect(style.paddingBottom).toBeGreaterThan(0);
+  // Las secciones del fondo (las que quedaban fuera de pantalla) están renderizadas.
+  expect(screen.getByTestId("reports-toggle")).toBeTruthy();
+  expect(screen.getByTestId("logout")).toBeTruthy();
 });
 
 test("con ECG habilitado en el backend, guarda la contraseña de Kardia al confirmar", async () => {
