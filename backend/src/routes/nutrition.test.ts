@@ -11,7 +11,7 @@ const bananaRow = {
   saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, saltG: 0,
 };
 
-function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: any } = {}) {
+function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: any; mealFull?: any } = {}) {
   const inserts: any[] = [];
   const db: any = {
     _inserts: inserts,
@@ -30,7 +30,7 @@ function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: a
     transaction: async (fn: any) => fn(db),
     query: {
       food: { findFirst: async () => opts.foodRow ?? null },
-      meal: { findFirst: async () => (opts.meals?.[0] ? { userId: opts.meals[0].userId } : null) },
+      meal: { findFirst: async () => opts.mealFull ?? (opts.meals?.[0] ? { userId: opts.meals[0].userId } : null) },
       settings: { findFirst: async () => ({ aiApiKeyEncrypted: null }) },
     },
   };
@@ -117,4 +117,56 @@ test("PATCH /nutrition/meals/:id 404 si la comida es de otro usuario (no filtra 
     method: "PATCH", headers: { "content-type": "application/json" }, body: validMealBody,
   });
   expect(res.status).toBe(404); // NO 409 — mismo status que "no existe"
+});
+
+const MEAL_ID2 = "44444444-4444-4444-8444-444444444444";
+
+test("GET /nutrition/foods/:id → 200 con el alimento", async () => {
+  const app = createApp(deps(fakeDb({ foodRow: bananaRow })));
+  const res = await app.request(`/nutrition/foods/${FOOD_ID}`);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toMatchObject({ id: FOOD_ID, name: "Banana", sugars_g: 12 });
+});
+
+test("GET /nutrition/foods/:id → 404 si no existe", async () => {
+  const res = await createApp(deps(fakeDb())).request(`/nutrition/foods/${FOOD_ID}`);
+  expect(res.status).toBe(404);
+});
+
+test("PATCH /nutrition/foods/:id → 200 con el alimento actualizado", async () => {
+  const app = createApp(deps(fakeDb({ foodRow: { ...bananaRow, name: "Banana madura" } })));
+  const res = await app.request(`/nutrition/foods/${FOOD_ID}`, {
+    method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Banana madura", basis: "per_100g", kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120, source: "estimate", sugars_g: 15 }),
+  });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toMatchObject({ name: "Banana madura" });
+});
+
+test("PATCH /nutrition/foods/:id → 404 si no existe", async () => {
+  const res = await createApp(deps(fakeDb())).request(`/nutrition/foods/${FOOD_ID}`, {
+    method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "X", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, source: "estimate" }),
+  });
+  expect(res.status).toBe(404);
+});
+
+test("PATCH /nutrition/foods/:id → 400 con body inválido", async () => {
+  const res = await createApp(deps(fakeDb({ foodRow: bananaRow }))).request(`/nutrition/foods/${FOOD_ID}`, {
+    method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, source: "estimate" }),
+  });
+  expect(res.status).toBe(400);
+});
+
+test("GET /nutrition/meals/:id → 200 con la comida", async () => {
+  const app = createApp(deps(fakeDb({ mealFull: { id: MEAL_ID2, userId: "single-user", eatenAt: 123, mealType: "desayuno", note: null }, foods: [] })));
+  const res = await app.request(`/nutrition/meals/${MEAL_ID2}`);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toMatchObject({ id: MEAL_ID2, eatenAt: 123, mealType: "desayuno", items: [] });
+});
+
+test("GET /nutrition/meals/:id → 404 si no existe", async () => {
+  const res = await createApp(deps(fakeDb())).request(`/nutrition/meals/${MEAL_ID2}`);
+  expect(res.status).toBe(404);
 });
