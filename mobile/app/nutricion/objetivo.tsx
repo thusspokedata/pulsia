@@ -8,6 +8,7 @@ import { getLatestMetrics } from "../../src/api/metrics";
 import { getNutritionGoal, putNutritionGoal } from "../../src/api/nutrition";
 import { ChipGroup } from "../../src/components/ChipGroup";
 import { colors, radius, spacing } from "../../src/theme/tokens";
+import { useScreenPadding } from "../../src/theme/screen";
 import type { TrainingProfile } from "@pulsia/shared";
 
 const OBJECTIVES = [
@@ -21,6 +22,7 @@ const RATES = [
 ];
 
 export default function ObjetivoScreen() {
+  const screenPad = useScreenPadding(spacing.lg);
   const baseUrl = useRef<string | null>(null);
   const [profile, setProfileState] = useState<TrainingProfile | null>(null);
   const [weightKg, setWeightKg] = useState<number | undefined>(undefined);
@@ -75,7 +77,7 @@ export default function ObjetivoScreen() {
   const card = { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm } as const;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.md }}>
       <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>Objetivo nutricional</Text>
 
       <View><Text style={{ color: colors.textMuted, marginBottom: spacing.xs }}>Objetivo</Text>

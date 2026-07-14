@@ -8,6 +8,7 @@ import { uploadEcg, listEcg, getEcg, deleteEcg, ecgPdfUrl } from "../src/api/ecg
 import { getBackendUrl } from "../src/storage/config";
 import { getToken } from "../src/storage/authToken";
 import { colors, radius, spacing } from "../src/theme/tokens";
+import { useScreenPadding } from "../src/theme/screen";
 
 const POLL_MS = 3000;
 // Cota superior del poll: ~2 min (40 intentos × 3s). Evita pollear para siempre
@@ -27,6 +28,7 @@ function sortByDate(list: EcgRecording[]): EcgRecording[] {
 }
 
 export default function EcgScreen() {
+  const screenPad = useScreenPadding(spacing.xl);
   const [recordings, setRecordings] = useState<EcgRecording[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -203,7 +205,7 @@ export default function EcgScreen() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.lg }}>
       <Text style={{ fontSize: 20, fontWeight: "500", color: colors.text }}>ECG (KardiaMobile)</Text>
 
       <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18 }}>
