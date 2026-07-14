@@ -102,7 +102,7 @@ export default function NutricionScreen() {
       {meals.length === 0 && <Text style={{ color: colors.textMuted }}>No hay comidas registradas este día.</Text>}
 
       {meals.map((m) => (
-        <Pressable key={m.id} onLongPress={() => remove(m)} style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.xs }}>
+        <Pressable key={m.id} onPress={() => router.push(`/nutricion/nueva-comida?mealId=${m.id}`)} onLongPress={() => remove(m)} style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.xs }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
             <Text style={{ color: colors.text, fontWeight: "600" }}>{hhmm(m.eatenAt)}{m.mealType ? ` · ${m.mealType}` : ""}</Text>
             <Text style={{ color: colors.accentText }}>{mealKcal(m)} kcal</Text>
