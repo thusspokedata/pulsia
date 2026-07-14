@@ -46,7 +46,7 @@ export default function CatalogoScreen() {
       {foods.length > 0 && filtered.length === 0 && <Text style={{ color: colors.textMuted }}>No se encontraron alimentos para "{q}".</Text>}
       {filtered.map((f) => (
         <View key={f.id} style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <View style={{ flex: 1 }}>
+          <Pressable style={{ flex: 1 }} onPress={() => router.push(`/nutricion/agregar-alimento?foodId=${f.id}`)}>
             <Text style={{ color: colors.text, fontWeight: "600" }}>{f.name}</Text>
             <Text style={{ color: colors.textMuted, fontSize: 12 }}>
               {f.kcal} kcal · P{f.protein_g} C{f.carbs_g} G{f.fat_g} /100{f.basis === "per_100ml" ? "ml" : "g"}
@@ -56,7 +56,7 @@ export default function CatalogoScreen() {
               {f.salt_g != null ? ` · sal ${f.salt_g}` : ""}
               {f.unitWeightG != null ? ` · 1 u ≈ ${f.unitWeightG}${f.basis === "per_100ml" ? "ml" : "g"}` : ""}
             </Text>
-          </View>
+          </Pressable>
           <Pressable onPress={() => remove(f)} style={{ padding: spacing.sm }}>
             <Text style={{ color: colors.danger }}>Borrar</Text>
           </Pressable>
