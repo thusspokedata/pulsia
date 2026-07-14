@@ -5,6 +5,8 @@ import { spacing } from "./tokens";
 // su contenido arranca en y=0, o sea debajo de la barra de estado arriba y de la
 // barra de navegación abajo. Suma los insets del dispositivo al padding base para
 // que nada quede tapado. Usar en el contentContainerStyle de un ScrollView headerless.
+// Solo insets verticales a propósito: la app es portrait-only; si algún día se
+// soporta landscape habría que sumar insets.left/right al paddingHorizontal.
 export function useScreenPadding(base: number = spacing.lg) {
   const insets = useSafeAreaInsets();
   return {

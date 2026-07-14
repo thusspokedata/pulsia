@@ -7,6 +7,7 @@ import { getProfile } from "../src/storage/profile";
 import { setStoredOneOffProgram, setStoredOneOffProgramId } from "../src/storage/oneOffProgram";
 import { generateOneOff } from "../src/api/programs";
 import { colors, radius, spacing } from "../src/theme/tokens";
+import { useScreenPadding } from "../src/theme/screen";
 
 const FOCUS_OPTIONS: { value: MuscleGroup; label: string }[] = [
   { value: "chest", label: "Pecho" },
@@ -62,6 +63,7 @@ function Chip({ label, on, testID, onPress }: { label: string; on: boolean; test
 }
 
 export default function EntrenoPuntualScreen() {
+  const screenPad = useScreenPadding(spacing.xl);
   const [profile, setProfile] = useState<TrainingProfile | null>(null);
   const [focus, setFocus] = useState<MuscleGroup[]>([]);
   const [location, setLocation] = useState<"gym" | "home">("gym");
@@ -139,7 +141,7 @@ export default function EntrenoPuntualScreen() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, padding: spacing.xl, gap: spacing.lg, justifyContent: "center", alignItems: "center" }}>
+      <View style={{ flex: 1, backgroundColor: colors.bg, ...screenPad, gap: spacing.lg, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color={colors.accent} />
         <Text style={{ fontSize: 16, color: colors.text }}>Generando…</Text>
         <Text style={{ color: colors.textMuted, textAlign: "center" }}>Esto puede tardar hasta un par de minutos.</Text>
@@ -151,7 +153,7 @@ export default function EntrenoPuntualScreen() {
   const customOn = customMinutes.trim() !== "" && Number.isFinite(customParsed);
 
   return (
-    <ScrollView contentContainerStyle={{ flexGrow: 1, backgroundColor: colors.bg, padding: spacing.xl, gap: spacing.lg }}>
+    <ScrollView contentContainerStyle={{ flexGrow: 1, backgroundColor: colors.bg, ...screenPad, gap: spacing.lg }}>
       <Text style={{ fontSize: 18, fontWeight: "500", color: colors.text }}>Entreno puntual</Text>
       <Text style={{ color: colors.textMuted }}>Elegí qué músculos, cuánto tiempo, con qué equipo y cualquier nota para hoy.</Text>
 
