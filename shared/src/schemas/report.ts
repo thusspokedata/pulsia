@@ -39,7 +39,7 @@ export type ReportGenerateInput = z.infer<typeof ReportGenerateInputSchema>;
 // Output estructurado que devuelve la IA (tool_use).
 export const ReportOutputSchema = z.object({
   content: z.string().trim().min(1),
-  memoryNotes: z.array(z.string().trim().min(1)).max(2).default([]),
+  memoryNotes: z.array(z.string().trim().min(1).max(400)).max(2).default([]),
 });
 export type ReportOutput = z.infer<typeof ReportOutputSchema>;
 
