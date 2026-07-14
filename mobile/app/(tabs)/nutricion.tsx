@@ -143,6 +143,10 @@ export default function NutricionScreen() {
           <Text style={{ color: colors.accentText, fontWeight: "600" }}>Catálogo</Text>
         </Pressable>
       </View>
+      <Pressable onPress={() => router.push("/nutricion/informes")}
+        style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
+        <Text style={{ color: colors.accentText, fontWeight: "600" }}>📋 Informes</Text>
+      </Pressable>
 
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
       {meals.length === 0 && <Text style={{ color: colors.textMuted }}>No hay comidas registradas este día.</Text>}
