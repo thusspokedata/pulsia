@@ -1,23 +1,15 @@
-import { useCallback, useRef, useState } from "react";
+import { useState } from "react";
 import { ScrollView, View, Text, Pressable, Alert, TextInput } from "react-native";
-import { router, useFocusEffect } from "expo-router";
-import { getBackendUrl } from "../../src/storage/config";
-import { listMeals, deleteMeal, listWater, logWater, deleteWater, getNutritionGoal } from "../../src/api/nutrition";
-import { getProfile } from "../../src/storage/profile";
-import { getLatestMetrics } from "../../src/api/metrics";
-import { computeNutritionGoal } from "@pulsia/shared";
-import { buildGoalView } from "../../src/nutrition/goalView";
-import { dayAtNoon, dayLabel } from "../../src/session/metricDate";
-import type { Meal, WaterLog, NutritionGoalInput, TrainingProfile } from "@pulsia/shared";
-import { sumNullableMicro } from "@pulsia/shared";
+import { router } from "expo-router";
+import { deleteMeal, logWater, deleteWater } from "../../src/api/nutrition";
+import { dayLabel } from "../../src/session/metricDate";
+import { dayBounds } from "../../src/nutrition/dayBounds";
+import { useNutritionDay } from "../../src/nutrition/useNutritionDay";
+import { remainingLabel } from "../../src/nutrition/goalView";
+import type { Meal } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
-function dayBounds(offset: number): { from: number; to: number; noon: number } {
-  const noon = dayAtNoon(offset, Date.now()); // mediodía del día (offset 0 = hoy), patrón de Progreso
-  const start = noon - 12 * 3600_000; // 00:00
-  const end = start + 24 * 3600_000 - 1; // 23:59:59.999
-  return { from: start, to: end, noon };
-}
+const SHORT: Record<"protein" | "carbs" | "fat", string> = { protein: "Prot", carbs: "Carb", fat: "Gras" };
 
 function hhmm(ms: number): string {
   const d = new Date(ms);
@@ -25,68 +17,19 @@ function hhmm(ms: number): string {
 }
 
 export default function NutricionScreen() {
-  const baseUrl = useRef<string | null>(null);
   const [offset, setOffset] = useState(0);
-  const [meals, setMeals] = useState<Meal[]>([]);
-  const [water, setWater] = useState<WaterLog[]>([]);
   const [mlInput, setMlInput] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [goalInput, setGoalInput] = useState<NutritionGoalInput | null>(null);
-  const [profile, setProfileState] = useState<TrainingProfile | null>(null);
-  const [weightKg, setWeightKg] = useState<number | undefined>(undefined);
-
-  const load = useCallback(async (off: number) => {
-    const url = await getBackendUrl(); baseUrl.current = url;
-    const { from, to } = dayBounds(off);
-    try {
-      const [ms, ws, gi, p] = await Promise.all([
-        listMeals(url, from, to), listWater(url, from, to), getNutritionGoal(url), getProfile(),
-      ]);
-      setMeals(ms); setWater(ws); setGoalInput(gi); setProfileState(p);
-      let w = p?.weightKg;
-      try { const latest = await getLatestMetrics(url); if (latest.weight_kg?.value != null) w = latest.weight_kg.value; } catch { /* offline */ }
-      setWeightKg(w);
-      setError(null);
-    } catch (e) { setError((e as Error).message); }
-  }, []);
-
-  useFocusEffect(useCallback(() => { void load(offset); }, [load, offset]));
+  const { error, setError, meals, water, summary, goalView, baseUrl, reload } = useNutritionDay(offset);
+  const { dayTotals, cholesterolMg, liquid } = summary;
 
   function mealKcal(m: Meal): number { return m.items.reduce((a, it) => a + it.kcal, 0); }
-  const items = meals.flatMap((m) => m.items);
-  const dayMicro = (key: "saturated_fat_g" | "sugars_g" | "fiber_g" | "salt_g"): number | null =>
-    sumNullableMicro(items.map((it) => it[key]));
-  const dayTotals = {
-    kcal: items.reduce((a, it) => a + it.kcal, 0),
-    p: items.reduce((a, it) => a + it.protein_g, 0),
-    c: items.reduce((a, it) => a + it.carbs_g, 0),
-    g: items.reduce((a, it) => a + it.fat_g, 0),
-    sugars_g: dayMicro("sugars_g"), fiber_g: dayMicro("fiber_g"),
-    saturated_fat_g: dayMicro("saturated_fat_g"), salt_g: dayMicro("salt_g"),
-  };
-  const cholesterolMg = sumNullableMicro(items.map((it) => it.cholesterol_mg));
-  const waterFromFood = sumNullableMicro(items.map((it) => it.water_ml)) ?? 0;
-  const waterDrank = water.reduce((a, w) => a + w.ml, 0);
-  const liquidTotal = Math.round(waterFromFood + waterDrank);
 
-  const goalResult = goalInput
-    ? computeNutritionGoal({
-        sex: profile?.sex, age: profile?.age, heightCm: profile?.heightCm, weightKg,
-        activityLevel: profile?.activityLevel,
-        objective: goalInput.objective, rateKgPerWeek: goalInput.rateKgPerWeek, manualKcal: goalInput.manualKcal,
-      })
-    : null;
-  const goalView = goalResult
-    ? buildGoalView(goalResult, { kcal: dayTotals.kcal, protein_g: dayTotals.p, carbs_g: dayTotals.c, fat_g: dayTotals.g })
-    : null;
-
-  async function remove(m: Meal) {
+  function remove(m: Meal) {
     Alert.alert("Borrar comida", "¿Borrar esta comida?", [
       { text: "Cancelar", style: "cancel" },
       { text: "Borrar", style: "destructive", onPress: async () => {
-        if (!baseUrl.current) return;
-        try { await deleteMeal(baseUrl.current, m.id); setMeals((xs) => xs.filter((x) => x.id !== m.id)); }
-        catch (e) { setError((e as Error).message); }
+        if (!baseUrl) return;
+        try { await deleteMeal(baseUrl, m.id); await reload(); } catch (e) { setError((e as Error).message); }
       } },
     ]);
   }
@@ -94,23 +37,21 @@ export default function NutricionScreen() {
   function waterLoggedAt(): number { return offset === 0 ? Date.now() : dayBounds(offset).noon; }
 
   async function addWater(ml: number) {
-    if (!baseUrl.current || !Number.isFinite(ml) || ml <= 0) return;
-    try { await logWater(baseUrl.current, { ml, loggedAt: waterLoggedAt() }); await load(offset); }
+    if (!baseUrl || !Number.isFinite(ml) || ml <= 0) return;
+    try { await logWater(baseUrl, { ml, loggedAt: waterLoggedAt() }); await reload(); }
     catch (e) { setError((e as Error).message); }
   }
 
   async function undoLastWater() {
-    if (!baseUrl.current || water.length === 0) return;
-    const last = water[water.length - 1]; // listWater viene ordenado asc por loggedAt
-    try { await deleteWater(baseUrl.current, last.id); await load(offset); }
-    catch (e) { setError((e as Error).message); }
+    if (!baseUrl || water.length === 0) return;
+    const last = water[water.length - 1];
+    try { await deleteWater(baseUrl, last.id); await reload(); } catch (e) { setError((e as Error).message); }
   }
 
   const { noon } = dayBounds(offset);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
-      {/* Navegador de fechas (patrón Progreso) */}
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
         <Pressable onPress={() => setOffset((o) => o - 1)}><Text style={{ color: colors.accent, fontSize: 18 }}>◀</Text></Pressable>
         <Text style={{ color: colors.text, fontWeight: "600" }}>{dayLabel(offset, Date.now())}</Text>
@@ -119,23 +60,24 @@ export default function NutricionScreen() {
         </Pressable>
       </View>
 
-      {/* Totales del día */}
-      <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg }}>
+      {/* Totales del día — toda la card abre el detalle */}
+      <Pressable onPress={() => router.push(`/nutricion/detalle?offset=${offset}`)}
+        style={{ backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
           {goalView?.status === "ok" ? (
             <View>
               <Text style={{ color: colors.text, fontSize: 22, fontWeight: "700" }}>{goalView.kcal!.comido} / {goalView.kcal!.meta} kcal</Text>
-              <Text style={{ color: goalView.kcal!.restante < 0 ? colors.warning : colors.textMuted }}>
-                Restante {goalView.kcal!.restante} kcal
+              <Text style={{ color: goalView.kcal!.over ? colors.warning : colors.textMuted }}>
+                {goalView.kcal!.over ? `${-goalView.kcal!.restante} kcal de más` : `te quedan ${goalView.kcal!.restante} kcal`}
               </Text>
             </View>
           ) : (
             <View>
               <Text style={{ color: colors.text, fontSize: 22, fontWeight: "700" }}>{dayTotals.kcal} kcal</Text>
-              <Text style={{ color: colors.textMuted }}>P {Math.round(dayTotals.p)}g · C {Math.round(dayTotals.c)}g · G {Math.round(dayTotals.g)}g</Text>
+              <Text style={{ color: colors.textMuted }}>Prot {Math.round(dayTotals.protein_g)}g · Carb {Math.round(dayTotals.carbs_g)}g · Gras {Math.round(dayTotals.fat_g)}g</Text>
             </View>
           )}
-          <Pressable onPress={() => router.push("/nutricion/objetivo")}>
+          <Pressable onPress={() => router.push("/nutricion/objetivo")} hitSlop={8}>
             <Text style={{ color: colors.accentText, fontSize: 12, fontWeight: "600" }}>Objetivo ⚙</Text>
           </Pressable>
         </View>
@@ -143,50 +85,39 @@ export default function NutricionScreen() {
           <View style={{ gap: spacing.xs, marginTop: spacing.sm }}>
             {goalView.macros!.map((m) => (
               <View key={m.key} style={{ gap: 2 }}>
-                <Text style={{ color: colors.textMuted, fontSize: 12 }}>{m.label} {m.comido} / {m.meta} g · resta {m.restante}</Text>
+                <Text style={{ color: m.over ? colors.warning : colors.textMuted, fontSize: 12 }}>
+                  {SHORT[m.key]} {m.comido} / {m.meta} g · {remainingLabel(m.restante)}
+                </Text>
                 <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.surfaceMuted, overflow: "hidden" }}>
-                  <View style={{ width: `${m.pct}%`, height: 6, backgroundColor: colors.accent }} />
+                  <View style={{ width: m.over ? "100%" : `${m.pct}%`, height: 6, backgroundColor: m.over ? colors.warning : colors.accent }} />
                 </View>
               </View>
             ))}
           </View>
         )}
         {goalView?.status === "incomplete" && (
-          <Pressable onPress={() => router.push("/nutricion/objetivo")} style={{ marginTop: spacing.xs }}>
+          <Pressable onPress={() => router.push("/nutricion/objetivo")} style={{ marginTop: spacing.xs }} hitSlop={8}>
             <Text style={{ color: colors.accentText, fontSize: 12 }}>Definí tu objetivo / completá tu perfil para ver tu meta →</Text>
           </Pressable>
         )}
-        {(dayTotals.sugars_g != null || dayTotals.fiber_g != null || dayTotals.saturated_fat_g != null || dayTotals.salt_g != null) && (
-          <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
-            {[
-              dayTotals.sugars_g != null ? `azúc ${dayTotals.sugars_g}g` : null,
-              dayTotals.fiber_g != null ? `fibra ${dayTotals.fiber_g}g` : null,
-              dayTotals.saturated_fat_g != null ? `sat ${dayTotals.saturated_fat_g}g` : null,
-              dayTotals.salt_g != null ? `sal ${dayTotals.salt_g}g` : null,
-            ].filter(Boolean).join(" · ")}
-          </Text>
-        )}
         {cholesterolMg != null && (
-          <Text style={{ color: cholesterolMg > 300 ? colors.warning : colors.textMuted, fontSize: 12, marginTop: 2 }}>
+          <Text style={{ color: cholesterolMg > 300 ? colors.warning : colors.textMuted, fontSize: 12, marginTop: 6 }}>
             Colesterol {Math.round(cholesterolMg)} / 300 mg
           </Text>
         )}
-      </View>
+        <Text style={{ color: colors.icon, fontSize: 11, marginTop: 8 }}>toca para ver el detalle ›</Text>
+      </Pressable>
 
       {/* Líquido del día */}
       <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm }}>
-        <Text style={{ color: colors.text, fontSize: 16, fontWeight: "700" }}>💧 Líquido {liquidTotal} ml</Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-          tomada {Math.round(waterDrank)} + alimentos {Math.round(waterFromFood)}
-        </Text>
+        <Text style={{ color: colors.text, fontSize: 16, fontWeight: "700" }}>💧 Líquido {liquid.total} ml</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 12 }}>tomada {Math.round(liquid.drank)} + alimentos {Math.round(liquid.fromFood)}</Text>
         <View style={{ flexDirection: "row", gap: spacing.sm, alignItems: "center" }}>
           <Pressable onPress={() => addWater(250)} style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.md }}>
             <Text style={{ color: colors.accentText, fontWeight: "600" }}>+1 vaso (250 ml)</Text>
           </Pressable>
-          <TextInput
-            value={mlInput} onChangeText={setMlInput} keyboardType="numeric" placeholder="ml" placeholderTextColor={colors.icon}
-            style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.sm, color: colors.text }}
-          />
+          <TextInput value={mlInput} onChangeText={setMlInput} keyboardType="numeric" placeholder="ml" placeholderTextColor={colors.icon}
+            style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.sm, color: colors.text }} />
           <Pressable onPress={() => { const n = Number(mlInput.replace(",", ".")); if (Number.isFinite(n) && n > 0) { void addWater(n); setMlInput(""); } }}
             style={{ backgroundColor: colors.accent, borderRadius: radius.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.md }}>
             <Text style={{ color: "#fff", fontWeight: "600" }}>Agregar</Text>
