@@ -6,12 +6,16 @@ import { getProfile } from "../../src/storage/profile";
 import { getLatestMetrics } from "../../src/api/metrics";
 import { getNutritionGoal } from "../../src/api/nutrition";
 import { generateReport, getReport } from "../../src/api/reports";
-import { dayPeriod } from "../../src/reports/periods";
+import { periodFor } from "../../src/reports/periods";
 import { computeNutritionGoal } from "@pulsia/shared";
-import type { AthleteContext } from "@pulsia/shared";
+import type { AthleteContext, ReportKind } from "@pulsia/shared";
+import { ChipGroup } from "../../src/components/ChipGroup";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
+const KIND_LABEL: Record<ReportKind, string> = { daily: "del día", weekly: "de la semana", biweekly: "de la quincena", monthly: "del mes" };
+
 export default function InformesScreen() {
+  const [kind, setKind] = useState<ReportKind>("daily");
   const [offset, setOffset] = useState(0);
   const [content, setContent] = useState<string | null>(null);
   const [createdAt, setCreatedAt] = useState<number | null>(null);
@@ -20,18 +24,20 @@ export default function InformesScreen() {
   const [error, setError] = useState<string | null>(null);
   const [disabled, setDisabled] = useState(false);
   const url = useRef<string | null>(null);
-  const period = dayPeriod(offset, Date.now());
+  const period = periodFor(kind, offset, Date.now());
+
+  function pickKind(k: ReportKind) { setKind(k); setOffset(0); setContent(null); setCreatedAt(null); }
 
   const load = useCallback(async (start: number) => {
     setLoading(true); setError(null); setDisabled(false);
     setContent(null); setCreatedAt(null); // evitar el flash del informe anterior al navegar de día
     try {
       const u = await getBackendUrl(); url.current = u;
-      const rep = await getReport(u, "daily", start);
+      const rep = await getReport(u, kind, start);
       setContent(rep?.content ?? null); setCreatedAt(rep?.createdAt ?? null);
     } catch (e) { setError((e as Error).message); }
     setLoading(false);
-  }, []);
+  }, [kind]);
   useFocusEffect(useCallback(() => { void load(period.start); }, [load, period.start]));
 
   async function buildAthlete(): Promise<AthleteContext> {
@@ -58,7 +64,7 @@ export default function InformesScreen() {
     setBusy(true); setError(null); setDisabled(false);
     try {
       const athleteContext = await buildAthlete();
-      const rep = await generateReport(url.current, { kind: "daily", periodStart: period.start, periodEnd: period.end, athleteContext, force });
+      const rep = await generateReport(url.current, { kind, periodStart: period.start, periodEnd: period.end, athleteContext, force });
       setContent(rep.content); setCreatedAt(rep.createdAt);
     } catch (e) {
       const msg = (e as Error).message;
@@ -70,6 +76,10 @@ export default function InformesScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
+      <ChipGroup single
+        options={[{ value: "daily", label: "Día" }, { value: "weekly", label: "Semana" }, { value: "biweekly", label: "Quincena" }, { value: "monthly", label: "Mes" }]}
+        selected={[kind]} onChange={(v) => pickKind(v[0] as ReportKind)} />
+
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
         <Pressable onPress={() => setOffset((o) => o + 1)}><Text style={{ color: colors.accent, fontSize: 18 }}>◀</Text></Pressable>
         <Text style={{ color: colors.text, fontWeight: "600" }}>{period.label}</Text>
@@ -90,12 +100,12 @@ export default function InformesScreen() {
 
       {!loading && content == null && !busy && (
         <Pressable onPress={() => generate(false)} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
-          <Text style={{ color: "#fff", fontWeight: "700" }}>Generar informe del día</Text>
+          <Text style={{ color: "#fff", fontWeight: "700" }}>Generar informe {KIND_LABEL[kind]}</Text>
         </Pressable>
       )}
       {busy && (
         <View style={{ alignItems: "center", gap: spacing.sm, paddingVertical: spacing.lg }}>
-          <ActivityIndicator color={colors.accent} /><Text style={{ color: colors.textMuted }}>El agente está analizando tu día…</Text>
+          <ActivityIndicator color={colors.accent} /><Text style={{ color: colors.textMuted }}>El agente está analizando tu {kind === "daily" ? "día" : "período"}…</Text>
         </View>
       )}
       {content != null && (
