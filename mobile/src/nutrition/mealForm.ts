@@ -18,23 +18,22 @@ export function itemPreview(food: Food, quantity: number, unit: QuantityUnit) {
 }
 
 export function mealTotals(rows: MealRow[]) {
-  const sum = rows.reduce(
-    (acc, r) => {
-      const m = foodMacrosForQuantity(r.food, r.quantity, r.unit);
-      acc.kcal += m.kcal;
-      acc.protein_g += m.protein_g;
-      acc.carbs_g += m.carbs_g;
-      acc.fat_g += m.fat_g;
-      return acc;
-    },
-    { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
-  );
+  const scaled = rows.map((r) => foodMacrosForQuantity(r.food, r.quantity, r.unit));
   const round1 = (n: number) => Math.round(n * 10) / 10;
+  // Micro: null si NINGÚN ítem lo tiene; si al menos uno lo tiene, suma tratando null como 0.
+  const micro = (key: "saturated_fat_g" | "sugars_g" | "fiber_g" | "salt_g"): number | null => {
+    if (!scaled.some((m) => m[key] != null)) return null;
+    return round1(scaled.reduce((a, m) => a + (m[key] ?? 0), 0));
+  };
   return {
-    kcal: sum.kcal,
-    protein_g: round1(sum.protein_g),
-    carbs_g: round1(sum.carbs_g),
-    fat_g: round1(sum.fat_g),
+    kcal: scaled.reduce((a, m) => a + m.kcal, 0),
+    protein_g: round1(scaled.reduce((a, m) => a + m.protein_g, 0)),
+    carbs_g: round1(scaled.reduce((a, m) => a + m.carbs_g, 0)),
+    fat_g: round1(scaled.reduce((a, m) => a + m.fat_g, 0)),
+    saturated_fat_g: micro("saturated_fat_g"),
+    sugars_g: micro("sugars_g"),
+    fiber_g: micro("fiber_g"),
+    salt_g: micro("salt_g"),
   };
 }
 
