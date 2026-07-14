@@ -4,7 +4,7 @@ import { snapshotItems, toFood, toMeal } from "./repository";
 const banana = {
   id: "11111111-1111-4111-8111-111111111111", userId: "u", name: "Banana", basis: "per_100g",
   kcal: 89, proteinG: 1.1, carbsG: 23, fatG: 0.3, unitWeightG: 120, source: "estimate", createdAt: new Date(0),
-  saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, saltG: 0,
+  saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, saltG: 0, cholesterolMg: 0, waterMl: 75,
 };
 
 test("toFood mapea la fila a Food del shared", () => {
@@ -55,4 +55,19 @@ test("snapshotItems deja los micros en null si el alimento no los tiene", () => 
   const legacy = { ...banana, saturatedFatG: null, sugarsG: null, fiberG: null, saltG: null };
   const items = snapshotItems([{ foodId: legacy.id, quantity: 100, quantityUnit: "g" }], new Map([[legacy.id, legacy as any]]));
   expect(items[0]).toMatchObject({ sugarsG: null, fiberG: null, saturatedFatG: null, saltG: null });
+});
+
+test("toFood mapea colesterol y agua (y null si faltan)", () => {
+  expect(toFood(banana as any)).toMatchObject({ cholesterol_mg: 0, water_ml: 75 });
+  const legacy = { ...banana, cholesterolMg: null, waterMl: null };
+  expect(toFood(legacy as any)).toMatchObject({ cholesterol_mg: null, water_ml: null });
+});
+
+test("snapshotItems escala y persiste colesterol y agua", () => {
+  const items = snapshotItems(
+    [{ foodId: banana.id, quantity: 1, quantityUnit: "unit" }],
+    new Map([[banana.id, banana as any]]),
+  );
+  // 1 unidad = 120g → factor 1.2 ; agua 75*1.2 = 90
+  expect(items[0]).toMatchObject({ cholesterolMg: 0, waterMl: 90 });
 });
