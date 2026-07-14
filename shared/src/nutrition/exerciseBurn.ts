@@ -41,8 +41,9 @@ export function sumDayExerciseBurn(
   sessions: { totalDurationMs: number | null; avgHr: number | null }[],
   athlete: { weightKg?: number; age?: number; sex?: Sex; bmr?: number | null },
 ): number {
-  return Math.round(sessions.reduce(
+  // Suma de enteros (cada sesión ya redondea) → no hace falta redondear de nuevo.
+  return sessions.reduce(
     (a, s) => a + estimateSessionBurn({ durationMs: s.totalDurationMs, avgHr: s.avgHr, ...athlete }).kcal,
     0,
-  ));
+  );
 }

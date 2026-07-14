@@ -44,7 +44,8 @@ export default function DetalleDiaScreen() {
                 {goalView.kcal!.over ? `${-goalView.kcal!.restante} de más` : `te quedan ${goalView.kcal!.restante}`}
               </Text>
             </View>
-            {bar(Math.min(100, Math.round((goalView.kcal!.comido / goalView.kcal!.meta) * 100)), goalView.kcal!.over)}
+            {/* La barra mide contra el presupuesto real del día (meta + ejercicio), igual que el restante. */}
+            {bar(Math.min(100, Math.round((goalView.kcal!.comido / (goalView.kcal!.meta + goalView.kcal!.exercise)) * 100)), goalView.kcal!.over)}
             {goalView.kcal!.exercise > 0 && (
               <Text style={{ color: colors.textMuted, fontSize: 12 }}>
                 Ejercicio +{goalView.kcal!.exercise} kcal (ya sumado al restante)
