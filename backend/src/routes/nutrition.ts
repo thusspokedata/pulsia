@@ -13,7 +13,7 @@ import { settings } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { getReport, upsertReport, listReports } from "../reports/repository";
 import { collectReportData, hasAnyData } from "../reports/collect";
-import { getMemory, upsertMemory } from "../memory/repository";
+import { appendMemory } from "../memory/repository";
 import type { AppDeps } from "../app";
 
 const ExtractSchema = z.object({
@@ -185,12 +185,12 @@ export function nutritionRoutes(deps: AppDeps) {
 
     const saved = await upsertReport(deps.db, userId, { kind, periodStart, periodEnd, content: output.content });
 
-    // Memoria del atleta: anexar hasta 2 observaciones con la fecha del período.
+    // Memoria del atleta: anexar hasta 2 observaciones con la fecha del período (append recorta desde
+    // el frente si excede el cap → las notas nuevas no se pierden).
     if (output.memoryNotes.length > 0) {
       const date = new Date(periodStart).toISOString().slice(0, 10);
-      const current = await getMemory(deps.db, userId);
       const appended = output.memoryNotes.slice(0, 2).map((note) => `[${date}] ${note}`).join("\n");
-      await upsertMemory(deps.db, userId, current ? `${current}\n${appended}` : appended);
+      await appendMemory(deps.db, userId, appended);
     }
     return c.json(saved);
   });
@@ -201,7 +201,9 @@ export function nutritionRoutes(deps: AppDeps) {
   });
 
   r.get("/reports/:kind/:periodStart", async (c) => {
-    const rep = await getReport(deps.db, c.get("userId"), c.req.param("kind") as ReportKind, Number(c.req.param("periodStart")));
+    const periodStart = Number(c.req.param("periodStart"));
+    if (Number.isNaN(periodStart)) return c.json({ error: "periodStart inválido" }, 400);
+    const rep = await getReport(deps.db, c.get("userId"), c.req.param("kind") as ReportKind, periodStart);
     return rep ? c.json(rep) : c.json({ error: "No encontrado" }, 404);
   });
 
