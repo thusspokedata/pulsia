@@ -11,7 +11,7 @@ const bananaRow = {
   saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, saltG: 0,
 };
 
-function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: any; mealFull?: any; water?: any[]; goal?: any } = {}) {
+function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: any; mealFull?: any; water?: any[]; goal?: any; settingsRow?: any; report?: any } = {}) {
   const inserts: any[] = [];
   const db: any = {
     _inserts: inserts,
@@ -32,8 +32,9 @@ function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: a
     query: {
       food: { findFirst: async () => opts.foodRow ?? null },
       meal: { findFirst: async () => opts.mealFull ?? (opts.meals?.[0] ? { userId: opts.meals[0].userId } : null) },
-      settings: { findFirst: async () => ({ aiApiKeyEncrypted: null }) },
+      settings: { findFirst: async () => opts.settingsRow ?? { aiApiKeyEncrypted: null } },
       nutritionGoal: { findFirst: async () => opts.goal ?? null },
+      report: { findFirst: async () => opts.report ?? null },
     },
   };
   return db;
@@ -225,4 +226,26 @@ test("PUT /nutrition/goal rechaza objetivo inválido", async () => {
     body: JSON.stringify({ objective: "bulk", rateKgPerWeek: 0.5 }),
   });
   expect(res.status).toBe(400);
+});
+
+// ---- Informes del agente (#4) ----
+
+test("POST /nutrition/reports/generate 403 si reportsEnabled=false", async () => {
+  const app = createApp(deps(fakeDb({ settingsRow: { reportsEnabled: false, aiApiKeyEncrypted: null } })));
+  const res = await app.request("/nutrition/reports/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ kind: "daily", periodStart: 0, periodEnd: 10, athleteContext: { goal: { status: "incomplete" } } }),
+  });
+  expect(res.status).toBe(403);
+});
+
+test("POST /nutrition/reports/generate devuelve el existente sin llamar a la IA", async () => {
+  const existing = { id: "r1", kind: "daily", periodStart: 0, periodEnd: 10, content: "viejo", createdAt: new Date(0) };
+  const app = createApp(deps(fakeDb({ settingsRow: { reportsEnabled: true, aiApiKeyEncrypted: null }, report: existing })));
+  const res = await app.request("/nutrition/reports/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ kind: "daily", periodStart: 0, periodEnd: 10, athleteContext: { goal: { status: "incomplete" } } }),
+  });
+  expect(res.status).toBe(200);
+  expect((await res.json()).content).toBe("viejo");
 });

@@ -1,12 +1,14 @@
 import { z } from "zod";
 import type { Program, TrainingProfile } from "@pulsia/shared";
 import Anthropic from "@anthropic-ai/sdk";
-import { ProgramSchema, EcgAnalysisSchema, FoodExtractionSchema } from "@pulsia/shared";
+import { ProgramSchema, EcgAnalysisSchema, FoodExtractionSchema, ReportOutputSchema } from "@pulsia/shared";
 import { buildGenerationPrompt } from "./prompt";
 import { buildOneOffPrompt, type OneOffArgs } from "./oneoff";
 import { buildMemoryUpdatePrompt } from "./memory";
 import { buildEcgPrompt } from "./ecg";
 import { buildFoodPrompt } from "./nutrition";
+import { buildReportPrompt } from "./report";
+import type { ReportData } from "../reports/collect";
 
 export interface AiClient {
   generateProgram(input: {
@@ -36,6 +38,11 @@ export interface AiClient {
     mediaType: string;
     apiKey: string;
   }): Promise<import("@pulsia/shared").FoodExtraction>;
+  generateReport?(input: {
+    kind: import("@pulsia/shared").ReportKind;
+    data: ReportData;
+    apiKey: string;
+  }): Promise<import("@pulsia/shared").ReportOutput>;
 }
 
 export class AnthropicAiClient implements AiClient {
@@ -168,5 +175,31 @@ export class AnthropicAiClient implements AiClient {
       throw new Error("La IA no devolvió los datos del alimento.");
     }
     return FoodExtractionSchema.parse(block.input);
+  }
+
+  async generateReport({ kind, data, apiKey }: {
+    kind: import("@pulsia/shared").ReportKind;
+    data: ReportData;
+    apiKey: string;
+  }) {
+    const client = new Anthropic({ apiKey });
+    const { $schema, ...inputSchema } = z.toJSONSchema(ReportOutputSchema) as Record<string, unknown>;
+    const tool = {
+      name: "return_report",
+      description: "Devuelve el informe + notas para la memoria.",
+      input_schema: inputSchema as any,
+    };
+    const res = await client.messages.create({
+      model: "claude-opus-4-8",
+      max_tokens: 4000,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "return_report" },
+      messages: [{ role: "user", content: [{ type: "text", text: buildReportPrompt(kind, data) }] }],
+    });
+    const block = res.content.find((b) => b.type === "tool_use");
+    if (!block || block.type !== "tool_use") {
+      throw new Error("La IA no devolvió el informe.");
+    }
+    return ReportOutputSchema.parse(block.input);
   }
 }

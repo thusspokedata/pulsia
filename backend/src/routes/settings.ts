@@ -10,6 +10,7 @@ const BodySchema = z.object({
   aiModel: z.string().optional(),
   ecgEnabled: z.boolean().optional(),
   kardiaPdfPassword: z.string().optional(),
+  reportsEnabled: z.boolean().optional(),
 });
 
 export function settingsRoutes(deps: AppDeps) {
@@ -19,7 +20,7 @@ export function settingsRoutes(deps: AppDeps) {
     const userId = c.get("userId");
     const parsed = BodySchema.safeParse(await c.req.json());
     if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
-    const { aiApiKey, aiModel, ecgEnabled, kardiaPdfPassword } = parsed.data;
+    const { aiApiKey, aiModel, ecgEnabled, kardiaPdfPassword, reportsEnabled } = parsed.data;
     const key = deps.config.encryptionKey;
 
     // Sólo re-encriptar/persistir lo que vino: no pisar la key con vacío ni resetear campos ausentes.
@@ -31,6 +32,7 @@ export function settingsRoutes(deps: AppDeps) {
     if (aiApiKeyEncrypted !== undefined) fields.aiApiKeyEncrypted = aiApiKeyEncrypted;
     if (kardiaPwEncrypted !== undefined) fields.kardiaPwEncrypted = kardiaPwEncrypted;
     if (ecgEnabled !== undefined) fields.ecgEnabled = ecgEnabled;
+    if (reportsEnabled !== undefined) fields.reportsEnabled = reportsEnabled;
 
     await deps.db
       .insert(settings)
@@ -46,6 +48,7 @@ export function settingsRoutes(deps: AppDeps) {
       hasApiKey: !!row?.aiApiKeyEncrypted,
       aiModel: row?.aiModel ?? deps.config.defaultModel,
       ecgEnabled: row?.ecgEnabled ?? false,
+      reportsEnabled: row?.reportsEnabled ?? false,
       hasKardiaPw: !!row?.kardiaPwEncrypted,
     });
   });

@@ -6,6 +6,7 @@ import { logout } from "../src/api/auth";
 import { useAuth } from "../src/auth/AuthContext";
 import { testConnection } from "../src/api/health";
 import { saveSettings, getSettings } from "../src/api/settings";
+import { scheduleDailyReport, cancelDailyReport, getReminderTime, DEFAULT_TIME } from "../src/reports/reminder";
 import { getPairedBand, setPairedBand, clearPairedBand } from "../src/storage/pairedBand";
 import { getSoundsEnabled, setSoundsEnabled } from "../src/storage/sounds";
 import { createBandManager, type BandManagerHandle, type FoundDevice } from "../src/ble/bandManager";
@@ -26,12 +27,15 @@ export default function ConfiguracionScreen() {
   const [soundsEnabled, setSoundsEnabledState] = useState(true);
   const [ecgEnabled, setEcgEnabled] = useState(false);
   const [kardiaPw, setKardiaPw] = useState("");
+  const [reportsEnabled, setReportsEnabled] = useState(false);
+  const [reminderTime, setReminderTime] = useState(DEFAULT_TIME);
   const bandMgr = useRef<BandManagerHandle | null>(null);
   const scanTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const foundRef = useRef<FoundDevice[]>([]);
   // Evita que la hidratación tardía de getSettings pise un toggle que el usuario
   // ya tocó (y evita setState tras desmontar).
   const ecgTouched = useRef(false);
+  const reportsTouched = useRef(false);
   const mounted = useRef(true);
 
   function clearScanTimer() {
@@ -49,11 +53,15 @@ export default function ConfiguracionScreen() {
           // No pisar un toggle que el usuario ya tocó, ni actualizar tras desmontar.
           if (!mounted.current || ecgTouched.current) return;
           setEcgEnabled(s.ecgEnabled);
+          if (!reportsTouched.current) setReportsEnabled(s.reportsEnabled);
         })
         .catch(() => { /* best-effort: si falla, ECG queda desactivado */ });
     });
     getPairedBand().then((b) => setPairedName(b?.name ?? null));
     getSoundsEnabled().then(setSoundsEnabledState);
+    getReminderTime().then((t) => {
+      if (mounted.current) setReminderTime(t);
+    });
     return () => {
       mounted.current = false;
       clearScanTimer();
@@ -164,6 +172,30 @@ export default function ConfiguracionScreen() {
     } catch {
       // Rollback UI para no desincronizar UI↔backend si la escritura falla.
       setEcgEnabled(!next);
+    }
+  }
+
+  async function onToggleReports() {
+    reportsTouched.current = true;
+    const next = !reportsEnabled;
+    setReportsEnabled(next);
+    try {
+      await saveSettings(url, { reportsEnabled: next });
+      if (next) {
+        await scheduleDailyReport(await getReminderTime());
+      } else {
+        await cancelDailyReport();
+      }
+    } catch {
+      // Rollback UI para no desincronizar UI↔backend si la escritura falla.
+      setReportsEnabled(!next);
+    }
+  }
+
+  async function onChangeReminderTime(text: string) {
+    setReminderTime(text);
+    if (/^\d{1,2}:\d{2}$/.test(text)) {
+      await scheduleDailyReport(text);
     }
   }
 
@@ -295,6 +327,36 @@ export default function ConfiguracionScreen() {
             <Pressable testID="ecg-screen-link" onPress={() => router.push("/ecg")} style={button}>
               <Text style={{ color: "#fff" }}>Ver mis ECG</Text>
             </Pressable>
+          </>
+        )}
+      </View>
+
+      <View style={{ gap: spacing.sm }}>
+        <Text style={{ color: colors.textMuted }}>Informes del agente</Text>
+        <Pressable
+          testID="reports-toggle"
+          onPress={onToggleReports}
+          style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.md }}
+        >
+          <Text style={{ color: colors.text }}>Recibir informes diarios del agente</Text>
+          <Text style={{ color: reportsEnabled ? colors.accentText : colors.textMuted }}>
+            {reportsEnabled ? "Activado" : "Desactivado"}
+          </Text>
+        </Pressable>
+        {reportsEnabled && (
+          <>
+            <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+              Recordatorio diario a las {reminderTime}
+            </Text>
+            <TextInput
+              testID="reports-reminder-time"
+              style={input}
+              placeholder="HH:MM"
+              autoCapitalize="none"
+              keyboardType="numbers-and-punctuation"
+              value={reminderTime}
+              onChangeText={onChangeReminderTime}
+            />
           </>
         )}
       </View>
