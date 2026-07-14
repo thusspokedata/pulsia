@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from "react";
-import { ScrollView, View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
+import { ScrollView, View, Text, TextInput, Pressable, ActivityIndicator, Alert } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { getBackendUrl } from "../../src/storage/config";
-import { listFoods, createMeal, getMeal, updateMeal } from "../../src/api/nutrition";
+import { listFoods, createMeal, getMeal, updateMeal, deleteMeal } from "../../src/api/nutrition";
 import { buildMealInput, mealTotals, itemPreview, allowedUnits, type MealRow } from "../../src/nutrition/mealForm";
 import type { Food, MealType, QuantityUnit } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
@@ -81,6 +81,18 @@ export default function NuevaComidaScreen() {
       else await createMeal(baseUrl.current, input);
       router.back();
     } catch (e) { setError((e as Error).message); setSaving(false); }
+  }
+
+  function confirmDelete() {
+    if (!mealId) return;
+    Alert.alert("Borrar comida", "¿Borrar esta comida?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Borrar", style: "destructive", onPress: async () => {
+        if (!baseUrl.current) { setError("No se pudo conectar con el servidor."); return; }
+        try { await deleteMeal(baseUrl.current, mealId); router.back(); }
+        catch (e) { setError((e as Error).message); }
+      } },
+    ]);
   }
 
   const totals = mealTotals(rows);
@@ -172,10 +184,20 @@ export default function NuevaComidaScreen() {
           </Text>
         )}
       </View>
+      {mealId && rows.length === 0 && !notEditable && (
+        <Text style={{ color: colors.textMuted, fontSize: 13 }}>
+          Una comida no puede quedar sin alimentos: agregá uno o borrá la comida.
+        </Text>
+      )}
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
-      <Pressable onPress={save} disabled={saving || notEditable} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving || notEditable ? 0.6 : 1 }}>
+      <Pressable onPress={save} disabled={saving || notEditable || rows.length === 0} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving || notEditable || rows.length === 0 ? 0.6 : 1 }}>
         <Text style={{ color: "#fff", fontWeight: "700" }}>{saving ? "Guardando…" : mealId ? "Guardar cambios" : "Guardar comida"}</Text>
       </Pressable>
+      {mealId && (
+        <Pressable onPress={confirmDelete} style={{ backgroundColor: colors.danger, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
+          <Text style={{ color: "#fff", fontWeight: "700" }}>Borrar comida</Text>
+        </Pressable>
+      )}
     </ScrollView>
   );
 }
