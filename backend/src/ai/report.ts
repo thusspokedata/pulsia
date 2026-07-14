@@ -19,10 +19,11 @@ function dataBlock(d: ReportData): string {
     `- Líquido: ${d.liquid.total} ml (tomada ${d.liquid.drank}, aporte de alimentos ${d.liquid.fromFood})`,
     `- Entrenamiento: ${d.sessionsCount} sesión(es), gasto estimado ${d.exercise} kcal`,
     `- Progreso: peso ${n(m.weight_kg, " kg")}, pasos ${n(m.steps)}, sueño ${n(m.sleep_hours, " h")}, FC reposo ${n(m.resting_hr)}, estrés ${n(m.stress, "/5")}, ánimo ${n(m.mood, "/5")}, energía ${n(m.energy, "/5")}`,
-    d.weightTrend
+    // Solo si el peso efectivamente cambió en el rango (redundante en un día con una sola medición).
+    d.weightTrend && d.weightTrend.first !== d.weightTrend.last
       ? `- Evolución del peso: de ${d.weightTrend.first} kg a ${d.weightTrend.last} kg en el período`
-      : `- Evolución del peso: s/d`,
-  ].join("\n");
+      : null,
+  ].filter(Boolean).join("\n");
 }
 
 export function buildReportPrompt(kind: ReportKind, data: ReportData): string {
