@@ -7,7 +7,7 @@ test("ok: arma meta/comido/restante + barras por macro", () => {
   const goal: NutritionGoalResult = { status: "ok", source: "auto", kcal: 2000, protein_g: 150, carbs_g: 200, fat_g: 60, bmr: 1600, tdee: 2000 };
   const v = buildGoalView(goal, comido);
   expect(v.status).toBe("ok");
-  expect(v.kcal).toEqual({ meta: 2000, comido: 1200, restante: 800, over: false });
+  expect(v.kcal).toEqual({ meta: 2000, comido: 1200, exercise: 0, restante: 800, over: false });
   const prot = v.macros!.find((m) => m.key === "protein")!;
   expect(prot).toMatchObject({ comido: 90, meta: 150, restante: 60, pct: 60 });
 });
@@ -45,6 +45,23 @@ test("remainingLabel: faltan / cumplida / de más", () => {
   expect(remainingLabel(45)).toBe("faltan 45");
   expect(remainingLabel(0)).toBe("meta cumplida");
   expect(remainingLabel(-36)).toBe("36 de más");
+});
+
+test("exercise suma al restante de kcal y no toca los macros", () => {
+  const goal = { status: "ok", source: "auto", kcal: 2000, protein_g: 150, carbs_g: 200, fat_g: 60, bmr: 1600, tdee: 2000 } as const;
+  const v = bgv(goal, { kcal: 2100, protein_g: 90, carbs_g: 120, fat_g: 40 }, 300);
+  expect(v.kcal).toEqual({ meta: 2000, comido: 2100, exercise: 300, restante: 200, over: false }); // 2000-2100+300
+  expect(v.macros!.find((m) => m.key === "protein")!.restante).toBe(60); // sin cambio
+});
+
+test("sin exercise (default 0) el comportamiento no cambia y over sigue el criterio del restante", () => {
+  const goal = { status: "ok", source: "auto", kcal: 2000, protein_g: 150, carbs_g: 200, fat_g: 60, bmr: 1600, tdee: 2000 } as const;
+  const v = bgv(goal, { kcal: 2100, protein_g: 0, carbs_g: 0, fat_g: 0 });
+  expect(v.kcal).toEqual({ meta: 2000, comido: 2100, exercise: 0, restante: -100, over: true });
+  // borde .5 con exercise: 2000 - 2000.5 + 0 → restante 0 (|| 0), over false
+  const v2 = bgv(goal, { kcal: 2000.5, protein_g: 0, carbs_g: 0, fat_g: 0 });
+  expect(v2.kcal!.restante).toBe(0);
+  expect(v2.kcal!.over).toBe(false);
 });
 
 test("over es consistente con el restante redondeado en el borde .5 (kcal y macros)", () => {

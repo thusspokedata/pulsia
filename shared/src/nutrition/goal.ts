@@ -37,10 +37,20 @@ function macros(kcal: number, weightKg: number | undefined, objective: Nutrition
 export function computeNutritionGoal(args: NutritionGoalArgs): NutritionGoalResult {
   const { sex, age, heightCm, weightKg, activityLevel, objective, rateKgPerWeek, manualKcal } = args;
 
+  // BMR/TDEE se computan si hay datos, ANTES del branch manual: el camino manual los devuelve
+  // informativos (los usa el gasto neto de #2b), aunque la meta sea la manual.
+  const s = sex === "male" ? 5 : sex === "female" ? -161 : -78; // other/sin sexo → promedio
+  const hasAnthro = age != null && heightCm != null && weightKg != null;
+  const bmrRaw = hasAnthro ? 10 * (weightKg as number) + 6.25 * (heightCm as number) - 5 * (age as number) + s : null;
+  const tdeeRaw = bmrRaw != null ? bmrRaw * ACTIVITY_FACTOR[activityLevel ?? "light"] : null;
+
   // Camino manual: el usuario fija las kcal; pisa el cálculo y no fuerza el piso.
   // Se llama directo desde el móvil con un número parseado, así que 0/negativo NO cuentan como override.
   if (manualKcal != null && manualKcal > 0) {
-    return { status: "ok", source: "manual", kcal: manualKcal, ...macros(manualKcal, weightKg, objective), bmr: null, tdee: null };
+    return {
+      status: "ok", source: "manual", kcal: manualKcal, ...macros(manualKcal, weightKg, objective),
+      bmr: bmrRaw != null ? round(bmrRaw) : null, tdee: tdeeRaw != null ? round(tdeeRaw) : null,
+    };
   }
 
   const missing: string[] = [];
@@ -49,11 +59,9 @@ export function computeNutritionGoal(args: NutritionGoalArgs): NutritionGoalResu
   if (weightKg == null) missing.push("peso");
   if (missing.length > 0) return { status: "incomplete", missing };
 
-  const s = sex === "male" ? 5 : sex === "female" ? -161 : -78; // other/sin sexo → promedio
-  const bmr = 10 * (weightKg as number) + 6.25 * (heightCm as number) - 5 * (age as number) + s;
-  const tdee = bmr * ACTIVITY_FACTOR[activityLevel ?? "light"];
+  // Acá bmrRaw/tdeeRaw son no-null (hasAnthro garantizado por el check de missing).
   const adj = (rateKgPerWeek * KCAL_PER_KG) / 7;
-  const raw = objective === "lose" ? tdee - adj : objective === "gain" ? tdee + adj : tdee;
+  const raw = objective === "lose" ? (tdeeRaw as number) - adj : objective === "gain" ? (tdeeRaw as number) + adj : (tdeeRaw as number);
   const kcal = Math.max(KCAL_FLOOR, round(raw));
-  return { status: "ok", source: "auto", kcal, ...macros(kcal, weightKg, objective), bmr: round(bmr), tdee: round(tdee) };
+  return { status: "ok", source: "auto", kcal, ...macros(kcal, weightKg, objective), bmr: round(bmrRaw as number), tdee: round(tdeeRaw as number) };
 }

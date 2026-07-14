@@ -139,3 +139,49 @@ test("listSessions incluye completionPct y proyecta liviano (sin exercises)", as
   expect(typeof out[0].completionPct).toBe("number");
   expect(out[0]).not.toHaveProperty("exercises");
 });
+
+test("listSessions expone avgHr desde hrSeries (promedio redondeado)", async () => {
+  const row = { ...nestedRow, hrSeries: [{ t: 0, bpm: 120 }, { t: 5000, bpm: 141 }] };
+  const db: any = { query: { workoutSession: { findMany: async () => [row] } } };
+  const [item] = await listSessions(db, "u");
+  expect(item.avgHr).toBe(131); // (120+141)/2 = 130.5 → 131
+});
+
+test("listSessions cae al promedio de hrAvg de las series si no hay hrSeries", async () => {
+  // nestedRow no tiene hrSeries; asegurate de que sus sets tengan hrAvg (si el fixture no trae, cloná y seteá)
+  const withHr = {
+    ...nestedRow,
+    hrSeries: null,
+    exercises: nestedRow.exercises.map((ex: any) => ({
+      ...ex,
+      sets: ex.sets.map((st: any, i: number) => ({ ...st, hrAvg: i === 0 ? 110 : null })),
+    })),
+  };
+  const db: any = { query: { workoutSession: { findMany: async () => [withHr] } } };
+  const [item] = await listSessions(db, "u");
+  expect(item.avgHr).toBe(110); // solo los no-null cuentan
+});
+
+test("listSessions avgHr null si no hay FC en ningún lado", async () => {
+  const noHr = {
+    ...nestedRow, hrSeries: null,
+    exercises: nestedRow.exercises.map((ex: any) => ({ ...ex, sets: ex.sets.map((st: any) => ({ ...st, hrAvg: null })) })),
+  };
+  const db: any = { query: { workoutSession: { findMany: async () => [noHr] } } };
+  const [item] = await listSessions(db, "u");
+  expect(item.avgHr).toBeNull();
+});
+
+test("listSessions deriva la duración de endedAt si totalDurationMs es null", async () => {
+  const row = { ...nestedRow, totalDurationMs: null, startedAt: 1000, endedAt: 61000 };
+  const db: any = { query: { workoutSession: { findMany: async () => [row] } } };
+  const [item] = await listSessions(db, "u");
+  expect(item.totalDurationMs).toBe(60000);
+});
+
+test("listSessions duración null si la sesión sigue en curso (endedAt null)", async () => {
+  const row = { ...nestedRow, totalDurationMs: null, endedAt: null };
+  const db: any = { query: { workoutSession: { findMany: async () => [row] } } };
+  const [item] = await listSessions(db, "u");
+  expect(item.totalDurationMs).toBeNull();
+});

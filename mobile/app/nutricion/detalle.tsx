@@ -30,7 +30,7 @@ export default function DetalleDiaScreen() {
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
       <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>Detalle del día</Text>
       <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18 }}>
-        Comido = lo registrado · Meta = tu objetivo · Restante = Meta − Comido. Todavía no incluye el gasto del ejercicio.
+        Comido = lo registrado · Meta = tu objetivo · Restante = Meta − Comido + Ejercicio. El gasto del ejercicio se estima desde tus sesiones (FC o duración).
       </Text>
 
       {/* Calorías */}
@@ -44,7 +44,13 @@ export default function DetalleDiaScreen() {
                 {goalView.kcal!.over ? `${-goalView.kcal!.restante} de más` : `te quedan ${goalView.kcal!.restante}`}
               </Text>
             </View>
-            {bar(Math.min(100, Math.round((goalView.kcal!.comido / goalView.kcal!.meta) * 100)), goalView.kcal!.over)}
+            {/* La barra mide contra el presupuesto real del día (meta + ejercicio), igual que el restante. */}
+            {bar(Math.min(100, Math.round((goalView.kcal!.comido / (goalView.kcal!.meta + goalView.kcal!.exercise)) * 100)), goalView.kcal!.over)}
+            {goalView.kcal!.exercise > 0 && (
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                Ejercicio +{goalView.kcal!.exercise} kcal (ya sumado al restante)
+              </Text>
+            )}
           </>
         ) : (
           <>
