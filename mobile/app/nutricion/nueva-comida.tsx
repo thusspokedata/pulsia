@@ -30,8 +30,9 @@ export default function NuevaComidaScreen() {
       const url = await getBackendUrl();
       baseUrl.current = url;
       let cat: Food[] = [];
-      try { cat = await listFoods(url); setFoods(cat); } catch (e) { setError((e as Error).message); }
-      if (mealId && !initedRef.current) {
+      let catOk = false;
+      try { cat = await listFoods(url); setFoods(cat); catOk = true; } catch (e) { setError((e as Error).message); }
+      if (mealId && !initedRef.current && catOk) {
         initedRef.current = true;
         try {
           const m = await getMeal(url, mealId);
@@ -40,11 +41,13 @@ export default function NuevaComidaScreen() {
           setNote(m.note ?? "");
           const reconstructed = m.items.map((it) => {
             const food = cat.find((f) => f.id === it.foodId);
-            return food ? { food, quantity: it.quantity, unit: it.quantityUnit } : null;
+            return food && allowedUnits(food).includes(it.quantityUnit)
+              ? { food, quantity: it.quantity, unit: it.quantityUnit }
+              : null;
           });
           if (reconstructed.some((r) => r === null)) setNotEditable(true);
           else setRows(reconstructed as MealRow[]);
-        } catch (e) { setError((e as Error).message); }
+        } catch (e) { setError((e as Error).message); initedRef.current = false; }
       }
     })();
   }, [mealId]));
