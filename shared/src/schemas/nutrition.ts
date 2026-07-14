@@ -18,11 +18,21 @@ const macrosPer100 = {
   fat_g: z.number().nonnegative(),
 };
 
+// Micros de etiqueta (por 100g/100ml). Todos OPCIONALES + nullable: la IA puede omitirlos y
+// los alimentos/comidas viejos no los tienen.
+const microsPer100 = {
+  saturated_fat_g: z.number().nonnegative().nullable().optional(),
+  sugars_g: z.number().nonnegative().nullable().optional(),
+  fiber_g: z.number().nonnegative().nullable().optional(),
+  salt_g: z.number().nonnegative().nullable().optional(),
+};
+
 // Lo que la IA extrae de la foto (output estructurado). Sin id/userId.
 export const FoodExtractionSchema = z.object({
   name: z.string().trim().min(1),
   basis: FoodBasisSchema,
   ...macrosPer100,
+  ...microsPer100,
   // "1 unidad" en la base del alimento (g si per_100g, ml si per_100ml). null si no es contable.
   unitWeightG: z.number().positive().nullable(),
   source: FoodSourceSchema,
@@ -66,6 +76,7 @@ export const MealItemSchema = z.object({
   quantityUnit: QuantityUnitSchema,
   grams: z.number(),
   ...macrosPer100,
+  ...microsPer100,
 });
 export type MealItem = z.infer<typeof MealItemSchema>;
 
