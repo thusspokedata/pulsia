@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { FoodInputSchema, MealInputSchema, WaterLogInputSchema, NutritionGoalInputSchema } from "@pulsia/shared";
+import { FoodInputSchema, MealInputSchema, WaterLogInputSchema, NutritionGoalInputSchema, ReportGenerateInputSchema, type ReportKind } from "@pulsia/shared";
 import {
   insertFood, listFoods, getFood, updateFood, deleteFood,
   createMeal, listMeals, updateMeal, deleteMeal, getMealById,
@@ -11,6 +11,9 @@ import {
 import { resolveAiKey } from "../ai/resolveKey";
 import { settings } from "../db/schema";
 import { eq } from "drizzle-orm";
+import { getReport, upsertReport, listReports } from "../reports/repository";
+import { collectReportData, hasAnyData } from "../reports/collect";
+import { getMemory, upsertMemory } from "../memory/repository";
 import type { AppDeps } from "../app";
 
 const ExtractSchema = z.object({
@@ -144,6 +147,62 @@ export function nutritionRoutes(deps: AppDeps) {
     const parsed = NutritionGoalInputSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "Objetivo inválido", detail: parsed.error.issues }, 400);
     return c.json(await upsertGoalInput(deps.db, c.get("userId"), parsed.data));
+  });
+
+  // ---- Informes del agente (#4) ----
+  const NO_DATA = "No registraste datos en este período. Cargá tus comidas, agua o entrenamientos y volvé a generar el informe.";
+
+  r.post("/reports/generate", async (c) => {
+    const userId = c.get("userId");
+    const parsed = ReportGenerateInputSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Pedido inválido", detail: parsed.error.issues }, 400);
+    const { kind, periodStart, periodEnd, athleteContext, force } = parsed.data;
+
+    const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
+    if (!settingsRow?.reportsEnabled) return c.json({ error: "Los informes están desactivados. Activalos en Configuración." }, 403);
+
+    if (!force) {
+      const existing = await getReport(deps.db, userId, kind, periodStart);
+      if (existing) return c.json(existing);
+    }
+
+    const data = await collectReportData(deps.db, userId, periodStart, periodEnd, athleteContext);
+    if (!hasAnyData(data)) {
+      return c.json(await upsertReport(deps.db, userId, { kind, periodStart, periodEnd, content: NO_DATA }));
+    }
+
+    if (!deps.aiClient.generateReport) return c.json({ error: "El servidor no soporta la generación de informes." }, 500);
+    const apiKey = resolveAiKey(settingsRow, deps.config);
+    if (!apiKey) return c.json({ error: "No hay API key de IA disponible." }, 400);
+
+    let output;
+    try {
+      output = await deps.aiClient.generateReport({ kind, data, apiKey });
+    } catch (e) {
+      console.warn("generateReport falló:", (e as Error).message);
+      return c.json({ error: "No se pudo generar el informe. Reintentá en un rato." }, 502);
+    }
+
+    const saved = await upsertReport(deps.db, userId, { kind, periodStart, periodEnd, content: output.content });
+
+    // Memoria del atleta: anexar hasta 2 observaciones con la fecha del período.
+    if (output.memoryNotes.length > 0) {
+      const date = new Date(periodStart).toISOString().slice(0, 10);
+      const current = await getMemory(deps.db, userId);
+      const appended = output.memoryNotes.slice(0, 2).map((note) => `[${date}] ${note}`).join("\n");
+      await upsertMemory(deps.db, userId, current ? `${current}\n${appended}` : appended);
+    }
+    return c.json(saved);
+  });
+
+  r.get("/reports", async (c) => {
+    const kind = c.req.query("kind") as ReportKind | undefined;
+    return c.json(await listReports(deps.db, c.get("userId"), kind, parseQueryNumber(c.req.query("from")), parseQueryNumber(c.req.query("to"))));
+  });
+
+  r.get("/reports/:kind/:periodStart", async (c) => {
+    const rep = await getReport(deps.db, c.get("userId"), c.req.param("kind") as ReportKind, Number(c.req.param("periodStart")));
+    return rep ? c.json(rep) : c.json({ error: "No encontrado" }, 404);
   });
 
   return r;
