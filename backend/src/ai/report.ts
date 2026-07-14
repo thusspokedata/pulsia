@@ -19,6 +19,9 @@ function dataBlock(d: ReportData): string {
     `- Líquido: ${d.liquid.total} ml (tomada ${d.liquid.drank}, aporte de alimentos ${d.liquid.fromFood})`,
     `- Entrenamiento: ${d.sessionsCount} sesión(es), gasto estimado ${d.exercise} kcal`,
     `- Progreso: peso ${n(m.weight_kg, " kg")}, pasos ${n(m.steps)}, sueño ${n(m.sleep_hours, " h")}, FC reposo ${n(m.resting_hr)}, estrés ${n(m.stress, "/5")}, ánimo ${n(m.mood, "/5")}, energía ${n(m.energy, "/5")}`,
+    d.weightTrend
+      ? `- Evolución del peso: de ${d.weightTrend.first} kg a ${d.weightTrend.last} kg en el período`
+      : `- Evolución del peso: s/d`,
   ].join("\n");
 }
 
@@ -31,7 +34,7 @@ export function buildReportPrompt(kind: ReportKind, data: ReportData): string {
     "DATOS DEL PERÍODO:",
     dataBlock(data),
     periodica
-      ? "Como es un informe periódico, enfocate en TENDENCIAS y PROMEDIOS: días por encima/debajo de la meta, patrones recurrentes (mucha azúcar/sal/colesterol), evolución del peso vs objetivo, adherencia al entrenamiento."
+      ? `Como es un informe periódico de ${data.periodDays} días, los TOTALES de arriba son la SUMA del período: PROMEDIÁ por día (p.ej. kcal/día = total / ${data.periodDays}) y compará contra la meta DIARIA. Enfocate en tendencias: días probablemente por encima/debajo de la meta, patrones recurrentes (azúcar/sal/colesterol), la evolución del peso, y la adherencia al entrenamiento.`
       : "Como es un informe de un día, resumí cómo fue el día vs la meta y qué se puede mejorar mañana.",
     "Reglas del informe:",
     "1. Sé honesto y proporcional: si hay POCOS datos registrados, decilo y hacé un análisis parcial; NUNCA inventes números que no están.",
