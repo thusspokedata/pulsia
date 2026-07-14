@@ -22,6 +22,18 @@ export async function listFoods(baseUrl: string): Promise<Food[]> {
   return (await res.json()) as Food[];
 }
 
+export async function getFood(baseUrl: string, id: string): Promise<Food> {
+  const res = await apiFetch(baseUrl, `/nutrition/foods/${id}`);
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo cargar el alimento."));
+  return (await res.json()) as Food;
+}
+
+export async function updateFood(baseUrl: string, id: string, input: FoodInput): Promise<Food> {
+  const res = await apiFetch(baseUrl, `/nutrition/foods/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo actualizar el alimento."));
+  return (await res.json()) as Food;
+}
+
 export async function deleteFood(baseUrl: string, id: string): Promise<void> {
   const res = await apiFetch(baseUrl, `/nutrition/foods/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo borrar el alimento."));
@@ -37,6 +49,18 @@ export async function listMeals(baseUrl: string, from: number, to: number): Prom
   const res = await apiFetch(baseUrl, `/nutrition/meals?from=${from}&to=${to}`);
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudieron cargar las comidas."));
   return (await res.json()) as Meal[];
+}
+
+export async function getMeal(baseUrl: string, id: string): Promise<Meal> {
+  const res = await apiFetch(baseUrl, `/nutrition/meals/${id}`);
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo cargar la comida."));
+  return (await res.json()) as Meal;
+}
+
+export async function updateMeal(baseUrl: string, id: string, input: MealInput): Promise<Meal> {
+  const res = await apiFetch(baseUrl, `/nutrition/meals/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo actualizar la comida."));
+  return (await res.json()) as Meal;
 }
 
 export async function deleteMeal(baseUrl: string, id: string): Promise<void> {

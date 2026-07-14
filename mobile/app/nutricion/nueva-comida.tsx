@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from "react";
-import { ScrollView, View, Text, TextInput, Pressable } from "react-native";
+import { ScrollView, View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { getBackendUrl } from "../../src/storage/config";
-import { listFoods, createMeal } from "../../src/api/nutrition";
+import { listFoods, createMeal, getMeal, updateMeal } from "../../src/api/nutrition";
 import { buildMealInput, mealTotals, itemPreview, allowedUnits, type MealRow } from "../../src/nutrition/mealForm";
 import type { Food, MealType, QuantityUnit } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
@@ -10,7 +10,8 @@ import { colors, radius, spacing } from "../../src/theme/tokens";
 const MEAL_TYPES: MealType[] = ["desayuno", "almuerzo", "cena", "snack"];
 
 export default function NuevaComidaScreen() {
-  const params = useLocalSearchParams<{ eatenAt?: string }>();
+  const params = useLocalSearchParams<{ eatenAt?: string; mealId?: string }>();
+  const mealId = params.mealId;
   const baseUrl = useRef<string | null>(null);
   const [foods, setFoods] = useState<Food[]>([]);
   const [rows, setRows] = useState<MealRow[]>([]);
@@ -19,12 +20,39 @@ export default function NuevaComidaScreen() {
   const [q, setQ] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [notEditable, setNotEditable] = useState(false);
+  const [loading, setLoading] = useState(!!mealId);
+  const initedRef = useRef(false);
   // eatenAt: si vino por params (día seleccionado en el tab), usarlo; si no, ahora.
   const eatenAt = useRef<number>(params.eatenAt ? Number(params.eatenAt) : Date.now());
 
   useFocusEffect(useCallback(() => {
-    (async () => { const url = await getBackendUrl(); baseUrl.current = url; try { setFoods(await listFoods(url)); } catch (e) { setError((e as Error).message); } })();
-  }, []));
+    (async () => {
+      const url = await getBackendUrl();
+      baseUrl.current = url;
+      let cat: Food[] = [];
+      let catOk = false;
+      try { cat = await listFoods(url); setFoods(cat); catOk = true; } catch (e) { setError((e as Error).message); }
+      if (mealId && !initedRef.current && catOk) {
+        initedRef.current = true;
+        try {
+          const m = await getMeal(url, mealId);
+          eatenAt.current = m.eatenAt;
+          setMealType(m.mealType);
+          setNote(m.note ?? "");
+          const reconstructed = m.items.map((it) => {
+            const food = cat.find((f) => f.id === it.foodId);
+            return food && allowedUnits(food).includes(it.quantityUnit)
+              ? { food, quantity: it.quantity, unit: it.quantityUnit }
+              : null;
+          });
+          if (reconstructed.some((r) => r === null)) setNotEditable(true);
+          else setRows(reconstructed as MealRow[]);
+        } catch (e) { setError((e as Error).message); initedRef.current = false; }
+      }
+      setLoading(false);
+    })();
+  }, [mealId]));
 
   function addFood(food: Food) {
     const unit = allowedUnits(food)[0];
@@ -42,12 +70,15 @@ export default function NuevaComidaScreen() {
 
   async function save() {
     setError(null);
+    if (notEditable) { setError("Esta comida no se puede editar: uno de sus alimentos fue borrado del catálogo o cambió de unidad/formato. Borrala y volvé a cargarla."); return; }
     if (rows.length === 0) { setError("Agregá al menos un alimento."); return; }
     if (rows.some((r) => r.quantity <= 0)) { setError("Las cantidades tienen que ser mayores a 0."); return; }
     if (!baseUrl.current) { setError("No se pudo conectar con el servidor."); return; }
     setSaving(true);
     try {
-      await createMeal(baseUrl.current, buildMealInput({ eatenAt: eatenAt.current, mealType, note, rows }));
+      const input = buildMealInput({ eatenAt: eatenAt.current, mealType, note, rows });
+      if (mealId) await updateMeal(baseUrl.current, mealId, input);
+      else await createMeal(baseUrl.current, input);
       router.back();
     } catch (e) { setError((e as Error).message); setSaving(false); }
   }
@@ -55,9 +86,23 @@ export default function NuevaComidaScreen() {
   const totals = mealTotals(rows);
   const matches = q.trim() ? foods.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase())) : [];
 
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator color={colors.accent} />
+        <Text style={{ color: colors.textMuted, marginTop: spacing.sm }}>Cargando comida…</Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
-      <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>Nueva comida</Text>
+      <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>{mealId ? "Editar comida" : "Nueva comida"}</Text>
+      {notEditable && (
+        <Text style={{ color: colors.danger, fontSize: 13 }}>
+          Esta comida no se puede editar: uno de sus alimentos fue borrado del catálogo o cambió de unidad/formato. Borrala y volvé a cargarla.
+        </Text>
+      )}
 
       <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" }}>
         {MEAL_TYPES.map((t) => (
@@ -128,8 +173,8 @@ export default function NuevaComidaScreen() {
         )}
       </View>
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
-      <Pressable onPress={save} disabled={saving} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
-        <Text style={{ color: "#fff", fontWeight: "700" }}>{saving ? "Guardando…" : "Guardar comida"}</Text>
+      <Pressable onPress={save} disabled={saving || notEditable} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving || notEditable ? 0.6 : 1 }}>
+        <Text style={{ color: "#fff", fontWeight: "700" }}>{saving ? "Guardando…" : mealId ? "Guardar cambios" : "Guardar comida"}</Text>
       </Pressable>
     </ScrollView>
   );

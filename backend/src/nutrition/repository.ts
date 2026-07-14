@@ -84,6 +84,17 @@ export async function getFood(db: Db, userId: string, id: string): Promise<Food 
   return row ? toFood(row) : null;
 }
 
+export async function updateFood(db: Db, userId: string, id: string, input: FoodInput): Promise<Food | null> {
+  const rows = await db.update(food).set({
+    name: input.name, basis: input.basis, kcal: input.kcal,
+    proteinG: input.protein_g, carbsG: input.carbs_g, fatG: input.fat_g,
+    unitWeightG: input.unitWeightG, source: input.source,
+    saturatedFatG: input.saturated_fat_g ?? null, sugarsG: input.sugars_g ?? null,
+    fiberG: input.fiber_g ?? null, saltG: input.salt_g ?? null,
+  }).where(and(eq(food.id, id), eq(food.userId, userId))).returning();
+  return rows[0] ? toFood(rows[0]) : null;
+}
+
 export async function deleteFood(db: Db, userId: string, id: string): Promise<boolean> {
   const rows = await db.delete(food).where(and(eq(food.id, id), eq(food.userId, userId))).returning({ id: food.id });
   return rows.length > 0;
@@ -121,6 +132,13 @@ export async function listMeals(db: Db, userId: string, from?: number, to?: numb
 export async function getMealOwner(db: Db, id: string): Promise<{ userId: string } | null> {
   const row = await db.query.meal.findFirst({ where: eq(meal.id, id), columns: { userId: true } });
   return row ?? null;
+}
+
+export async function getMealById(db: Db, userId: string, id: string): Promise<Meal | null> {
+  const row = await db.query.meal.findFirst({ where: and(eq(meal.id, id), eq(meal.userId, userId)) });
+  if (!row) return null;
+  const items = await db.select().from(mealItem).where(eq(mealItem.mealId, id));
+  return toMeal(row, items);
 }
 
 export async function updateMeal(db: Db, userId: string, id: string, input: MealInput): Promise<Meal | null> {
