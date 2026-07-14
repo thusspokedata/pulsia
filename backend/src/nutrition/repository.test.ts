@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { snapshotItems, toFood, toMeal, insertWater, deleteWater } from "./repository";
+import { snapshotItems, toFood, toMeal, insertWater, deleteWater, getGoalInput, upsertGoalInput } from "./repository";
 
 const banana = {
   id: "11111111-1111-4111-8111-111111111111", userId: "u", name: "Banana", basis: "per_100g",
@@ -88,8 +88,6 @@ test("deleteWater devuelve true si borró, false si no", async () => {
   expect(await deleteWater(dbHit, "u", "w1")).toBe(true);
   expect(await deleteWater(dbMiss, "u", "w1")).toBe(false);
 });
-
-import { getGoalInput, upsertGoalInput } from "./repository";
 
 test("getGoalInput devuelve mantenimiento por defecto si no hay fila", async () => {
   const db: any = { query: { nutritionGoal: { findFirst: async () => null } } };

@@ -200,7 +200,7 @@ const DEFAULT_GOAL: NutritionGoalInput = { objective: "maintain", rateKgPerWeek:
 
 export async function getGoalInput(db: Db, userId: string): Promise<NutritionGoalInput> {
   const row = await db.query.nutritionGoal.findFirst({ where: eq(nutritionGoal.userId, userId) });
-  if (!row) return DEFAULT_GOAL;
+  if (!row) return { ...DEFAULT_GOAL }; // copia: no compartir la referencia del default
   return {
     objective: row.objective as NutritionGoalInput["objective"],
     rateKgPerWeek: row.rateKgPerWeek,
