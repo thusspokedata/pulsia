@@ -9,9 +9,10 @@ import { colors, radius, spacing } from "../../src/theme/tokens";
 
 type Form = {
   name: string; basis: FoodBasis; kcal: string; protein_g: string; carbs_g: string; fat_g: string;
+  saturated_fat_g: string; sugars_g: string; fiber_g: string; salt_g: string;
   unitWeightG: string; source: FoodSource;
 };
-const EMPTY: Form = { name: "", basis: "per_100g", kcal: "", protein_g: "", carbs_g: "", fat_g: "", unitWeightG: "", source: "estimate" };
+const EMPTY: Form = { name: "", basis: "per_100g", kcal: "", protein_g: "", carbs_g: "", fat_g: "", saturated_fat_g: "", sugars_g: "", fiber_g: "", salt_g: "", unitWeightG: "", source: "estimate" };
 
 export default function AgregarAlimentoScreen() {
   const baseUrl = useRef<string | null>(null);
@@ -38,9 +39,12 @@ export default function AgregarAlimentoScreen() {
     setAnalyzing(true);
     try {
       const ex = await extractFood(baseUrl.current, asset.base64!, mime);
+      const numStr = (v: number | null | undefined) => (v == null ? "" : String(v));
       setForm({
         name: ex.name, basis: ex.basis, kcal: String(ex.kcal), protein_g: String(ex.protein_g),
         carbs_g: String(ex.carbs_g), fat_g: String(ex.fat_g),
+        saturated_fat_g: numStr(ex.saturated_fat_g), sugars_g: numStr(ex.sugars_g),
+        fiber_g: numStr(ex.fiber_g), salt_g: numStr(ex.salt_g),
         unitWeightG: ex.unitWeightG == null ? "" : String(ex.unitWeightG), source: ex.source,
       });
     } catch (e) {
@@ -53,13 +57,20 @@ export default function AgregarAlimentoScreen() {
   async function save() {
     setError(null);
     const num = (s: string) => Number(s.replace(",", "."));
+    const optNum = (s: string) => (s.trim() === "" ? null : num(s));
     const input = {
       name: form.name.trim(), basis: form.basis, kcal: num(form.kcal), protein_g: num(form.protein_g),
       carbs_g: num(form.carbs_g), fat_g: num(form.fat_g),
+      saturated_fat_g: optNum(form.saturated_fat_g), sugars_g: optNum(form.sugars_g),
+      fiber_g: optNum(form.fiber_g), salt_g: optNum(form.salt_g),
       unitWeightG: form.unitWeightG.trim() === "" ? null : num(form.unitWeightG), source: form.source,
     };
     if (!input.name || [input.kcal, input.protein_g, input.carbs_g, input.fat_g].some((n) => Number.isNaN(n) || n < 0)) {
       setError("Completá nombre y macros (kcal/proteína/carbos/grasa) con números válidos."); return;
+    }
+    // Los micros son opcionales: si el usuario tipeó algo, tiene que ser un número >= 0.
+    for (const [label, v, raw] of [["saturadas", input.saturated_fat_g, form.saturated_fat_g], ["azúcares", input.sugars_g, form.sugars_g], ["fibra", input.fiber_g, form.fiber_g], ["sal", input.salt_g, form.salt_g]] as const) {
+      if (raw.trim() !== "" && (v == null || Number.isNaN(v) || v < 0)) { setError(`El valor de ${label} tiene que ser un número mayor o igual a 0.`); return; }
     }
     if (form.unitWeightG.trim() !== "" && (input.unitWeightG == null || Number.isNaN(input.unitWeightG) || input.unitWeightG <= 0)) {
       setError("El peso por unidad tiene que ser un número mayor a 0."); return;
@@ -121,6 +132,15 @@ export default function AgregarAlimentoScreen() {
       {field("Proteína (g)", "protein_g", "numeric")}
       {field("Carbohidratos (g)", "carbs_g", "numeric")}
       {field("Grasa (g)", "fat_g", "numeric")}
+      {field("Grasas saturadas (g, opcional)", "saturated_fat_g", "numeric")}
+      {field("Azúcares (g, opcional)", "sugars_g", "numeric")}
+      {field("Fibra (g, opcional)", "fiber_g", "numeric")}
+      {field("Sal (g, opcional)", "salt_g", "numeric")}
+      {form.salt_g.trim() !== "" && !Number.isNaN(Number(form.salt_g.replace(",", "."))) && (
+        <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+          Sodio ≈ {Math.round((Number(form.salt_g.replace(",", ".")) / 2.5) * 1000)} mg / 100{form.basis === "per_100ml" ? "ml" : "g"}
+        </Text>
+      )}
       {field("Peso por unidad (opcional)", "unitWeightG", "numeric")}
       <Text style={{ color: colors.textMuted, fontSize: 12 }}>
         Fuente: {form.source === "label" ? "etiqueta (preciso)" : "estimado por IA"}
