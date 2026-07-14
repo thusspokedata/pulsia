@@ -7,6 +7,10 @@ export interface MacroSource {
   carbs_g: number;
   fat_g: number;
   unitWeightG: number | null;
+  saturated_fat_g?: number | null;
+  sugars_g?: number | null;
+  fiber_g?: number | null;
+  salt_g?: number | null;
 }
 
 export interface ScaledMacros {
@@ -15,9 +19,17 @@ export interface ScaledMacros {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  saturated_fat_g: number | null;
+  sugars_g: number | null;
+  fiber_g: number | null;
+  salt_g: number | null;
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
+
+// Escala un micro opcional por el factor; null/undefined → null.
+const scaleMicro = (v: number | null | undefined, factor: number): number | null =>
+  v == null ? null : round1(v * factor);
 
 // Fuente única del cálculo: la usan el móvil (preview) y el backend (snapshot).
 export function foodMacrosForQuantity(food: MacroSource, quantity: number, unit: QuantityUnit): ScaledMacros {
@@ -37,5 +49,9 @@ export function foodMacrosForQuantity(food: MacroSource, quantity: number, unit:
     protein_g: round1(food.protein_g * factor),
     carbs_g: round1(food.carbs_g * factor),
     fat_g: round1(food.fat_g * factor),
+    saturated_fat_g: scaleMicro(food.saturated_fat_g, factor),
+    sugars_g: scaleMicro(food.sugars_g, factor),
+    fiber_g: scaleMicro(food.fiber_g, factor),
+    salt_g: scaleMicro(food.salt_g, factor),
   };
 }
