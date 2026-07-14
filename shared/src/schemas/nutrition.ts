@@ -25,6 +25,8 @@ const microsPer100 = {
   sugars_g: z.number().nonnegative().nullable().optional(),
   fiber_g: z.number().nonnegative().nullable().optional(),
   salt_g: z.number().nonnegative().nullable().optional(),
+  cholesterol_mg: z.number().nonnegative().nullable().optional(), // mg (no g)
+  water_ml: z.number().nonnegative().nullable().optional(),        // aporte de agua por 100g/ml
 };
 
 // Lo que la IA extrae de la foto (output estructurado). Sin id/userId.
