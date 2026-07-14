@@ -11,7 +11,7 @@ const bananaRow = {
   saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, saltG: 0,
 };
 
-function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: any; mealFull?: any } = {}) {
+function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: any; mealFull?: any; water?: any[] } = {}) {
   const inserts: any[] = [];
   const db: any = {
     _inserts: inserts,
@@ -26,7 +26,7 @@ function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: a
     }),
     update: () => ({ set: () => ({ where: () => { const p: any = Promise.resolve([]); p.returning = async () => (opts.foodRow ? [opts.foodRow] : []); return p; } }) }),
     delete: () => ({ where: () => { const p: any = Promise.resolve(undefined); p.returning = async () => [{ id: FOOD_ID }]; return p; } }),
-    select: () => ({ from: () => ({ where: () => ({ orderBy: async () => opts.foods ?? [], then: (r: any) => r(opts.foods ?? []) }) }) }),
+    select: () => ({ from: () => ({ where: () => ({ orderBy: async () => opts.water ?? opts.foods ?? [], then: (r: any) => r(opts.foods ?? []) }) }) }),
     transaction: async (fn: any) => fn(db),
     query: {
       food: { findFirst: async () => opts.foodRow ?? null },
@@ -169,4 +169,35 @@ test("GET /nutrition/meals/:id → 200 con la comida", async () => {
 test("GET /nutrition/meals/:id → 404 si no existe", async () => {
   const res = await createApp(deps(fakeDb())).request(`/nutrition/meals/${MEAL_ID2}`);
   expect(res.status).toBe(404);
+});
+
+test("POST /nutrition/water registra agua y devuelve la fila", async () => {
+  const db = fakeDb();
+  const app = createApp(deps(db));
+  const res = await app.request("/nutrition/water", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ml: 250, loggedAt: 1_700_000_000_000 }),
+  });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toMatchObject({ ml: 250, loggedAt: 1_700_000_000_000 });
+});
+
+test("POST /nutrition/water rechaza ml <= 0", async () => {
+  const res = await createApp(deps(fakeDb())).request("/nutrition/water", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ml: 0, loggedAt: 1 }),
+  });
+  expect(res.status).toBe(400);
+});
+
+test("GET /nutrition/water lista las cargas del rango", async () => {
+  const db = fakeDb({ water: [{ id: "w1", ml: 250, loggedAt: 1_700_000_000_000 }] });
+  const res = await createApp(deps(db)).request("/nutrition/water?from=0&to=9999999999999");
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual([{ id: "w1", ml: 250, loggedAt: 1_700_000_000_000 }]);
+});
+
+test("DELETE /nutrition/water/:id → 200", async () => {
+  const res = await createApp(deps(fakeDb())).request("/nutrition/water/11111111-1111-4111-8111-111111111111", { method: "DELETE" });
+  expect(res.status).toBe(200);
 });

@@ -1,7 +1,7 @@
 import { and, asc, eq, gte, lte, inArray } from "drizzle-orm";
-import { food, meal, mealItem } from "../db/schema";
+import { food, meal, mealItem, waterLog } from "../db/schema";
 import { foodMacrosForQuantity } from "@pulsia/shared";
-import type { Food, FoodInput, Meal, MealItem, MealItemInput, MealInput, QuantityUnit } from "@pulsia/shared";
+import type { Food, FoodInput, Meal, MealItem, MealItemInput, MealInput, QuantityUnit, WaterLog, WaterLogInput } from "@pulsia/shared";
 import type { Db } from "../db/client";
 
 type FoodRow = typeof food.$inferSelect;
@@ -166,5 +166,29 @@ export async function updateMeal(db: Db, userId: string, id: string, input: Meal
 
 export async function deleteMeal(db: Db, userId: string, id: string): Promise<boolean> {
   const rows = await db.delete(meal).where(and(eq(meal.id, id), eq(meal.userId, userId))).returning({ id: meal.id });
+  return rows.length > 0;
+}
+
+// ---- Water log (agua tomada) ----
+type WaterRow = typeof waterLog.$inferSelect;
+function toWaterLog(row: WaterRow): WaterLog {
+  return { id: row.id, ml: row.ml, loggedAt: row.loggedAt };
+}
+
+export async function insertWater(db: Db, userId: string, input: WaterLogInput): Promise<WaterLog> {
+  const [row] = await db.insert(waterLog).values({ userId, ml: input.ml, loggedAt: input.loggedAt }).returning();
+  return toWaterLog(row);
+}
+
+export async function listWater(db: Db, userId: string, from?: number, to?: number): Promise<WaterLog[]> {
+  const conds = [eq(waterLog.userId, userId)];
+  if (from != null) conds.push(gte(waterLog.loggedAt, from));
+  if (to != null) conds.push(lte(waterLog.loggedAt, to));
+  const rows = await db.select().from(waterLog).where(and(...conds)).orderBy(asc(waterLog.loggedAt));
+  return rows.map(toWaterLog);
+}
+
+export async function deleteWater(db: Db, userId: string, id: string): Promise<boolean> {
+  const rows = await db.delete(waterLog).where(and(eq(waterLog.id, id), eq(waterLog.userId, userId))).returning({ id: waterLog.id });
   return rows.length > 0;
 }

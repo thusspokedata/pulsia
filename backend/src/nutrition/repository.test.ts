@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { snapshotItems, toFood, toMeal } from "./repository";
+import { snapshotItems, toFood, toMeal, insertWater, deleteWater } from "./repository";
 
 const banana = {
   id: "11111111-1111-4111-8111-111111111111", userId: "u", name: "Banana", basis: "per_100g",
@@ -70,4 +70,21 @@ test("snapshotItems escala y persiste colesterol y agua", () => {
   );
   // 1 unidad = 120g → factor 1.2 ; agua 75*1.2 = 90
   expect(items[0]).toMatchObject({ cholesterolMg: 0, waterMl: 90 });
+});
+
+test("insertWater mapea ml + loggedAt y devuelve WaterLog", async () => {
+  const inserted: any[] = [];
+  const db: any = {
+    insert: () => ({ values(v: any) { const row = { id: "w1", ...v }; inserted.push(row); const p: any = Promise.resolve([row]); p.returning = async () => [row]; return p; } }),
+  };
+  const w = await insertWater(db, "u", { ml: 250, loggedAt: 1700 });
+  expect(w).toEqual({ id: "w1", ml: 250, loggedAt: 1700 });
+  expect(inserted[0]).toMatchObject({ userId: "u", ml: 250, loggedAt: 1700 });
+});
+
+test("deleteWater devuelve true si borró, false si no", async () => {
+  const dbHit: any = { delete: () => ({ where: () => { const p: any = Promise.resolve(undefined); p.returning = async () => [{ id: "w1" }]; return p; } }) };
+  const dbMiss: any = { delete: () => ({ where: () => { const p: any = Promise.resolve(undefined); p.returning = async () => []; return p; } }) };
+  expect(await deleteWater(dbHit, "u", "w1")).toBe(true);
+  expect(await deleteWater(dbMiss, "u", "w1")).toBe(false);
 });

@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { FoodInputSchema, MealInputSchema } from "@pulsia/shared";
+import { FoodInputSchema, MealInputSchema, WaterLogInputSchema } from "@pulsia/shared";
 import {
   insertFood, listFoods, getFood, updateFood, deleteFood,
   createMeal, listMeals, updateMeal, deleteMeal, getMealById,
+  insertWater, listWater, deleteWater,
   MealValidationError,
 } from "../nutrition/repository";
 import { resolveAiKey } from "../ai/resolveKey";
@@ -113,6 +114,24 @@ export function nutritionRoutes(deps: AppDeps) {
   r.delete("/meals/:id", async (c) => {
     const ok = await deleteMeal(deps.db, c.get("userId"), c.req.param("id"));
     return ok ? c.json({ ok: true }) : c.json({ error: "No encontrada" }, 404);
+  });
+
+  // ---- Water log (agua tomada) ----
+  r.post("/water", async (c) => {
+    const parsed = WaterLogInputSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Registro de agua inválido", detail: parsed.error.issues }, 400);
+    return c.json(await insertWater(deps.db, c.get("userId"), parsed.data));
+  });
+
+  r.get("/water", async (c) => {
+    const from = parseQueryNumber(c.req.query("from"));
+    const to = parseQueryNumber(c.req.query("to"));
+    return c.json(await listWater(deps.db, c.get("userId"), from, to));
+  });
+
+  r.delete("/water/:id", async (c) => {
+    const ok = await deleteWater(deps.db, c.get("userId"), c.req.param("id"));
+    return ok ? c.json({ ok: true }) : c.json({ error: "No encontrado" }, 404);
   });
 
   return r;
