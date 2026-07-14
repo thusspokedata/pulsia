@@ -24,13 +24,16 @@ export function buildGoalView(
   comido: { kcal: number; protein_g: number; carbs_g: number; fat_g: number },
 ): GoalView {
   if (goal.status === "incomplete") return { status: "incomplete", missing: goal.missing };
+  // `over` se deriva SIEMPRE del restante redondeado (mismo criterio para macros y kcal): así
+  // el color/texto no se contradicen en el borde .5. El `|| 0` normaliza el -0 de Math.round(-0.5).
   const bar = (key: MacroBar["key"], label: string, c: number, meta: number): MacroBar => {
-    const restante = Math.round(meta - c);
+    const restante = Math.round(meta - c) || 0;
     return { key, label, comido: Math.round(c), meta, restante, pct: clampPct(c, meta), over: restante < 0 };
   };
+  const kcalRestante = Math.round(goal.kcal - comido.kcal) || 0;
   return {
     status: "ok",
-    kcal: { meta: goal.kcal, comido: Math.round(comido.kcal), restante: Math.round(goal.kcal - comido.kcal), over: Math.round(comido.kcal) > goal.kcal },
+    kcal: { meta: goal.kcal, comido: Math.round(comido.kcal), restante: kcalRestante, over: kcalRestante < 0 },
     macros: [
       bar("protein", "Proteína", comido.protein_g, goal.protein_g),
       bar("carbs", "Carbohidratos", comido.carbs_g, goal.carbs_g),

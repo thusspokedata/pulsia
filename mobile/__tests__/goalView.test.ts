@@ -46,3 +46,17 @@ test("remainingLabel: faltan / cumplida / de más", () => {
   expect(remainingLabel(0)).toBe("meta cumplida");
   expect(remainingLabel(-36)).toBe("36 de más");
 });
+
+test("over es consistente con el restante redondeado en el borde .5 (kcal y macros)", () => {
+  const goal = { status: "ok", source: "auto", kcal: 2000, protein_g: 50, carbs_g: 100, fat_g: 30, bmr: 1, tdee: 1 } as const;
+  // 0.5 por encima → el restante redondea a 0 → NO es "over" (evita el "0 de más" en ámbar)
+  const v = bgv(goal, { kcal: 2000.5, protein_g: 50.5, carbs_g: 0, fat_g: 0 });
+  expect(v.kcal!.over).toBe(false);
+  expect(v.kcal!.restante).toBe(0); // normalizado, no -0
+  expect(v.macros!.find((m) => m.key === "protein")!.over).toBe(false);
+  // 1 por encima → sí es "over"
+  const v2 = bgv(goal, { kcal: 2001, protein_g: 51, carbs_g: 0, fat_g: 0 });
+  expect(v2.kcal!.over).toBe(true);
+  expect(v2.kcal!.restante).toBe(-1);
+  expect(v2.macros!.find((m) => m.key === "protein")!.over).toBe(true);
+});
