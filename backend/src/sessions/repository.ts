@@ -125,10 +125,21 @@ export async function listSessions(db: Db, userId: string) {
   });
   return rows.map((row: any) => {
     const s = rowsToSession(row);
+    // FC promedio para estimar gasto (#2b): serie completa si hay; si no, promedio de los hrAvg de las series.
+    const seriesHr = s.hrSeries && s.hrSeries.length > 0
+      ? s.hrSeries.reduce((a, p) => a + p.bpm, 0) / s.hrSeries.length
+      : null;
+    const setHrs = s.exercises.flatMap((ex) => ex.sets.map((st) => st.hrAvg).filter((v): v is number => v != null));
+    const avgHr = seriesHr != null
+      ? Math.round(seriesHr)
+      : setHrs.length > 0 ? Math.round(setHrs.reduce((a, v) => a + v, 0) / setHrs.length) : null;
     return {
       id: s.id, programId: s.programId, dayLabel: s.dayLabel, location: s.location,
-      startedAt: s.startedAt, totalDurationMs: s.totalDurationMs,
+      startedAt: s.startedAt,
+      // Fallback: sesión terminada sin totalDurationMs → derivar de endedAt (en curso → null).
+      totalDurationMs: s.totalDurationMs ?? (s.endedAt != null ? s.endedAt - s.startedAt : null),
       completionPct: sessionCompletionPct(s),
+      avgHr,
     };
   });
 }
