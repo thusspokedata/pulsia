@@ -11,10 +11,12 @@ import { computeNutritionGoal } from "@pulsia/shared";
 import type { AthleteContext, ReportKind } from "@pulsia/shared";
 import { ChipGroup } from "../../src/components/ChipGroup";
 import { colors, radius, spacing } from "../../src/theme/tokens";
+import { useScreenPadding } from "../../src/theme/screen";
 
 const KIND_LABEL: Record<ReportKind, string> = { daily: "del día", weekly: "de la semana", biweekly: "de la quincena", monthly: "del mes" };
 
 export default function InformesScreen() {
+  const screenPad = useScreenPadding(spacing.lg);
   const [kind, setKind] = useState<ReportKind>("daily");
   const [offset, setOffset] = useState(0);
   const [content, setContent] = useState<string | null>(null);
@@ -75,7 +77,7 @@ export default function InformesScreen() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.md }}>
       <ChipGroup single
         options={[{ value: "daily", label: "Día" }, { value: "weekly", label: "Semana" }, { value: "biweekly", label: "Quincena" }, { value: "monthly", label: "Mes" }]}
         selected={[kind]} onChange={(v) => pickKind(v[0] as ReportKind)} />

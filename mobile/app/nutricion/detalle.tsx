@@ -3,8 +3,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useNutritionDay } from "../../src/nutrition/useNutritionDay";
 import { remainingLabel } from "../../src/nutrition/goalView";
 import { colors, radius, spacing } from "../../src/theme/tokens";
+import { useScreenPadding } from "../../src/theme/screen";
 
 export default function DetalleDiaScreen() {
+  const screenPad = useScreenPadding(spacing.lg);
   const { offset: offsetParam } = useLocalSearchParams<{ offset?: string }>();
   const offset = Number(offsetParam ?? 0) || 0;
   const { error, summary, goalView } = useNutritionDay(offset);
@@ -27,7 +29,7 @@ export default function DetalleDiaScreen() {
   ].filter(([, v]) => v != null) as [string, number][];
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.md }}>
       <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>Detalle del día</Text>
       <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18 }}>
         Comido = lo registrado · Meta = tu objetivo · Restante = Meta − Comido + Ejercicio. El gasto del ejercicio se estima desde tus sesiones (FC o duración).

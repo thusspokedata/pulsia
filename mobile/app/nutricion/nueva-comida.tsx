@@ -6,10 +6,12 @@ import { listFoods, createMeal, getMeal, updateMeal, deleteMeal } from "../../sr
 import { buildMealInput, mealTotals, itemPreview, allowedUnits, type MealRow } from "../../src/nutrition/mealForm";
 import type { Food, MealType, QuantityUnit } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
+import { useScreenPadding } from "../../src/theme/screen";
 
 const MEAL_TYPES: MealType[] = ["desayuno", "almuerzo", "cena", "snack"];
 
 export default function NuevaComidaScreen() {
+  const screenPad = useScreenPadding(spacing.lg);
   const params = useLocalSearchParams<{ eatenAt?: string; mealId?: string }>();
   const mealId = params.mealId;
   const baseUrl = useRef<string | null>(null);
@@ -108,7 +110,7 @@ export default function NuevaComidaScreen() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.md }}>
       <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>{mealId ? "Editar comida" : "Nueva comida"}</Text>
       {notEditable && (
         <Text style={{ color: colors.danger, fontSize: 13 }}>

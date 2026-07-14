@@ -6,6 +6,7 @@ import { getBackendUrl } from "../../src/storage/config";
 import { extractFood, createFood, getFood, updateFood } from "../../src/api/nutrition";
 import type { FoodBasis, FoodSource } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
+import { useScreenPadding } from "../../src/theme/screen";
 
 type Form = {
   name: string; basis: FoodBasis; kcal: string; protein_g: string; carbs_g: string; fat_g: string;
@@ -16,6 +17,7 @@ type Form = {
 const EMPTY: Form = { name: "", basis: "per_100g", kcal: "", protein_g: "", carbs_g: "", fat_g: "", saturated_fat_g: "", sugars_g: "", fiber_g: "", salt_g: "", cholesterol_mg: "", water_ml: "", unitWeightG: "", source: "estimate" };
 
 export default function AgregarAlimentoScreen() {
+  const screenPad = useScreenPadding(spacing.lg);
   const baseUrl = useRef<string | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
   const [analyzing, setAnalyzing] = useState(false);
@@ -141,7 +143,7 @@ export default function AgregarAlimentoScreen() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.md }}>
       <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>{foodId ? "Editar alimento" : "Agregar alimento"}</Text>
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
         <Pressable onPress={() => pickAndExtract("camera")} style={{ flex: 1, backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>

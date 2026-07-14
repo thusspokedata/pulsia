@@ -7,6 +7,7 @@ import { setStoredProgram } from "../src/storage/program";
 import { setStoredProgramId } from "../src/storage/programId";
 import { startGeneration, getGenerationStatus, GenerationError } from "../src/api/programs";
 import { colors, radius, spacing } from "../src/theme/tokens";
+import { useScreenPadding } from "../src/theme/screen";
 
 const MESSAGES = [
   "Analizando tu perfil…",
@@ -22,6 +23,7 @@ interface ScreenError {
 }
 
 export default function GenerandoScreen() {
+  const screenPad = useScreenPadding(spacing.xl);
   const [msgIndex, setMsgIndex] = useState(0);
   const [error, setError] = useState<ScreenError | null>(null);
   const started = useRef(false);
@@ -99,7 +101,7 @@ export default function GenerandoScreen() {
 
   if (error) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, padding: spacing.xl, gap: spacing.lg, justifyContent: "center" }}>
+      <View style={{ flex: 1, backgroundColor: colors.bg, ...screenPad, gap: spacing.lg, justifyContent: "center" }}>
         <Text style={{ fontSize: 18, fontWeight: "500", color: colors.text }}>No se pudo generar</Text>
         <Text style={{ color: colors.textMuted }}>{error.message}</Text>
         <Pressable
@@ -113,7 +115,7 @@ export default function GenerandoScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, padding: spacing.xl, gap: spacing.lg, justifyContent: "center", alignItems: "center" }}>
+    <View style={{ flex: 1, backgroundColor: colors.bg, ...screenPad, gap: spacing.lg, justifyContent: "center", alignItems: "center" }}>
       <ActivityIndicator size="large" color={colors.accent} />
       <Text style={{ fontSize: 16, color: colors.text }}>{MESSAGES[msgIndex]}</Text>
       <Text style={{ color: colors.textMuted, textAlign: "center" }}>Esto puede tardar un par de minutos.</Text>

@@ -3,8 +3,10 @@ import { ScrollView, View, Text, Pressable } from "react-native";
 import { getBackendUrl } from "../src/storage/config";
 import { getMemory, refreshMemory } from "../src/api/memory";
 import { colors, radius, spacing } from "../src/theme/tokens";
+import { useScreenPadding } from "../src/theme/screen";
 
 export default function MemoriaScreen() {
+  const screenPad = useScreenPadding(spacing.xl);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,7 +47,7 @@ export default function MemoriaScreen() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.lg }}>
       <Text style={{ fontSize: 20, fontWeight: "500", color: colors.text }}>Qué sabe la IA de mí</Text>
       {error && <Text style={{ color: colors.danger, fontSize: 12 }}>{error}</Text>}
       {loading ? (

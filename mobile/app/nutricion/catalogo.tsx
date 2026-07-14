@@ -5,8 +5,10 @@ import { getBackendUrl } from "../../src/storage/config";
 import { listFoods, deleteFood } from "../../src/api/nutrition";
 import type { Food } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
+import { useScreenPadding } from "../../src/theme/screen";
 
 export default function CatalogoScreen() {
+  const screenPad = useScreenPadding(spacing.lg);
   const baseUrl = useRef<string | null>(null);
   const [foods, setFoods] = useState<Food[]>([]);
   const [q, setQ] = useState("");
@@ -34,7 +36,7 @@ export default function CatalogoScreen() {
   const filtered = foods.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase()));
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.md }}>
       <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>Catálogo de alimentos</Text>
       <Pressable onPress={() => router.push("/nutricion/agregar-alimento")} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
         <Text style={{ color: "#fff", fontWeight: "600" }}>+ Agregar alimento</Text>
