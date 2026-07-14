@@ -96,7 +96,7 @@ export default function ObjetivoScreen() {
         {result.status === "ok" ? (
           <>
             <Text style={{ color: colors.text, fontSize: 22, fontWeight: "700" }}>{result.kcal} kcal / día</Text>
-            <Text style={{ color: colors.textMuted }}>P {result.protein_g}g · C {result.carbs_g}g · G {result.fat_g}g</Text>
+            <Text style={{ color: colors.textMuted }}>Prot {result.protein_g}g · Carb {result.carbs_g}g · Gras {result.fat_g}g</Text>
             <Text style={{ color: colors.icon, fontSize: 12 }}>
               {result.source === "manual" ? "meta manual" : `BMR ${result.bmr} · TDEE ${result.tdee}`}
             </Text>

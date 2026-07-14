@@ -13,7 +13,7 @@ export default function DetalleDiaScreen() {
   const card = { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm } as const;
   const sectionTitle = { color: colors.textMuted, fontSize: 13 } as const;
 
-  const bar = (comido: number, meta: number, pct: number, over: boolean) => (
+  const bar = (pct: number, over: boolean) => (
     <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.surfaceMuted, overflow: "hidden" }}>
       <View style={{ width: over ? "100%" : `${pct}%`, height: 8, backgroundColor: over ? colors.warning : colors.accent }} />
     </View>
@@ -44,7 +44,7 @@ export default function DetalleDiaScreen() {
                 {goalView.kcal!.over ? `${-goalView.kcal!.restante} de más` : `te quedan ${goalView.kcal!.restante}`}
               </Text>
             </View>
-            {bar(goalView.kcal!.comido, goalView.kcal!.meta, Math.min(100, Math.round((goalView.kcal!.comido / goalView.kcal!.meta) * 100)), goalView.kcal!.over)}
+            {bar(Math.min(100, Math.round((goalView.kcal!.comido / goalView.kcal!.meta) * 100)), goalView.kcal!.over)}
           </>
         ) : (
           <>
@@ -66,7 +66,7 @@ export default function DetalleDiaScreen() {
                 <Text style={{ color: colors.text, fontSize: 14 }}>{m.label}</Text>
                 <Text style={{ color: m.over ? colors.warning : colors.textMuted, fontSize: 13 }}>{m.comido} / {m.meta} g · {remainingLabel(m.restante)}</Text>
               </View>
-              {bar(m.comido, m.meta, m.pct, m.over)}
+              {bar(m.pct, m.over)}
             </View>
           ))}
         </View>
@@ -92,7 +92,7 @@ export default function DetalleDiaScreen() {
             <Text style={{ color: colors.text, fontSize: 14 }}>Colesterol</Text>
             <Text style={{ color: cholesterolMg > 300 ? colors.warning : colors.textMuted, fontSize: 13 }}>{Math.round(cholesterolMg)} / 300 mg</Text>
           </View>
-          {bar(Math.round(cholesterolMg), 300, Math.min(100, Math.round((cholesterolMg / 300) * 100)), cholesterolMg > 300)}
+          {bar(Math.min(100, Math.round((cholesterolMg / 300) * 100)), cholesterolMg > 300)}
         </View>
       )}
 
