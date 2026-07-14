@@ -1,5 +1,14 @@
 import { apiFetch } from "./client";
-import type { Food, FoodInput, FoodExtraction, Meal, MealInput, WaterLog, WaterLogInput } from "@pulsia/shared";
+import type {
+  Food,
+  FoodInput,
+  FoodExtraction,
+  Meal,
+  MealInput,
+  NutritionGoalInput,
+  WaterLog,
+  WaterLogInput,
+} from "@pulsia/shared";
 
 export async function extractFood(baseUrl: string, imageBase64: string, mediaType: string): Promise<FoodExtraction> {
   // La imagen va entera en el body → margen mayor al timeout por defecto (15s).
@@ -83,6 +92,18 @@ export async function listWater(baseUrl: string, from: number, to: number): Prom
 export async function deleteWater(baseUrl: string, id: string): Promise<void> {
   const res = await apiFetch(baseUrl, `/nutrition/water/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo borrar el registro de agua."));
+}
+
+export async function getNutritionGoal(baseUrl: string): Promise<NutritionGoalInput> {
+  const res = await apiFetch(baseUrl, "/nutrition/goal");
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo cargar el objetivo."));
+  return (await res.json()) as NutritionGoalInput;
+}
+
+export async function putNutritionGoal(baseUrl: string, input: NutritionGoalInput): Promise<NutritionGoalInput> {
+  const res = await apiFetch(baseUrl, "/nutrition/goal", { method: "PUT", body: JSON.stringify(input) });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo guardar el objetivo."));
+  return (await res.json()) as NutritionGoalInput;
 }
 
 async function errorMessage(res: Response, fallback: string): Promise<string> {
