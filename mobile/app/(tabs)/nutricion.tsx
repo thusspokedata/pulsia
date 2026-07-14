@@ -2,9 +2,13 @@ import { useCallback, useRef, useState } from "react";
 import { ScrollView, View, Text, Pressable, Alert, TextInput } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { getBackendUrl } from "../../src/storage/config";
-import { listMeals, deleteMeal, listWater, logWater, deleteWater } from "../../src/api/nutrition";
+import { listMeals, deleteMeal, listWater, logWater, deleteWater, getNutritionGoal } from "../../src/api/nutrition";
+import { getProfile } from "../../src/storage/profile";
+import { getLatestMetrics } from "../../src/api/metrics";
+import { computeNutritionGoal } from "@pulsia/shared";
+import { buildGoalView } from "../../src/nutrition/goalView";
 import { dayAtNoon, dayLabel } from "../../src/session/metricDate";
-import type { Meal, WaterLog } from "@pulsia/shared";
+import type { Meal, WaterLog, NutritionGoalInput, TrainingProfile } from "@pulsia/shared";
 import { sumNullableMicro } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
@@ -27,13 +31,22 @@ export default function NutricionScreen() {
   const [water, setWater] = useState<WaterLog[]>([]);
   const [mlInput, setMlInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [goalInput, setGoalInput] = useState<NutritionGoalInput | null>(null);
+  const [profile, setProfileState] = useState<TrainingProfile | null>(null);
+  const [weightKg, setWeightKg] = useState<number | undefined>(undefined);
 
   const load = useCallback(async (off: number) => {
     const url = await getBackendUrl(); baseUrl.current = url;
     const { from, to } = dayBounds(off);
     try {
-      const [ms, ws] = await Promise.all([listMeals(url, from, to), listWater(url, from, to)]);
-      setMeals(ms); setWater(ws); setError(null);
+      const [ms, ws, gi, p] = await Promise.all([
+        listMeals(url, from, to), listWater(url, from, to), getNutritionGoal(url), getProfile(),
+      ]);
+      setMeals(ms); setWater(ws); setGoalInput(gi); setProfileState(p);
+      let w = p?.weightKg;
+      try { const latest = await getLatestMetrics(url); if (latest.weight_kg?.value != null) w = latest.weight_kg.value; } catch { /* offline */ }
+      setWeightKg(w);
+      setError(null);
     } catch (e) { setError((e as Error).message); }
   }, []);
 
@@ -55,6 +68,17 @@ export default function NutricionScreen() {
   const waterFromFood = sumNullableMicro(items.map((it) => it.water_ml)) ?? 0;
   const waterDrank = water.reduce((a, w) => a + w.ml, 0);
   const liquidTotal = Math.round(waterFromFood + waterDrank);
+
+  const goalResult = goalInput
+    ? computeNutritionGoal({
+        sex: profile?.sex, age: profile?.age, heightCm: profile?.heightCm, weightKg,
+        activityLevel: profile?.activityLevel,
+        objective: goalInput.objective, rateKgPerWeek: goalInput.rateKgPerWeek, manualKcal: goalInput.manualKcal,
+      })
+    : null;
+  const goalView = goalResult
+    ? buildGoalView(goalResult, { kcal: dayTotals.kcal, protein_g: dayTotals.p, carbs_g: dayTotals.c, fat_g: dayTotals.g })
+    : null;
 
   async function remove(m: Meal) {
     Alert.alert("Borrar comida", "¿Borrar esta comida?", [
@@ -97,8 +121,41 @@ export default function NutricionScreen() {
 
       {/* Totales del día */}
       <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg }}>
-        <Text style={{ color: colors.text, fontSize: 22, fontWeight: "700" }}>{dayTotals.kcal} kcal</Text>
-        <Text style={{ color: colors.textMuted }}>P {Math.round(dayTotals.p)}g · C {Math.round(dayTotals.c)}g · G {Math.round(dayTotals.g)}g</Text>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+          {goalView?.status === "ok" ? (
+            <View>
+              <Text style={{ color: colors.text, fontSize: 22, fontWeight: "700" }}>{goalView.kcal!.comido} / {goalView.kcal!.meta} kcal</Text>
+              <Text style={{ color: goalView.kcal!.restante < 0 ? colors.warning : colors.textMuted }}>
+                Restante {goalView.kcal!.restante} kcal
+              </Text>
+            </View>
+          ) : (
+            <View>
+              <Text style={{ color: colors.text, fontSize: 22, fontWeight: "700" }}>{dayTotals.kcal} kcal</Text>
+              <Text style={{ color: colors.textMuted }}>P {Math.round(dayTotals.p)}g · C {Math.round(dayTotals.c)}g · G {Math.round(dayTotals.g)}g</Text>
+            </View>
+          )}
+          <Pressable onPress={() => router.push("/nutricion/objetivo")}>
+            <Text style={{ color: colors.accentText, fontSize: 12, fontWeight: "600" }}>Objetivo ⚙</Text>
+          </Pressable>
+        </View>
+        {goalView?.status === "ok" && (
+          <View style={{ gap: spacing.xs, marginTop: spacing.sm }}>
+            {goalView.macros!.map((m) => (
+              <View key={m.key} style={{ gap: 2 }}>
+                <Text style={{ color: colors.textMuted, fontSize: 12 }}>{m.label} {m.comido} / {m.meta} g · resta {m.restante}</Text>
+                <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.surfaceMuted, overflow: "hidden" }}>
+                  <View style={{ width: `${m.pct}%`, height: 6, backgroundColor: colors.accent }} />
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+        {goalView?.status === "incomplete" && (
+          <Pressable onPress={() => router.push("/nutricion/objetivo")} style={{ marginTop: spacing.xs }}>
+            <Text style={{ color: colors.accentText, fontSize: 12 }}>Definí tu objetivo / completá tu perfil para ver tu meta →</Text>
+          </Pressable>
+        )}
         {(dayTotals.sugars_g != null || dayTotals.fiber_g != null || dayTotals.saturated_fat_g != null || dayTotals.salt_g != null) && (
           <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
             {[
