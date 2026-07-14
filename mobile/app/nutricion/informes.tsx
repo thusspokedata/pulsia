@@ -26,7 +26,7 @@ export default function InformesScreen() {
   const url = useRef<string | null>(null);
   const period = periodFor(kind, offset, Date.now());
 
-  function pickKind(k: ReportKind) { setKind(k); setOffset(0); setContent(null); setCreatedAt(null); }
+  function pickKind(k: ReportKind) { setKind(k); setOffset(0); setContent(null); setCreatedAt(null); setError(null); setDisabled(false); }
 
   const load = useCallback(async (start: number) => {
     setLoading(true); setError(null); setDisabled(false);
