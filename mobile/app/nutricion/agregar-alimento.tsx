@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { getBackendUrl } from "../../src/storage/config";
-import { extractFood, createFood } from "../../src/api/nutrition";
+import { extractFood, createFood, getFood, updateFood } from "../../src/api/nutrition";
 import type { FoodBasis, FoodSource } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
@@ -20,8 +20,27 @@ export default function AgregarAlimentoScreen() {
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { foodId } = useLocalSearchParams<{ foodId?: string }>();
 
-  useEffect(() => { getBackendUrl().then((u) => { baseUrl.current = u; }); }, []);
+  useEffect(() => {
+    (async () => {
+      const url = await getBackendUrl();
+      baseUrl.current = url;
+      if (foodId) {
+        try {
+          const f = await getFood(url, foodId);
+          const numStr = (v: number | null | undefined) => (v == null ? "" : String(v));
+          setForm({
+            name: f.name, basis: f.basis, kcal: String(f.kcal), protein_g: String(f.protein_g),
+            carbs_g: String(f.carbs_g), fat_g: String(f.fat_g),
+            saturated_fat_g: numStr(f.saturated_fat_g), sugars_g: numStr(f.sugars_g),
+            fiber_g: numStr(f.fiber_g), salt_g: numStr(f.salt_g),
+            unitWeightG: f.unitWeightG == null ? "" : String(f.unitWeightG), source: f.source,
+          });
+        } catch (e) { setError((e as Error).message); }
+      }
+    })();
+  }, [foodId]);
 
   async function pickAndExtract(source: "camera" | "library") {
     setError(null);
@@ -78,7 +97,8 @@ export default function AgregarAlimentoScreen() {
     if (!baseUrl.current) { setError("No se pudo conectar con el servidor."); return; }
     setSaving(true);
     try {
-      await createFood(baseUrl.current, input);
+      if (foodId) await updateFood(baseUrl.current, foodId, input);
+      else await createFood(baseUrl.current, input);
       router.back();
     } catch (e) {
       setError((e as Error).message); setSaving(false);
@@ -107,7 +127,7 @@ export default function AgregarAlimentoScreen() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
-      <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>Agregar alimento</Text>
+      <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>{foodId ? "Editar alimento" : "Agregar alimento"}</Text>
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
         <Pressable onPress={() => pickAndExtract("camera")} style={{ flex: 1, backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
           <Text style={{ color: "#fff", fontWeight: "600" }}>📷 Foto</Text>
@@ -147,7 +167,7 @@ export default function AgregarAlimentoScreen() {
       </Text>
 
       <Pressable onPress={save} disabled={saving} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
-        <Text style={{ color: "#fff", fontWeight: "700" }}>{saving ? "Guardando…" : "Guardar en el catálogo"}</Text>
+        <Text style={{ color: "#fff", fontWeight: "700" }}>{saving ? "Guardando…" : foodId ? "Guardar cambios" : "Guardar en el catálogo"}</Text>
       </Pressable>
     </ScrollView>
   );
