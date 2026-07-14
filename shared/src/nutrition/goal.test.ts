@@ -66,3 +66,31 @@ test("manual sin peso: macros por % (no rompe)", () => {
   if (r.status !== "ok") throw new Error("esperaba ok");
   expect(r.protein_g).toBe(125); // 2000*0.25/4
 });
+
+test("female usa la constante -161 (por encima del piso)", () => {
+  const r = computeNutritionGoal({ sex: "female", age: 30, heightCm: 170, weightKg: 65, activityLevel: "moderate", objective: "maintain", rateKgPerWeek: 0 });
+  if (r.status !== "ok") throw new Error("esperaba ok");
+  // BMR = 650 + 1062.5 - 150 - 161 = 1401.5 → 1402 ; TDEE = 1401.5*1.55 = 2172.325 → 2172
+  expect(r.bmr).toBe(1402);
+  expect(r.kcal).toBe(2172);
+});
+
+test("factor de actividad active (1.725)", () => {
+  const r = computeNutritionGoal({ sex: "male", age: 25, heightCm: 180, weightKg: 75, activityLevel: "active", objective: "maintain", rateKgPerWeek: 0 });
+  if (r.status !== "ok") throw new Error("esperaba ok");
+  // BMR = 750 + 1125 - 125 + 5 = 1755 ; TDEE = 1755*1.725 = 3027.375 → 3027
+  expect(r.bmr).toBe(1755);
+  expect(r.kcal).toBe(3027);
+});
+
+test("carbos se clampea a 0 si proteína+grasa superan las kcal", () => {
+  const r = computeNutritionGoal({ objective: "lose", rateKgPerWeek: 0.5, weightKg: 120, manualKcal: 800 });
+  if (r.status !== "ok") throw new Error("esperaba ok");
+  expect(r.protein_g).toBe(240); // 120*2.0 = 960 kcal, ya supera las 800
+  expect(r.carbs_g).toBe(0);
+});
+
+test("manualKcal 0 NO cuenta como override (cae a auto → incompleto sin perfil)", () => {
+  const r = computeNutritionGoal({ objective: "maintain", rateKgPerWeek: 0, manualKcal: 0 });
+  expect(r.status).toBe("incomplete");
+});

@@ -38,7 +38,8 @@ export function computeNutritionGoal(args: NutritionGoalArgs): NutritionGoalResu
   const { sex, age, heightCm, weightKg, activityLevel, objective, rateKgPerWeek, manualKcal } = args;
 
   // Camino manual: el usuario fija las kcal; pisa el cálculo y no fuerza el piso.
-  if (manualKcal != null) {
+  // Se llama directo desde el móvil con un número parseado, así que 0/negativo NO cuentan como override.
+  if (manualKcal != null && manualKcal > 0) {
     return { status: "ok", source: "manual", kcal: manualKcal, ...macros(manualKcal, weightKg, objective), bmr: null, tdee: null };
   }
 
