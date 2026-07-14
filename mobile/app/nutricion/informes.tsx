@@ -24,6 +24,7 @@ export default function InformesScreen() {
 
   const load = useCallback(async (start: number) => {
     setLoading(true); setError(null); setDisabled(false);
+    setContent(null); setCreatedAt(null); // evitar el flash del informe anterior al navegar de día
     try {
       const u = await getBackendUrl(); url.current = u;
       const rep = await getReport(u, "daily", start);
