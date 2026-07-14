@@ -27,6 +27,12 @@ export interface ScaledMacros {
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
+// null si TODOS los valores son null/undefined; si no, suma tratando null como 0, redondeado a 1 decimal.
+export function sumNullableMicro(values: Array<number | null | undefined>): number | null {
+  if (!values.some((v) => v != null)) return null;
+  return Math.round(values.reduce<number>((a, v) => a + (v ?? 0), 0) * 10) / 10;
+}
+
 // Escala un micro opcional por el factor; null/undefined → null.
 const scaleMicro = (v: number | null | undefined, factor: number): number | null =>
   v == null ? null : round1(v * factor);

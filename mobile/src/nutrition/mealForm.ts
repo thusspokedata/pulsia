@@ -1,4 +1,4 @@
-import { foodMacrosForQuantity } from "@pulsia/shared";
+import { foodMacrosForQuantity, sumNullableMicro } from "@pulsia/shared";
 import type { Food, MealInput, MealType, QuantityUnit } from "@pulsia/shared";
 
 export interface MealRow {
@@ -21,10 +21,8 @@ export function mealTotals(rows: MealRow[]) {
   const scaled = rows.map((r) => foodMacrosForQuantity(r.food, r.quantity, r.unit));
   const round1 = (n: number) => Math.round(n * 10) / 10;
   // Micro: null si NINGÚN ítem lo tiene; si al menos uno lo tiene, suma tratando null como 0.
-  const micro = (key: "saturated_fat_g" | "sugars_g" | "fiber_g" | "salt_g"): number | null => {
-    if (!scaled.some((m) => m[key] != null)) return null;
-    return round1(scaled.reduce((a, m) => a + (m[key] ?? 0), 0));
-  };
+  const micro = (key: "saturated_fat_g" | "sugars_g" | "fiber_g" | "salt_g"): number | null =>
+    sumNullableMicro(scaled.map((m) => m[key]));
   return {
     kcal: scaled.reduce((a, m) => a + m.kcal, 0),
     protein_g: round1(scaled.reduce((a, m) => a + m.protein_g, 0)),

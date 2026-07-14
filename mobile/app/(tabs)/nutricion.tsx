@@ -5,6 +5,7 @@ import { getBackendUrl } from "../../src/storage/config";
 import { listMeals, deleteMeal } from "../../src/api/nutrition";
 import { dayAtNoon, dayLabel } from "../../src/session/metricDate";
 import type { Meal } from "@pulsia/shared";
+import { sumNullableMicro } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
 function dayBounds(offset: number): { from: number; to: number; noon: number } {
@@ -35,11 +36,8 @@ export default function NutricionScreen() {
 
   function mealKcal(m: Meal): number { return m.items.reduce((a, it) => a + it.kcal, 0); }
   const items = meals.flatMap((m) => m.items);
-  const round1 = (n: number) => Math.round(n * 10) / 10;
-  const dayMicro = (key: "saturated_fat_g" | "sugars_g" | "fiber_g" | "salt_g"): number | null => {
-    if (!items.some((it) => it[key] != null)) return null;
-    return round1(items.reduce((a, it) => a + (it[key] ?? 0), 0));
-  };
+  const dayMicro = (key: "saturated_fat_g" | "sugars_g" | "fiber_g" | "salt_g"): number | null =>
+    sumNullableMicro(items.map((it) => it[key]));
   const dayTotals = {
     kcal: items.reduce((a, it) => a + it.kcal, 0),
     p: items.reduce((a, it) => a + it.protein_g, 0),
