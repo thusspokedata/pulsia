@@ -21,6 +21,7 @@ export interface SessionListItem {
   startedAt: number;
   totalDurationMs: number | null;
   completionPct: number;
+  avgHr: number | null;
 }
 
 // Trae el historial (liviano) de sesiones del usuario desde el backend.

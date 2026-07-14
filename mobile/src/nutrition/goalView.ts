@@ -12,7 +12,7 @@ export interface MacroBar {
 export interface GoalView {
   status: "ok" | "incomplete";
   missing?: string[];
-  kcal?: { meta: number; comido: number; restante: number; over: boolean };
+  kcal?: { meta: number; comido: number; exercise: number; restante: number; over: boolean };
   macros?: MacroBar[];
 }
 
@@ -22,6 +22,7 @@ const clampPct = (comido: number, meta: number): number =>
 export function buildGoalView(
   goal: NutritionGoalResult,
   comido: { kcal: number; protein_g: number; carbs_g: number; fat_g: number },
+  exercise = 0,
 ): GoalView {
   if (goal.status === "incomplete") return { status: "incomplete", missing: goal.missing };
   // `over` se deriva SIEMPRE del restante redondeado (mismo criterio para macros y kcal): así
@@ -30,10 +31,10 @@ export function buildGoalView(
     const restante = Math.round(meta - c) || 0;
     return { key, label, comido: Math.round(c), meta, restante, pct: clampPct(c, meta), over: restante < 0 };
   };
-  const kcalRestante = Math.round(goal.kcal - comido.kcal) || 0;
+  const kcalRestante = Math.round(goal.kcal - comido.kcal + exercise) || 0;
   return {
     status: "ok",
-    kcal: { meta: goal.kcal, comido: Math.round(comido.kcal), restante: kcalRestante, over: kcalRestante < 0 },
+    kcal: { meta: goal.kcal, comido: Math.round(comido.kcal), exercise: Math.round(exercise), restante: kcalRestante, over: kcalRestante < 0 },
     macros: [
       bar("protein", "Proteína", comido.protein_g, goal.protein_g),
       bar("carbs", "Carbohidratos", comido.carbs_g, goal.carbs_g),
