@@ -184,7 +184,9 @@ export async function listWater(db: Db, userId: string, from?: number, to?: numb
   const conds = [eq(waterLog.userId, userId)];
   if (from != null) conds.push(gte(waterLog.loggedAt, from));
   if (to != null) conds.push(lte(waterLog.loggedAt, to));
-  const rows = await db.select().from(waterLog).where(and(...conds)).orderBy(asc(waterLog.loggedAt));
+  // Desempate por createdAt: si dos cargas comparten loggedAt (p.ej. dos vasos en el mismo día pasado, que usan
+  // el mismo "noon"), el orden queda determinístico → "deshacer último" en el móvil borra la última realmente insertada.
+  const rows = await db.select().from(waterLog).where(and(...conds)).orderBy(asc(waterLog.loggedAt), asc(waterLog.createdAt));
   return rows.map(toWaterLog);
 }
 
