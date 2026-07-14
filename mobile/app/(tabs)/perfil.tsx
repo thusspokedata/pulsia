@@ -27,6 +27,12 @@ const SEX = [
   { value: "other", label: "Otro" },
   { value: "prefer_not_to_say", label: "Prefiero no decir" },
 ];
+const ACTIVITY = [
+  { value: "sedentary", label: "Sedentario" },
+  { value: "light", label: "Ligero" },
+  { value: "moderate", label: "Moderado" },
+  { value: "active", label: "Activo" },
+];
 const EQUIPMENT = [
   { value: "bodyweight", label: "Peso corporal" },
   { value: "dumbbell", label: "Mancuernas" },
@@ -44,6 +50,7 @@ export default function PerfilScreen() {
   const [experience, setExperience] = useState("beginner");
   const [goal, setGoal] = useState("general_fitness");
   const [sex, setSex] = useState<string | undefined>(undefined);
+  const [activityLevel, setActivityLevel] = useState<string | undefined>(undefined);
   const [daysPerWeek, setDaysPerWeek] = useState("3");
   const [sessionMinutes, setSessionMinutes] = useState("45");
   const [age, setAge] = useState("");
@@ -69,6 +76,7 @@ export default function PerfilScreen() {
         setExperience(p.experience);
         setGoal(p.goal);
         setSex(p.sex);
+        setActivityLevel(p.activityLevel);
         setDaysPerWeek(String(p.daysPerWeek));
         setSessionMinutes(String(p.sessionMinutes));
         setAge(p.age != null ? String(p.age) : "");
@@ -106,6 +114,7 @@ export default function PerfilScreen() {
       experience,
       goal,
       sex,
+      activityLevel: activityLevel as TrainingProfile["activityLevel"],
       age: numOrUndef(age),
       weightKg: numOrUndef(weightKg),
       heightCm: numOrUndef(heightCm),
@@ -164,6 +173,10 @@ export default function PerfilScreen() {
       <View><Text style={label}>Experiencia</Text><ChipGroup single options={EXPERIENCE} selected={[experience]} onChange={(v) => setExperience(v[0])} /></View>
       <View><Text style={label}>Objetivo</Text><ChipGroup single options={GOAL} selected={[goal]} onChange={(v) => setGoal(v[0])} /></View>
       <View><Text style={label}>Sexo</Text><ChipGroup single options={SEX} selected={sex ? [sex] : []} onChange={(v) => setSex(v[0])} /></View>
+      <View>
+        <Text style={label}>Nivel de actividad (sin contar entrenamientos)</Text>
+        <ChipGroup single options={ACTIVITY} selected={activityLevel ? [activityLevel] : []} onChange={(v) => setActivityLevel(v[0])} />
+      </View>
       <View style={{ flexDirection: "row", gap: spacing.md }}>
         <View style={{ flex: 1 }}><Text style={label}>Días/semana</Text><TextInput style={input} keyboardType="number-pad" value={daysPerWeek} onChangeText={setDaysPerWeek} /></View>
         <View style={{ flex: 1 }}><Text style={label}>Min/sesión</Text><TextInput style={input} keyboardType="number-pad" value={sessionMinutes} onChangeText={setSessionMinutes} /></View>

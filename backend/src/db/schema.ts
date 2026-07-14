@@ -156,6 +156,14 @@ export const waterLog = pgTable("water_log", {
   byUserTime: index("water_log_user_time_idx").on(t.userId, t.loggedAt),
 }));
 
+export const nutritionGoal = pgTable("nutrition_goal", {
+  userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  objective: text("objective").notNull(),            // 'lose' | 'maintain' | 'gain'
+  rateKgPerWeek: real("rate_kg_per_week").notNull(), // 0 | 0.25 | 0.5
+  manualKcal: integer("manual_kcal"),                // nullable: override total
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const exerciseCatalog = pgTable("exercise_catalog", {
   id: text("id").primaryKey(),
   garminCategory: text("garmin_category").notNull(),

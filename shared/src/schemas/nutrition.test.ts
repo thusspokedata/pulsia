@@ -4,6 +4,7 @@ import {
   MealInputSchema, MealItemInputSchema, MealItemSchema, MealSchema,
   QuantityUnitSchema, FoodBasisSchema, MealTypeSchema,
   WaterLogInputSchema, WaterLogSchema,
+  NutritionObjectiveSchema, NutritionGoalInputSchema,
 } from "./nutrition";
 
 const extraction = {
@@ -117,4 +118,12 @@ test("WaterLogSchema exige id uuid", () => {
   const ok = WaterLogSchema.safeParse({ id: "11111111-1111-4111-8111-111111111111", ml: 250, loggedAt: 1 });
   expect(ok.success).toBe(true);
   expect(WaterLogSchema.safeParse({ id: "no-uuid", ml: 250, loggedAt: 1 }).success).toBe(false);
+});
+
+test("NutritionGoalInputSchema acepta objetivo + ritmo, rechaza objetivo inválido", () => {
+  expect(NutritionGoalInputSchema.safeParse({ objective: "lose", rateKgPerWeek: 0.5 }).success).toBe(true);
+  expect(NutritionGoalInputSchema.safeParse({ objective: "maintain", rateKgPerWeek: 0, manualKcal: 2200 }).success).toBe(true);
+  expect(NutritionGoalInputSchema.safeParse({ objective: "bulk", rateKgPerWeek: 0.5 }).success).toBe(false);
+  expect(NutritionGoalInputSchema.safeParse({ objective: "gain", rateKgPerWeek: 5 }).success).toBe(false); // rate > 1
+  expect(NutritionGoalInputSchema.safeParse({ objective: "lose", rateKgPerWeek: 0.25, manualKcal: -5 }).success).toBe(false);
 });

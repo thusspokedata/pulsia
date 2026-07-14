@@ -99,6 +99,13 @@
       "when": 1784029294319,
       "tag": "0013_cooing_puck",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1784041812755,
+      "tag": "0014_lethal_sunfire",
+      "breakpoints": true
     }
   ]
 }

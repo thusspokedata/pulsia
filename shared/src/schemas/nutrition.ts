@@ -103,3 +103,14 @@ export const WaterLogSchema = WaterLogInputSchema.extend({
   id: z.string().uuid(),
 });
 export type WaterLog = z.infer<typeof WaterLogSchema>;
+
+// Objetivo nutricional (input del usuario para calcular la meta calórica). El cálculo vive en nutrition/goal.ts.
+export const NutritionObjectiveSchema = z.enum(["lose", "maintain", "gain"]);
+export type NutritionObjective = z.infer<typeof NutritionObjectiveSchema>;
+
+export const NutritionGoalInputSchema = z.object({
+  objective: NutritionObjectiveSchema,
+  rateKgPerWeek: z.number().min(0).max(1),                 // la UI usa 0.25 / 0.5; ignorado si maintain
+  manualKcal: z.number().int().positive().max(10000).nullable().optional(), // override total (fallback)
+});
+export type NutritionGoalInput = z.infer<typeof NutritionGoalInputSchema>;
