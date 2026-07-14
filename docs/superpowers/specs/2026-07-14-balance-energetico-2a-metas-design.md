@@ -82,25 +82,28 @@ Reglas:
 
 Nota de peso single-source: el peso canónico es el último `weight_kg` de Progreso (métricas); `profile.weightKg` es fallback.
 
-### Bloque 4 — Backend
+### Bloque 4 — Backend (store fino de inputs)
+
+> **Nota de arquitectura (descubierta al planear):** el perfil NO vive en el backend — está en AsyncStorage del móvil y se manda en el body de los requests (p.ej. `POST /programs/generate-async`). Por eso el **cálculo de la meta corre en el móvil** (función pura de `shared`, mismo patrón que `foodMacrosForQuantity`), y el backend solo persiste los **inputs** del objetivo. Robusto: usa el perfil local autoritativo sin depender de sincronizar.
 
 - **shared**: schemas del Bloque 2 + la función del Bloque 3 (con sus tests).
 - **schema.ts**: tabla `nutrition_goal`. Migración 0014.
-- **repository** (`backend/src/nutrition/repository.ts`): `getGoalInput(db, userId)` (fila o default `{ objective: "maintain", rateKgPerWeek: 0, manualKcal: null }` si no existe) y `upsertGoalInput(db, userId, input)` (insert/onConflictDoUpdate como el perfil).
-- **resolver** (`backend/src/nutrition/goalService.ts` o dentro de la ruta): junta perfil (`profiles.data` → sexo/edad/altura/peso/activityLevel), último peso (`getLatestMetrics` → `weight_kg`), y el goal input → llama `computeNutritionGoal`.
+- **repository** (`backend/src/nutrition/repository.ts`): `getGoalInput(db, userId)` (devuelve la fila o el default `{ objective: "maintain", rateKgPerWeek: 0, manualKcal: null }` si no existe) y `upsertGoalInput(db, userId, input)` (insert/onConflictDoUpdate como el perfil). Ambas mapean ↔ `NutritionGoalInput`.
 - **rutas** (`backend/src/routes/nutrition.ts`):
-  - `GET /nutrition/goal` → `{ ...NutritionGoalResult, input: NutritionGoalInput }`. Con el default de `getGoalInput`, un usuario sin objetivo configurado igual recibe una meta de **mantenimiento** (o `incomplete` si le falta perfil).
-  - `PUT /nutrition/goal` → valida `NutritionGoalInputSchema`, `upsertGoalInput`, devuelve el resultado recomputado (mismo shape que el GET).
+  - `GET /nutrition/goal` → `NutritionGoalInput` (los inputs guardados, o el default de mantenimiento). **No computa** la meta.
+  - `PUT /nutrition/goal` → valida `NutritionGoalInputSchema`, `upsertGoalInput`, devuelve los inputs guardados.
 
-### Bloque 5 — Mobile
+### Bloque 5 — Mobile (computa la meta)
 
-- **api** (`mobile/src/api/nutrition.ts`): `getNutritionGoal(baseUrl)` y `putNutritionGoal(baseUrl, input)`.
-- **Perfil** (`mobile/app/(tabs)/perfil.tsx`): selector de **nivel de actividad** (chips sedentario/ligero/moderado/activo) con la aclaración "sin contar entrenamientos"; se incluye en el `TrainingProfile` que ya se guarda.
-- **Pantalla "Objetivo nutricional"** (`mobile/app/nutricion/objetivo.tsx`, nueva): chips de objetivo (perder/mantener/ganar), chips de ritmo (0.25 / 0.5 kg/sem, ocultos si "mantener"), campo opcional de **kcal manual**; muestra la **meta calculada** (kcal + P/C/F) en vivo. Si el resultado es `incomplete`, muestra qué falta + link a Perfil. Guardar → `putNutritionGoal`. Acceso desde el tab (botón "Objetivo").
-- **Tab Nutrición** (`mobile/app/(tabs)/nutricion.tsx`): en `load`, sumar `getNutritionGoal` (Promise.all con meals+water). La tarjeta de totales:
+- **api** (`mobile/src/api/nutrition.ts`): `getNutritionGoal(baseUrl): NutritionGoalInput` y `putNutritionGoal(baseUrl, input): NutritionGoalInput`.
+- **Helper de peso**: reusar `getLatestMetrics(url).weight_kg?.value` (ya se usa en Perfil) como peso canónico; fallback `profile.weightKg`.
+- **Perfil** (`mobile/app/(tabs)/perfil.tsx`): selector de **nivel de actividad** (chips sedentario/ligero/moderado/activo, con `ChipGroup single`) con la aclaración "sin contar entrenamientos"; se incluye en el `TrainingProfile` que ya se guarda (AsyncStorage).
+- **Pantalla "Objetivo nutricional"** (`mobile/app/nutricion/objetivo.tsx`, nueva): carga el perfil local + último peso + `getNutritionGoal`. Chips de objetivo (perder/mantener/ganar), chips de ritmo (0.25 / 0.5 kg/sem, ocultos si "mantener"), campo opcional de **kcal manual**; corre `computeNutritionGoal` **en vivo** y muestra la meta (kcal + P/C/F). Si es `incomplete`, muestra qué falta + link a Perfil. Guardar → `putNutritionGoal`. Acceso desde el tab (botón "Objetivo").
+- **Tab Nutrición** (`mobile/app/(tabs)/nutricion.tsx`): en `load`, además de meals+water, cargar el perfil local + último peso + `getNutritionGoal`, y correr `computeNutritionGoal`. La tarjeta de totales:
   - Si `goal.status === "ok"`: **Meta {kcal} · Comido {comido} · Restante {meta − comido}** (el restante en ámbar/rojo si es negativo), y una mini-tabla por macro **P/C/G** con **Comido / Meta / Restante** + barra de progreso (comido/meta, clamp 0–100%).
   - Si `incomplete`: mostrar lo comido igual + un CTA "Completá tu perfil / definí tu objetivo" que lleva a la pantalla de objetivo/perfil.
   - La línea de **colesterol 300 mg** y la **tarjeta de líquido** quedan igual.
+- **Lógica pura testeable** (`mobile/src/nutrition/goalView.ts`): dado el resultado de `computeNutritionGoal` + los totales comidos, arma { kcal: {meta, comido, restante}, macros: [{key, comido, meta, restante, pct}] } para que el render sea trivial y testeable.
 
 ## Casos borde
 
@@ -114,8 +117,8 @@ Nota de peso single-source: el peso canónico es el último `weight_kg` de Progr
 ## Testabilidad
 
 - **shared** (`goal.test.ts`): BMR male/female/other, TDEE por nivel, ajuste lose/maintain/gain + piso 1500, manualKcal override, macros (proteína lose vs no-lose, carbos = resto, floor 0), fallback por % sin peso, `incomplete` con la lista `missing` correcta.
-- **backend**: `getGoalInput` default + `upsertGoalInput`; el resolver arma bien los inputs (perfil + último peso); `GET`/`PUT /nutrition/goal` (ok, incomplete, validación 400) con fakeDb.
-- **mobile**: lógica pura de la pantalla de objetivo (buildInput desde el form) y del cálculo de "Restante"/porcentaje de barra por macro (función pura testeable).
+- **backend**: `getGoalInput` default (sin fila → mantenimiento) + `upsertGoalInput`; `GET`/`PUT /nutrition/goal` (devuelven los inputs; validación 400 en el PUT) con fakeDb.
+- **mobile** (`goalView.test.ts`): dado un `computeNutritionGoal` "ok"/"incomplete" + totales comidos, arma bien { meta/comido/restante, barras por macro con pct clamp 0–100 }. (El cálculo en sí ya está cubierto por `shared`.)
 
 ## Entrega
 
