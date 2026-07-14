@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
 import { router } from "expo-router";
 import { getBackendUrl, setBackendUrl } from "../src/storage/config";
 import { logout } from "../src/api/auth";
@@ -227,7 +227,12 @@ export default function ConfiguracionScreen() {
   } as const;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, padding: spacing.xl, gap: spacing.lg }}>
+    <ScrollView
+      testID="configuracion-scroll"
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xl * 2, gap: spacing.lg }}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={{ gap: spacing.sm }}>
         <Text style={{ color: colors.textMuted }}>URL del backend</Text>
         <TextInput
@@ -366,6 +371,6 @@ export default function ConfiguracionScreen() {
       <Pressable testID="logout" onPress={onLogout} style={{ alignItems: "center", paddingVertical: spacing.md, marginTop: spacing.lg }}>
         <Text style={{ color: colors.danger, fontWeight: "600" }}>Cerrar sesión</Text>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
