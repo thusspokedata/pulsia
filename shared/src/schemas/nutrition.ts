@@ -94,7 +94,7 @@ export type Meal = z.infer<typeof MealSchema>;
 
 // Agua tomada (registro rápido): ml + momento. El aporte de agua de los alimentos va aparte (water_ml del ítem).
 export const WaterLogInputSchema = z.object({
-  ml: z.number().positive(),
+  ml: z.number().positive().max(5000), // tope anti-dedazo por carga (una botella grande ~2L; 5000 deja margen)
   loggedAt: z.number().int(),
 });
 export type WaterLogInput = z.infer<typeof WaterLogInputSchema>;
