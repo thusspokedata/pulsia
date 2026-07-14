@@ -116,6 +116,16 @@ export default function NuevaComidaScreen() {
       <View style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md }}>
         <Text style={{ color: colors.text, fontWeight: "700" }}>Total: {totals.kcal} kcal</Text>
         <Text style={{ color: colors.textMuted, fontSize: 12 }}>P {totals.protein_g}g · C {totals.carbs_g}g · G {totals.fat_g}g</Text>
+        {(totals.sugars_g != null || totals.fiber_g != null || totals.saturated_fat_g != null || totals.salt_g != null) && (
+          <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+            {[
+              totals.sugars_g != null ? `azúc ${totals.sugars_g}g` : null,
+              totals.fiber_g != null ? `fibra ${totals.fiber_g}g` : null,
+              totals.saturated_fat_g != null ? `sat ${totals.saturated_fat_g}g` : null,
+              totals.salt_g != null ? `sal ${totals.salt_g}g` : null,
+            ].filter(Boolean).join(" · ")}
+          </Text>
+        )}
       </View>
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
       <Pressable onPress={save} disabled={saving} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
