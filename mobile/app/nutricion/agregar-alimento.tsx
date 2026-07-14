@@ -136,7 +136,7 @@ export default function AgregarAlimentoScreen() {
       {field("Azúcares (g, opcional)", "sugars_g", "numeric")}
       {field("Fibra (g, opcional)", "fiber_g", "numeric")}
       {field("Sal (g, opcional)", "salt_g", "numeric")}
-      {form.salt_g.trim() !== "" && !Number.isNaN(Number(form.salt_g.replace(",", "."))) && (
+      {form.salt_g.trim() !== "" && Number(form.salt_g.replace(",", ".")) >= 0 && (
         <Text style={{ color: colors.textMuted, fontSize: 12 }}>
           Sodio ≈ {Math.round((Number(form.salt_g.replace(",", ".")) / 2.5) * 1000)} mg / 100{form.basis === "per_100ml" ? "ml" : "g"}
         </Text>
