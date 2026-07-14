@@ -13,6 +13,8 @@ export interface ReportData {
   sessionsCount: number;
   metrics: Partial<Record<string, number>>; // último valor por tipo en el período
   athlete: AthleteContext;
+  periodDays: number;
+  weightTrend: { first: number; last: number } | null;
 }
 
 // Deps inyectables para testear sin DB real.
@@ -53,9 +55,12 @@ export async function collectReportData(
   const exercise = sumDayExerciseBurn(daySessions, { weightKg: athlete.weightKg, age: athlete.age, sex: athlete.sex, bmr });
   const metricsByType: Partial<Record<string, number>> = {};
   for (const m of metrics) metricsByType[m.metricType] = m.value; // ordenados asc → queda el último
+  const periodDays = Math.max(1, Math.round((to - from + 1) / 86_400_000));
+  const weights = metrics.filter((m) => m.metricType === "weight_kg");
+  const weightTrend = weights.length > 0 ? { first: weights[0].value, last: weights[weights.length - 1].value } : null;
   return {
     totals, cholesterolMg, liquid: { total: Math.round(fromFood + drank), drank, fromFood },
-    exercise, sessionsCount: daySessions.length, metrics: metricsByType, athlete,
+    exercise, sessionsCount: daySessions.length, metrics: metricsByType, athlete, periodDays, weightTrend,
   };
 }
 

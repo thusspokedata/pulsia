@@ -35,3 +35,28 @@ test("hasAnyData false si no hay nada", async () => {
   const data = await collectReportData({} as any, "u", 0, 10, { goal: { status: "incomplete" } } as any, deps as any);
   expect(hasAnyData(data)).toBe(false);
 });
+
+test("periodDays y weightTrend (primer y último peso del rango)", async () => {
+  const deps = {
+    listMeals: async () => [], listWater: async () => [],
+    listSessions: async () => [],
+    getMetrics: async () => [ // ordenados asc por measuredAt (como el real)
+      { id: "a", metricType: "weight_kg", value: 82, measuredAt: 100 },
+      { id: "b", metricType: "steps", value: 5000, measuredAt: 150 },
+      { id: "c", metricType: "weight_kg", value: 80, measuredAt: 900 },
+    ],
+  };
+  const athlete = { goal: { status: "incomplete" } } as any;
+  // período de 7 días: from=0, to=7*86400000-1
+  const data = await collectReportData({} as any, "u", 0, 7 * 86400000 - 1, athlete, deps as any);
+  expect(data.periodDays).toBe(7);
+  expect(data.weightTrend).toEqual({ first: 82, last: 80 });
+  expect(data.metrics.weight_kg).toBe(80); // último sigue siendo el "actual"
+});
+
+test("periodDays mínimo 1 y weightTrend null si no hay peso", async () => {
+  const deps = { listMeals: async () => [], listWater: async () => [], listSessions: async () => [], getMetrics: async () => [] };
+  const data = await collectReportData({} as any, "u", 0, 10, { goal: { status: "incomplete" } } as any, deps as any);
+  expect(data.periodDays).toBe(1);
+  expect(data.weightTrend).toBeNull();
+});
