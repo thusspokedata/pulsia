@@ -11,3 +11,4 @@ export * from "./progress/trends";
 export * from "./schemas/nutrition";
 export * from "./nutrition/macros";
 export * from "./nutrition/goal";
+export * from "./nutrition/exerciseBurn";
