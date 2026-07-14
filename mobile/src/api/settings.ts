@@ -7,6 +7,7 @@ export interface SettingsInput {
   aiModel?: string;
   ecgEnabled?: boolean;
   kardiaPdfPassword?: string;
+  reportsEnabled?: boolean;
 }
 
 export interface SettingsStatus {
@@ -14,6 +15,7 @@ export interface SettingsStatus {
   aiModel: string;
   ecgEnabled: boolean;
   hasKardiaPw: boolean;
+  reportsEnabled: boolean;
 }
 
 export async function saveSettings(baseUrl: string, input: SettingsInput): Promise<void> {
