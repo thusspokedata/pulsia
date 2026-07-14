@@ -90,3 +90,24 @@ test("sumNullableMicro: todos presentes suma", () => {
 test("sumNullableMicro: suma redondeada a 1 decimal", () => {
   expect(sumNullableMicro([2.1, 1.2])).toBe(3.3);
 });
+
+const yema = {
+  basis: "per_100g" as const, kcal: 322, protein_g: 16, carbs_g: 3.6, fat_g: 27, unitWeightG: 17,
+  cholesterol_mg: 1085, water_ml: 50,
+};
+
+test("escala colesterol y agua cuando el alimento los tiene", () => {
+  const r = foodMacrosForQuantity(yema, 100, "g");
+  expect(r.cholesterol_mg).toBe(1085);
+  expect(r.water_ml).toBe(50);
+  const half = foodMacrosForQuantity(yema, 50, "g");
+  expect(half.cholesterol_mg).toBe(542.5); // 1085 * 0.5
+  expect(half.water_ml).toBe(25);
+});
+
+test("colesterol y agua ausentes → null (alimento legacy)", () => {
+  const legacy = { basis: "per_100g" as const, kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: null };
+  const r = foodMacrosForQuantity(legacy, 100, "g");
+  expect(r.cholesterol_mg).toBeNull();
+  expect(r.water_ml).toBeNull();
+});

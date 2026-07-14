@@ -1,10 +1,10 @@
 import { useCallback, useRef, useState } from "react";
-import { ScrollView, View, Text, Pressable, Alert } from "react-native";
+import { ScrollView, View, Text, Pressable, Alert, TextInput } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { getBackendUrl } from "../../src/storage/config";
-import { listMeals, deleteMeal } from "../../src/api/nutrition";
+import { listMeals, deleteMeal, listWater, logWater, deleteWater } from "../../src/api/nutrition";
 import { dayAtNoon, dayLabel } from "../../src/session/metricDate";
-import type { Meal } from "@pulsia/shared";
+import type { Meal, WaterLog } from "@pulsia/shared";
 import { sumNullableMicro } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
@@ -24,12 +24,17 @@ export default function NutricionScreen() {
   const baseUrl = useRef<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [meals, setMeals] = useState<Meal[]>([]);
+  const [water, setWater] = useState<WaterLog[]>([]);
+  const [mlInput, setMlInput] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (off: number) => {
     const url = await getBackendUrl(); baseUrl.current = url;
     const { from, to } = dayBounds(off);
-    try { setMeals(await listMeals(url, from, to)); setError(null); } catch (e) { setError((e as Error).message); }
+    try {
+      const [ms, ws] = await Promise.all([listMeals(url, from, to), listWater(url, from, to)]);
+      setMeals(ms); setWater(ws); setError(null);
+    } catch (e) { setError((e as Error).message); }
   }, []);
 
   useFocusEffect(useCallback(() => { void load(offset); }, [load, offset]));
@@ -46,6 +51,10 @@ export default function NutricionScreen() {
     sugars_g: dayMicro("sugars_g"), fiber_g: dayMicro("fiber_g"),
     saturated_fat_g: dayMicro("saturated_fat_g"), salt_g: dayMicro("salt_g"),
   };
+  const cholesterolMg = sumNullableMicro(items.map((it) => it.cholesterol_mg));
+  const waterFromFood = sumNullableMicro(items.map((it) => it.water_ml)) ?? 0;
+  const waterDrank = water.reduce((a, w) => a + w.ml, 0);
+  const liquidTotal = Math.round(waterFromFood + waterDrank);
 
   async function remove(m: Meal) {
     Alert.alert("Borrar comida", "¿Borrar esta comida?", [
@@ -56,6 +65,21 @@ export default function NutricionScreen() {
         catch (e) { setError((e as Error).message); }
       } },
     ]);
+  }
+
+  function waterLoggedAt(): number { return offset === 0 ? Date.now() : dayBounds(offset).noon; }
+
+  async function addWater(ml: number) {
+    if (!baseUrl.current || !Number.isFinite(ml) || ml <= 0) return;
+    try { await logWater(baseUrl.current, { ml, loggedAt: waterLoggedAt() }); await load(offset); }
+    catch (e) { setError((e as Error).message); }
+  }
+
+  async function undoLastWater() {
+    if (!baseUrl.current || water.length === 0) return;
+    const last = water[water.length - 1]; // listWater viene ordenado asc por loggedAt
+    try { await deleteWater(baseUrl.current, last.id); await load(offset); }
+    catch (e) { setError((e as Error).message); }
   }
 
   const { noon } = dayBounds(offset);
@@ -84,6 +108,37 @@ export default function NutricionScreen() {
               dayTotals.salt_g != null ? `sal ${dayTotals.salt_g}g` : null,
             ].filter(Boolean).join(" · ")}
           </Text>
+        )}
+        {cholesterolMg != null && (
+          <Text style={{ color: cholesterolMg > 300 ? colors.warning : colors.textMuted, fontSize: 12, marginTop: 2 }}>
+            Colesterol {Math.round(cholesterolMg)} / 300 mg
+          </Text>
+        )}
+      </View>
+
+      {/* Líquido del día */}
+      <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm }}>
+        <Text style={{ color: colors.text, fontSize: 16, fontWeight: "700" }}>💧 Líquido {liquidTotal} ml</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+          tomada {Math.round(waterDrank)} + alimentos {Math.round(waterFromFood)}
+        </Text>
+        <View style={{ flexDirection: "row", gap: spacing.sm, alignItems: "center" }}>
+          <Pressable onPress={() => addWater(250)} style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.md }}>
+            <Text style={{ color: colors.accentText, fontWeight: "600" }}>+1 vaso (250 ml)</Text>
+          </Pressable>
+          <TextInput
+            value={mlInput} onChangeText={setMlInput} keyboardType="numeric" placeholder="ml" placeholderTextColor={colors.icon}
+            style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.sm, color: colors.text }}
+          />
+          <Pressable onPress={() => { const n = Number(mlInput.replace(",", ".")); if (Number.isFinite(n) && n > 0) { void addWater(n); setMlInput(""); } }}
+            style={{ backgroundColor: colors.accent, borderRadius: radius.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.md }}>
+            <Text style={{ color: "#fff", fontWeight: "600" }}>Agregar</Text>
+          </Pressable>
+        </View>
+        {water.length > 0 && (
+          <Pressable onPress={undoLastWater}>
+            <Text style={{ color: colors.accentText, fontSize: 12 }}>Deshacer último ({Math.round(water[water.length - 1].ml)} ml)</Text>
+          </Pressable>
         )}
       </View>
 

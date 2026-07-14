@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import type { Food, FoodInput, FoodExtraction, Meal, MealInput } from "@pulsia/shared";
+import type { Food, FoodInput, FoodExtraction, Meal, MealInput, WaterLog, WaterLogInput } from "@pulsia/shared";
 
 export async function extractFood(baseUrl: string, imageBase64: string, mediaType: string): Promise<FoodExtraction> {
   // La imagen va entera en el body → margen mayor al timeout por defecto (15s).
@@ -66,6 +66,23 @@ export async function updateMeal(baseUrl: string, id: string, input: MealInput):
 export async function deleteMeal(baseUrl: string, id: string): Promise<void> {
   const res = await apiFetch(baseUrl, `/nutrition/meals/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo borrar la comida."));
+}
+
+export async function logWater(baseUrl: string, input: WaterLogInput): Promise<WaterLog> {
+  const res = await apiFetch(baseUrl, "/nutrition/water", { method: "POST", body: JSON.stringify(input) });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo registrar el agua."));
+  return (await res.json()) as WaterLog;
+}
+
+export async function listWater(baseUrl: string, from: number, to: number): Promise<WaterLog[]> {
+  const res = await apiFetch(baseUrl, `/nutrition/water?from=${from}&to=${to}`);
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo cargar el agua."));
+  return (await res.json()) as WaterLog[];
+}
+
+export async function deleteWater(baseUrl: string, id: string): Promise<void> {
+  const res = await apiFetch(baseUrl, `/nutrition/water/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo borrar el registro de agua."));
 }
 
 async function errorMessage(res: Response, fallback: string): Promise<string> {

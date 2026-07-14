@@ -1,10 +1,10 @@
 import { test, expect } from "bun:test";
-import { snapshotItems, toFood, toMeal } from "./repository";
+import { snapshotItems, toFood, toMeal, insertWater, deleteWater } from "./repository";
 
 const banana = {
   id: "11111111-1111-4111-8111-111111111111", userId: "u", name: "Banana", basis: "per_100g",
   kcal: 89, proteinG: 1.1, carbsG: 23, fatG: 0.3, unitWeightG: 120, source: "estimate", createdAt: new Date(0),
-  saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, saltG: 0,
+  saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, saltG: 0, cholesterolMg: 0, waterMl: 75,
 };
 
 test("toFood mapea la fila a Food del shared", () => {
@@ -55,4 +55,36 @@ test("snapshotItems deja los micros en null si el alimento no los tiene", () => 
   const legacy = { ...banana, saturatedFatG: null, sugarsG: null, fiberG: null, saltG: null };
   const items = snapshotItems([{ foodId: legacy.id, quantity: 100, quantityUnit: "g" }], new Map([[legacy.id, legacy as any]]));
   expect(items[0]).toMatchObject({ sugarsG: null, fiberG: null, saturatedFatG: null, saltG: null });
+});
+
+test("toFood mapea colesterol y agua (y null si faltan)", () => {
+  expect(toFood(banana as any)).toMatchObject({ cholesterol_mg: 0, water_ml: 75 });
+  const legacy = { ...banana, cholesterolMg: null, waterMl: null };
+  expect(toFood(legacy as any)).toMatchObject({ cholesterol_mg: null, water_ml: null });
+});
+
+test("snapshotItems escala y persiste colesterol y agua", () => {
+  const items = snapshotItems(
+    [{ foodId: banana.id, quantity: 1, quantityUnit: "unit" }],
+    new Map([[banana.id, banana as any]]),
+  );
+  // 1 unidad = 120g → factor 1.2 ; agua 75*1.2 = 90
+  expect(items[0]).toMatchObject({ cholesterolMg: 0, waterMl: 90 });
+});
+
+test("insertWater mapea ml + loggedAt y devuelve WaterLog", async () => {
+  const inserted: any[] = [];
+  const db: any = {
+    insert: () => ({ values(v: any) { const row = { id: "w1", ...v }; inserted.push(row); const p: any = Promise.resolve([row]); p.returning = async () => [row]; return p; } }),
+  };
+  const w = await insertWater(db, "u", { ml: 250, loggedAt: 1700 });
+  expect(w).toEqual({ id: "w1", ml: 250, loggedAt: 1700 });
+  expect(inserted[0]).toMatchObject({ userId: "u", ml: 250, loggedAt: 1700 });
+});
+
+test("deleteWater devuelve true si borró, false si no", async () => {
+  const dbHit: any = { delete: () => ({ where: () => { const p: any = Promise.resolve(undefined); p.returning = async () => [{ id: "w1" }]; return p; } }) };
+  const dbMiss: any = { delete: () => ({ where: () => { const p: any = Promise.resolve(undefined); p.returning = async () => []; return p; } }) };
+  expect(await deleteWater(dbHit, "u", "w1")).toBe(true);
+  expect(await deleteWater(dbMiss, "u", "w1")).toBe(false);
 });

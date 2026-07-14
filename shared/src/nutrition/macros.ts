@@ -11,6 +11,8 @@ export interface MacroSource {
   sugars_g?: number | null;
   fiber_g?: number | null;
   salt_g?: number | null;
+  cholesterol_mg?: number | null;
+  water_ml?: number | null;
 }
 
 export interface ScaledMacros {
@@ -23,6 +25,8 @@ export interface ScaledMacros {
   sugars_g: number | null;
   fiber_g: number | null;
   salt_g: number | null;
+  cholesterol_mg: number | null;
+  water_ml: number | null;
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -59,5 +63,7 @@ export function foodMacrosForQuantity(food: MacroSource, quantity: number, unit:
     sugars_g: scaleMicro(food.sugars_g, factor),
     fiber_g: scaleMicro(food.fiber_g, factor),
     salt_g: scaleMicro(food.salt_g, factor),
+    cholesterol_mg: scaleMicro(food.cholesterol_mg, factor),
+    water_ml: scaleMicro(food.water_ml, factor),
   };
 }

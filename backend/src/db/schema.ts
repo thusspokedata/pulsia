@@ -97,6 +97,8 @@ export const food = pgTable("food", {
   sugarsG: real("sugars_g"),
   fiberG: real("fiber_g"),
   saltG: real("salt_g"),
+  cholesterolMg: real("cholesterol_mg"), // nullable
+  waterMl: real("water_ml"),             // nullable
   unitWeightG: real("unit_weight_g"), // nullable
   source: text("source").notNull(), // 'label' | 'estimate'
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -131,6 +133,8 @@ export const mealItem = pgTable("meal_item", {
   sugarsG: real("sugars_g"),
   fiberG: real("fiber_g"),
   saltG: real("salt_g"),
+  cholesterolMg: real("cholesterol_mg"),
+  waterMl: real("water_ml"),
 }, (t) => ({
   byMeal: index("meal_item_meal_idx").on(t.mealId),
 }));
@@ -140,6 +144,16 @@ export const mealRelations = relations(meal, ({ many }) => ({
 }));
 export const mealItemRelations = relations(mealItem, ({ one }) => ({
   meal: one(meal, { fields: [mealItem.mealId], references: [meal.id] }),
+}));
+
+export const waterLog = pgTable("water_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  ml: real("ml").notNull(),
+  loggedAt: bigint("logged_at", { mode: "number" }).notNull(), // epoch ms
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  byUserTime: index("water_log_user_time_idx").on(t.userId, t.loggedAt),
 }));
 
 export const exerciseCatalog = pgTable("exercise_catalog", {

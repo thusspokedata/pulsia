@@ -3,6 +3,7 @@ import {
   FoodExtractionSchema, FoodSchema, FoodInputSchema,
   MealInputSchema, MealItemInputSchema, MealItemSchema, MealSchema,
   QuantityUnitSchema, FoodBasisSchema, MealTypeSchema,
+  WaterLogInputSchema, WaterLogSchema,
 } from "./nutrition";
 
 const extraction = {
@@ -72,8 +73,9 @@ test("FoodExtractionSchema acepta los micros opcionales", () => {
     name: "Muesli", basis: "per_100g", kcal: 442, protein_g: 9.9, carbs_g: 63, fat_g: 14.8,
     unitWeightG: null, source: "label",
     saturated_fat_g: 4.2, sugars_g: 14, fiber_g: 8.4, salt_g: 0.2,
+    cholesterol_mg: 12, water_ml: 3,
   };
-  expect(FoodExtractionSchema.parse(withMicros)).toMatchObject({ saturated_fat_g: 4.2, sugars_g: 14, fiber_g: 8.4, salt_g: 0.2 });
+  expect(FoodExtractionSchema.parse(withMicros)).toMatchObject({ saturated_fat_g: 4.2, sugars_g: 14, fiber_g: 8.4, salt_g: 0.2, cholesterol_mg: 12, water_ml: 3 });
 });
 
 test("FoodExtractionSchema permite omitir los micros (estimado)", () => {
@@ -97,8 +99,22 @@ test("MealItemSchema acepta micros snapshoteados o null", () => {
     id: "33333333-3333-4333-8333-333333333333", foodId: null, foodName: "Muesli",
     quantity: 50, quantityUnit: "g", grams: 50, kcal: 221, protein_g: 5, carbs_g: 31.5, fat_g: 7.4,
     saturated_fat_g: 2.1, sugars_g: 7, fiber_g: 4.2, salt_g: 0.1,
+    cholesterol_mg: 6, water_ml: 45,
   };
-  expect(MealItemSchema.parse(item)).toMatchObject({ sugars_g: 7, fiber_g: 4.2 });
-  const legacy = { ...item, saturated_fat_g: undefined, sugars_g: undefined, fiber_g: undefined, salt_g: undefined };
+  expect(MealItemSchema.parse(item)).toMatchObject({ sugars_g: 7, fiber_g: 4.2, cholesterol_mg: 6, water_ml: 45 });
+  const legacy = { ...item, saturated_fat_g: undefined, sugars_g: undefined, fiber_g: undefined, salt_g: undefined, cholesterol_mg: undefined, water_ml: undefined };
   expect(MealItemSchema.safeParse(legacy).success).toBe(true);
+});
+
+test("WaterLogInputSchema acepta ml positivo + loggedAt, rechaza ml <= 0 y dedazos", () => {
+  expect(WaterLogInputSchema.safeParse({ ml: 250, loggedAt: 1_700_000_000_000 }).success).toBe(true);
+  expect(WaterLogInputSchema.safeParse({ ml: 0, loggedAt: 1 }).success).toBe(false);
+  expect(WaterLogInputSchema.safeParse({ ml: -5, loggedAt: 1 }).success).toBe(false);
+  expect(WaterLogInputSchema.safeParse({ ml: 999999, loggedAt: 1 }).success).toBe(false); // tope anti-dedazo (max 5000)
+});
+
+test("WaterLogSchema exige id uuid", () => {
+  const ok = WaterLogSchema.safeParse({ id: "11111111-1111-4111-8111-111111111111", ml: 250, loggedAt: 1 });
+  expect(ok.success).toBe(true);
+  expect(WaterLogSchema.safeParse({ id: "no-uuid", ml: 250, loggedAt: 1 }).success).toBe(false);
 });
