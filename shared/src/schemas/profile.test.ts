@@ -60,3 +60,10 @@ test("sex es opcional y valida el enum", () => {
   expect(TrainingProfileSchema.safeParse({ ...base }).success).toBe(true);
   expect(TrainingProfileSchema.safeParse({ ...base, sex: "otro" }).success).toBe(false);
 });
+
+test("acepta activityLevel y lo deja opcional", () => {
+  const base = { experience: "beginner", goal: "strength", daysPerWeek: 3, sessionMinutes: 45, gymEquipment: [], homeEquipment: ["bodyweight"], limitations: [] };
+  expect(TrainingProfileSchema.parse({ ...base, activityLevel: "moderate" }).activityLevel).toBe("moderate");
+  expect(TrainingProfileSchema.parse(base).activityLevel).toBeUndefined();
+  expect(TrainingProfileSchema.safeParse({ ...base, activityLevel: "extreme" }).success).toBe(false);
+});
