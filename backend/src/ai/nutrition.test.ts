@@ -25,3 +25,11 @@ test("el prompt pide micros y la regla de naming condicional", () => {
   // base (sigue)
   expect(p).toMatch(/return_food/);
 });
+
+test("el prompt pide colesterol (mg) y aporte de agua", () => {
+  const p = buildFoodPrompt();
+  expect(p).toMatch(/cholesterol_mg/);
+  expect(p).toMatch(/water_ml/);
+  expect(p).toMatch(/mg/); // colesterol en mg
+  expect(p).toMatch(/agua/i); // aporte de agua
+});
