@@ -15,7 +15,10 @@ export function toFood(row: FoodRow): Food {
   return {
     id: row.id, name: row.name, basis: row.basis as Food["basis"],
     kcal: row.kcal, protein_g: row.proteinG, carbs_g: row.carbsG, fat_g: row.fatG,
-    unitWeightG: row.unitWeightG, source: row.source as Food["source"],
+    unitWeightG: row.unitWeightG,
+    saturated_fat_g: row.saturatedFatG ?? null, sugars_g: row.sugarsG ?? null,
+    fiber_g: row.fiberG ?? null, salt_g: row.saltG ?? null,
+    source: row.source as Food["source"],
     createdAt: new Date(row.createdAt).getTime(),
   };
 }
@@ -27,6 +30,8 @@ export function toMeal(row: MealRow, items: MealItemRow[]): Meal {
       id: it.id, foodId: it.foodId ?? null, foodName: it.foodName,
       quantity: it.quantity, quantityUnit: it.quantityUnit as QuantityUnit, grams: it.grams,
       kcal: it.kcal, protein_g: it.proteinG, carbs_g: it.carbsG, fat_g: it.fatG,
+      saturated_fat_g: it.saturatedFatG ?? null, sugars_g: it.sugarsG ?? null,
+      fiber_g: it.fiberG ?? null, salt_g: it.saltG ?? null,
     })),
   };
 }
@@ -39,7 +44,11 @@ export function snapshotItems(items: MealItemInput[], catalog: Map<string, FoodR
     let m: ReturnType<typeof foodMacrosForQuantity>;
     try {
       m = foodMacrosForQuantity(
-        { basis: f.basis as Food["basis"], kcal: f.kcal, protein_g: f.proteinG, carbs_g: f.carbsG, fat_g: f.fatG, unitWeightG: f.unitWeightG },
+        {
+          basis: f.basis as Food["basis"], kcal: f.kcal, protein_g: f.proteinG, carbs_g: f.carbsG, fat_g: f.fatG,
+          unitWeightG: f.unitWeightG,
+          saturated_fat_g: f.saturatedFatG, sugars_g: f.sugarsG, fiber_g: f.fiberG, salt_g: f.saltG,
+        },
         it.quantity, it.quantityUnit,
       );
     } catch (e) {
@@ -48,6 +57,7 @@ export function snapshotItems(items: MealItemInput[], catalog: Map<string, FoodR
     return {
       foodId: f.id, foodName: f.name, quantity: it.quantity, quantityUnit: it.quantityUnit,
       grams: m.grams, kcal: m.kcal, proteinG: m.protein_g, carbsG: m.carbs_g, fatG: m.fat_g,
+      saturatedFatG: m.saturated_fat_g, sugarsG: m.sugars_g, fiberG: m.fiber_g, saltG: m.salt_g,
     };
   });
 }
@@ -58,6 +68,8 @@ export async function insertFood(db: Db, userId: string, input: FoodInput): Prom
     userId, name: input.name, basis: input.basis, kcal: input.kcal,
     proteinG: input.protein_g, carbsG: input.carbs_g, fatG: input.fat_g,
     unitWeightG: input.unitWeightG, source: input.source,
+    saturatedFatG: input.saturated_fat_g ?? null, sugarsG: input.sugars_g ?? null,
+    fiberG: input.fiber_g ?? null, saltG: input.salt_g ?? null,
   }).returning();
   return toFood(row);
 }
