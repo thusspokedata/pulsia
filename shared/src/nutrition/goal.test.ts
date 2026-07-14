@@ -94,3 +94,19 @@ test("manualKcal 0 NO cuenta como override (cae a auto → incompleto sin perfil
   const r = computeNutritionGoal({ objective: "maintain", rateKgPerWeek: 0, manualKcal: 0 });
   expect(r.status).toBe("incomplete");
 });
+
+test("manual con perfil completo devuelve bmr/tdee informativos (para el gasto neto)", () => {
+  const r = computeNutritionGoal({ ...base, objective: "maintain", rateKgPerWeek: 0, manualKcal: 1400 });
+  if (r.status !== "ok") throw new Error("esperaba ok");
+  expect(r.kcal).toBe(1400);        // la meta sigue siendo la manual
+  expect(r.source).toBe("manual");
+  expect(r.bmr).toBe(1718);          // informativo (base: male 40a 178cm 80kg)
+  expect(r.tdee).toBe(2362);         // 1717.5 * 1.375 → 2362
+});
+
+test("manual SIN datos antropométricos sigue con bmr/tdee null", () => {
+  const r = computeNutritionGoal({ objective: "maintain", rateKgPerWeek: 0, manualKcal: 2000 });
+  if (r.status !== "ok") throw new Error("esperaba ok");
+  expect(r.bmr).toBeNull();
+  expect(r.tdee).toBeNull();
+});
