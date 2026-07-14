@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { ScrollView, View, Text, TextInput, Pressable } from "react-native";
+import { ScrollView, View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { getBackendUrl } from "../../src/storage/config";
 import { listFoods, createMeal, getMeal, updateMeal } from "../../src/api/nutrition";
@@ -21,6 +21,7 @@ export default function NuevaComidaScreen() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [notEditable, setNotEditable] = useState(false);
+  const [loading, setLoading] = useState(!!mealId);
   const initedRef = useRef(false);
   // eatenAt: si vino por params (día seleccionado en el tab), usarlo; si no, ahora.
   const eatenAt = useRef<number>(params.eatenAt ? Number(params.eatenAt) : Date.now());
@@ -49,6 +50,7 @@ export default function NuevaComidaScreen() {
           else setRows(reconstructed as MealRow[]);
         } catch (e) { setError((e as Error).message); initedRef.current = false; }
       }
+      setLoading(false);
     })();
   }, [mealId]));
 
@@ -68,7 +70,7 @@ export default function NuevaComidaScreen() {
 
   async function save() {
     setError(null);
-    if (notEditable) { setError("Esta comida tiene un alimento borrado del catálogo; no se puede editar."); return; }
+    if (notEditable) { setError("Esta comida no se puede editar: uno de sus alimentos fue borrado del catálogo o cambió de unidad/formato. Borrala y volvé a cargarla."); return; }
     if (rows.length === 0) { setError("Agregá al menos un alimento."); return; }
     if (rows.some((r) => r.quantity <= 0)) { setError("Las cantidades tienen que ser mayores a 0."); return; }
     if (!baseUrl.current) { setError("No se pudo conectar con el servidor."); return; }
@@ -84,12 +86,21 @@ export default function NuevaComidaScreen() {
   const totals = mealTotals(rows);
   const matches = q.trim() ? foods.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase())) : [];
 
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator color={colors.accent} />
+        <Text style={{ color: colors.textMuted, marginTop: spacing.sm }}>Cargando comida…</Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
       <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>{mealId ? "Editar comida" : "Nueva comida"}</Text>
       {notEditable && (
         <Text style={{ color: colors.danger, fontSize: 13 }}>
-          Esta comida tiene un alimento que borraste del catálogo, así que no se puede editar. Borrala y volvé a cargarla.
+          Esta comida no se puede editar: uno de sus alimentos fue borrado del catálogo o cambió de unidad/formato. Borrala y volvé a cargarla.
         </Text>
       )}
 
@@ -162,7 +173,7 @@ export default function NuevaComidaScreen() {
         )}
       </View>
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
-      <Pressable onPress={save} disabled={saving || notEditable} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
+      <Pressable onPress={save} disabled={saving || notEditable} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving || notEditable ? 0.6 : 1 }}>
         <Text style={{ color: "#fff", fontWeight: "700" }}>{saving ? "Guardando…" : mealId ? "Guardar cambios" : "Guardar comida"}</Text>
       </Pressable>
     </ScrollView>

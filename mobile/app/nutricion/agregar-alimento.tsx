@@ -21,6 +21,7 @@ export default function AgregarAlimentoScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { foodId } = useLocalSearchParams<{ foodId?: string }>();
+  const [loading, setLoading] = useState(!!foodId);
 
   useEffect(() => {
     (async () => {
@@ -39,6 +40,7 @@ export default function AgregarAlimentoScreen() {
           });
         } catch (e) { setError((e as Error).message); }
       }
+      setLoading(false);
     })();
   }, [foodId]);
 
@@ -124,6 +126,15 @@ export default function AgregarAlimentoScreen() {
       <Text style={{ color: active ? "#fff" : colors.text }}>{label}</Text>
     </Pressable>
   );
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator color={colors.accent} />
+        <Text style={{ color: colors.textMuted, marginTop: spacing.sm }}>Cargando alimento…</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}>
