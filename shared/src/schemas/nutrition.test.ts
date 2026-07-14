@@ -3,6 +3,7 @@ import {
   FoodExtractionSchema, FoodSchema, FoodInputSchema,
   MealInputSchema, MealItemInputSchema, MealItemSchema, MealSchema,
   QuantityUnitSchema, FoodBasisSchema, MealTypeSchema,
+  WaterLogInputSchema, WaterLogSchema,
 } from "./nutrition";
 
 const extraction = {
@@ -101,4 +102,16 @@ test("MealItemSchema acepta micros snapshoteados o null", () => {
   expect(MealItemSchema.parse(item)).toMatchObject({ sugars_g: 7, fiber_g: 4.2 });
   const legacy = { ...item, saturated_fat_g: undefined, sugars_g: undefined, fiber_g: undefined, salt_g: undefined };
   expect(MealItemSchema.safeParse(legacy).success).toBe(true);
+});
+
+test("WaterLogInputSchema acepta ml positivo + loggedAt, rechaza ml <= 0", () => {
+  expect(WaterLogInputSchema.safeParse({ ml: 250, loggedAt: 1_700_000_000_000 }).success).toBe(true);
+  expect(WaterLogInputSchema.safeParse({ ml: 0, loggedAt: 1 }).success).toBe(false);
+  expect(WaterLogInputSchema.safeParse({ ml: -5, loggedAt: 1 }).success).toBe(false);
+});
+
+test("WaterLogSchema exige id uuid", () => {
+  const ok = WaterLogSchema.safeParse({ id: "11111111-1111-4111-8111-111111111111", ml: 250, loggedAt: 1 });
+  expect(ok.success).toBe(true);
+  expect(WaterLogSchema.safeParse({ id: "no-uuid", ml: 250, loggedAt: 1 }).success).toBe(false);
 });

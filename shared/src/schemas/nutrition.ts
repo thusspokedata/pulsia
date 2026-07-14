@@ -91,3 +91,15 @@ export const MealSchema = z.object({
   items: z.array(MealItemSchema),
 });
 export type Meal = z.infer<typeof MealSchema>;
+
+// Agua tomada (registro rápido): ml + momento. El aporte de agua de los alimentos va aparte (water_ml del ítem).
+export const WaterLogInputSchema = z.object({
+  ml: z.number().positive(),
+  loggedAt: z.number().int(),
+});
+export type WaterLogInput = z.infer<typeof WaterLogInputSchema>;
+
+export const WaterLogSchema = WaterLogInputSchema.extend({
+  id: z.string().uuid(),
+});
+export type WaterLog = z.infer<typeof WaterLogSchema>;
