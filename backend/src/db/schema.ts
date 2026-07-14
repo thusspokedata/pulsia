@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, jsonb, timestamp, integer, bigint, boolean, doublePrecision, real, index, customType } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, jsonb, timestamp, integer, bigint, boolean, doublePrecision, real, index, uniqueIndex, customType } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import type { TrainingProfile, Program, PlannedExercise } from "@pulsia/shared";
 
@@ -25,6 +25,7 @@ export const settings = pgTable("settings", {
   aiApiKeyEncrypted: text("ai_api_key_encrypted"),
   aiModel: text("ai_model").default("claude-sonnet-4-6").notNull(),
   ecgEnabled: boolean("ecg_enabled").notNull().default(false),
+  reportsEnabled: boolean("reports_enabled").notNull().default(false),
   kardiaPwEncrypted: text("kardia_pw_encrypted"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -163,6 +164,18 @@ export const nutritionGoal = pgTable("nutrition_goal", {
   manualKcal: integer("manual_kcal"),                // nullable: override total
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+export const report = pgTable("report", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  kind: text("kind").notNull(),
+  periodStart: bigint("period_start", { mode: "number" }).notNull(),
+  periodEnd: bigint("period_end", { mode: "number" }).notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  byUserKindPeriod: uniqueIndex("report_user_kind_period_idx").on(t.userId, t.kind, t.periodStart),
+}));
 
 export const exerciseCatalog = pgTable("exercise_catalog", {
   id: text("id").primaryKey(),
