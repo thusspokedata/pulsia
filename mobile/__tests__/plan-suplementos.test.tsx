@@ -78,6 +78,36 @@ test("editar solo la dosis de un ítem día-por-medio preserva el anchorDate ori
   expect(patch.frequency).toEqual({ type: "every_other_day", anchorDate: "2026-07-10" }); // NO re-anclado a hoy
 });
 
+test("si falla el guardado, la edición no se pierde y se ve el error", async () => {
+  (getPlan as jest.Mock).mockResolvedValueOnce(plan);
+  // Rechazo asíncrono real (tick de red): fuerza el render intermedio de "guardando".
+  (updatePlanItem as jest.Mock).mockImplementationOnce(
+    () => new Promise((_, reject) => setTimeout(() => reject(new Error("No se pudo actualizar el ítem del plan.")), 0)),
+  );
+  await render(<PlanSuplementosScreen />);
+  await fireEvent.press(await screen.findByText(/Magnesio/)); // expande edición
+  await fireEvent.changeText(screen.getByDisplayValue("2 cápsulas"), "1 cápsula");
+  await fireEvent.press(screen.getByText(/Guardar cambios/i));
+  await waitFor(() => expect(screen.getByText(/No se pudo actualizar/)).toBeTruthy());
+  expect(screen.getByDisplayValue("1 cápsula")).toBeTruthy(); // la dosis editada sigue en el input
+});
+
+test("días fijos: los días elegidos se mandan ordenados sin importar el orden de tap", async () => {
+  (getPlan as jest.Mock).mockResolvedValueOnce(plan);
+  (updatePlanItem as jest.Mock).mockResolvedValueOnce({
+    ...plan.items[0], frequency: { type: "weekdays", days: [1, 6] },
+  });
+  await render(<PlanSuplementosScreen />);
+  await fireEvent.press(await screen.findByText(/Magnesio/)); // expande edición
+  await fireEvent.press(screen.getByText(/días fijos/i));
+  await fireEvent.press(screen.getByText("sáb")); // primero el sábado…
+  await fireEvent.press(screen.getByText("lun")); // …después el lunes
+  await fireEvent.press(screen.getByText(/Guardar cambios/i));
+  await waitFor(() => expect(updatePlanItem).toHaveBeenCalled());
+  const patch = (updatePlanItem as jest.Mock).mock.calls[0][2];
+  expect(patch.frequency).toEqual({ type: "weekdays", days: [1, 6] }); // ordenados
+});
+
 test("muestra el disclaimer no-médico", async () => {
   await render(<PlanSuplementosScreen />);
   await waitFor(() => expect(screen.getByText(/no reemplaza.*(médico|profesional)/i)).toBeTruthy());

@@ -27,21 +27,18 @@ function frequencyLabel(freq: Frequency): string {
   return freq.days.map((d) => WEEKDAY_LABELS[d]).join("/");
 }
 
-function freqType(freq: Frequency): "daily" | "every_other_day" | "weekdays" {
-  return freq.type;
-}
-
-function EditItem({ item, onSave, onCancel }: { item: PlanItemView; onSave: (patch: { slot: TakeSlot; frequency: Frequency; dose: string }) => void; onCancel: () => void }) {
+function EditItem({ item, saving, onSave, onCancel }: {
+  item: PlanItemView;
+  saving: boolean;
+  onSave: (patch: { slot: TakeSlot; frequency: Frequency; dose: string }) => void;
+  onCancel: () => void;
+}) {
   const [slot, setSlot] = useState<TakeSlot>(item.slot);
-  const [type, setType] = useState<"daily" | "every_other_day" | "weekdays">(freqType(item.frequency));
+  const [type, setType] = useState<Frequency["type"]>(item.frequency.type);
   const [days, setDays] = useState<string[]>(item.frequency.type === "weekdays" ? item.frequency.days.map(String) : []);
   const [dose, setDose] = useState(item.dose);
 
-  function pickType(v: string) {
-    setType(v as "daily" | "every_other_day" | "weekdays");
-  }
-
-  const canSave = dose.trim().length > 0 && (type !== "weekdays" || days.length > 0);
+  const canSave = !saving && dose.trim().length > 0 && (type !== "weekdays" || days.length > 0);
 
   function save() {
     if (!canSave) return;
@@ -52,7 +49,7 @@ function EditItem({ item, onSave, onCancel }: { item: PlanItemView; onSave: (pat
       // invertir la paridad de todo el esquema); solo anclar a hoy al CAMBIAR a este tipo.
       const anchorDate = item.frequency.type === "every_other_day" ? item.frequency.anchorDate : dateKey(Date.now());
       frequency = { type: "every_other_day", anchorDate };
-    } else frequency = { type: "weekdays", days: days.map(Number) };
+    } else frequency = { type: "weekdays", days: days.map(Number).sort((a, b) => a - b) };
     onSave({ slot, frequency, dose: dose.trim() });
   }
 
@@ -61,7 +58,7 @@ function EditItem({ item, onSave, onCancel }: { item: PlanItemView; onSave: (pat
       <Text style={{ color: colors.textMuted, fontSize: 12 }}>Franja</Text>
       <ChipGroup single options={SLOT_OPTIONS} selected={[slot]} onChange={(v) => setSlot(v[0] as TakeSlot)} />
       <Text style={{ color: colors.textMuted, fontSize: 12 }}>Frecuencia</Text>
-      <ChipGroup single options={FREQ_TYPE_OPTIONS} selected={[type]} onChange={(v) => pickType(v[0])} />
+      <ChipGroup single options={FREQ_TYPE_OPTIONS} selected={[type]} onChange={(v) => setType(v[0] as Frequency["type"])} />
       {type === "weekdays" && (
         <ChipGroup options={WEEKDAY_OPTIONS} selected={days} onChange={setDays} />
       )}
@@ -74,7 +71,8 @@ function EditItem({ item, onSave, onCancel }: { item: PlanItemView; onSave: (pat
       )}
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
         <Pressable onPress={save} disabled={!canSave}
-          style={{ flex: 1, backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.sm, alignItems: "center", opacity: canSave ? 1 : 0.5 }}>
+          style={{ flex: 1, flexDirection: "row", gap: spacing.xs, justifyContent: "center", backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.sm, alignItems: "center", opacity: canSave ? 1 : 0.5 }}>
+          {saving && <ActivityIndicator size="small" color="#fff" />}
           <Text style={{ color: "#fff", fontWeight: "600" }}>Guardar cambios</Text>
         </Pressable>
         <Pressable onPress={onCancel}
@@ -193,15 +191,13 @@ export default function PlanSuplementosScreen() {
                     )}
                   </Pressable>
                   {expandedId === item.id && (
-                    savingId === item.id
-                      ? <ActivityIndicator color={colors.accent} style={{ marginBottom: spacing.md }} />
-                      : (
-                        <EditItem
-                          item={item}
-                          onSave={(patch) => saveItem(item, patch)}
-                          onCancel={() => setExpandedId(null)}
-                        />
-                      )
+                    // EditItem queda montado durante el guardado: si falla, la edición no se pierde.
+                    <EditItem
+                      item={item}
+                      saving={savingId === item.id}
+                      onSave={(patch) => saveItem(item, patch)}
+                      onCancel={() => setExpandedId(null)}
+                    />
                   )}
                 </View>
               ))}
