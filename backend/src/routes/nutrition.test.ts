@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import { createApp } from "../app";
+import { food, meal, mealItem, waterLog, bodyMetric, supplementPlanItem, supplementAdjustment } from "../db/schema";
 
 const KEY = "a".repeat(64);
 const FOOD_ID = "11111111-1111-4111-8111-111111111111";
@@ -11,7 +12,11 @@ const bananaRow = {
   saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, saltG: 0,
 };
 
-function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: any; mealFull?: any; water?: any[]; goal?: any; settingsRow?: any; report?: any } = {}) {
+function fakeDb(opts: {
+  foods?: any[]; meals?: any[]; items?: any[]; foodRow?: any; mealFull?: any; water?: any[]; goal?: any;
+  settingsRow?: any; report?: any; sessions?: any[]; metrics?: any[];
+  planRow?: any | null; planItemRows?: any[];
+} = {}) {
   const inserts: any[] = [];
   const db: any = {
     _inserts: inserts,
@@ -21,13 +26,46 @@ function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: a
         inserts.push({ table, rows });
         const p: any = Promise.resolve(rows);
         p.returning = async () => rows;
-        p.onConflictDoUpdate = async () => undefined;
+        // onConflictDoUpdate puede encadenar .returning() (upsertReport) o awaitearse directo
+        // (upsertAdjustment/goal) — devolvemos algo que soporta ambos usos.
+        p.onConflictDoUpdate = () => {
+          const p2: any = Promise.resolve(rows);
+          p2.returning = async () => rows;
+          return p2;
+        };
         return p;
       },
     }),
     update: () => ({ set: () => ({ where: () => { const p: any = Promise.resolve([]); p.returning = async () => (opts.foodRow ? [opts.foodRow] : []); return p; } }) }),
     delete: () => ({ where: () => { const p: any = Promise.resolve(undefined); p.returning = async () => [{ id: FOOD_ID }]; return p; } }),
-    select: () => ({ from: () => ({ where: () => ({ orderBy: async () => opts.water ?? opts.foods ?? [], then: (r: any) => r(opts.foods ?? []) }) }) }),
+    // select().from(table)[.innerJoin(...)].where()[.orderBy()] — table-aware (mismo patrón que
+    // supplements.test.ts): cada tabla real del collect de informes necesita su propio balde de
+    // filas para no pisarse entre sí (meals/water/metrics/plan/catálogo son independientes).
+    select: (_fields?: any) => ({
+      from: (table: any) => {
+        let joins = 0;
+        const chain: any = {
+          innerJoin: () => {
+            joins++;
+            return chain;
+          },
+          where: () => {
+            let rows: any[];
+            if (table === food) rows = opts.foods ?? [];
+            else if (table === meal) rows = opts.meals ?? [];
+            else if (table === mealItem) rows = opts.items ?? [];
+            else if (table === waterLog) rows = opts.water ?? [];
+            else if (table === bodyMetric) rows = opts.metrics ?? [];
+            else if (table === supplementPlanItem) rows = joins === 1 ? (opts.planItemRows ?? []) : [];
+            else rows = []; // incluye `supplement` (catálogo): no lo necesitan los tests actuales
+            const p: any = Promise.resolve(rows);
+            p.orderBy = async () => rows;
+            return p;
+          },
+        };
+        return chain;
+      },
+    }),
     transaction: async (fn: any) => fn(db),
     query: {
       food: { findFirst: async () => opts.foodRow ?? null },
@@ -35,6 +73,8 @@ function fakeDb(opts: { foods?: any[]; meals?: any[]; items?: any[]; foodRow?: a
       settings: { findFirst: async () => opts.settingsRow ?? { aiApiKeyEncrypted: null } },
       nutritionGoal: { findFirst: async () => opts.goal ?? null },
       report: { findFirst: async () => opts.report ?? null },
+      supplementPlan: { findFirst: async () => opts.planRow ?? null },
+      workoutSession: { findMany: async () => opts.sessions ?? [] },
     },
   };
   return db;
@@ -45,7 +85,7 @@ const aiClient = {
   generateProgram: async () => ({ name: "x", weeks: [] }),
   extractFood: async () => ({ name: "Banana", basis: "per_100g", kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120, source: "estimate" }),
 };
-const deps = (db: any): any => ({ db, config: baseConfig, aiClient });
+const deps = (db: any, aiClientOverride: any = aiClient): any => ({ db, config: baseConfig, aiClient: aiClientOverride });
 
 test("POST /nutrition/foods/extract → devuelve la extracción sin persistir", async () => {
   const app = createApp(deps(fakeDb()));
@@ -248,4 +288,154 @@ test("POST /nutrition/reports/generate devuelve el existente sin llamar a la IA"
   });
   expect(res.status).toBe(200);
   expect((await res.json()).content).toBe("viejo");
+});
+
+// ---- PR3: persistencia del ajuste de suplementos tras el informe diario ----
+
+const SUP_ID = "77777777-7777-4777-8777-777777777777";
+const SUP_UNKNOWN = "88888888-8888-4888-8888-888888888888";
+const REPORT_PLAN_ID = "66666666-6666-4666-8666-666666666666";
+const REPORT_ITEM_ID = "99999999-9999-4999-8999-999999999999";
+
+// 1 sesión dentro del período (0..10) alcanza para que hasAnyData() sea true y el flujo
+// llegue a llamar a la IA (el resto de listas/metrics quedan vacías por defecto en fakeDb).
+const oneSession = [{ id: "sess1", programId: null, weekNumber: 1, dayLabel: "A", location: "gym", startedAt: 1, endedAt: 2, totalDurationMs: 3600000, notes: null }];
+const activePlanRow = { id: REPORT_PLAN_ID, userNote: null, createdAt: new Date(0) };
+const activePlanItemRows = [{
+  id: REPORT_ITEM_ID, planId: REPORT_PLAN_ID, supplementId: SUP_ID,
+  slot: "desayuno", frequency: { type: "daily" }, dose: "1 cápsula", reason: null,
+  supplementName: "Zinc",
+}];
+
+function reportsEnabledDb(overrides: any = {}) {
+  return fakeDb({ settingsRow: { reportsEnabled: true, aiApiKeyEncrypted: null }, sessions: oneSession, ...overrides });
+}
+
+function generateReportBody(overrides: any = {}) {
+  return JSON.stringify({
+    kind: "daily", periodStart: 0, periodEnd: 10,
+    athleteContext: { goal: { status: "incomplete" } },
+    ...overrides,
+  });
+}
+
+test("POST /nutrition/reports/generate (daily + adjustmentForDate): ajuste válido → upsertAdjustment con forDate + reportId + el item", async () => {
+  const adjustment = [{ supplementId: SUP_ID, action: "skip", reason: "comiste rico en zinc" }];
+  const genAiClient = { ...aiClient, generateReport: async () => ({ content: "informe", memoryNotes: [], supplementAdjustment: adjustment }) };
+  const db = reportsEnabledDb({ planRow: activePlanRow, planItemRows: activePlanItemRows });
+  const app = createApp(deps(db, genAiClient));
+  const res = await app.request("/nutrition/reports/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: generateReportBody({ adjustmentForDate: "2026-07-16" }),
+  });
+  expect(res.status).toBe(200);
+  const saved = await res.json();
+  const insertedAdjustment = db._inserts.find((i: any) => i.table === supplementAdjustment);
+  expect(insertedAdjustment).toBeDefined();
+  expect(insertedAdjustment.rows[0]).toMatchObject({
+    userId: "00000000-0000-0000-0000-000000000001", forDate: "2026-07-16", reportId: saved.id, items: adjustment,
+  });
+});
+
+test("POST /nutrition/reports/generate: ítem con supplementId desconocido se filtra (no está en el plan activo)", async () => {
+  const adjustment = [
+    { supplementId: SUP_ID, action: "skip", reason: "comiste rico en zinc" },
+    { supplementId: SUP_UNKNOWN, action: "skip", reason: "alucinado" },
+  ];
+  const genAiClient = { ...aiClient, generateReport: async () => ({ content: "informe", memoryNotes: [], supplementAdjustment: adjustment }) };
+  const db = reportsEnabledDb({ planRow: activePlanRow, planItemRows: activePlanItemRows });
+  const app = createApp(deps(db, genAiClient));
+  const res = await app.request("/nutrition/reports/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: generateReportBody({ adjustmentForDate: "2026-07-16" }),
+  });
+  expect(res.status).toBe(200);
+  const insertedAdjustment = db._inserts.find((i: any) => i.table === supplementAdjustment);
+  expect(insertedAdjustment).toBeDefined();
+  expect(insertedAdjustment.rows[0].items).toEqual([{ supplementId: SUP_ID, action: "skip", reason: "comiste rico en zinc" }]);
+});
+
+test("POST /nutrition/reports/generate: todos los supplementId desconocidos → nada se persiste", async () => {
+  const adjustment = [{ supplementId: SUP_UNKNOWN, action: "skip", reason: "alucinado" }];
+  const genAiClient = { ...aiClient, generateReport: async () => ({ content: "informe", memoryNotes: [], supplementAdjustment: adjustment }) };
+  const db = reportsEnabledDb({ planRow: activePlanRow, planItemRows: activePlanItemRows });
+  const app = createApp(deps(db, genAiClient));
+  const res = await app.request("/nutrition/reports/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: generateReportBody({ adjustmentForDate: "2026-07-16" }),
+  });
+  expect(res.status).toBe(200);
+  expect(db._inserts.find((i: any) => i.table === supplementAdjustment)).toBeUndefined();
+});
+
+test("POST /nutrition/reports/generate: dos items con el mismo supplementId (skip + reduce) → solo persiste el primero", async () => {
+  const adjustment = [
+    { supplementId: SUP_ID, action: "skip", reason: "comiste rico en zinc" },
+    { supplementId: SUP_ID, action: "reduce", dose: "media dosis", reason: "contradictorio" },
+  ];
+  const genAiClient = { ...aiClient, generateReport: async () => ({ content: "informe", memoryNotes: [], supplementAdjustment: adjustment }) };
+  const db = reportsEnabledDb({ planRow: activePlanRow, planItemRows: activePlanItemRows });
+  const app = createApp(deps(db, genAiClient));
+  const res = await app.request("/nutrition/reports/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: generateReportBody({ adjustmentForDate: "2026-07-16" }),
+  });
+  expect(res.status).toBe(200);
+  const insertedAdjustment = db._inserts.find((i: any) => i.table === supplementAdjustment);
+  expect(insertedAdjustment).toBeDefined();
+  expect(insertedAdjustment.rows[0].items).toEqual([{ supplementId: SUP_ID, action: "skip", reason: "comiste rico en zinc" }]);
+});
+
+test("POST /nutrition/reports/generate: kind weekly con ajuste en el output de la IA → NO persiste", async () => {
+  const adjustment = [{ supplementId: SUP_ID, action: "skip", reason: "comiste rico en zinc" }];
+  const genAiClient = { ...aiClient, generateReport: async () => ({ content: "informe", memoryNotes: [], supplementAdjustment: adjustment }) };
+  const db = reportsEnabledDb({ planRow: activePlanRow, planItemRows: activePlanItemRows });
+  const app = createApp(deps(db, genAiClient));
+  const res = await app.request("/nutrition/reports/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      kind: "weekly", periodStart: 0, periodEnd: 10,
+      athleteContext: { goal: { status: "incomplete" } }, adjustmentForDate: "2026-07-16",
+    }),
+  });
+  expect(res.status).toBe(200);
+  expect(db._inserts.find((i: any) => i.table === supplementAdjustment)).toBeUndefined();
+});
+
+test("POST /nutrition/reports/generate: daily SIN adjustmentForDate → NO persiste aunque la IA devuelva ajuste", async () => {
+  const adjustment = [{ supplementId: SUP_ID, action: "skip", reason: "comiste rico en zinc" }];
+  const genAiClient = { ...aiClient, generateReport: async () => ({ content: "informe", memoryNotes: [], supplementAdjustment: adjustment }) };
+  const db = reportsEnabledDb({ planRow: activePlanRow, planItemRows: activePlanItemRows });
+  const app = createApp(deps(db, genAiClient));
+  const res = await app.request("/nutrition/reports/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: generateReportBody(), // sin adjustmentForDate
+  });
+  expect(res.status).toBe(200);
+  expect(db._inserts.find((i: any) => i.table === supplementAdjustment)).toBeUndefined();
+});
+
+test("POST /nutrition/reports/generate: daily con adjustmentForDate pero supplementAdjustment vacío → NO persiste", async () => {
+  const genAiClient = { ...aiClient, generateReport: async () => ({ content: "informe", memoryNotes: [], supplementAdjustment: [] }) };
+  const db = reportsEnabledDb({ planRow: activePlanRow, planItemRows: activePlanItemRows });
+  const app = createApp(deps(db, genAiClient));
+  const res = await app.request("/nutrition/reports/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: generateReportBody({ adjustmentForDate: "2026-07-16" }),
+  });
+  expect(res.status).toBe(200);
+  expect(db._inserts.find((i: any) => i.table === supplementAdjustment)).toBeUndefined();
+});
+
+test("POST /nutrition/reports/generate: daily con ajuste pero SIN plan activo → NO persiste (se ignora)", async () => {
+  const adjustment = [{ supplementId: SUP_ID, action: "skip", reason: "comiste rico en zinc" }];
+  const genAiClient = { ...aiClient, generateReport: async () => ({ content: "informe", memoryNotes: [], supplementAdjustment: adjustment }) };
+  const db = reportsEnabledDb({ planRow: null }); // sin plan activo
+  const app = createApp(deps(db, genAiClient));
+  const res = await app.request("/nutrition/reports/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: generateReportBody({ adjustmentForDate: "2026-07-16" }),
+  });
+  expect(res.status).toBe(200);
+  expect(db._inserts.find((i: any) => i.table === supplementAdjustment)).toBeUndefined();
 });

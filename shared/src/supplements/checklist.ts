@@ -37,7 +37,8 @@ function daysBetween(a: string, b: string): number {
   const ms = Date.UTC(...splitDate(a)) - Date.UTC(...splitDate(b));
   return Math.round(ms / 86_400_000);
 }
-function splitDate(d: string): [number, number, number] {
+// YYYY-MM-DD → [año, mes 0-based, día] listo para Date.UTC (compartido con overlap.ts).
+export function splitDate(d: string): [number, number, number] {
   const [y, m, day] = d.split("-").map(Number);
   return [y, m - 1, day];
 }
@@ -51,6 +52,10 @@ export function frequencyAppliesOn(freq: Frequency, date: string): boolean {
   return freq.days.includes(dow);
 }
 
+// OJO — keying deliberado por supplementId (no por planItemId): un ajuste (skip/reduce) del
+// informe diario aplica a TODAS las franjas de ese suplemento ese día (ver adjBySupplement
+// abajo). La IA razona por producto ("ya cubriste el magnesio"), no por franja individual —
+// si un suplemento está en 2 franjas (split dosing), el ajuste pega en ambas por diseño.
 export function resolveDayChecklist({ planItems, adjustments, takes, date }: {
   planItems: ChecklistPlanItem[];
   adjustments: AdjustmentItem[];

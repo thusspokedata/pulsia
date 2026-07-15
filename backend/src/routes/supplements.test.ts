@@ -4,9 +4,11 @@ import { supplement, supplementPlanItem, supplementTake } from "../db/schema";
 
 const KEY = "a".repeat(64);
 const SUP_ID = "11111111-1111-4111-8111-111111111111";
+const SUP_ID2 = "22222222-2222-4222-8222-222222222222";
 const SUP_UNKNOWN = "99999999-9999-4999-8999-999999999999";
 const PLAN_ID = "55555555-5555-4555-8555-555555555555";
 const ITEM_ID = "33333333-3333-4333-8333-333333333333";
+const ITEM_ID2 = "44444444-4444-4444-8444-444444444444";
 const IMG = Buffer.from("fake jpeg").toString("base64");
 
 const supRow = {
@@ -248,11 +250,52 @@ test("POST /nutrition/supplements/plan/generate → filtra ids desconocidos y an
   });
   expect(res.status).toBe(200);
   const body = await res.json();
-  expect(body.items).toHaveLength(1);
-  expect(body.items[0]).toMatchObject({ supplementId: SUP_ID, supplementName: "ZMA Pro" });
+  expect(body.plan.items).toHaveLength(1);
+  expect(body.plan.items[0]).toMatchObject({ supplementId: SUP_ID, supplementName: "ZMA Pro" });
+  expect(body.warnings).toEqual([]);
   const insertedItems = db._inserts.find((i: any) => i.table === supplementPlanItem);
   expect(insertedItems.rows).toHaveLength(1);
   expect(insertedItems.rows[0].frequency).toMatchObject({ type: "every_other_day", anchorDate: "2026-07-16" });
+});
+
+test("POST /nutrition/supplements/plan/generate → dos suplementos con magnesio ambos daily → 1 warning nombrando el componente", async () => {
+  const MG_A = "22222222-2222-4222-8222-222222222222";
+  const MG_B = "33333333-3333-4333-8333-333333333333";
+  const supMgA = { ...supRow, id: MG_A, name: "Magnesio Citrato", components: [{ name: "Magnesio (citrato)", amount: 200, unit: "mg" }] };
+  const supMgB = { ...supRow, id: MG_B, name: "Magnesio Bisglicinato", components: [{ name: "Magnesio bisglicinato", amount: 150, unit: "mg" }] };
+  const aiClient = makeAiClient({
+    generateSupplementPlan: async () => [
+      { supplementId: MG_A, slot: "desayuno", frequency: { type: "daily" }, dose: "1 tableta", reason: "x" },
+      { supplementId: MG_B, slot: "cena", frequency: { type: "daily" }, dose: "1 tableta", reason: "x" },
+    ],
+  });
+  const db = fakeDb({ supplements: [supMgA, supMgB] });
+  const app = createApp(deps(db, aiClient));
+  const res = await app.request("/nutrition/supplements/plan/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ athleteContext: VALID_CONTEXT, date: "2026-07-16" }),
+  });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.warnings).toHaveLength(1);
+  expect(body.warnings[0]).toContain("magnesio");
+});
+
+test("POST /nutrition/supplements/plan/generate → catálogo limpio (sin solapamiento) → warnings: []", async () => {
+  const aiClient = makeAiClient({
+    generateSupplementPlan: async () => [
+      { supplementId: SUP_ID, slot: "desayuno", frequency: { type: "daily" }, dose: "1 tableta", reason: "x" },
+    ],
+  });
+  const db = fakeDb({ supplements: [supRow] });
+  const app = createApp(deps(db, aiClient));
+  const res = await app.request("/nutrition/supplements/plan/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ athleteContext: VALID_CONTEXT, date: "2026-07-16" }),
+  });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.warnings).toEqual([]);
 });
 
 test("POST /nutrition/supplements/plan/generate → 422 si todos los ids son desconocidos", async () => {
@@ -283,21 +326,42 @@ test("POST /nutrition/supplements/plan/generate → 502 si la IA falla", async (
   expect(res.status).toBe(502);
 });
 
-test("GET /nutrition/supplements/plan → 200 null sin plan", async () => {
+test("GET /nutrition/supplements/plan → 200 { plan: null, warnings: [] } sin plan", async () => {
   const app = createApp(deps(fakeDb({ planRow: null })));
   const res = await app.request("/nutrition/supplements/plan");
   expect(res.status).toBe(200);
-  expect(await res.json()).toBeNull();
+  expect(await res.json()).toEqual({ plan: null, warnings: [] });
 });
 
-test("GET /nutrition/supplements/plan → 200 PlanView con plan activo", async () => {
+test("GET /nutrition/supplements/plan → 200 { plan, warnings: [] } con plan activo sin solapamiento", async () => {
   const planRow = { id: PLAN_ID, userNote: null, createdAt: new Date(0) };
-  const app = createApp(deps(fakeDb({ planRow, planItemRows: [joinedItem] })));
+  const app = createApp(deps(fakeDb({ planRow, planItemRows: [joinedItem], supplements: [supRow] })));
   const res = await app.request("/nutrition/supplements/plan");
   expect(res.status).toBe(200);
   const body = await res.json();
-  expect(body).toMatchObject({ id: PLAN_ID });
-  expect(body.items[0]).toMatchObject({ id: ITEM_ID, supplementName: "ZMA Pro" });
+  expect(body.plan).toMatchObject({ id: PLAN_ID });
+  expect(body.plan.items[0]).toMatchObject({ id: ITEM_ID, supplementName: "ZMA Pro" });
+  expect(body.warnings).toEqual([]);
+});
+
+// Warnings persistentes (T4 review): mismo componente ("Zinc") aportado por dos productos
+// distintos del plan → GET /plan debe devolverlas también al recargar, no solo al generar.
+test("GET /nutrition/supplements/plan → warnings de solapamiento de componentes al recargar", async () => {
+  const planRow = { id: PLAN_ID, userNote: null, createdAt: new Date(0) };
+  const sup2Row = { ...supRow, id: SUP_ID2, name: "Zinc Extra" };
+  const joinedItem2 = {
+    id: ITEM_ID2, planId: PLAN_ID, supplementId: SUP_ID2,
+    slot: "cena", frequency: { type: "daily" }, dose: "1 tableta", reason: "test",
+    supplementName: "Zinc Extra",
+  };
+  const app = createApp(deps(fakeDb({
+    planRow, planItemRows: [joinedItem, joinedItem2], supplements: [supRow, sup2Row],
+  })));
+  const res = await app.request("/nutrition/supplements/plan");
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.warnings.length).toBeGreaterThan(0);
+  expect(body.warnings[0]).toMatch(/zinc/i);
 });
 
 test("PATCH /nutrition/supplements/plan/items/:id → 400 con id no-UUID (carry-over)", async () => {

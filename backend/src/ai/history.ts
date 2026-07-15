@@ -1,8 +1,5 @@
 import type { WorkoutSession, SessionExercise } from "@pulsia/shared";
-
-function fmtDate(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
-}
+import { epochToUtcDateStr as fmtDate } from "../lib/dateUtc";
 
 function fmtSet(s: SessionExercise["sets"][number]): string {
   const w = s.weightKg == null ? "—" : String(s.weightKg);

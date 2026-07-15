@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { FoodSourceSchema } from "./nutrition";
-import { AthleteContextSchema } from "./report";
+import { AthleteContextSchema } from "./athlete";
 
 // Franjas del día, en orden canónico (el checklist agrupa en este orden).
 export const TAKE_SLOTS = ["desayuno", "almuerzo", "cena", "post_entreno", "antes_de_dormir"] as const;
@@ -46,6 +46,8 @@ export type Supplement = z.infer<typeof SupplementSchema>;
 
 // ---- Plan (se usa desde PR2, el schema se define ya para la migración 0016) ----
 // OJO: AiPlanFrequencySchema (abajo) es un clon estructural SIN anchorDate — si agregás una variante, replicala allá.
+// OJO 2: SCAN_DAYS en supplements/overlap.ts es el LCM de los períodos de estas variantes (2 y 7 → 14) —
+// si agregás una variante con otro período, recalculalo allá.
 export const FrequencySchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("daily") }),
   // anchorDate fija la paridad del "día por medio" (YYYY-MM-DD, fecha real).
@@ -77,7 +79,7 @@ export const AdjustmentItemSchema = z
     supplementId: z.string().uuid(),
     action: z.enum(["skip", "reduce"]),
     dose: z.string().trim().min(1).nullish(), // solo para reduce
-    reason: z.string().trim().min(1),
+    reason: z.string().trim().min(1).max(200), // texto de la IA, acotado por higiene
   })
   .refine((a) => a.action !== "reduce" || (a.dose != null && a.dose.length > 0), {
     message: "reduce exige dose",

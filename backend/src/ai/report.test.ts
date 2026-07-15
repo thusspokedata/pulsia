@@ -7,6 +7,7 @@ const data: any = {
   metrics: { weight_kg: 80, sleep_hours: 5, stress: 4 },
   athlete: { goal: { status: "ok", kcal: 2000, protein_g: 150, carbs_g: 200, fat_g: 60, bmr: 1700 } },
   periodDays: 7, weightTrend: { first: 82, last: 80 },
+  foodNames: [], foodNamesTotal: 0, supplements: null,
 };
 
 test("el prompt incluye los datos, el tipo, anti-inyección y el anclaje no-médico", () => {
@@ -34,4 +35,69 @@ test("periódico: instruye a promediar por día y menciona la tendencia de peso"
 test("diario NO habla de promedios de varios días", () => {
   const p = buildReportPrompt("daily", { ...data, periodDays: 1, weightTrend: null });
   expect(p).not.toMatch(/promediá por día|dividí por/i);
+});
+
+// ---- PR3: sección de suplementos + ajuste ----
+
+const supplements = {
+  planItems: [{ supplementName: "Zinc", dose: "1 cápsula", slot: "desayuno" }],
+  takes: [{ supplementName: "Zinc", status: "taken", plannedDose: "1 cápsula", actualDose: null, date: "2026-07-15" }],
+  catalog: [{ id: "s1", name: "Zinc", components: [{ name: "Zinc", amount: 10, unit: "mg" }] }],
+};
+
+test("sin data.supplements: NO aparece la sección de suplementos ni el bloque de ajuste", () => {
+  const p = buildReportPrompt("daily", { ...data, supplements: null, foodNames: [], foodNamesTotal: 0 });
+  expect(p).not.toMatch(/SUPLEMENTOS/);
+  expect(p).not.toMatch(/supplementAdjustment/);
+});
+
+test("con data.supplements: aparece la sección con plan, tomas y catálogo", () => {
+  const p = buildReportPrompt("daily", { ...data, supplements, foodNames: [], foodNamesTotal: 0 });
+  expect(p).toMatch(/SUPLEMENTOS/);
+  expect(p).toMatch(/Zinc/); // nombre del plan/toma/catálogo
+  expect(p).toMatch(/desayuno/); // franja del plan
+  expect(p).toMatch(/taken/); // estado de la toma registrada
+  expect(p).toMatch(/s1/); // id del catálogo (referencia para supplementAdjustment)
+});
+
+test("con data.supplements: el texto debe mencionar adherencia", () => {
+  const p = buildReportPrompt("daily", { ...data, supplements, foodNames: [], foodNamesTotal: 0 });
+  expect(p).toMatch(/adherencia/i);
+});
+
+test("SOLO daily: instrucción de ajuste (skip/reduce, nunca increase, supplementId exacto)", () => {
+  const daily = buildReportPrompt("daily", { ...data, supplements, foodNames: [], foodNamesTotal: 0 });
+  expect(daily).toMatch(/supplementAdjustment/);
+  expect(daily).toMatch(/skip/);
+  expect(daily).toMatch(/reduce/);
+  expect(daily).toMatch(/nunca.*(aumentar|increase|subas)/i);
+  expect(daily).toMatch(/supplementId/);
+
+  const weekly = buildReportPrompt("weekly", { ...data, supplements, foodNames: [], foodNamesTotal: 0 });
+  expect(weekly).not.toMatch(/supplementAdjustment.*(skip|reduce)/s); // no da instrucciones de cómo armarlo
+  expect(weekly).toMatch(/no.*supplementAdjustment|supplementAdjustment.*(vac[íi]o|proh)/i); // instruye a NO ajustar
+});
+
+test("periódico con suplementos: menciona adherencia como conteos, no día por día", () => {
+  const p = buildReportPrompt("weekly", { ...data, supplements, foodNames: [], foodNamesTotal: 0 });
+  expect(p).toMatch(/adherencia/i);
+  expect(p).toMatch(/de\s+\d|conteo|cu[áa]nt/i);
+});
+
+test("anti-inyección: extiende la mención a datos de suplementos", () => {
+  const p = buildReportPrompt("daily", { ...data, supplements, foodNames: [], foodNamesTotal: 0 });
+  expect(p).toMatch(/suplement/i);
+  // la frase de anti-inyección original sigue estando
+  expect(p).toMatch(/DATOS|no.*instrucc/i);
+});
+
+test("food names truncados: aparece 'y N más'", () => {
+  const foodNames = Array.from({ length: 40 }, (_, i) => `Alimento ${i}`);
+  const p = buildReportPrompt("daily", { ...data, supplements: null, foodNames, foodNamesTotal: 45 });
+  expect(p).toMatch(/y 5 m[áa]s/);
+});
+
+test("food names sin truncar: NO aparece 'y N más'", () => {
+  const p = buildReportPrompt("daily", { ...data, supplements: null, foodNames: ["Pollo", "Arroz"], foodNamesTotal: 2 });
+  expect(p).not.toMatch(/y \d+ m[áa]s/);
 });
