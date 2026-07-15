@@ -6,12 +6,10 @@ test("daily offset 0 (informe de hoy): ajuste = mañana (15 jul)", () => {
   expect(adjustmentDateForReport("daily", 0, NOW)).toBe("2026-07-15");
 });
 
-test("daily offset 1 (informe de ayer): ajuste = hoy (14 jul)", () => {
-  expect(adjustmentDateForReport("daily", 1, NOW)).toBe("2026-07-14");
-});
-
-test("daily offset grande (informe de hace 10 días): ajuste sigue siendo día+1", () => {
-  expect(adjustmentDateForReport("daily", 10, NOW)).toBe("2026-07-05");
+test("daily offset > 0 (informe de un día pasado): NO ajusta — evita pisar el ajuste real de un día posterior", () => {
+  // Regenerar el informe de ayer no debe dejar un ajuste para hoy (pisaría al de hoy, único por día).
+  expect(adjustmentDateForReport("daily", 1, NOW)).toBeUndefined();
+  expect(adjustmentDateForReport("daily", 10, NOW)).toBeUndefined();
 });
 
 test("weekly/biweekly/monthly: no manda adjustmentForDate (undefined)", () => {
