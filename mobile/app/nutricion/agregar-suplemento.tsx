@@ -103,9 +103,21 @@ export default function AgregarSuplementoScreen() {
 
   async function save() {
     setError(null);
-    const validComponents = components
-      .map((c) => ({ name: c.name.trim(), amount: Number(c.amount.replace(",", ".")), unit: c.unit.trim() }))
-      .filter((c) => c.name !== "" && c.unit !== "" && !Number.isNaN(c.amount) && c.amount > 0);
+    // Partición de filas: las totalmente vacías se ignoran; las válidas se guardan;
+    // una fila a medio cargar (o con cantidad inválida) corta el guardado con error,
+    // para no descartar componentes en silencio.
+    const validComponents: { name: string; amount: number; unit: string }[] = [];
+    for (let i = 0; i < components.length; i++) {
+      const raw = components[i];
+      const cName = raw.name.trim();
+      const cUnit = raw.unit.trim();
+      if (cName === "" && raw.amount.trim() === "" && cUnit === "") continue; // fila vacía
+      const amount = Number(raw.amount.replace(",", "."));
+      if (cName === "" || cUnit === "" || raw.amount.trim() === "" || Number.isNaN(amount) || amount <= 0) {
+        setError(`El componente ${i + 1} está incompleto o tiene una cantidad inválida.`); return;
+      }
+      validComponents.push({ name: cName, amount, unit: cUnit });
+    }
     if (!name.trim()) { setError("Completá el nombre."); return; }
     if (!servingLabel.trim()) { setError("Completá la porción."); return; }
     if (validComponents.length === 0) { setError("Cargá al menos un componente."); return; }
