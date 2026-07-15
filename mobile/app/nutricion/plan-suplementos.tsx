@@ -9,7 +9,7 @@ import { SLOT_LABELS } from "../../src/components/SupplementChecklist";
 import { ChipGroup } from "../../src/components/ChipGroup";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
-import { TAKE_SLOTS } from "@pulsia/shared";
+import { TAKE_SLOTS, frequencyAppliesOn } from "@pulsia/shared";
 import type { PlanView, PlanItemView, Frequency, TakeSlot } from "@pulsia/shared";
 
 const WEEKDAY_LABELS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
@@ -80,6 +80,33 @@ function EditItem({ item, saving, onSave, onCancel }: {
           <Text style={{ color: colors.text, fontWeight: "600" }}>Cancelar</Text>
         </Pressable>
       </View>
+    </View>
+  );
+}
+
+function WeekPreview({ items }: { items: PlanItemView[] }) {
+  const card = { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.xs } as const;
+  // Aritmética de calendario (no +86_400_000 ms): un día de 25 h por DST duplicaría
+  // una fecha y perdería la séptima. `new Date(Date.now())` (y no `new Date()`) para
+  // que los tests puedan fijar el tiempo espiando Date.now.
+  const base = new Date(Date.now());
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + i);
+    const date = dateKey(d.getTime());
+    const label = i === 0 ? "Hoy" : WEEKDAY_LABELS[d.getDay()];
+    const names = items.filter((it) => frequencyAppliesOn(it.frequency, date)).map((it) => it.supplementName);
+    return { date, label, text: names.length > 0 ? names.join(" · ") : "—" };
+  });
+  return (
+    <View style={card}>
+      <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: "600" }}>Semana</Text>
+      {days.map((d, i) => (
+        <View key={d.date} testID={`week-day-${i}`}
+          style={{ flexDirection: "row", gap: spacing.sm, alignItems: "flex-start" }}>
+          <Text style={{ color: colors.text, fontSize: 12, fontWeight: "600", width: 36 }}>{d.label}</Text>
+          <Text style={{ color: colors.textMuted, fontSize: 12, flex: 1 }}>{d.text}</Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -203,6 +230,8 @@ export default function PlanSuplementosScreen() {
               ))}
             </View>
           ))}
+
+          <WeekPreview items={plan.items} />
 
           <View style={{ ...card }}>
             <Text style={{ color: colors.textMuted, fontSize: 12 }}>Nota para la IA (opcional)</Text>

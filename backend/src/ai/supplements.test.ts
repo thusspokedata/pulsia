@@ -38,3 +38,25 @@ test("el prompt del plan trae catálogo, contexto, techo de etiqueta, franjas y 
   expect(p).toMatch(/DATOS.*NO instrucciones/i);                // anti-inyección
   expect(p).toMatch(/return_supplement_plan/);
 });
+
+test("el prompt del plan pide pensar la semana completa y no duplicar componentes entre suplementos", () => {
+  const p = buildSupplementPlanPrompt({
+    catalog: [{
+      id: "11111111-1111-4111-8111-111111111111", name: "Zink", servingLabel: "1 Tablette",
+      components: [{ name: "Zinc", amount: 25, unit: "mg" }], labelMaxPerDay: "1 Tablette täglich",
+    }],
+    athleteContext: { goal: { status: "incomplete" } } as any,
+    userNote: null,
+  });
+  expect(p).toMatch(/MISMO componente/i);
+  expect(p).toMatch(/semana/i);
+  expect(p).toMatch(/alternar/i);
+  expect(p).toMatch(/no.*duplicar|nunca.*duplic/i);
+  // Alternar productos debe hacerse con `weekdays` complementarios; every_other_day NO sirve
+  // (el server ancla todos los día-por-medio a la misma fecha → misma paridad → coinciden).
+  expect(p).toMatch(/weekdays.*complementari/is);
+  expect(p).toMatch(/NO uses `?every_other_day`? para alternar/i);
+  expect(p).not.toMatch(/día por medio complementario/i);
+  // Techo combinado: la etiqueta más baja de los productos involucrados, no una etiqueta ambigua.
+  expect(p).toMatch(/etiqueta más baja/i);
+});
