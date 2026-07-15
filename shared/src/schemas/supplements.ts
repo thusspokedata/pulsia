@@ -7,6 +7,7 @@ export const TakeSlotSchema = z.enum(TAKE_SLOTS);
 export type TakeSlot = z.infer<typeof TakeSlotSchema>;
 
 export const SupplementSourceSchema = FoodSourceSchema; // 'label' | 'estimate', misma semántica que comidas
+export type SupplementSource = z.infer<typeof SupplementSourceSchema>;
 export const TakeStatusSchema = z.enum(["taken", "deviated", "skipped"]);
 export type TakeStatus = z.infer<typeof TakeStatusSchema>;
 
@@ -45,9 +46,16 @@ export type Supplement = z.infer<typeof SupplementSchema>;
 // ---- Plan (se usa desde PR2, el schema se define ya para la migración 0016) ----
 export const FrequencySchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("daily") }),
-  // anchorDate fija la paridad del "día por medio" (YYYY-MM-DD).
-  z.object({ type: z.literal("every_other_day"), anchorDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
-  z.object({ type: z.literal("weekdays"), days: z.array(z.number().int().min(0).max(6)).min(1) }),
+  // anchorDate fija la paridad del "día por medio" (YYYY-MM-DD, fecha real).
+  z.object({ type: z.literal("every_other_day"), anchorDate: z.iso.date() }),
+  z.object({
+    type: z.literal("weekdays"),
+    // días 0-6, convención JS getDay(): 0 = domingo
+    days: z
+      .array(z.number().int().min(0).max(6))
+      .min(1)
+      .refine((d) => new Set(d).size === d.length, { message: "días duplicados" }),
+  }),
 ]);
 export type Frequency = z.infer<typeof FrequencySchema>;
 
@@ -62,10 +70,14 @@ export const PlanItemSchema = z.object({
 export type PlanItem = z.infer<typeof PlanItemSchema>;
 
 // Ajuste del informe diario para MAÑANA. Solo skip/reduce — nunca increase (techo de seguridad).
-export const AdjustmentItemSchema = z.object({
-  supplementId: z.string().uuid(),
-  action: z.enum(["skip", "reduce"]),
-  dose: z.string().trim().min(1).nullish(), // solo para reduce
-  reason: z.string().trim().min(1),
-});
+export const AdjustmentItemSchema = z
+  .object({
+    supplementId: z.string().uuid(),
+    action: z.enum(["skip", "reduce"]),
+    dose: z.string().trim().min(1).nullish(), // solo para reduce
+    reason: z.string().trim().min(1),
+  })
+  .refine((a) => a.action !== "reduce" || (a.dose != null && a.dose.length > 0), {
+    message: "reduce exige dose",
+  });
 export type AdjustmentItem = z.infer<typeof AdjustmentItemSchema>;

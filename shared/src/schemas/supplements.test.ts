@@ -60,9 +60,24 @@ test("FrequencySchema: daily / every_other_day con anchorDate / weekdays no vacÃ
   expect(FrequencySchema.safeParse({ type: "weekdays", days: [7] }).success).toBe(false);
 });
 
+test("FrequencySchema: anchorDate debe ser una fecha real, no solo el formato", () => {
+  expect(FrequencySchema.safeParse({ type: "every_other_day", anchorDate: "2026-07-15" }).success).toBe(true);
+  expect(FrequencySchema.safeParse({ type: "every_other_day", anchorDate: "2026-99-99" }).success).toBe(false);
+});
+
+test("FrequencySchema: weekdays rechaza dÃ­as duplicados", () => {
+  expect(FrequencySchema.safeParse({ type: "weekdays", days: [1, 1] }).success).toBe(false);
+});
+
 test("AdjustmentItemSchema NUNCA acepta increase", () => {
   const base = { supplementId: "11111111-1111-4111-8111-111111111111", reason: "ayer comiste rico en magnesio" };
   expect(AdjustmentItemSchema.safeParse({ ...base, action: "skip" }).success).toBe(true);
   expect(AdjustmentItemSchema.safeParse({ ...base, action: "reduce", dose: "2.5 g" }).success).toBe(true);
   expect(AdjustmentItemSchema.safeParse({ ...base, action: "increase" }).success).toBe(false);
+});
+
+test("AdjustmentItemSchema: reduce exige dose", () => {
+  expect(AdjustmentItemSchema.safeParse({
+    supplementId: "11111111-1111-4111-8111-111111111111", action: "reduce", reason: "x",
+  }).success).toBe(false);
 });
