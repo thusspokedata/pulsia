@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { supplement, supplementPlan, supplementPlanItem, supplementTake, supplementAdjustment } from "../db/schema";
 import type {
   Supplement, SupplementInput, PlanView, PlanItemPatch, TakeInput,
@@ -168,10 +168,27 @@ export async function listTakesForDate(db: Db, userId: string, date: string) {
     .where(and(eq(supplementTake.userId, userId), eq(supplementTake.date, date)));
 }
 
+// Rango de fechas (YYYY-MM-DD, inclusive ambos extremos) para el collect de informes.
+// gte/lte sobre la columna text: los strings ISO ordenan lexicográficamente igual que las fechas.
+export async function listTakesForRange(db: Db, userId: string, fromDate: string, toDate: string) {
+  return db.select().from(supplementTake)
+    .where(and(eq(supplementTake.userId, userId), gte(supplementTake.date, fromDate), lte(supplementTake.date, toDate)));
+}
+
 // PR3 la escribe; PR2 solo la lee (vacía hasta entonces).
 export async function getAdjustmentItems(db: Db, userId: string, forDate: string): Promise<AdjustmentItem[]> {
   const row = await db.query.supplementAdjustment.findFirst({
     where: and(eq(supplementAdjustment.userId, userId), eq(supplementAdjustment.forDate, forDate)),
   });
   return (row?.items as AdjustmentItem[]) ?? [];
+}
+
+// El informe diario del día siguiente pisa el ajuste anterior (índice UNIQUE user+forDate, migración 0016).
+export async function upsertAdjustment(db: Db, userId: string, forDate: string, items: AdjustmentItem[], reportId: string): Promise<void> {
+  await db.insert(supplementAdjustment).values({
+    userId, forDate, items: [...items], reportId,
+  }).onConflictDoUpdate({
+    target: [supplementAdjustment.userId, supplementAdjustment.forDate],
+    set: { items: [...items], reportId },
+  });
 }

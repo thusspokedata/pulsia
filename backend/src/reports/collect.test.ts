@@ -11,9 +11,17 @@ function fakeDb(opts: any) {
   } as any;
 }
 
+// Deps con defaults vacíos (sin plan activo): las suites spreadean y overridean lo que necesitan.
+const baseDeps = {
+  listMeals: async () => [], listWater: async () => [], listSessions: async () => [], getMetrics: async () => [],
+  getActivePlan: async () => null, listTakesForRange: async () => [], listSupplements: async () => [],
+};
+const athleteIncomplete = { goal: { status: "incomplete" } } as any;
+
 test("collectReportData agrega comidas, líquido y gasto", async () => {
   // meals con 1 ítem 500 kcal; 1 agua de 250; 1 sesión 1h sin FC → MET 5*80 = 400 (bruto, sin bmr)
   const deps = {
+    ...baseDeps,
     listMeals: async () => [meal([item({ kcal: 500, protein_g: 30, cholesterol_mg: 90, water_ml: 50 })])],
     listWater: async () => [{ id: "w", ml: 250, loggedAt: 1 }],
     listSessions: async () => [{ id: "s", startedAt: 1, totalDurationMs: 3600000, avgHr: null, dayLabel: "A", location: "gym", programId: "p", completionPct: 100 }],
@@ -31,32 +39,81 @@ test("collectReportData agrega comidas, líquido y gasto", async () => {
 });
 
 test("hasAnyData false si no hay nada", async () => {
-  const deps = { listMeals: async () => [], listWater: async () => [], listSessions: async () => [], getMetrics: async () => [] };
-  const data = await collectReportData({} as any, "u", 0, 10, { goal: { status: "incomplete" } } as any, deps as any);
+  const data = await collectReportData({} as any, "u", 0, 10, athleteIncomplete, baseDeps as any);
   expect(hasAnyData(data)).toBe(false);
 });
 
 test("periodDays y weightTrend (primer y último peso del rango)", async () => {
   const deps = {
-    listMeals: async () => [], listWater: async () => [],
-    listSessions: async () => [],
+    ...baseDeps,
     getMetrics: async () => [ // ordenados asc por measuredAt (como el real)
       { id: "a", metricType: "weight_kg", value: 82, measuredAt: 100 },
       { id: "b", metricType: "steps", value: 5000, measuredAt: 150 },
       { id: "c", metricType: "weight_kg", value: 80, measuredAt: 900 },
     ],
   };
-  const athlete = { goal: { status: "incomplete" } } as any;
   // período de 7 días: from=0, to=7*86400000-1
-  const data = await collectReportData({} as any, "u", 0, 7 * 86400000 - 1, athlete, deps as any);
+  const data = await collectReportData({} as any, "u", 0, 7 * 86400000 - 1, athleteIncomplete, deps as any);
   expect(data.periodDays).toBe(7);
   expect(data.weightTrend).toEqual({ first: 82, last: 80 });
   expect(data.metrics.weight_kg).toBe(80); // último sigue siendo el "actual"
 });
 
 test("periodDays mínimo 1 y weightTrend null si no hay peso", async () => {
-  const deps = { listMeals: async () => [], listWater: async () => [], listSessions: async () => [], getMetrics: async () => [] };
-  const data = await collectReportData({} as any, "u", 0, 10, { goal: { status: "incomplete" } } as any, deps as any);
+  const data = await collectReportData({} as any, "u", 0, 10, athleteIncomplete, baseDeps as any);
   expect(data.periodDays).toBe(1);
   expect(data.weightTrend).toBeNull();
+});
+
+test("foodNames: únicos y con cap 40", async () => {
+  const names = Array.from({ length: 45 }, (_, i) => `Alimento ${i % 42}`); // 42 nombres únicos, algunos repetidos
+  const deps = {
+    ...baseDeps,
+    listMeals: async () => [meal(names.map((n) => item({ foodName: n })))],
+  };
+  const data = await collectReportData({} as any, "u", 0, 10, athleteIncomplete, deps as any);
+  expect(new Set(data.foodNames).size).toBe(data.foodNames.length); // sin duplicados
+  expect(data.foodNames.length).toBe(40); // cap
+});
+
+test("supplements null si no hay plan activo", async () => {
+  const data = await collectReportData({} as any, "u", 0, 10, athleteIncomplete, baseDeps as any);
+  expect(data.supplements).toBeNull();
+});
+
+test("supplements poblado con plan activo: planItems, takes y catálogo mapeados", async () => {
+  const deps = {
+    ...baseDeps,
+    getActivePlan: async () => ({
+      id: "p", userNote: null, createdAt: 0,
+      items: [{ id: "it1", supplementId: "s1", slot: "desayuno", frequency: { type: "daily" }, dose: "1 cápsula", reason: null, supplementName: "Zinc" }],
+    }),
+    listTakesForRange: async () => [
+      { id: "t1", userId: "u", date: "2026-07-15", planItemId: "it1", supplementName: "Zinc", plannedDose: "1 cápsula", slot: "desayuno", status: "taken", actualDose: null, note: null, createdAt: new Date(0) },
+    ],
+    listSupplements: async () => [
+      { id: "s1", name: "Zinc", brand: null, servingLabel: "1 cápsula", components: [{ name: "Zinc", amount: 10, unit: "mg" }], labelMaxPerDay: null, source: "label", info: null, notes: null, createdAt: 0 },
+    ],
+  };
+  const data = await collectReportData({} as any, "u", 0, 10, athleteIncomplete, deps as any);
+  expect(data.supplements).not.toBeNull();
+  expect(data.supplements!.planItems).toEqual([{ supplementName: "Zinc", dose: "1 cápsula", slot: "desayuno" }]);
+  expect(data.supplements!.takes).toEqual([{ supplementName: "Zinc", status: "taken", plannedDose: "1 cápsula", actualDose: null, date: "2026-07-15" }]);
+  expect(data.supplements!.catalog).toEqual([{ name: "Zinc", components: [{ name: "Zinc", amount: 10, unit: "mg" }] }]);
+});
+
+test("hasAnyData false si SOLO hay datos de suplementos (no justifican un informe solos)", async () => {
+  const deps = {
+    ...baseDeps,
+    getActivePlan: async () => ({
+      id: "p", userNote: null, createdAt: 0,
+      items: [{ id: "it1", supplementId: "s1", slot: "desayuno", frequency: { type: "daily" }, dose: "1 cápsula", reason: null, supplementName: "Zinc" }],
+    }),
+    listTakesForRange: async () => [
+      { id: "t1", userId: "u", date: "2026-07-15", planItemId: "it1", supplementName: "Zinc", plannedDose: "1 cápsula", slot: "desayuno", status: "taken", actualDose: null, note: null, createdAt: new Date(0) },
+    ],
+  };
+  const data = await collectReportData({} as any, "u", 0, 10, athleteIncomplete, deps as any);
+  expect(data.supplements).not.toBeNull();
+  expect(hasAnyData(data)).toBe(false);
 });
