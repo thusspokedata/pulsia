@@ -7,7 +7,7 @@ jest.mock("../src/storage/config", () => ({ getBackendUrl: jest.fn(async () => "
 jest.mock("../src/nutrition/athleteContext", () => ({ buildAthleteContext: jest.fn(async () => ({ goal: { status: "incomplete" } })) }));
 jest.mock("../src/api/supplements", () => ({
   getPlan: jest.fn(async () => null),
-  generatePlan: jest.fn(async () => ({})),
+  generatePlan: jest.fn(async () => ({ plan: {}, warnings: [] })),
   updatePlanItem: jest.fn(async () => ({})),
 }));
 
@@ -22,12 +22,12 @@ const plan = {
 beforeEach(() => {
   jest.clearAllMocks();
   (getPlan as jest.Mock).mockResolvedValue(null);
-  (generatePlan as jest.Mock).mockResolvedValue({});
+  (generatePlan as jest.Mock).mockResolvedValue({ plan: {}, warnings: [] });
   (updatePlanItem as jest.Mock).mockResolvedValue({});
 });
 
 test("sin plan: CTA de generar; generar manda athleteContext + date y muestra el plan", async () => {
-  (generatePlan as jest.Mock).mockResolvedValueOnce(plan);
+  (generatePlan as jest.Mock).mockResolvedValueOnce({ plan, warnings: [] });
   await render(<PlanSuplementosScreen />);
   await waitFor(() => expect(screen.getByText(/Todavía no hay plan/i)).toBeTruthy());
   await fireEvent.press(screen.getByText(/Generar plan con IA/i));
@@ -39,9 +39,29 @@ test("sin plan: CTA de generar; generar manda athleteContext + date y muestra el
   expect(screen.getByText(/ayuda al descanso/)).toBeTruthy(); // motivo de la IA
 });
 
+test("generar con warnings: se muestran arriba del plan en una nota ámbar", async () => {
+  (generatePlan as jest.Mock).mockResolvedValueOnce({
+    plan, warnings: ["Varios productos activos aportan \"magnesio\" el mismo día: A, B. Revisá si hay solapamiento."],
+  });
+  await render(<PlanSuplementosScreen />);
+  await waitFor(() => expect(screen.getByText(/Todavía no hay plan/i)).toBeTruthy());
+  await fireEvent.press(screen.getByText(/Generar plan con IA/i));
+  await waitFor(() => expect(screen.getByText(/⚠️.*magnesio/)).toBeTruthy());
+  expect(screen.getByText(/Revisá el plan o regenerá con una nota/i)).toBeTruthy();
+});
+
+test("generar sin warnings: no se muestra la nota ámbar", async () => {
+  (generatePlan as jest.Mock).mockResolvedValueOnce({ plan, warnings: [] });
+  await render(<PlanSuplementosScreen />);
+  await waitFor(() => expect(screen.getByText(/Todavía no hay plan/i)).toBeTruthy());
+  await fireEvent.press(screen.getByText(/Generar plan con IA/i));
+  await waitFor(() => expect(screen.getAllByText(/Magnesio/).length).toBeGreaterThan(0));
+  expect(screen.queryByText(/Revisá el plan o regenerá con una nota/i)).toBeNull();
+});
+
 test("con plan: regenerar con nota la manda como userNote", async () => {
   (getPlan as jest.Mock).mockResolvedValueOnce(plan);
-  (generatePlan as jest.Mock).mockResolvedValueOnce(plan);
+  (generatePlan as jest.Mock).mockResolvedValueOnce({ plan, warnings: [] });
   await render(<PlanSuplementosScreen />);
   await waitFor(() => expect(screen.getAllByText(/Magnesio/).length).toBeGreaterThan(0)); // ítem + vista semanal
   await fireEvent.changeText(screen.getByPlaceholderText(/Nota para la IA/i), "el zinc a la mañana no");

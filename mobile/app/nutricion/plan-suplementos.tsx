@@ -121,6 +121,7 @@ export default function PlanSuplementosScreen() {
   const [nota, setNota] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -135,13 +136,14 @@ export default function PlanSuplementosScreen() {
 
   async function generate() {
     if (!url.current) return;
-    setGenerating(true); setError(null);
+    setGenerating(true); setError(null); setWarnings([]);
     try {
       const athleteContext = await buildAthleteContext(url.current);
       const date = dateKey(Date.now());
       const userNote = nota.trim() || null;
-      const result = await generatePlan(url.current, { athleteContext, date, userNote });
+      const { plan: result, warnings: newWarnings } = await generatePlan(url.current, { athleteContext, date, userNote });
       setPlan(result);
+      setWarnings(newWarnings);
       setExpandedId(null);
     } catch (e) { setError((e as Error).message); }
     setGenerating(false);
@@ -197,6 +199,15 @@ export default function PlanSuplementosScreen() {
               <Text style={{ color: "#fff", fontWeight: "700" }}>Generar plan con IA</Text>
             </Pressable>
           )}
+        </View>
+      )}
+
+      {warnings.length > 0 && (
+        <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.warning, padding: spacing.lg, gap: spacing.xs }}>
+          {warnings.map((w, i) => (
+            <Text key={i} style={{ color: colors.warning, fontSize: 13 }}>⚠️ {w}</Text>
+          ))}
+          <Text style={{ color: colors.textMuted, fontSize: 12 }}>Revisá el plan o regenerá con una nota.</Text>
         </View>
       )}
 

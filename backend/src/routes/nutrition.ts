@@ -200,13 +200,24 @@ export function nutritionRoutes(deps: AppDeps) {
     // la IA devolvió algo. Sin plan activo → no hay nada que ajustar. supplementId fuera del plan
     // activo (alucinado o de un plan viejo) → se descarta (el móvil solo puede mostrar ajustes de
     // ítems que existen en el plan actual).
+    if (kind === "daily" && !parsed.data.adjustmentForDate && output.supplementAdjustment.length > 0) {
+      console.warn("ajuste de suplementos: el móvil no mandó adjustmentForDate, el ajuste de la IA se descarta");
+    }
     if (kind === "daily" && parsed.data.adjustmentForDate && output.supplementAdjustment.length > 0) {
       const activePlan = await getActivePlan(deps.db, userId);
       if (activePlan) {
         const knownSupplementIds = new Set(activePlan.items.map((it) => it.supplementId));
-        const filtered = output.supplementAdjustment.filter((a) => knownSupplementIds.has(a.supplementId));
-        const discarded = output.supplementAdjustment.length - filtered.length;
+        const inPlan = output.supplementAdjustment.filter((a) => knownSupplementIds.has(a.supplementId));
+        const discarded = output.supplementAdjustment.length - inPlan.length;
         if (discarded > 0) console.warn(`ajuste de suplementos: ${discarded} ítem(s) con supplementId fuera del plan activo, descartados`);
+        // Dedupe por supplementId (queda el PRIMERO): una IA que devuelva skip y reduce para el
+        // mismo suplemento dejaría un ajuste contradictorio si persistieran ambos.
+        const seen = new Set<string>();
+        const filtered = inPlan.filter((a) => {
+          if (seen.has(a.supplementId)) return false;
+          seen.add(a.supplementId);
+          return true;
+        });
         if (filtered.length > 0) {
           await upsertAdjustment(deps.db, userId, parsed.data.adjustmentForDate, filtered, saved.id);
         }

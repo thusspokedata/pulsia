@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { z } from "zod";
 import {
   SupplementInputSchema, GeneratePlanInputSchema, PlanItemPatchSchema, TakeInputSchema,
-  resolveDayChecklist, type Frequency, type TakeStatus, type AiPlanItem,
+  resolveDayChecklist, detectComponentOverlaps, type Frequency, type TakeStatus, type AiPlanItem,
 } from "@pulsia/shared";
 import {
   insertSupplement, listSupplements, getSupplement,
@@ -90,7 +90,12 @@ export function supplementsRoutes(deps: AppDeps) {
     }));
     if (items.length === 0) return c.json({ error: "La IA no devolvió un plan utilizable. Reintentá." }, 422);
     // Fuera del try: un error de DB acá no debe reportarse como falla de la IA (502).
-    return c.json(await createPlan(deps.db, userId, parsed.data.userNote ?? null, items));
+    const planView = await createPlan(deps.db, userId, parsed.data.userNote ?? null, items);
+    // Chequeo runtime (no bloqueante): componentes activos que se solapan entre productos
+    // distintos del plan recién creado — la IA puede repetir un componente sin saberlo.
+    const warnings = detectComponentOverlaps(planView.items, catalog, parsed.data.date);
+    for (const warning of warnings) console.warn("solapamiento de componentes en plan generado:", warning);
+    return c.json({ plan: planView, warnings });
   });
 
   r.get("/plan", async (c) => c.json(await getActivePlan(deps.db, c.get("userId"))));

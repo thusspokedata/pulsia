@@ -248,11 +248,52 @@ test("POST /nutrition/supplements/plan/generate → filtra ids desconocidos y an
   });
   expect(res.status).toBe(200);
   const body = await res.json();
-  expect(body.items).toHaveLength(1);
-  expect(body.items[0]).toMatchObject({ supplementId: SUP_ID, supplementName: "ZMA Pro" });
+  expect(body.plan.items).toHaveLength(1);
+  expect(body.plan.items[0]).toMatchObject({ supplementId: SUP_ID, supplementName: "ZMA Pro" });
+  expect(body.warnings).toEqual([]);
   const insertedItems = db._inserts.find((i: any) => i.table === supplementPlanItem);
   expect(insertedItems.rows).toHaveLength(1);
   expect(insertedItems.rows[0].frequency).toMatchObject({ type: "every_other_day", anchorDate: "2026-07-16" });
+});
+
+test("POST /nutrition/supplements/plan/generate → dos suplementos con magnesio ambos daily → 1 warning nombrando el componente", async () => {
+  const MG_A = "22222222-2222-4222-8222-222222222222";
+  const MG_B = "33333333-3333-4333-8333-333333333333";
+  const supMgA = { ...supRow, id: MG_A, name: "Magnesio Citrato", components: [{ name: "Magnesio (citrato)", amount: 200, unit: "mg" }] };
+  const supMgB = { ...supRow, id: MG_B, name: "Magnesio Bisglicinato", components: [{ name: "Magnesio bisglicinato", amount: 150, unit: "mg" }] };
+  const aiClient = makeAiClient({
+    generateSupplementPlan: async () => [
+      { supplementId: MG_A, slot: "desayuno", frequency: { type: "daily" }, dose: "1 tableta", reason: "x" },
+      { supplementId: MG_B, slot: "cena", frequency: { type: "daily" }, dose: "1 tableta", reason: "x" },
+    ],
+  });
+  const db = fakeDb({ supplements: [supMgA, supMgB] });
+  const app = createApp(deps(db, aiClient));
+  const res = await app.request("/nutrition/supplements/plan/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ athleteContext: VALID_CONTEXT, date: "2026-07-16" }),
+  });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.warnings).toHaveLength(1);
+  expect(body.warnings[0]).toContain("magnesio");
+});
+
+test("POST /nutrition/supplements/plan/generate → catálogo limpio (sin solapamiento) → warnings: []", async () => {
+  const aiClient = makeAiClient({
+    generateSupplementPlan: async () => [
+      { supplementId: SUP_ID, slot: "desayuno", frequency: { type: "daily" }, dose: "1 tableta", reason: "x" },
+    ],
+  });
+  const db = fakeDb({ supplements: [supRow] });
+  const app = createApp(deps(db, aiClient));
+  const res = await app.request("/nutrition/supplements/plan/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ athleteContext: VALID_CONTEXT, date: "2026-07-16" }),
+  });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.warnings).toEqual([]);
 });
 
 test("POST /nutrition/supplements/plan/generate → 422 si todos los ids son desconocidos", async () => {

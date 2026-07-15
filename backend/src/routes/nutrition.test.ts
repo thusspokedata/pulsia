@@ -368,6 +368,24 @@ test("POST /nutrition/reports/generate: todos los supplementId desconocidos → 
   expect(db._inserts.find((i: any) => i.table === supplementAdjustment)).toBeUndefined();
 });
 
+test("POST /nutrition/reports/generate: dos items con el mismo supplementId (skip + reduce) → solo persiste el primero", async () => {
+  const adjustment = [
+    { supplementId: SUP_ID, action: "skip", reason: "comiste rico en zinc" },
+    { supplementId: SUP_ID, action: "reduce", dose: "media dosis", reason: "contradictorio" },
+  ];
+  const genAiClient = { ...aiClient, generateReport: async () => ({ content: "informe", memoryNotes: [], supplementAdjustment: adjustment }) };
+  const db = reportsEnabledDb({ planRow: activePlanRow, planItemRows: activePlanItemRows });
+  const app = createApp(deps(db, genAiClient));
+  const res = await app.request("/nutrition/reports/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: generateReportBody({ adjustmentForDate: "2026-07-16" }),
+  });
+  expect(res.status).toBe(200);
+  const insertedAdjustment = db._inserts.find((i: any) => i.table === supplementAdjustment);
+  expect(insertedAdjustment).toBeDefined();
+  expect(insertedAdjustment.rows[0].items).toEqual([{ supplementId: SUP_ID, action: "skip", reason: "comiste rico en zinc" }]);
+});
+
 test("POST /nutrition/reports/generate: kind weekly con ajuste en el output de la IA → NO persiste", async () => {
   const adjustment = [{ supplementId: SUP_ID, action: "skip", reason: "comiste rico en zinc" }];
   const genAiClient = { ...aiClient, generateReport: async () => ({ content: "informe", memoryNotes: [], supplementAdjustment: adjustment }) };
