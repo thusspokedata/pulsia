@@ -86,10 +86,14 @@ function EditItem({ item, saving, onSave, onCancel }: {
 
 function WeekPreview({ items }: { items: PlanItemView[] }) {
   const card = { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.xs } as const;
+  // Aritmética de calendario (no +86_400_000 ms): un día de 25 h por DST duplicaría
+  // una fecha y perdería la séptima. `new Date(Date.now())` (y no `new Date()`) para
+  // que los tests puedan fijar el tiempo espiando Date.now.
+  const base = new Date(Date.now());
   const days = Array.from({ length: 7 }, (_, i) => {
-    const ms = Date.now() + i * 86_400_000;
-    const date = dateKey(ms);
-    const label = i === 0 ? "Hoy" : WEEKDAY_LABELS[new Date(ms).getDay()];
+    const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + i);
+    const date = dateKey(d.getTime());
+    const label = i === 0 ? "Hoy" : WEEKDAY_LABELS[d.getDay()];
     const names = items.filter((it) => frequencyAppliesOn(it.frequency, date)).map((it) => it.supplementName);
     return { date, label, text: names.length > 0 ? names.join(" · ") : "—" };
   });

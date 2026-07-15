@@ -50,6 +50,13 @@ test("el prompt del plan pide pensar la semana completa y no duplicar componente
   });
   expect(p).toMatch(/MISMO componente/i);
   expect(p).toMatch(/semana/i);
-  expect(p).toMatch(/alternad/i);
+  expect(p).toMatch(/alternar/i);
   expect(p).toMatch(/no.*duplicar|nunca.*duplic/i);
+  // Alternar productos debe hacerse con `weekdays` complementarios; every_other_day NO sirve
+  // (el server ancla todos los día-por-medio a la misma fecha → misma paridad → coinciden).
+  expect(p).toMatch(/weekdays.*complementari/is);
+  expect(p).toMatch(/NO uses `?every_other_day`? para alternar/i);
+  expect(p).not.toMatch(/día por medio complementario/i);
+  // Techo combinado: la etiqueta más baja de los productos involucrados, no una etiqueta ambigua.
+  expect(p).toMatch(/etiqueta más baja/i);
 });
