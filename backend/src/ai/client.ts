@@ -1,13 +1,20 @@
 import { z } from "zod";
 import type { Program, TrainingProfile } from "@pulsia/shared";
 import Anthropic from "@anthropic-ai/sdk";
-import { ProgramSchema, EcgAnalysisSchema, FoodExtractionSchema, ReportOutputSchema } from "@pulsia/shared";
+import {
+  ProgramSchema,
+  EcgAnalysisSchema,
+  FoodExtractionSchema,
+  ReportOutputSchema,
+  SupplementExtractionSchema,
+} from "@pulsia/shared";
 import { buildGenerationPrompt } from "./prompt";
 import { buildOneOffPrompt, type OneOffArgs } from "./oneoff";
 import { buildMemoryUpdatePrompt } from "./memory";
 import { buildEcgPrompt } from "./ecg";
 import { buildFoodPrompt } from "./nutrition";
 import { buildReportPrompt } from "./report";
+import { buildSupplementExtractPrompt, buildSupplementExplainPrompt } from "./supplements";
 import type { ReportData } from "../reports/collect";
 
 export interface AiClient {
@@ -38,6 +45,15 @@ export interface AiClient {
     mediaType: string;
     apiKey: string;
   }): Promise<import("@pulsia/shared").FoodExtraction>;
+  extractSupplement?(input: {
+    imageBase64: string;
+    mediaType: string;
+    apiKey: string;
+  }): Promise<import("@pulsia/shared").SupplementExtraction>;
+  explainSupplement?(input: {
+    supplement: { name: string; servingLabel: string; components: import("@pulsia/shared").SupplementComponent[] };
+    apiKey: string;
+  }): Promise<string>;
   generateReport?(input: {
     kind: import("@pulsia/shared").ReportKind;
     data: ReportData;
@@ -175,6 +191,61 @@ export class AnthropicAiClient implements AiClient {
       throw new Error("La IA no devolvió los datos del alimento.");
     }
     return FoodExtractionSchema.parse(block.input);
+  }
+
+  async extractSupplement({ imageBase64, mediaType, apiKey }: {
+    imageBase64: string;
+    mediaType: string;
+    apiKey: string;
+  }) {
+    const client = new Anthropic({ apiKey });
+    const { $schema, ...inputSchema } = z.toJSONSchema(SupplementExtractionSchema) as Record<string, unknown>;
+    const tool = {
+      name: "return_supplement",
+      description: "Devuelve los datos del suplemento de la foto.",
+      input_schema: inputSchema as any,
+    };
+    const res = await client.messages.create({
+      model: "claude-opus-4-8",
+      max_tokens: 2048,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "return_supplement" },
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: mediaType as any, data: imageBase64 } },
+            { type: "text", text: buildSupplementExtractPrompt() },
+          ],
+        },
+      ],
+    });
+    const block = res.content.find((b) => b.type === "tool_use");
+    if (!block || block.type !== "tool_use") {
+      throw new Error("La IA no devolvió los datos del suplemento.");
+    }
+    return SupplementExtractionSchema.parse(block.input);
+  }
+
+  async explainSupplement({ supplement, apiKey }: {
+    supplement: { name: string; servingLabel: string; components: import("@pulsia/shared").SupplementComponent[] };
+    apiKey: string;
+  }) {
+    const client = new Anthropic({ apiKey });
+    const res = await client.messages.create({
+      model: "claude-opus-4-8",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: [{ type: "text", text: buildSupplementExplainPrompt(supplement) }] }],
+    });
+    const text = res.content
+      .filter((b) => b.type === "text")
+      .map((b: any) => b.text)
+      .join("")
+      .trim();
+    if (!text) {
+      throw new Error("La IA no devolvió la explicación.");
+    }
+    return text;
   }
 
   async generateReport({ kind, data, apiKey }: {
