@@ -25,7 +25,7 @@ export default function NutricionScreen() {
   const [mlInput, setMlInput] = useState("");
   const { error, setError, meals, water, summary, goalView, baseUrl, reload } = useNutritionDay(offset);
   const { dayTotals, cholesterolMg, liquid } = summary;
-  const [checklist, setChecklist] = useState<{ hasPlan: boolean; entries: DayChecklistEntry[] }>({ hasPlan: true, entries: [] });
+  const [checklist, setChecklist] = useState<{ hasPlan: boolean; entries: DayChecklistEntry[] } | null>(null);
 
   const loadChecklist = useCallback(async () => {
     try {
@@ -158,22 +158,22 @@ export default function NutricionScreen() {
       <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <Text style={{ color: colors.text, fontSize: 16, fontWeight: "700" }}>💊 Suplementos</Text>
-          {checklist.hasPlan && (
+          {checklist?.hasPlan && (
             <Pressable onPress={() => router.push("/nutricion/plan-suplementos")} hitSlop={8}>
               <Text style={{ color: colors.accentText, fontSize: 12 }}>Ver plan ›</Text>
             </Pressable>
           )}
         </View>
-        {!checklist.hasPlan && (
+        {checklist && !checklist.hasPlan && (
           <Pressable onPress={() => router.push("/nutricion/plan-suplementos")}
             style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
             <Text style={{ color: "#fff", fontWeight: "600" }}>Armar plan con IA</Text>
           </Pressable>
         )}
-        {checklist.hasPlan && checklist.entries.length === 0 && (
+        {checklist && checklist.hasPlan && checklist.entries.length === 0 && (
           <Text style={{ color: colors.textMuted }}>Hoy no toca ningún suplemento.</Text>
         )}
-        {checklist.hasPlan && checklist.entries.length > 0 && (
+        {checklist && checklist.hasPlan && checklist.entries.length > 0 && (
           <SupplementChecklist entries={checklist.entries} onMark={onMarkTake} />
         )}
       </View>

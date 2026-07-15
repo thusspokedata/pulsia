@@ -35,10 +35,12 @@ function Row({ entry, onMark }: { entry: DayChecklistEntry; onMark: SupplementCh
 
   function markTaken() {
     onMark(entry, "taken", undefined, undefined);
+    setExpanded(false);
   }
 
   function markSkipped() {
     onMark(entry, "skipped", undefined, undefined);
+    setExpanded(false);
   }
 
   return (
