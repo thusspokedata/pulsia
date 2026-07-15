@@ -142,6 +142,10 @@ export default function NutricionScreen() {
           style={{ flex: 1, backgroundColor: colors.accentSoft, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
           <Text style={{ color: colors.accentText, fontWeight: "600" }}>Catálogo</Text>
         </Pressable>
+        <Pressable onPress={() => router.push("/nutricion/suplementos")}
+          style={{ flex: 1, backgroundColor: colors.accentSoft, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
+          <Text style={{ color: colors.accentText, fontWeight: "600" }}>Suplementos</Text>
+        </Pressable>
       </View>
       <Pressable onPress={() => router.push("/nutricion/informes")}
         style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
