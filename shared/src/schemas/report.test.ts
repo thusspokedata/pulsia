@@ -15,6 +15,37 @@ test("ReportOutputSchema exige content y limita memoryNotes a 2", () => {
   expect(ReportOutputSchema.safeParse({ content: "x", memoryNotes: ["a", "b", "c"] }).success).toBe(false); // >2 notas
 });
 
+test("ReportGenerateInputSchema: adjustmentForDate es opcional (back-compat) y valida fecha real", () => {
+  const withoutField = ReportGenerateInputSchema.safeParse({ kind: "daily", periodStart: 1, periodEnd: 2, athleteContext: athlete });
+  expect(withoutField.success).toBe(true);
+  const withValidDate = ReportGenerateInputSchema.safeParse({
+    kind: "daily", periodStart: 1, periodEnd: 2, athleteContext: athlete, adjustmentForDate: "2026-07-16",
+  });
+  expect(withValidDate.success).toBe(true);
+  const withInvalidDate = ReportGenerateInputSchema.safeParse({
+    kind: "daily", periodStart: 1, periodEnd: 2, athleteContext: athlete, adjustmentForDate: "2026-99-99",
+  });
+  expect(withInvalidDate.success).toBe(false);
+});
+
+test("ReportOutputSchema: supplementAdjustment por default vacío y rechaza action increase", () => {
+  const withoutField = ReportOutputSchema.safeParse({ content: "hola" });
+  expect(withoutField.success).toBe(true);
+  if (withoutField.success) expect(withoutField.data.supplementAdjustment).toEqual([]);
+
+  const withIncrease = ReportOutputSchema.safeParse({
+    content: "hola",
+    supplementAdjustment: [{ supplementId: "11111111-1111-4111-8111-111111111111", action: "increase", reason: "x" }],
+  });
+  expect(withIncrease.success).toBe(false);
+
+  const withValidSkip = ReportOutputSchema.safeParse({
+    content: "hola",
+    supplementAdjustment: [{ supplementId: "11111111-1111-4111-8111-111111111111", action: "skip", reason: "ya cubierto" }],
+  });
+  expect(withValidSkip.success).toBe(true);
+});
+
 test("ReportKindSchema opciones", () => {
   expect(ReportKindSchema.options).toEqual(["daily", "weekly", "biweekly", "monthly"]);
 });

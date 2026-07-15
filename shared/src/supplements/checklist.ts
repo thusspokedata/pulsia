@@ -51,6 +51,10 @@ export function frequencyAppliesOn(freq: Frequency, date: string): boolean {
   return freq.days.includes(dow);
 }
 
+// OJO — keying deliberado por supplementId (no por planItemId): un ajuste (skip/reduce) del
+// informe diario aplica a TODAS las franjas de ese suplemento ese día (ver adjBySupplement
+// abajo). La IA razona por producto ("ya cubriste el magnesio"), no por franja individual —
+// si un suplemento está en 2 franjas (split dosing), el ajuste pega en ambas por diseño.
 export function resolveDayChecklist({ planItems, adjustments, takes, date }: {
   planItems: ChecklistPlanItem[];
   adjustments: AdjustmentItem[];

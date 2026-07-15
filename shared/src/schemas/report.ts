@@ -1,31 +1,16 @@
 import { z } from "zod";
-import { ActivityLevelSchema, SexSchema } from "./profile";
-import { NutritionObjectiveSchema } from "./nutrition";
+import { AdjustmentItemSchema } from "./supplements";
+// AthleteContextSchema vive en ./athlete (no acá) para cortar el ciclo report↔supplements:
+// este archivo necesita AdjustmentItemSchema de supplements.ts, y supplements.ts necesita
+// AthleteContextSchema — si ambos vivieran acá, se ciclarían. Re-exportado para back-compat
+// (todo el resto del monorepo importa AthleteContext(Schema) desde "@pulsia/shared", que
+// re-exporta este módulo con `export *`).
+export { AthleteGoalContextSchema, AthleteContextSchema } from "./athlete";
+export type { AthleteContext } from "./athlete";
+import { AthleteContextSchema } from "./athlete";
 
 export const ReportKindSchema = z.enum(["daily", "weekly", "biweekly", "monthly"]);
 export type ReportKind = z.infer<typeof ReportKindSchema>;
-
-// La meta ya computada en el móvil (referencia para el agente + bmr para el gasto neto).
-export const AthleteGoalContextSchema = z.object({
-  status: z.enum(["ok", "incomplete"]),
-  kcal: z.number().optional(),
-  protein_g: z.number().optional(),
-  carbs_g: z.number().optional(),
-  fat_g: z.number().optional(),
-  bmr: z.number().nullable().optional(),
-});
-
-// Contexto que manda el móvil (el perfil vive client-side, como en #2a).
-export const AthleteContextSchema = z.object({
-  sex: SexSchema.optional(),
-  age: z.number().optional(),
-  heightCm: z.number().optional(),
-  weightKg: z.number().optional(),
-  activityLevel: ActivityLevelSchema.optional(),
-  objective: NutritionObjectiveSchema.optional(),
-  goal: AthleteGoalContextSchema,
-});
-export type AthleteContext = z.infer<typeof AthleteContextSchema>;
 
 export const ReportGenerateInputSchema = z.object({
   kind: ReportKindSchema,
@@ -33,6 +18,9 @@ export const ReportGenerateInputSchema = z.object({
   periodEnd: z.number().int(),
   athleteContext: AthleteContextSchema,
   force: z.boolean().optional(), // regenerar aunque exista
+  // Día calendario (dispositivo) SIGUIENTE al día del informe — solo para kind "daily".
+  // El server no adivina timezones: si falta o kind ≠ daily, no se genera/persiste ajuste.
+  adjustmentForDate: z.iso.date().nullish(),
 });
 export type ReportGenerateInput = z.infer<typeof ReportGenerateInputSchema>;
 
@@ -40,6 +28,8 @@ export type ReportGenerateInput = z.infer<typeof ReportGenerateInputSchema>;
 export const ReportOutputSchema = z.object({
   content: z.string().trim().min(1),
   memoryNotes: z.array(z.string().trim().min(1).max(400)).max(2).default([]),
+  // Ajuste de suplementos para MAÑANA (solo kind "daily"; el server ignora esto en los demás).
+  supplementAdjustment: z.array(AdjustmentItemSchema).max(10).default([]),
 });
 export type ReportOutput = z.infer<typeof ReportOutputSchema>;
 

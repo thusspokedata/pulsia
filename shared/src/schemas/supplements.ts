@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { FoodSourceSchema } from "./nutrition";
-import { AthleteContextSchema } from "./report";
+import { AthleteContextSchema } from "./athlete";
 
 // Franjas del día, en orden canónico (el checklist agrupa en este orden).
 export const TAKE_SLOTS = ["desayuno", "almuerzo", "cena", "post_entreno", "antes_de_dormir"] as const;

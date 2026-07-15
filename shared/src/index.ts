@@ -15,3 +15,4 @@ export * from "./nutrition/goal";
 export * from "./nutrition/exerciseBurn";
 export * from "./schemas/report";
 export * from "./supplements/checklist";
+export * from "./supplements/overlap";
