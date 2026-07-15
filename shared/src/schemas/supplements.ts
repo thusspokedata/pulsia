@@ -79,7 +79,7 @@ export const AdjustmentItemSchema = z
     supplementId: z.string().uuid(),
     action: z.enum(["skip", "reduce"]),
     dose: z.string().trim().min(1).nullish(), // solo para reduce
-    reason: z.string().trim().min(1),
+    reason: z.string().trim().min(1).max(200), // texto de la IA, acotado por higiene
   })
   .refine((a) => a.action !== "reduce" || (a.dose != null && a.dose.length > 0), {
     message: "reduce exige dose",
