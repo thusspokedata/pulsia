@@ -54,6 +54,46 @@ test("componentes distintos → sin warning", () => {
   expect(warnings).toEqual([]);
 });
 
+test("prefijo genérico: Vitamina C y Vitamina D3 NO se agrupan (clave de dos palabras)", () => {
+  const vitCatalog = [
+    { id: SUP_MG_A, name: "Vitamina C Retard", components: [{ name: "Vitamina C", amount: 500, unit: "mg" }] },
+    { id: SUP_MG_B, name: "Vitamina D3 Gotas", components: [{ name: "Vitamina D3", amount: 25, unit: "µg" }] },
+  ];
+  const items = [
+    { supplementId: SUP_MG_A, frequency: { type: "daily" as const } },
+    { supplementId: SUP_MG_B, frequency: { type: "daily" as const } },
+  ];
+  expect(detectComponentOverlaps(items, vitCatalog, "2026-07-16")).toEqual([]);
+});
+
+test("prefijo genérico: Omega 3 y Omega 6 NO se agrupan", () => {
+  const omegaCatalog = [
+    { id: SUP_MG_A, name: "Fish Oil", components: [{ name: "Omega 3", amount: 1000, unit: "mg" }] },
+    { id: SUP_MG_B, name: "Aceite de Onagra", components: [{ name: "Omega 6", amount: 500, unit: "mg" }] },
+  ];
+  const items = [
+    { supplementId: SUP_MG_A, frequency: { type: "daily" as const } },
+    { supplementId: SUP_MG_B, frequency: { type: "daily" as const } },
+  ];
+  expect(detectComponentOverlaps(items, omegaCatalog, "2026-07-16")).toEqual([]);
+});
+
+test("every_other_day con anclas de paridad OPUESTA nunca coinciden → sin warning; misma paridad → warning", () => {
+  const oppositeParity = [
+    { supplementId: SUP_MG_A, frequency: { type: "every_other_day" as const, anchorDate: "2026-07-15" } },
+    { supplementId: SUP_MG_B, frequency: { type: "every_other_day" as const, anchorDate: "2026-07-16" } },
+  ];
+  expect(detectComponentOverlaps(oppositeParity, catalog, "2026-07-16")).toEqual([]);
+
+  const sameParity = [
+    { supplementId: SUP_MG_A, frequency: { type: "every_other_day" as const, anchorDate: "2026-07-15" } },
+    { supplementId: SUP_MG_B, frequency: { type: "every_other_day" as const, anchorDate: "2026-07-17" } },
+  ];
+  const warnings = detectComponentOverlaps(sameParity, catalog, "2026-07-16");
+  expect(warnings).toHaveLength(1);
+  expect(warnings[0].toLowerCase()).toContain("magnesio");
+});
+
 test("mismo suplemento en 2 franjas (split dosing) → sin warning (mismo producto no es duplicación)", () => {
   const items = [
     { supplementId: SUP_MG_A, frequency: { type: "daily" as const } },

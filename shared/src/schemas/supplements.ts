@@ -46,6 +46,8 @@ export type Supplement = z.infer<typeof SupplementSchema>;
 
 // ---- Plan (se usa desde PR2, el schema se define ya para la migración 0016) ----
 // OJO: AiPlanFrequencySchema (abajo) es un clon estructural SIN anchorDate — si agregás una variante, replicala allá.
+// OJO 2: SCAN_DAYS en supplements/overlap.ts es el LCM de los períodos de estas variantes (2 y 7 → 14) —
+// si agregás una variante con otro período, recalculalo allá.
 export const FrequencySchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("daily") }),
   // anchorDate fija la paridad del "día por medio" (YYYY-MM-DD, fecha real).

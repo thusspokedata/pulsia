@@ -37,7 +37,8 @@ function daysBetween(a: string, b: string): number {
   const ms = Date.UTC(...splitDate(a)) - Date.UTC(...splitDate(b));
   return Math.round(ms / 86_400_000);
 }
-function splitDate(d: string): [number, number, number] {
+// YYYY-MM-DD → [año, mes 0-based, día] listo para Date.UTC (compartido con overlap.ts).
+export function splitDate(d: string): [number, number, number] {
   const [y, m, day] = d.split("-").map(Number);
   return [y, m - 1, day];
 }
