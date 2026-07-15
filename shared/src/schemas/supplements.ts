@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { FoodSourceSchema } from "./nutrition";
+import { AthleteContextSchema } from "./report";
 
 // Franjas del día, en orden canónico (el checklist agrupa en este orden).
 export const TAKE_SLOTS = ["desayuno", "almuerzo", "cena", "post_entreno", "antes_de_dormir"] as const;
@@ -44,6 +45,7 @@ export const SupplementSchema = SupplementInputSchema.extend({
 export type Supplement = z.infer<typeof SupplementSchema>;
 
 // ---- Plan (se usa desde PR2, el schema se define ya para la migración 0016) ----
+// OJO: AiPlanFrequencySchema (abajo) es un clon estructural SIN anchorDate — si agregás una variante, replicala allá.
 export const FrequencySchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("daily") }),
   // anchorDate fija la paridad del "día por medio" (YYYY-MM-DD, fecha real).
@@ -81,3 +83,66 @@ export const AdjustmentItemSchema = z
     message: "reduce exige dose",
   });
 export type AdjustmentItem = z.infer<typeof AdjustmentItemSchema>;
+
+// --- Wire de PR2 (plan + checklist + tomas) ---
+
+// Lo que devuelve la IA por ítem (sin id; el server los asigna). La frecuencia de la IA
+// NO trae anchorDate: "día por medio" ancla al día de generación (lo pone el server).
+export const AiPlanFrequencySchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("daily") }),
+  z.object({ type: z.literal("every_other_day") }),
+  z.object({
+    type: z.literal("weekdays"),
+    days: z
+      .array(z.number().int().min(0).max(6))
+      .min(1)
+      .refine((d) => new Set(d).size === d.length, { message: "días duplicados" }),
+  }),
+]);
+export const AiPlanItemSchema = z.object({
+  supplementId: z.string().uuid(),
+  slot: TakeSlotSchema,
+  frequency: AiPlanFrequencySchema,
+  dose: z.string().trim().min(1),
+  reason: z.string().trim().min(1),
+});
+export type AiPlanItem = z.infer<typeof AiPlanItemSchema>;
+export const AiPlanOutputSchema = z.object({ items: z.array(AiPlanItemSchema).min(1) });
+
+export const GeneratePlanInputSchema = z.object({
+  athleteContext: AthleteContextSchema,
+  userNote: z.string().trim().min(1).nullish(),
+  date: z.iso.date(), // "hoy" del dispositivo: ancla del every_other_day
+});
+export type GeneratePlanInput = z.infer<typeof GeneratePlanInputSchema>;
+
+// PATCH de un ítem a mano (franja/frecuencia/dosis; todo opcional pero al menos uno).
+export const PlanItemPatchSchema = z
+  .object({
+    slot: TakeSlotSchema.optional(),
+    frequency: FrequencySchema.optional(),
+    dose: z.string().trim().min(1).optional(),
+  })
+  .refine((p) => p.slot !== undefined || p.frequency !== undefined || p.dose !== undefined);
+export type PlanItemPatch = z.infer<typeof PlanItemPatchSchema>;
+
+// Ítem del plan como lo devuelve el backend (join con el nombre del suplemento).
+export const PlanItemViewSchema = PlanItemSchema.extend({ supplementName: z.string() });
+export type PlanItemView = z.infer<typeof PlanItemViewSchema>;
+export const PlanViewSchema = z.object({
+  id: z.string().uuid(),
+  userNote: z.string().nullish(),
+  createdAt: z.number().int(),
+  items: z.array(PlanItemViewSchema),
+});
+export type PlanView = z.infer<typeof PlanViewSchema>;
+
+// Marcar una toma (upsert por userId+date+planItemId).
+export const TakeInputSchema = z.object({
+  date: z.iso.date(),
+  planItemId: z.string().uuid(),
+  status: TakeStatusSchema,
+  actualDose: z.string().trim().min(1).nullish(), // solo tiene sentido en deviated
+  note: z.string().nullish(),
+});
+export type TakeInput = z.infer<typeof TakeInputSchema>;

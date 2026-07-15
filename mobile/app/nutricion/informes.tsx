@@ -2,13 +2,10 @@ import { useCallback, useRef, useState } from "react";
 import { ScrollView, View, Text, Pressable, ActivityIndicator } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { getBackendUrl } from "../../src/storage/config";
-import { getProfile } from "../../src/storage/profile";
-import { getLatestMetrics } from "../../src/api/metrics";
-import { getNutritionGoal } from "../../src/api/nutrition";
 import { generateReport, getReport } from "../../src/api/reports";
 import { periodFor } from "../../src/reports/periods";
-import { computeNutritionGoal } from "@pulsia/shared";
-import type { AthleteContext, ReportKind } from "@pulsia/shared";
+import { buildAthleteContext } from "../../src/nutrition/athleteContext";
+import type { ReportKind } from "@pulsia/shared";
 import { ChipGroup } from "../../src/components/ChipGroup";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
@@ -42,30 +39,11 @@ export default function InformesScreen() {
   }, [kind]);
   useFocusEffect(useCallback(() => { void load(period.start); }, [load, period.start]));
 
-  async function buildAthlete(): Promise<AthleteContext> {
-    const p = await getProfile();
-    let weightKg = p?.weightKg;
-    const gi = url.current ? await getNutritionGoal(url.current) : null;
-    if (url.current) {
-      try { const lm = await getLatestMetrics(url.current); if (lm.weight_kg?.value != null) weightKg = lm.weight_kg.value; } catch { /* offline */ }
-    }
-    const goalRes = gi
-      ? computeNutritionGoal({
-          sex: p?.sex, age: p?.age, heightCm: p?.heightCm, weightKg,
-          activityLevel: p?.activityLevel, objective: gi.objective, rateKgPerWeek: gi.rateKgPerWeek, manualKcal: gi.manualKcal,
-        })
-      : null;
-    const goal = goalRes && goalRes.status === "ok"
-      ? { status: "ok" as const, kcal: goalRes.kcal, protein_g: goalRes.protein_g, carbs_g: goalRes.carbs_g, fat_g: goalRes.fat_g, bmr: goalRes.bmr }
-      : { status: "incomplete" as const };
-    return { sex: p?.sex, age: p?.age, heightCm: p?.heightCm, weightKg, activityLevel: p?.activityLevel, objective: gi?.objective, goal };
-  }
-
   async function generate(force: boolean) {
     if (!url.current) return;
     setBusy(true); setError(null); setDisabled(false);
     try {
-      const athleteContext = await buildAthlete();
+      const athleteContext = await buildAthleteContext(url.current);
       const rep = await generateReport(url.current, { kind, periodStart: period.start, periodEnd: period.end, athleteContext, force });
       setContent(rep.content); setCreatedAt(rep.createdAt);
     } catch (e) {

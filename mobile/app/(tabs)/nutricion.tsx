@@ -1,12 +1,16 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { ScrollView, View, Text, Pressable, Alert, TextInput } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { deleteMeal, logWater, deleteWater } from "../../src/api/nutrition";
-import { dayLabel } from "../../src/session/metricDate";
+import { getDayChecklist, putTake } from "../../src/api/supplements";
+import { getBackendUrl } from "../../src/storage/config";
+import { dayLabel, dayAtNoon } from "../../src/session/metricDate";
+import { dateKey } from "../../src/session/dateKey";
 import { dayBounds } from "../../src/nutrition/dayBounds";
 import { useNutritionDay } from "../../src/nutrition/useNutritionDay";
 import { remainingLabel } from "../../src/nutrition/goalView";
-import type { Meal } from "@pulsia/shared";
+import { SupplementChecklist } from "../../src/components/SupplementChecklist";
+import type { Meal, DayChecklistEntry, TakeStatus } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
 const SHORT: Record<"protein" | "carbs" | "fat", string> = { protein: "Prot", carbs: "Carb", fat: "Gras" };
@@ -21,6 +25,23 @@ export default function NutricionScreen() {
   const [mlInput, setMlInput] = useState("");
   const { error, setError, meals, water, summary, goalView, baseUrl, reload } = useNutritionDay(offset);
   const { dayTotals, cholesterolMg, liquid } = summary;
+  const [checklist, setChecklist] = useState<{ hasPlan: boolean; entries: DayChecklistEntry[] } | null>(null);
+
+  const loadChecklist = useCallback(async () => {
+    try {
+      const url = await getBackendUrl();
+      setChecklist(await getDayChecklist(url, dateKey(dayAtNoon(offset, Date.now()))));
+    } catch (e) { setError((e as Error).message); }
+  }, [offset]);
+  useFocusEffect(useCallback(() => { void loadChecklist(); }, [loadChecklist]));
+
+  async function onMarkTake(entry: DayChecklistEntry, status: TakeStatus, actualDose?: string, note?: string) {
+    try {
+      const url = await getBackendUrl();
+      await putTake(url, { date: dateKey(dayAtNoon(offset, Date.now())), planItemId: entry.planItemId, status, actualDose, note });
+      await loadChecklist();
+    } catch (e) { setError((e as Error).message); }
+  }
 
   function mealKcal(m: Meal): number { return m.items.reduce((a, it) => a + it.kcal, 0); }
 
@@ -130,6 +151,30 @@ export default function NutricionScreen() {
           <Pressable onPress={undoLastWater}>
             <Text style={{ color: colors.accentText, fontSize: 12 }}>Deshacer último ({Math.round(water[water.length - 1].ml)} ml)</Text>
           </Pressable>
+        )}
+      </View>
+
+      {/* Suplementos del día */}
+      <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Text style={{ color: colors.text, fontSize: 16, fontWeight: "700" }}>💊 Suplementos</Text>
+          {checklist?.hasPlan && (
+            <Pressable onPress={() => router.push("/nutricion/plan-suplementos")} hitSlop={8}>
+              <Text style={{ color: colors.accentText, fontSize: 12 }}>Ver plan ›</Text>
+            </Pressable>
+          )}
+        </View>
+        {checklist && !checklist.hasPlan && (
+          <Pressable onPress={() => router.push("/nutricion/plan-suplementos")}
+            style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
+            <Text style={{ color: "#fff", fontWeight: "600" }}>Armar plan con IA</Text>
+          </Pressable>
+        )}
+        {checklist && checklist.hasPlan && checklist.entries.length === 0 && (
+          <Text style={{ color: colors.textMuted }}>Hoy no toca ningún suplemento.</Text>
+        )}
+        {checklist && checklist.hasPlan && checklist.entries.length > 0 && (
+          <SupplementChecklist entries={checklist.entries} onMark={onMarkTake} />
         )}
       </View>
 
