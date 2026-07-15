@@ -134,10 +134,13 @@ export default function AgregarSuplementoScreen() {
       notes: notes.trim() === "" ? null : notes.trim(),
     };
 
-    if (id && componentsEdited) {
+    // Si se editaron los componentes, la explicación ya no describe lo que se guarda:
+    // se quita (en alta Y edición) para que el detalle ofrezca "Explicar con IA" de nuevo.
+    if (componentsEdited && input.info != null) {
+      input.info = null;
       Alert.alert(
-        "Explicación posiblemente desactualizada",
-        "Editaste los componentes: la explicación generada por IA puede haber quedado desactualizada. Podés regenerarla desde el detalle con \"Explicar con IA\".",
+        "Explicación quitada",
+        "Editaste los componentes, así que la explicación generada por IA quedó desactualizada y se quitó. Podés regenerarla desde el detalle con \"Explicar con IA\".",
       );
     }
 

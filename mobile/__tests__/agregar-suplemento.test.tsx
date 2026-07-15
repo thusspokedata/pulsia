@@ -98,6 +98,17 @@ test("una fila extra totalmente vacía se ignora sin error", async () => {
   expect(input.components[0]).toMatchObject({ name: "Creatina monohidrato", amount: 5, unit: "g" });
 });
 
+test("editar un componente tras la extracción quita la explicación (quedó obsoleta) también en alta nueva", async () => {
+  await render(<AgregarSuplementoScreen />);
+  await fireEvent.press(screen.getByText(/Galería/i));
+  await waitFor(() => expect(screen.getByDisplayValue("ZMA Pro")).toBeTruthy());
+  await fireEvent.changeText(screen.getByPlaceholderText("Cantidad"), "20"); // cambia la composición
+  await fireEvent.press(screen.getByText(/Guardar/i));
+  await waitFor(() => expect(createSupplement).toHaveBeenCalled());
+  const input = (createSupplement as jest.Mock).mock.calls[0][1];
+  expect(input.info ?? null).toBeNull(); // la info ya no describe los componentes guardados
+});
+
 test("edición: precarga desde listSupplements y guarda con updateSupplement preservando info", async () => {
   mockParams = { id: "id1" };
   (listSupplements as jest.Mock).mockResolvedValueOnce([
