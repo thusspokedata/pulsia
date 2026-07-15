@@ -66,9 +66,11 @@ export default function SuplementosScreen() {
         return (
           <Pressable key={s.id} onPress={() => setOpenId(open ? null : s.id)}
             style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.xs }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            {/* Apilado (no en fila): nombre y porción pueden ser largos y en una fila
+                con space-between desbordan la pantalla (p.ej. "13 g de polvo en 500 ml de agua"). */}
+            <View style={{ gap: 2 }}>
               <Text style={{ color: colors.text, fontWeight: "600" }}>{s.name}</Text>
-              <Text style={{ color: colors.textMuted, fontSize: 12 }}>{s.servingLabel}</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>Porción: {s.servingLabel}</Text>
             </View>
             {open && (
               <View style={{ gap: spacing.sm, marginTop: spacing.xs }}>
