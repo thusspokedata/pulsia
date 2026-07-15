@@ -128,7 +128,11 @@ export default function PlanSuplementosScreen() {
     try {
       const u = await getBackendUrl();
       url.current = u;
-      setPlan(await getPlan(u));
+      // Warnings persistentes (T4 review): el backend las recalcula en cada GET /plan, así que
+      // se muestran también al recargar la pantalla y no solo justo después de generar.
+      const { plan: p, warnings: w } = await getPlan(u);
+      setPlan(p);
+      setWarnings(w);
     } catch (e) { setError((e as Error).message); }
     setLoading(false);
   }, []);

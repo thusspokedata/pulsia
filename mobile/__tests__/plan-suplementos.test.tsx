@@ -6,7 +6,7 @@ jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn() } }
 jest.mock("../src/storage/config", () => ({ getBackendUrl: jest.fn(async () => "http://x") }));
 jest.mock("../src/nutrition/athleteContext", () => ({ buildAthleteContext: jest.fn(async () => ({ goal: { status: "incomplete" } })) }));
 jest.mock("../src/api/supplements", () => ({
-  getPlan: jest.fn(async () => null),
+  getPlan: jest.fn(async () => ({ plan: null, warnings: [] })),
   generatePlan: jest.fn(async () => ({ plan: {}, warnings: [] })),
   updatePlanItem: jest.fn(async () => ({})),
 }));
@@ -21,7 +21,7 @@ const plan = {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (getPlan as jest.Mock).mockResolvedValue(null);
+  (getPlan as jest.Mock).mockResolvedValue({ plan: null, warnings: [] });
   (generatePlan as jest.Mock).mockResolvedValue({ plan: {}, warnings: [] });
   (updatePlanItem as jest.Mock).mockResolvedValue({});
 });
@@ -59,8 +59,17 @@ test("generar sin warnings: no se muestra la nota ámbar", async () => {
   expect(screen.queryByText(/Revisá el plan o regenerá con una nota/i)).toBeNull();
 });
 
+test("con plan que ya tiene warnings guardadas: se muestran al cargar, no solo tras generar", async () => {
+  (getPlan as jest.Mock).mockResolvedValueOnce({
+    plan, warnings: ["Varios productos activos aportan \"magnesio\" el mismo día: A, B. Revisá si hay solapamiento."],
+  });
+  await render(<PlanSuplementosScreen />);
+  await waitFor(() => expect(screen.getByText(/⚠️.*magnesio/)).toBeTruthy());
+  expect(generatePlan).not.toHaveBeenCalled();
+});
+
 test("con plan: regenerar con nota la manda como userNote", async () => {
-  (getPlan as jest.Mock).mockResolvedValueOnce(plan);
+  (getPlan as jest.Mock).mockResolvedValueOnce({ plan, warnings: [] });
   (generatePlan as jest.Mock).mockResolvedValueOnce({ plan, warnings: [] });
   await render(<PlanSuplementosScreen />);
   await waitFor(() => expect(screen.getAllByText(/Magnesio/).length).toBeGreaterThan(0)); // ítem + vista semanal
@@ -71,7 +80,7 @@ test("con plan: regenerar con nota la manda como userNote", async () => {
 });
 
 test("editar un ítem: cambiar la dosis dispara PATCH", async () => {
-  (getPlan as jest.Mock).mockResolvedValueOnce(plan);
+  (getPlan as jest.Mock).mockResolvedValueOnce({ plan, warnings: [] });
   (updatePlanItem as jest.Mock).mockResolvedValueOnce({ ...plan.items[0], dose: "1 cápsula" });
   await render(<PlanSuplementosScreen />);
   await fireEvent.press((await screen.findAllByText(/Magnesio/))[0]); // expande edición (1º = ítem, el resto es la vista semanal)
@@ -86,7 +95,7 @@ test("editar solo la dosis de un ítem día-por-medio preserva el anchorDate ori
     id: "44444444-4444-4444-8444-444444444444", supplementId: "s2", supplementName: "Zink",
     slot: "desayuno", frequency: { type: "every_other_day", anchorDate: "2026-07-10" }, dose: "1 tableta", reason: null,
   };
-  (getPlan as jest.Mock).mockResolvedValueOnce({ ...plan, items: [eodItem] });
+  (getPlan as jest.Mock).mockResolvedValueOnce({ plan: { ...plan, items: [eodItem] }, warnings: [] });
   (updatePlanItem as jest.Mock).mockResolvedValueOnce({ ...eodItem, dose: "2 tabletas" });
   await render(<PlanSuplementosScreen />);
   await fireEvent.press((await screen.findAllByText(/Zink/))[0]); // expande edición (1º = ítem, el resto es la vista semanal)
@@ -99,7 +108,7 @@ test("editar solo la dosis de un ítem día-por-medio preserva el anchorDate ori
 });
 
 test("si falla el guardado, la edición no se pierde y se ve el error", async () => {
-  (getPlan as jest.Mock).mockResolvedValueOnce(plan);
+  (getPlan as jest.Mock).mockResolvedValueOnce({ plan, warnings: [] });
   // Rechazo asíncrono real (tick de red): fuerza el render intermedio de "guardando".
   (updatePlanItem as jest.Mock).mockImplementationOnce(
     () => new Promise((_, reject) => setTimeout(() => reject(new Error("No se pudo actualizar el ítem del plan.")), 0)),
@@ -113,7 +122,7 @@ test("si falla el guardado, la edición no se pierde y se ve el error", async ()
 });
 
 test("días fijos: los días elegidos se mandan ordenados sin importar el orden de tap", async () => {
-  (getPlan as jest.Mock).mockResolvedValueOnce(plan);
+  (getPlan as jest.Mock).mockResolvedValueOnce({ plan, warnings: [] });
   (updatePlanItem as jest.Mock).mockResolvedValueOnce({
     ...plan.items[0], frequency: { type: "weekdays", days: [1, 6] },
   });
@@ -150,7 +159,7 @@ test("vista semanal: 7 días desde hoy, ítem daily todos los días y weekdays s
     ],
   };
   try {
-    (getPlan as jest.Mock).mockResolvedValueOnce(weekPlan);
+    (getPlan as jest.Mock).mockResolvedValueOnce({ plan: weekPlan, warnings: [] });
     await render(<PlanSuplementosScreen />);
     await waitFor(() => expect(screen.getAllByText(/Magnesio/).length).toBeGreaterThan(0));
 

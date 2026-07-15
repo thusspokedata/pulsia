@@ -56,10 +56,10 @@ export async function explainSupplement(baseUrl: string, id: string): Promise<Su
   return (await res.json()) as Supplement;
 }
 
-export async function getPlan(baseUrl: string): Promise<PlanView | null> {
+export async function getPlan(baseUrl: string): Promise<{ plan: PlanView | null; warnings: string[] }> {
   const res = await apiFetch(baseUrl, "/nutrition/supplements/plan");
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo cargar el plan."));
-  return (await res.json()) as PlanView | null;
+  return (await res.json()) as { plan: PlanView | null; warnings: string[] };
 }
 
 export async function generatePlan(baseUrl: string, input: GeneratePlanInput): Promise<{ plan: PlanView; warnings: string[] }> {

@@ -5,6 +5,7 @@ import { getBackendUrl } from "../../src/storage/config";
 import { generateReport, getReport } from "../../src/api/reports";
 import { periodFor } from "../../src/reports/periods";
 import { buildAthleteContext } from "../../src/nutrition/athleteContext";
+import { adjustmentDateForReport } from "../../src/nutrition/adjustmentDate";
 import type { ReportKind } from "@pulsia/shared";
 import { ChipGroup } from "../../src/components/ChipGroup";
 import { colors, radius, spacing } from "../../src/theme/tokens";
@@ -44,7 +45,8 @@ export default function InformesScreen() {
     setBusy(true); setError(null); setDisabled(false);
     try {
       const athleteContext = await buildAthleteContext(url.current);
-      const rep = await generateReport(url.current, { kind, periodStart: period.start, periodEnd: period.end, athleteContext, force });
+      const adjustmentForDate = adjustmentDateForReport(kind, offset, Date.now());
+      const rep = await generateReport(url.current, { kind, periodStart: period.start, periodEnd: period.end, athleteContext, force, adjustmentForDate });
       setContent(rep.content); setCreatedAt(rep.createdAt);
     } catch (e) {
       const msg = (e as Error).message;

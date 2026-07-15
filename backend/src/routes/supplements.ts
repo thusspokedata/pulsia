@@ -14,6 +14,7 @@ import { resolveAiKey } from "../ai/resolveKey";
 import { settings } from "../db/schema";
 import { eq } from "drizzle-orm";
 import type { AppDeps } from "../app";
+import { epochToUtcDateStr } from "../lib/dateUtc";
 
 const ExtractSchema = z.object({
   imageBase64: z.string().min(10),
@@ -98,7 +99,17 @@ export function supplementsRoutes(deps: AppDeps) {
     return c.json({ plan: planView, warnings });
   });
 
-  r.get("/plan", async (c) => c.json(await getActivePlan(deps.db, c.get("userId"))));
+  // Warnings de solapamiento de componentes persistentes (T4 review): antes solo se veían al
+  // generar (respuesta de /plan/generate) y desaparecían al recargar. Se recalculan acá con el
+  // catálogo actual para que sobrevivan al reload; fecha aproximada UTC (ver dateUtc.ts).
+  r.get("/plan", async (c) => {
+    const userId = c.get("userId");
+    const plan = await getActivePlan(deps.db, userId);
+    if (!plan) return c.json({ plan: null, warnings: [] });
+    const catalog = await listSupplements(deps.db, userId);
+    const warnings = detectComponentOverlaps(plan.items, catalog, epochToUtcDateStr(Date.now()));
+    return c.json({ plan, warnings });
+  });
 
   r.patch("/plan/items/:id", async (c) => {
     if (!UuidSchema.safeParse(c.req.param("id")).success) return badId(c);

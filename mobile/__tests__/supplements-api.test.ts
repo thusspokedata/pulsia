@@ -57,6 +57,13 @@ test("errores del backend se traducen a Error con mensaje", async () => {
   await expect(extractSupplement("http://x", "AAAA", "image/jpeg")).rejects.toThrow(/analizar la foto/);
 });
 
+test("getPlan devuelve { plan, warnings } tal como los manda el backend", async () => {
+  const planResponse = { plan: { id: "p1", items: [] }, warnings: ["ojo con el zinc"] };
+  global.fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => planResponse })) as any;
+  const out = await getPlan("http://x");
+  expect(out).toEqual(planResponse);
+});
+
 test("generatePlan devuelve { plan, warnings } tal como los manda el backend", async () => {
   const planResponse = { plan: { id: "p1", items: [] }, warnings: ["ojo con el magnesio"] };
   global.fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => planResponse })) as any;
