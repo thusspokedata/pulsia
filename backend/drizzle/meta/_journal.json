@@ -113,6 +113,13 @@
       "when": 1784061295299,
       "tag": "0015_mushy_blackheart",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1784075092172,
+      "tag": "0016_shocking_warbound",
+      "breakpoints": true
     }
   ]
 }
