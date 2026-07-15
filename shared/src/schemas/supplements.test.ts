@@ -2,6 +2,7 @@ import { test, expect } from "bun:test";
 import {
   SupplementExtractionSchema, SupplementInputSchema, SupplementSchema,
   TakeSlotSchema, AdjustmentItemSchema, FrequencySchema, TAKE_SLOTS,
+  GeneratePlanInputSchema, PlanItemPatchSchema, AiPlanFrequencySchema,
 } from "./supplements";
 
 const extraction = {
@@ -80,4 +81,19 @@ test("AdjustmentItemSchema: reduce exige dose", () => {
   expect(AdjustmentItemSchema.safeParse({
     supplementId: "11111111-1111-4111-8111-111111111111", action: "reduce", reason: "x",
   }).success).toBe(false);
+});
+
+test("GeneratePlanInputSchema exige date en formato ISO", () => {
+  const base = { athleteContext: { goal: { status: "incomplete" } } };
+  expect(GeneratePlanInputSchema.safeParse({ ...base, date: "2026-07-16" }).success).toBe(true);
+  expect(GeneratePlanInputSchema.safeParse({ ...base, date: "16-07-2026" }).success).toBe(false);
+});
+
+test("PlanItemPatchSchema rechaza el objeto vacío", () => {
+  expect(PlanItemPatchSchema.safeParse({}).success).toBe(false);
+  expect(PlanItemPatchSchema.safeParse({ dose: "5 g" }).success).toBe(true);
+});
+
+test("AiPlanFrequencySchema acepta every_other_day SIN anchorDate (lo ancla el server)", () => {
+  expect(AiPlanFrequencySchema.safeParse({ type: "every_other_day" }).success).toBe(true);
 });
