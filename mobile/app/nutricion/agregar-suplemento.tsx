@@ -3,7 +3,7 @@ import { ScrollView, View, Text, TextInput, Pressable, ActivityIndicator, Alert 
 import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { getBackendUrl } from "../../src/storage/config";
-import { extractSupplement, createSupplement, updateSupplement, listSupplements } from "../../src/api/supplements";
+import { extractSupplement, createSupplement, updateSupplement, getSupplement } from "../../src/api/supplements";
 import type { SupplementSource, SupplementComponent } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
@@ -37,19 +37,15 @@ export default function AgregarSuplementoScreen() {
       baseUrl.current = url;
       if (id) {
         try {
-          const list = await listSupplements(url);
-          const s = list.find((x) => x.id === id);
-          if (!s) { setError("No se encontró el suplemento."); }
-          else {
-            setName(s.name);
-            setBrand(s.brand ?? "");
-            setServingLabel(s.servingLabel);
-            setLabelMaxPerDay(s.labelMaxPerDay ?? "");
-            setComponents(s.components.map((c: SupplementComponent) => ({ name: c.name, amount: String(c.amount), unit: c.unit })));
-            setSource(s.source);
-            setInfo(s.info ?? null);
-            setNotes(s.notes ?? "");
-          }
+          const s = await getSupplement(url, id);
+          setName(s.name);
+          setBrand(s.brand ?? "");
+          setServingLabel(s.servingLabel);
+          setLabelMaxPerDay(s.labelMaxPerDay ?? "");
+          setComponents(s.components.map((c: SupplementComponent) => ({ name: c.name, amount: String(c.amount), unit: c.unit })));
+          setSource(s.source);
+          setInfo(s.info ?? null);
+          setNotes(s.notes ?? "");
         } catch (e) { setError((e as Error).message); }
       }
       setLoading(false);

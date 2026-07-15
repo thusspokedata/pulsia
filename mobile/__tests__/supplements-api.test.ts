@@ -4,6 +4,12 @@ import {
   listSupplements,
   explainSupplement,
   deleteSupplement,
+  getPlan,
+  generatePlan,
+  updatePlanItem,
+  getDayChecklist,
+  putTake,
+  getSupplement,
 } from "../src/api/supplements";
 
 const extraction = {
@@ -49,4 +55,23 @@ test("explainSupplement hace POST a /:id/explain", async () => {
 test("errores del backend se traducen a Error con mensaje", async () => {
   global.fetch = jest.fn(async () => ({ ok: false, status: 502, json: async () => ({ error: "No se pudo analizar la foto." }) })) as any;
   await expect(extractSupplement("http://x", "AAAA", "image/jpeg")).rejects.toThrow(/analizar la foto/);
+});
+
+test("getPlan / generatePlan / updatePlanItem / getDayChecklist / putTake / getSupplement pegan a las rutas correctas", async () => {
+  await getPlan("http://x");
+  await generatePlan("http://x", { athleteContext: { goal: { status: "incomplete" } }, date: "2026-07-16" } as any);
+  await updatePlanItem("http://x", "abc", { dose: "5 g" });
+  await getDayChecklist("http://x", "2026-07-16");
+  await putTake("http://x", { date: "2026-07-16", planItemId: "abc", status: "taken" } as any);
+  await getSupplement("http://x", "abc");
+  const calls = (global.fetch as jest.Mock).mock.calls;
+  expect(String(calls[0][0])).toContain("/nutrition/supplements/plan");
+  expect(String(calls[1][0])).toContain("/nutrition/supplements/plan/generate");
+  expect(calls[1][1].method).toBe("POST");
+  expect(String(calls[2][0])).toContain("/nutrition/supplements/plan/items/abc");
+  expect(calls[2][1].method).toBe("PATCH");
+  expect(String(calls[3][0])).toContain("/nutrition/supplements/day?date=2026-07-16");
+  expect(String(calls[4][0])).toContain("/nutrition/supplements/takes");
+  expect(calls[4][1].method).toBe("PUT");
+  expect(String(calls[5][0])).toContain("/nutrition/supplements/abc");
 });

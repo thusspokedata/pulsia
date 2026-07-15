@@ -85,7 +85,11 @@ function fakeDb(opts: {
           where: () => {
             let rows: any[];
             if (table === supplement) rows = opts.supplements ?? [];
-            else if (table === supplementPlanItem) rows = joins >= 2 ? (opts.ownedItemRows ?? []) : (opts.planItemRows ?? []);
+            else if (table === supplementPlanItem) {
+              if (joins === 1) rows = opts.planItemRows ?? [];
+              else if (joins === 2) rows = opts.ownedItemRows ?? [];
+              else throw new Error("query shape desconocida");
+            }
             else if (table === supplementTake) rows = opts.takes ?? [];
             else rows = [];
             const p: any = Promise.resolve(rows);
@@ -355,6 +359,24 @@ test("GET /nutrition/supplements/day → con plan: resuelve el checklist con tom
   expect(body.hasPlan).toBe(true);
   expect(body.entries).toHaveLength(1);
   expect(body.entries[0]).toMatchObject({ planItemId: ITEM_ID, status: "taken", slot: "desayuno" });
+});
+
+test("GET /nutrition/supplements/day → un ajuste (skip) marca la entrada como adjusted", async () => {
+  const planRow = { id: PLAN_ID, userNote: null, createdAt: new Date(0) };
+  const adjustmentRow = {
+    userId: "single-user", forDate: "2026-07-16",
+    items: [{ supplementId: SUP_ID, action: "skip", reason: "ayer comiste rico en zinc" }],
+  };
+  const app = createApp(deps(fakeDb({ planRow, planItemRows: [joinedItem], adjustmentRow })));
+  const res = await app.request("/nutrition/supplements/day?date=2026-07-16");
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.hasPlan).toBe(true);
+  expect(body.entries).toHaveLength(1);
+  expect(body.entries[0]).toMatchObject({
+    planItemId: ITEM_ID,
+    adjusted: { action: "skip", reason: "ayer comiste rico en zinc" },
+  });
 });
 
 test("PUT /nutrition/supplements/takes → 404 si el ítem del plan no es del usuario", async () => {

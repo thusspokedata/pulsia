@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
 import AgregarSuplementoScreen from "../app/nutricion/agregar-suplemento";
-import { extractSupplement, createSupplement, updateSupplement, listSupplements } from "../src/api/supplements";
+import { extractSupplement, createSupplement, updateSupplement, getSupplement } from "../src/api/supplements";
 
 let mockParams: Record<string, string> = {};
 jest.mock("expo-router", () => ({ router: { back: jest.fn() }, useLocalSearchParams: () => mockParams }));
@@ -19,7 +19,7 @@ jest.mock("../src/api/supplements", () => ({
   })),
   createSupplement: jest.fn(async (u: string, input: any) => ({ ...input, id: "id1", createdAt: 0 })),
   updateSupplement: jest.fn(async () => ({})),
-  listSupplements: jest.fn(async () => []),
+  getSupplement: jest.fn(async () => { throw new Error("no debería llamarse sin id"); }),
 }));
 
 beforeEach(() => {
@@ -109,17 +109,15 @@ test("editar un componente tras la extracción quita la explicación (quedó obs
   expect(input.info ?? null).toBeNull(); // la info ya no describe los componentes guardados
 });
 
-test("edición: precarga desde listSupplements y guarda con updateSupplement preservando info", async () => {
+test("edición: precarga desde getSupplement y guarda con updateSupplement preservando info", async () => {
   mockParams = { id: "id1" };
-  (listSupplements as jest.Mock).mockResolvedValueOnce([
-    {
-      id: "id1", createdAt: 0,
-      name: "ZMA Pro", brand: "BrandX", servingLabel: "2 cápsulas",
-      components: [{ name: "Zinc", amount: 10, unit: "mg" }],
-      labelMaxPerDay: "2 cápsulas al día", source: "label",
-      info: "El zinc participa en el sistema inmune.", notes: null,
-    },
-  ]);
+  (getSupplement as jest.Mock).mockResolvedValueOnce({
+    id: "id1", createdAt: 0,
+    name: "ZMA Pro", brand: "BrandX", servingLabel: "2 cápsulas",
+    components: [{ name: "Zinc", amount: 10, unit: "mg" }],
+    labelMaxPerDay: "2 cápsulas al día", source: "label",
+    info: "El zinc participa en el sistema inmune.", notes: null,
+  });
   await render(<AgregarSuplementoScreen />);
   await waitFor(() => expect(screen.getByDisplayValue("ZMA Pro")).toBeTruthy());
   expect(screen.getByDisplayValue("2 cápsulas")).toBeTruthy();

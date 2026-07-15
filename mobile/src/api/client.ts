@@ -34,3 +34,12 @@ export async function apiFetch(
     clearTimeout(timer);
   }
 }
+
+// Traduce una respuesta de error del backend a un mensaje legible (o el fallback si no viene JSON).
+export async function errorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const body = (await res.json()) as { error?: unknown };
+    if (typeof body.error === "string") return body.error;
+  } catch { /* no-JSON */ }
+  return `${fallback} (error ${res.status})`;
+}

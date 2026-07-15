@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, errorMessage } from "./client";
 import type {
   Food,
   FoodInput,
@@ -104,12 +104,4 @@ export async function putNutritionGoal(baseUrl: string, input: NutritionGoalInpu
   const res = await apiFetch(baseUrl, "/nutrition/goal", { method: "PUT", body: JSON.stringify(input) });
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo guardar el objetivo."));
   return (await res.json()) as NutritionGoalInput;
-}
-
-async function errorMessage(res: Response, fallback: string): Promise<string> {
-  try {
-    const body = (await res.json()) as { error?: unknown };
-    if (typeof body.error === "string") return body.error;
-  } catch { /* no-JSON */ }
-  return `${fallback} (error ${res.status})`;
 }

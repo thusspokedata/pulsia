@@ -1,8 +1,8 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import {
   SupplementInputSchema, GeneratePlanInputSchema, PlanItemPatchSchema, TakeInputSchema,
-  resolveDayChecklist, type Frequency,
+  resolveDayChecklist, type Frequency, type TakeStatus,
 } from "@pulsia/shared";
 import {
   insertSupplement, listSupplements, getSupplement,
@@ -21,7 +21,7 @@ const ExtractSchema = z.object({
 });
 
 const UuidSchema = z.string().uuid();
-function badId(c: any) {
+function badId(c: Context<{ Variables: { userId: string } }>) {
   return c.json({ error: "Id inválido" }, 400);
 }
 
@@ -71,24 +71,26 @@ export function supplementsRoutes(deps: AppDeps) {
     if (!deps.aiClient.generateSupplementPlan) return c.json({ error: "El servidor no soporta generación de planes." }, 500);
     const apiKey = await apiKeyFor(deps, userId);
     if (!apiKey) return c.json({ error: "No hay API key de IA disponible." }, 400);
+    let aiItems: Awaited<ReturnType<NonNullable<typeof deps.aiClient.generateSupplementPlan>>>;
     try {
-      const aiItems = await deps.aiClient.generateSupplementPlan({
+      aiItems = await deps.aiClient.generateSupplementPlan({
         catalog, athleteContext: parsed.data.athleteContext, userNote: parsed.data.userNote ?? null, apiKey,
       });
-      const known = new Set(catalog.map((s) => s.id));
-      const items = aiItems.filter((it) => known.has(it.supplementId)).map((it) => ({
-        supplementId: it.supplementId, slot: it.slot, dose: it.dose, reason: it.reason,
-        // la IA no ancla el "día por medio": se ancla al hoy del dispositivo
-        frequency: (it.frequency.type === "every_other_day"
-          ? { type: "every_other_day", anchorDate: parsed.data.date }
-          : it.frequency) as Frequency,
-      }));
-      if (items.length === 0) return c.json({ error: "La IA no devolvió un plan utilizable. Reintentá." }, 422);
-      return c.json(await createPlan(deps.db, userId, parsed.data.userNote ?? null, items));
     } catch (e) {
       console.warn("generateSupplementPlan falló:", (e as Error).message);
       return c.json({ error: "No se pudo generar el plan. Reintentá." }, 502);
     }
+    const known = new Set(catalog.map((s) => s.id));
+    const items = aiItems.filter((it) => known.has(it.supplementId)).map((it) => ({
+      supplementId: it.supplementId, slot: it.slot, dose: it.dose, reason: it.reason,
+      // la IA no ancla el "día por medio": se ancla al hoy del dispositivo
+      frequency: (it.frequency.type === "every_other_day"
+        ? { type: "every_other_day", anchorDate: parsed.data.date }
+        : it.frequency) as Frequency,
+    }));
+    if (items.length === 0) return c.json({ error: "La IA no devolvió un plan utilizable. Reintentá." }, 422);
+    // Fuera del try: un error de DB acá no debe reportarse como falla de la IA (502).
+    return c.json(await createPlan(deps.db, userId, parsed.data.userNote ?? null, items));
   });
 
   r.get("/plan", async (c) => c.json(await getActivePlan(deps.db, c.get("userId"))));
@@ -119,7 +121,7 @@ export function supplementsRoutes(deps: AppDeps) {
         .filter((t) => t.planItemId != null)
         .map((t) => ({
           planItemId: t.planItemId as string,
-          status: t.status as any,
+          status: t.status as TakeStatus,
           actualDose: t.actualDose,
           note: t.note,
         })),

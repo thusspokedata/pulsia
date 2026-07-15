@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, errorMessage } from "./client";
 import type { Report, ReportListItem, ReportGenerateInput } from "@pulsia/shared";
 
 export async function generateReport(baseUrl: string, input: ReportGenerateInput): Promise<Report> {
@@ -18,9 +18,4 @@ export async function getReport(baseUrl: string, kind: string, periodStart: numb
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo cargar el informe."));
   return (await res.json()) as Report;
-}
-
-async function errorMessage(res: Response, fallback: string): Promise<string> {
-  try { const b = (await res.json()) as { error?: unknown }; if (typeof b.error === "string") return b.error; } catch { /* no-json */ }
-  return `${fallback} (error ${res.status})`;
 }
