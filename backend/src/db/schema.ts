@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, jsonb, timestamp, integer, bigint, boolean, doublePrecision, real, index, uniqueIndex, customType } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
-import type { TrainingProfile, Program, PlannedExercise } from "@pulsia/shared";
+import type { TrainingProfile, Program, PlannedExercise, SupplementComponent, Frequency, AdjustmentItem } from "@pulsia/shared";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() { return "bytea"; },
@@ -171,7 +171,7 @@ export const supplement = pgTable("supplement", {
   name: text("name").notNull(),
   brand: text("brand"),
   servingLabel: text("serving_label").notNull(),
-  components: jsonb("components").notNull(), // SupplementComponent[]
+  components: jsonb("components").$type<SupplementComponent[]>().notNull(),
   labelMaxPerDay: text("label_max_per_day"),
   source: text("source").notNull(), // 'label' | 'estimate'
   info: text("info"),   // explicación IA de los componentes (nullable: alta manual)
@@ -196,8 +196,8 @@ export const supplementPlanItem = pgTable("supplement_plan_item", {
   id: uuid("id").primaryKey().defaultRandom(),
   planId: uuid("plan_id").references(() => supplementPlan.id, { onDelete: "cascade" }).notNull(),
   supplementId: uuid("supplement_id").references(() => supplement.id, { onDelete: "cascade" }).notNull(),
-  slot: text("slot").notNull(),           // TakeSlot
-  frequency: jsonb("frequency").notNull(), // Frequency
+  slot: text("slot").notNull(), // TakeSlot
+  frequency: jsonb("frequency").$type<Frequency>().notNull(),
   dose: text("dose").notNull(),
   reason: text("reason"),
 }, (t) => ({
@@ -205,11 +205,12 @@ export const supplementPlanItem = pgTable("supplement_plan_item", {
 }));
 
 // Historial de tomas (PR2). Snapshot: el historial no cambia si se edita catálogo/plan.
+// plan_item_id es set null (precedente meal_item.food_id): borrar suplemento/plan no borra historial.
 export const supplementTake = pgTable("supplement_take", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   date: text("date").notNull(), // YYYY-MM-DD, día calendario del dispositivo
-  planItemId: uuid("plan_item_id").references(() => supplementPlanItem.id, { onDelete: "cascade" }).notNull(),
+  planItemId: uuid("plan_item_id").references(() => supplementPlanItem.id, { onDelete: "set null" }), // el snapshot sobrevive
   supplementName: text("supplement_name").notNull(),
   plannedDose: text("planned_dose").notNull(),
   slot: text("slot").notNull(),
@@ -218,7 +219,7 @@ export const supplementTake = pgTable("supplement_take", {
   note: text("note"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
-  byUserDate: index("supplement_take_user_date_idx").on(t.userId, t.date),
+  // (user_id, date) queda cubierto como prefijo del índice único.
   oncePerItemDay: uniqueIndex("supplement_take_unique_idx").on(t.userId, t.date, t.planItemId),
 }));
 
@@ -239,7 +240,7 @@ export const supplementAdjustment = pgTable("supplement_adjustment", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   forDate: text("for_date").notNull(), // YYYY-MM-DD
-  items: jsonb("items").notNull(),     // AdjustmentItem[]
+  items: jsonb("items").$type<AdjustmentItem[]>().notNull(),
   reportId: uuid("report_id").references(() => report.id, { onDelete: "cascade" }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({

@@ -98,7 +98,7 @@ supplement            id, user_id, name, brand, serving_label, components jsonb,
 supplement_plan       id, user_id, status ('active'|'archived'), user_note, created_at
                       -- un 'active' por usuario; regenerar archiva el anterior (historial de planes)
 supplement_plan_item  id, plan_id, supplement_id (FK), slot, frequency jsonb, dose, reason
-supplement_take       id, user_id, date (date), plan_item_id (FK, NOT NULL),
+supplement_take       id, user_id, date (date), plan_item_id (FK nullable, on delete SET NULL — precedente meal_item.food_id: el snapshot sobrevive),
                       -- snapshot (invariante meal_item): el historial no cambia si se edita el catálogo/plan
                       supplement_name, planned_dose, slot,
                       status ('taken'|'deviated'|'skipped'), actual_dose, note, created_at

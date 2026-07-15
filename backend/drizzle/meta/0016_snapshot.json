@@ -1,5 +1,5 @@
 {
-  "id": "2e7ba827-92f0-4959-8ca1-fea08446679a",
+  "id": "4bb84723-6a2c-47d3-9ca8-6d0c05256392",
   "prevId": "bf602b1a-9d69-4060-ae2e-002bff045fae",
   "version": "7",
   "dialect": "postgresql",
@@ -1808,7 +1808,7 @@
           "name": "plan_item_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "supplement_name": {
           "name": "supplement_name",
@@ -1855,27 +1855,6 @@
         }
       },
       "indexes": {
-        "supplement_take_user_date_idx": {
-          "name": "supplement_take_user_date_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "date",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "supplement_take_unique_idx": {
           "name": "supplement_take_unique_idx",
           "columns": [
@@ -1928,7 +1907,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
