@@ -45,6 +45,7 @@ export const SupplementSchema = SupplementInputSchema.extend({
 export type Supplement = z.infer<typeof SupplementSchema>;
 
 // ---- Plan (se usa desde PR2, el schema se define ya para la migración 0016) ----
+// OJO: AiPlanFrequencySchema (abajo) es un clon estructural SIN anchorDate — si agregás una variante, replicala allá.
 export const FrequencySchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("daily") }),
   // anchorDate fija la paridad del "día por medio" (YYYY-MM-DD, fecha real).
@@ -95,7 +96,7 @@ export const AiPlanFrequencySchema = z.discriminatedUnion("type", [
     days: z
       .array(z.number().int().min(0).max(6))
       .min(1)
-      .refine((d) => new Set(d).size === d.length),
+      .refine((d) => new Set(d).size === d.length, { message: "días duplicados" }),
   }),
 ]);
 export const AiPlanItemSchema = z.object({

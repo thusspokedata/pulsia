@@ -42,6 +42,7 @@ function splitDate(d: string): [number, number, number] {
   return [y, m - 1, day];
 }
 
+// Asume YYYY-MM-DD válido (validar en el borde con Zod); una fecha inválida hace que el ítem NO aplique.
 export function frequencyAppliesOn(freq: Frequency, date: string): boolean {
   if (freq.type === "daily") return true;
   if (freq.type === "every_other_day") return Math.abs(daysBetween(date, freq.anchorDate)) % 2 === 0;
