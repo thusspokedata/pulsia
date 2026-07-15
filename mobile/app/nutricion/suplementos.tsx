@@ -26,6 +26,7 @@ export default function SuplementosScreen() {
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   async function onExplain(s: Supplement) {
+    if (!url) return;
     setExplaining(s.id);
     try {
       const updated = await explainSupplement(url, s.id);
@@ -35,6 +36,7 @@ export default function SuplementosScreen() {
   }
 
   function onDelete(s: Supplement) {
+    if (!url) return;
     Alert.alert("Borrar suplemento", `¿Borrar "${s.name}" del catálogo?`, [
       { text: "Cancelar", style: "cancel" },
       { text: "Borrar", style: "destructive", onPress: async () => {
