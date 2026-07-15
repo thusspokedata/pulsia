@@ -97,7 +97,8 @@ export async function createPlan(db: Db, userId: string, userNote: string | null
       ? await tx.insert(supplementPlanItem).values(items.map((it) => ({ planId: plan.id, ...it }))).returning()
       : [];
     // nombres para la vista: los ítems vienen validados contra el catálogo en la ruta
-    const sups = await tx.select().from(supplement).where(eq(supplement.userId, userId));
+    const sups = await tx.select({ id: supplement.id, name: supplement.name }).from(supplement)
+      .where(eq(supplement.userId, userId));
     const nameById = new Map(sups.map((s) => [s.id, s.name]));
     return toPlanView(plan, rows.map((r) => ({ ...r, supplementName: nameById.get(r.supplementId) ?? "?" })));
   });
@@ -136,12 +137,12 @@ export async function getOwnedPlanItem(db: Db, userId: string, itemId: string): 
 export async function updatePlanItem(db: Db, userId: string, itemId: string, patch: PlanItemPatch): Promise<PlanItemJoined | null> {
   const owned = await getOwnedPlanItem(db, userId, itemId);
   if (!owned) return null;
-  const set: Record<string, unknown> = {};
+  const set: Partial<Pick<PlanItemRow, "slot" | "frequency" | "dose">> = {};
   if (patch.slot !== undefined) set.slot = patch.slot;
   if (patch.frequency !== undefined) set.frequency = patch.frequency;
   if (patch.dose !== undefined) set.dose = patch.dose;
   await db.update(supplementPlanItem).set(set).where(eq(supplementPlanItem.id, itemId));
-  return { ...owned, ...set } as PlanItemJoined;
+  return { ...owned, ...set };
 }
 
 export async function upsertTake(db: Db, userId: string, input: TakeInput, snapshot: {
@@ -153,7 +154,12 @@ export async function upsertTake(db: Db, userId: string, input: TakeInput, snaps
     status: input.status, actualDose: input.actualDose ?? null, note: input.note ?? null,
   }).onConflictDoUpdate({
     target: [supplementTake.userId, supplementTake.date, supplementTake.planItemId],
-    set: { status: input.status, actualDose: input.actualDose ?? null, note: input.note ?? null },
+    // Re-marcar tras editar el ítem del plan debe refrescar el snapshot (si no, first-write-wins
+    // deja nombre/dosis/franja viejos colgados en la toma — trampa detectada para PR3).
+    set: {
+      supplementName: snapshot.supplementName, plannedDose: snapshot.plannedDose, slot: snapshot.slot,
+      status: input.status, actualDose: input.actualDose ?? null, note: input.note ?? null,
+    },
   });
 }
 

@@ -1,8 +1,12 @@
 import { test, expect } from "bun:test";
 import { createApp } from "../app";
+import { supplement, supplementPlanItem, supplementTake } from "../db/schema";
 
 const KEY = "a".repeat(64);
 const SUP_ID = "11111111-1111-4111-8111-111111111111";
+const SUP_UNKNOWN = "99999999-9999-4999-8999-999999999999";
+const PLAN_ID = "55555555-5555-4555-8555-555555555555";
+const ITEM_ID = "33333333-3333-4333-8333-333333333333";
 const IMG = Buffer.from("fake jpeg").toString("base64");
 
 const supRow = {
@@ -18,7 +22,26 @@ const extraction = {
   info: "El zinc participa en el sistema inmune.",
 };
 
-function fakeDb(opts: { supplements?: any[]; supRow?: any; settingsRow?: any } = {}) {
+// Ítem de plan ya "joineado" con el nombre del suplemento (lo que devuelven
+// getActivePlan / getOwnedPlanItem tras el innerJoin con `supplement`).
+const joinedItem = {
+  id: ITEM_ID, planId: PLAN_ID, supplementId: SUP_ID,
+  slot: "desayuno", frequency: { type: "daily" }, dose: "1 tableta", reason: "test",
+  supplementName: "ZMA Pro",
+};
+
+const VALID_CONTEXT = { goal: { status: "incomplete" } };
+
+function fakeDb(opts: {
+  supplements?: any[];
+  supRow?: any;
+  settingsRow?: any;
+  planRow?: any | null;
+  planItemRows?: any[];
+  ownedItemRows?: any[];
+  takes?: any[];
+  adjustmentRow?: any | null;
+} = {}) {
   const inserts: any[] = [];
   const db: any = {
     _inserts: inserts,
@@ -28,6 +51,7 @@ function fakeDb(opts: { supplements?: any[]; supRow?: any; settingsRow?: any } =
         inserts.push({ table, rows });
         const p: any = Promise.resolve(rows);
         p.returning = async () => rows;
+        p.onConflictDoUpdate = async () => undefined;
         return p;
       },
     }),
@@ -47,11 +71,37 @@ function fakeDb(opts: { supplements?: any[]; supRow?: any; settingsRow?: any } =
         return p;
       },
     }),
-    select: () => ({ from: () => ({ where: () => ({ orderBy: async () => opts.supplements ?? [] }) }) }),
+    // select().from(table)[.innerJoin(...)[.innerJoin(...)]].where() — awaited directamente o
+    // con .orderBy() encima. El número de innerJoin distingue getActivePlan (1) de
+    // getOwnedPlanItem (2), ambos partiendo de supplementPlanItem.
+    select: (_fields?: any) => ({
+      from: (table: any) => {
+        let joins = 0;
+        const chain: any = {
+          innerJoin: () => {
+            joins++;
+            return chain;
+          },
+          where: () => {
+            let rows: any[];
+            if (table === supplement) rows = opts.supplements ?? [];
+            else if (table === supplementPlanItem) rows = joins >= 2 ? (opts.ownedItemRows ?? []) : (opts.planItemRows ?? []);
+            else if (table === supplementTake) rows = opts.takes ?? [];
+            else rows = [];
+            const p: any = Promise.resolve(rows);
+            p.orderBy = async () => rows;
+            return p;
+          },
+        };
+        return chain;
+      },
+    }),
     transaction: async (fn: any) => fn(db),
     query: {
       supplement: { findFirst: async () => opts.supRow ?? null },
       settings: { findFirst: async () => opts.settingsRow ?? { aiApiKeyEncrypted: null } },
+      supplementPlan: { findFirst: async () => opts.planRow ?? null },
+      supplementAdjustment: { findFirst: async () => opts.adjustmentRow ?? null },
     },
   };
   return db;
@@ -165,5 +215,201 @@ test("POST /nutrition/supplements/:id/explain → 404 si el suplemento no existe
   const aiClient = makeAiClient({ explainSupplement: async () => "x" });
   const app = createApp(deps(fakeDb(), aiClient));
   const res = await app.request(`/nutrition/supplements/${SUP_ID}/explain`, { method: "POST" });
+  expect(res.status).toBe(404);
+});
+
+// ---- PR2: plan / día / tomas ----
+
+test("POST /nutrition/supplements/plan/generate → 422 si el catálogo está vacío", async () => {
+  const app = createApp(deps(fakeDb({ supplements: [] })));
+  const res = await app.request("/nutrition/supplements/plan/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ athleteContext: VALID_CONTEXT, date: "2026-07-16" }),
+  });
+  expect(res.status).toBe(422);
+});
+
+test("POST /nutrition/supplements/plan/generate → filtra ids desconocidos y ancla every_other_day a body.date", async () => {
+  const aiClient = makeAiClient({
+    generateSupplementPlan: async () => [
+      { supplementId: SUP_ID, slot: "desayuno", frequency: { type: "every_other_day" }, dose: "1 tableta", reason: "motivo" },
+      { supplementId: SUP_UNKNOWN, slot: "cena", frequency: { type: "daily" }, dose: "1 g", reason: "motivo desconocido" },
+    ],
+  });
+  const db = fakeDb({ supplements: [supRow] });
+  const app = createApp(deps(db, aiClient));
+  const res = await app.request("/nutrition/supplements/plan/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ athleteContext: VALID_CONTEXT, date: "2026-07-16" }),
+  });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.items).toHaveLength(1);
+  expect(body.items[0]).toMatchObject({ supplementId: SUP_ID, supplementName: "ZMA Pro" });
+  const insertedItems = db._inserts.find((i: any) => i.table === supplementPlanItem);
+  expect(insertedItems.rows).toHaveLength(1);
+  expect(insertedItems.rows[0].frequency).toMatchObject({ type: "every_other_day", anchorDate: "2026-07-16" });
+});
+
+test("POST /nutrition/supplements/plan/generate → 422 si todos los ids son desconocidos", async () => {
+  const aiClient = makeAiClient({
+    generateSupplementPlan: async () => [
+      { supplementId: SUP_UNKNOWN, slot: "cena", frequency: { type: "daily" }, dose: "1 g", reason: "x" },
+    ],
+  });
+  const app = createApp(deps(fakeDb({ supplements: [supRow] }), aiClient));
+  const res = await app.request("/nutrition/supplements/plan/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ athleteContext: VALID_CONTEXT, date: "2026-07-16" }),
+  });
+  expect(res.status).toBe(422);
+});
+
+test("POST /nutrition/supplements/plan/generate → 502 si la IA falla", async () => {
+  const aiClient = makeAiClient({
+    generateSupplementPlan: async () => {
+      throw new Error("boom");
+    },
+  });
+  const app = createApp(deps(fakeDb({ supplements: [supRow] }), aiClient));
+  const res = await app.request("/nutrition/supplements/plan/generate", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ athleteContext: VALID_CONTEXT, date: "2026-07-16" }),
+  });
+  expect(res.status).toBe(502);
+});
+
+test("GET /nutrition/supplements/plan → 200 null sin plan", async () => {
+  const app = createApp(deps(fakeDb({ planRow: null })));
+  const res = await app.request("/nutrition/supplements/plan");
+  expect(res.status).toBe(200);
+  expect(await res.json()).toBeNull();
+});
+
+test("GET /nutrition/supplements/plan → 200 PlanView con plan activo", async () => {
+  const planRow = { id: PLAN_ID, userNote: null, createdAt: new Date(0) };
+  const app = createApp(deps(fakeDb({ planRow, planItemRows: [joinedItem] })));
+  const res = await app.request("/nutrition/supplements/plan");
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body).toMatchObject({ id: PLAN_ID });
+  expect(body.items[0]).toMatchObject({ id: ITEM_ID, supplementName: "ZMA Pro" });
+});
+
+test("PATCH /nutrition/supplements/plan/items/:id → 400 con id no-UUID (carry-over)", async () => {
+  const res = await createApp(deps(fakeDb())).request("/nutrition/supplements/plan/items/not-a-uuid", {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ dose: "5 g" }),
+  });
+  expect(res.status).toBe(400);
+});
+
+test("PATCH /nutrition/supplements/plan/items/:id → 404 si el ítem no es del usuario", async () => {
+  const app = createApp(deps(fakeDb({ ownedItemRows: [] })));
+  const res = await app.request(`/nutrition/supplements/plan/items/${ITEM_ID}`, {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ dose: "5 g" }),
+  });
+  expect(res.status).toBe(404);
+});
+
+test("PATCH /nutrition/supplements/plan/items/:id → 400 con patch vacío", async () => {
+  const app = createApp(deps(fakeDb({ ownedItemRows: [joinedItem] })));
+  const res = await app.request(`/nutrition/supplements/plan/items/${ITEM_ID}`, {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
+  });
+  expect(res.status).toBe(400);
+});
+
+test("PATCH /nutrition/supplements/plan/items/:id → 200 feliz", async () => {
+  const app = createApp(deps(fakeDb({ ownedItemRows: [joinedItem] })));
+  const res = await app.request(`/nutrition/supplements/plan/items/${ITEM_ID}`, {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ dose: "5 g" }),
+  });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toMatchObject({ id: ITEM_ID, dose: "5 g" });
+});
+
+test("GET /nutrition/supplements/day → 400 sin date o con date inválida", async () => {
+  const app = createApp(deps(fakeDb()));
+  expect((await app.request("/nutrition/supplements/day")).status).toBe(400);
+  expect((await app.request("/nutrition/supplements/day?date=not-a-date")).status).toBe(400);
+});
+
+test("GET /nutrition/supplements/day → sin plan: {hasPlan:false, entries:[]}", async () => {
+  const app = createApp(deps(fakeDb({ planRow: null })));
+  const res = await app.request("/nutrition/supplements/day?date=2026-07-16");
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ hasPlan: false, entries: [] });
+});
+
+test("GET /nutrition/supplements/day → con plan: resuelve el checklist con tomas y ajustes", async () => {
+  const planRow = { id: PLAN_ID, userNote: null, createdAt: new Date(0) };
+  const takeRow = {
+    id: "t1", userId: "single-user", date: "2026-07-16", planItemId: ITEM_ID,
+    status: "taken", actualDose: null, note: null,
+    supplementName: "ZMA Pro", plannedDose: "1 tableta", slot: "desayuno",
+  };
+  const app = createApp(deps(fakeDb({ planRow, planItemRows: [joinedItem], takes: [takeRow] })));
+  const res = await app.request("/nutrition/supplements/day?date=2026-07-16");
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.hasPlan).toBe(true);
+  expect(body.entries).toHaveLength(1);
+  expect(body.entries[0]).toMatchObject({ planItemId: ITEM_ID, status: "taken", slot: "desayuno" });
+});
+
+test("PUT /nutrition/supplements/takes → 404 si el ítem del plan no es del usuario", async () => {
+  const app = createApp(deps(fakeDb({ ownedItemRows: [] })));
+  const res = await app.request("/nutrition/supplements/takes", {
+    method: "PUT", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ date: "2026-07-16", planItemId: ITEM_ID, status: "taken" }),
+  });
+  expect(res.status).toBe(404);
+});
+
+test("PUT /nutrition/supplements/takes → 200 feliz, el insert lleva el snapshot", async () => {
+  const db = fakeDb({ ownedItemRows: [joinedItem] });
+  const app = createApp(deps(db));
+  const res = await app.request("/nutrition/supplements/takes", {
+    method: "PUT", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ date: "2026-07-16", planItemId: ITEM_ID, status: "deviated", actualDose: "2 g" }),
+  });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ ok: true });
+  const insertedTake = db._inserts.find((i: any) => i.table === supplementTake);
+  expect(insertedTake.rows[0]).toMatchObject({
+    supplementName: "ZMA Pro", plannedDose: "1 tableta", slot: "desayuno",
+    status: "deviated", actualDose: "2 g",
+  });
+});
+
+test("GET/PATCH/DELETE/explain de PR1 → 400 con id no-UUID (carry-over de familia completa)", async () => {
+  const app = createApp(deps(fakeDb()));
+  expect((await app.request("/nutrition/supplements/not-a-uuid")).status).toBe(400);
+  expect(
+    (
+      await app.request("/nutrition/supplements/not-a-uuid", {
+        method: "PATCH", headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "ZMA Pro", brand: null, servingLabel: "2 cápsulas",
+          components: [{ name: "Zinc", amount: 10, unit: "mg" }],
+          labelMaxPerDay: null, source: "label", info: null, notes: null,
+        }),
+      })
+    ).status,
+  ).toBe(400);
+  expect((await app.request("/nutrition/supplements/not-a-uuid", { method: "DELETE" })).status).toBe(400);
+  expect((await app.request("/nutrition/supplements/not-a-uuid/explain", { method: "POST" })).status).toBe(400);
+});
+
+test("GET /nutrition/supplements/:id → 200 feliz", async () => {
+  const app = createApp(deps(fakeDb({ supRow })));
+  const res = await app.request(`/nutrition/supplements/${SUP_ID}`);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toMatchObject({ id: SUP_ID, name: "ZMA Pro" });
+});
+
+test("GET /nutrition/supplements/:id → 404 si es ajeno o no existe", async () => {
+  const app = createApp(deps(fakeDb({ supRow: null })));
+  const res = await app.request(`/nutrition/supplements/${SUP_ID}`);
   expect(res.status).toBe(404);
 });
