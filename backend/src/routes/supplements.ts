@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { z } from "zod";
 import {
   SupplementInputSchema, GeneratePlanInputSchema, PlanItemPatchSchema, TakeInputSchema,
-  resolveDayChecklist, type Frequency, type TakeStatus,
+  resolveDayChecklist, type Frequency, type TakeStatus, type AiPlanItem,
 } from "@pulsia/shared";
 import {
   insertSupplement, listSupplements, getSupplement,
@@ -71,7 +71,7 @@ export function supplementsRoutes(deps: AppDeps) {
     if (!deps.aiClient.generateSupplementPlan) return c.json({ error: "El servidor no soporta generación de planes." }, 500);
     const apiKey = await apiKeyFor(deps, userId);
     if (!apiKey) return c.json({ error: "No hay API key de IA disponible." }, 400);
-    let aiItems: Awaited<ReturnType<NonNullable<typeof deps.aiClient.generateSupplementPlan>>>;
+    let aiItems: AiPlanItem[];
     try {
       aiItems = await deps.aiClient.generateSupplementPlan({
         catalog, athleteContext: parsed.data.athleteContext, userNote: parsed.data.userNote ?? null, apiKey,
