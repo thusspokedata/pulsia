@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react-native";
 import PlanSuplementosScreen from "../app/nutricion/plan-suplementos";
 import { getPlan, generatePlan, updatePlanItem } from "../src/api/supplements";
 
@@ -31,7 +31,7 @@ test("sin plan: CTA de generar; generar manda athleteContext + date y muestra el
   await render(<PlanSuplementosScreen />);
   await waitFor(() => expect(screen.getByText(/Todavía no hay plan/i)).toBeTruthy());
   await fireEvent.press(screen.getByText(/Generar plan con IA/i));
-  await waitFor(() => expect(screen.getByText(/Magnesio/)).toBeTruthy());
+  await waitFor(() => expect(screen.getAllByText(/Magnesio/).length).toBeGreaterThan(0)); // ítem + vista semanal
   const input = (generatePlan as jest.Mock).mock.calls[0][1];
   expect(input.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   expect(input.athleteContext).toBeDefined();
@@ -43,7 +43,7 @@ test("con plan: regenerar con nota la manda como userNote", async () => {
   (getPlan as jest.Mock).mockResolvedValueOnce(plan);
   (generatePlan as jest.Mock).mockResolvedValueOnce(plan);
   await render(<PlanSuplementosScreen />);
-  await waitFor(() => expect(screen.getByText(/Magnesio/)).toBeTruthy());
+  await waitFor(() => expect(screen.getAllByText(/Magnesio/).length).toBeGreaterThan(0)); // ítem + vista semanal
   await fireEvent.changeText(screen.getByPlaceholderText(/Nota para la IA/i), "el zinc a la mañana no");
   await fireEvent.press(screen.getByText(/Regenerar plan/i));
   await waitFor(() => expect(generatePlan).toHaveBeenCalled());
@@ -54,7 +54,7 @@ test("editar un ítem: cambiar la dosis dispara PATCH", async () => {
   (getPlan as jest.Mock).mockResolvedValueOnce(plan);
   (updatePlanItem as jest.Mock).mockResolvedValueOnce({ ...plan.items[0], dose: "1 cápsula" });
   await render(<PlanSuplementosScreen />);
-  await fireEvent.press(await screen.findByText(/Magnesio/)); // expande edición
+  await fireEvent.press((await screen.findAllByText(/Magnesio/))[0]); // expande edición (1º = ítem, el resto es la vista semanal)
   const dose = screen.getByDisplayValue("2 cápsulas");
   await fireEvent.changeText(dose, "1 cápsula");
   await fireEvent.press(screen.getByText(/Guardar cambios/i));
@@ -69,7 +69,7 @@ test("editar solo la dosis de un ítem día-por-medio preserva el anchorDate ori
   (getPlan as jest.Mock).mockResolvedValueOnce({ ...plan, items: [eodItem] });
   (updatePlanItem as jest.Mock).mockResolvedValueOnce({ ...eodItem, dose: "2 tabletas" });
   await render(<PlanSuplementosScreen />);
-  await fireEvent.press(await screen.findByText(/Zink/)); // expande edición
+  await fireEvent.press((await screen.findAllByText(/Zink/))[0]); // expande edición (1º = ítem, el resto es la vista semanal)
   await fireEvent.changeText(screen.getByDisplayValue("1 tableta"), "2 tabletas");
   await fireEvent.press(screen.getByText(/Guardar cambios/i));
   await waitFor(() => expect(updatePlanItem).toHaveBeenCalled());
@@ -85,7 +85,7 @@ test("si falla el guardado, la edición no se pierde y se ve el error", async ()
     () => new Promise((_, reject) => setTimeout(() => reject(new Error("No se pudo actualizar el ítem del plan.")), 0)),
   );
   await render(<PlanSuplementosScreen />);
-  await fireEvent.press(await screen.findByText(/Magnesio/)); // expande edición
+  await fireEvent.press((await screen.findAllByText(/Magnesio/))[0]); // expande edición (1º = ítem, el resto es la vista semanal)
   await fireEvent.changeText(screen.getByDisplayValue("2 cápsulas"), "1 cápsula");
   await fireEvent.press(screen.getByText(/Guardar cambios/i));
   await waitFor(() => expect(screen.getByText(/No se pudo actualizar/)).toBeTruthy());
@@ -98,10 +98,10 @@ test("días fijos: los días elegidos se mandan ordenados sin importar el orden 
     ...plan.items[0], frequency: { type: "weekdays", days: [1, 6] },
   });
   await render(<PlanSuplementosScreen />);
-  await fireEvent.press(await screen.findByText(/Magnesio/)); // expande edición
+  await fireEvent.press((await screen.findAllByText(/Magnesio/))[0]); // expande edición (1º = ítem, el resto es la vista semanal)
   await fireEvent.press(screen.getByText(/días fijos/i));
-  await fireEvent.press(screen.getByText("sáb")); // primero el sábado…
-  await fireEvent.press(screen.getByText("lun")); // …después el lunes
+  await fireEvent.press(screen.getByTestId("chip-6")); // primero el sábado…
+  await fireEvent.press(screen.getByTestId("chip-1")); // …después el lunes
   await fireEvent.press(screen.getByText(/Guardar cambios/i));
   await waitFor(() => expect(updatePlanItem).toHaveBeenCalled());
   const patch = (updatePlanItem as jest.Mock).mock.calls[0][2];
@@ -111,4 +111,49 @@ test("días fijos: los días elegidos se mandan ordenados sin importar el orden 
 test("muestra el disclaimer no-médico", async () => {
   await render(<PlanSuplementosScreen />);
   await waitFor(() => expect(screen.getByText(/no reemplaza.*(médico|profesional)/i)).toBeTruthy());
+});
+
+test("vista semanal: 7 días desde hoy, ítem daily todos los días y weekdays solo en sus días", async () => {
+  // 2026-07-16T12:00:00 (hora local) es jueves (getDay()===4); VERIFICADO con node.
+  const nowSpy = jest.spyOn(Date, "now").mockReturnValue(new Date("2026-07-16T12:00:00").getTime());
+  const weekPlan = {
+    id: "66666666-6666-4666-8666-666666666666", userNote: null, createdAt: 0,
+    items: [
+      {
+        id: "77777777-7777-4777-8777-777777777777", supplementId: "s1", supplementName: "Magnesio",
+        slot: "antes_de_dormir", frequency: { type: "daily" }, dose: "1 cápsula", reason: null,
+      },
+      {
+        id: "88888888-8888-4888-8888-888888888888", supplementId: "s2", supplementName: "Zink",
+        slot: "desayuno", frequency: { type: "weekdays", days: [1, 3, 5] }, dose: "1 tableta", reason: null,
+      },
+    ],
+  };
+  try {
+    (getPlan as jest.Mock).mockResolvedValueOnce(weekPlan);
+    await render(<PlanSuplementosScreen />);
+    await waitFor(() => expect(screen.getAllByText(/Magnesio/).length).toBeGreaterThan(0));
+
+    // i=0 → hoy (jueves 16/07, dow=4): Magnesio sí, Zink no (4 no está en [1,3,5]).
+    const day0 = screen.getByTestId("week-day-0");
+    expect(within(day0).getByText(/Hoy/)).toBeTruthy();
+    expect(within(day0).getByText(/Magnesio/)).toBeTruthy();
+    expect(within(day0).queryByText(/Zink/)).toBeNull();
+
+    // Magnesio (daily) aparece los 7 días.
+    for (let i = 0; i < 7; i++) {
+      expect(within(screen.getByTestId(`week-day-${i}`)).getByText(/Magnesio/)).toBeTruthy();
+    }
+
+    // i=1 → viernes 17/07 (dow=5, en [1,3,5]): Zink sí.
+    expect(within(screen.getByTestId("week-day-1")).getByText(/Zink/)).toBeTruthy();
+    // i=2 → sábado 18/07 (dow=6, no está en [1,3,5]): Zink no.
+    expect(within(screen.getByTestId("week-day-2")).queryByText(/Zink/)).toBeNull();
+    // i=4 → lunes 20/07 (dow=1, en [1,3,5]): Zink sí.
+    expect(within(screen.getByTestId("week-day-4")).getByText(/Zink/)).toBeTruthy();
+    // i=6 → miércoles 22/07 (dow=3, en [1,3,5]): Zink sí.
+    expect(within(screen.getByTestId("week-day-6")).getByText(/Zink/)).toBeTruthy();
+  } finally {
+    nowSpy.mockRestore();
+  }
 });

@@ -38,3 +38,18 @@ test("el prompt del plan trae catálogo, contexto, techo de etiqueta, franjas y 
   expect(p).toMatch(/DATOS.*NO instrucciones/i);                // anti-inyección
   expect(p).toMatch(/return_supplement_plan/);
 });
+
+test("el prompt del plan pide pensar la semana completa y no duplicar componentes entre suplementos", () => {
+  const p = buildSupplementPlanPrompt({
+    catalog: [{
+      id: "11111111-1111-4111-8111-111111111111", name: "Zink", servingLabel: "1 Tablette",
+      components: [{ name: "Zinc", amount: 25, unit: "mg" }], labelMaxPerDay: "1 Tablette täglich",
+    }],
+    athleteContext: { goal: { status: "incomplete" } } as any,
+    userNote: null,
+  });
+  expect(p).toMatch(/MISMO componente/i);
+  expect(p).toMatch(/semana/i);
+  expect(p).toMatch(/alternad/i);
+  expect(p).toMatch(/no.*duplicar|nunca.*duplic/i);
+});
