@@ -7,12 +7,13 @@ import {
   getActivePlan as getActivePlanImpl, listTakesForRange as listTakesForRangeImpl,
   listSupplements as listSupplementsImpl,
 } from "../supplements/repository";
+import { epochToUtcDateStr } from "../lib/dateUtc";
 import type { Db } from "../db/client";
 
 interface TakeRow {
   supplementName: string; status: string; plannedDose: string; actualDose: string | null; date: string;
 }
-interface SupplementRow { name: string; components: { name: string; amount: number; unit: string }[] }
+interface SupplementRow { id: string; name: string; components: { name: string; amount: number; unit: string }[] }
 
 export interface ReportData {
   totals: { kcal: number; protein_g: number; carbs_g: number; fat_g: number; sugars_g: number | null; fiber_g: number | null; saturated_fat_g: number | null; salt_g: number | null };
@@ -25,10 +26,13 @@ export interface ReportData {
   periodDays: number;
   weightTrend: { first: number; last: number } | null;
   foodNames: string[]; // nombres únicos de los ítems comidos en el período (cap 40)
+  foodNamesTotal: number; // total de nombres únicos ANTES del cap, para que el prompt sepa si truncó ("y N más")
   supplements: {
     planItems: { supplementName: string; dose: string; slot: string }[]; // plan activo
     takes: { supplementName: string; status: string; plannedDose: string; actualDose: string | null; date: string }[];
-    catalog: { name: string; components: { name: string; amount: number; unit: string }[] }[];
+    // id incluido: es la referencia que el prompt le da a la IA para `supplementAdjustment.supplementId`
+    // (el ajuste se valida por id EXACTO del catálogo, ver ai/report.ts).
+    catalog: { id: string; name: string; components: { name: string; amount: number; unit: string }[] }[];
   } | null; // null si no hay plan activo
 }
 
@@ -48,7 +52,7 @@ const defaultDeps: CollectDeps = {
   listSessions: (db, u) => listSessionsImpl(db, u),
   getMetrics: (db, u, opts) => getMetricsImpl(db, u, opts),
   getActivePlan: (db, u) => getActivePlanImpl(db, u),
-  listTakesForRange: (db, u, f, t) => listTakesForRangeImpl(db, u, f, t) as unknown as Promise<TakeRow[]>,
+  listTakesForRange: (db, u, f, t) => listTakesForRangeImpl(db, u, f, t),
   listSupplements: (db, u) => listSupplementsImpl(db, u),
 };
 
@@ -56,11 +60,10 @@ export async function collectReportData(
   db: Db, userId: string, from: number, to: number, athlete: AthleteContext, deps: CollectDeps = defaultDeps,
 ): Promise<ReportData> {
   // El período viene en epoch (ms) del dispositivo, pero las tomas de suplementos se guardan con
-  // el date-string (YYYY-MM-DD) del dispositivo. Aproximación honesta: convertir from/to a fecha
-  // UTC — puede correr un día en el borde para TZs lejanas, pero es la misma aproximación que ya
-  // usa la fecha de memoria del atleta (nutrition.ts ~línea 191); suficiente para Europe/Berlin.
-  const fromDateStr = new Date(from).toISOString().slice(0, 10);
-  const toDateStr = new Date(to).toISOString().slice(0, 10);
+  // el date-string (YYYY-MM-DD) del dispositivo — ver comentario de epochToUtcDateStr (misma
+  // aproximación que usa la fecha de memoria del atleta en routes/nutrition.ts).
+  const fromDateStr = epochToUtcDateStr(from);
+  const toDateStr = epochToUtcDateStr(to);
   // Todo en un solo Promise.all: takes/catalog no dependen del plan activo, así que se piden en
   // paralelo con él en vez de encadenar; si no hay plan activo se descartan (supplements: null).
   const [meals, water, allSessions, metrics, activePlan, takes, catalog] = await Promise.all([
@@ -70,11 +73,13 @@ export async function collectReportData(
     deps.listSupplements(db, userId),
   ]);
   const items = meals.flatMap((m) => m.items);
-  const foodNames = [...new Set(items.map((it) => it.foodName))].slice(0, 40);
+  const uniqueNames = [...new Set(items.map((it) => it.foodName).filter(Boolean))];
+  const foodNames = uniqueNames.slice(0, 40);
+  const foodNamesTotal = uniqueNames.length;
   const supplements = activePlan ? {
     planItems: activePlan.items.map((it) => ({ supplementName: it.supplementName, dose: it.dose, slot: it.slot })),
     takes: takes.map((t) => ({ supplementName: t.supplementName, status: t.status, plannedDose: t.plannedDose, actualDose: t.actualDose ?? null, date: t.date })),
-    catalog: catalog.map((s) => ({ name: s.name, components: s.components })),
+    catalog: catalog.map((s) => ({ id: s.id, name: s.name, components: s.components })),
   } : null;
   const micro = (k: "sugars_g" | "fiber_g" | "saturated_fat_g" | "salt_g") => sumNullableMicro(items.map((it) => it[k]));
   const totals = {
@@ -98,7 +103,7 @@ export async function collectReportData(
   return {
     totals, cholesterolMg, liquid: { total: Math.round(fromFood + drank), drank, fromFood },
     exercise, sessionsCount: daySessions.length, metrics: metricsByType, athlete, periodDays, weightTrend,
-    foodNames, supplements,
+    foodNames, foodNamesTotal, supplements,
   };
 }
 

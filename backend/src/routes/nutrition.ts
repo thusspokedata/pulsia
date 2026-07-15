@@ -15,6 +15,8 @@ import { getReport, upsertReport, listReports } from "../reports/repository";
 import { collectReportData, hasAnyData } from "../reports/collect";
 import { appendMemory } from "../memory/repository";
 import { supplementsRoutes } from "./supplements";
+import { getActivePlan, upsertAdjustment } from "../supplements/repository";
+import { epochToUtcDateStr } from "../lib/dateUtc";
 import type { AppDeps } from "../app";
 
 const ExtractSchema = z.object({
@@ -189,10 +191,28 @@ export function nutritionRoutes(deps: AppDeps) {
     // Memoria del atleta: anexar hasta 2 observaciones con la fecha del período (append recorta desde
     // el frente si excede el cap → las notas nuevas no se pierden).
     if (output.memoryNotes.length > 0) {
-      const date = new Date(periodStart).toISOString().slice(0, 10);
+      const date = epochToUtcDateStr(periodStart);
       const appended = output.memoryNotes.slice(0, 2).map((note) => `[${date}] ${note}`).join("\n");
       await appendMemory(deps.db, userId, appended);
     }
+
+    // Ajuste de suplementos para MAÑANA — solo diario, con adjustmentForDate del móvil, y solo si
+    // la IA devolvió algo. Sin plan activo → no hay nada que ajustar. supplementId fuera del plan
+    // activo (alucinado o de un plan viejo) → se descarta (el móvil solo puede mostrar ajustes de
+    // ítems que existen en el plan actual).
+    if (kind === "daily" && parsed.data.adjustmentForDate && output.supplementAdjustment.length > 0) {
+      const activePlan = await getActivePlan(deps.db, userId);
+      if (activePlan) {
+        const knownSupplementIds = new Set(activePlan.items.map((it) => it.supplementId));
+        const filtered = output.supplementAdjustment.filter((a) => knownSupplementIds.has(a.supplementId));
+        const discarded = output.supplementAdjustment.length - filtered.length;
+        if (discarded > 0) console.warn(`ajuste de suplementos: ${discarded} ítem(s) con supplementId fuera del plan activo, descartados`);
+        if (filtered.length > 0) {
+          await upsertAdjustment(deps.db, userId, parsed.data.adjustmentForDate, filtered, saved.id);
+        }
+      }
+    }
+
     return c.json(saved);
   });
 

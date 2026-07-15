@@ -65,7 +65,7 @@ test("periodDays mínimo 1 y weightTrend null si no hay peso", async () => {
   expect(data.weightTrend).toBeNull();
 });
 
-test("foodNames: únicos y con cap 40", async () => {
+test("foodNames: únicos y con cap 40, foodNamesTotal es el total sin capear", async () => {
   const names = Array.from({ length: 45 }, (_, i) => `Alimento ${i % 42}`); // 42 nombres únicos, algunos repetidos
   const deps = {
     ...baseDeps,
@@ -74,6 +74,7 @@ test("foodNames: únicos y con cap 40", async () => {
   const data = await collectReportData({} as any, "u", 0, 10, athleteIncomplete, deps as any);
   expect(new Set(data.foodNames).size).toBe(data.foodNames.length); // sin duplicados
   expect(data.foodNames.length).toBe(40); // cap
+  expect(data.foodNamesTotal).toBe(42); // total único, sin capear
 });
 
 test("supplements null si no hay plan activo", async () => {
@@ -99,7 +100,7 @@ test("supplements poblado con plan activo: planItems, takes y catálogo mapeados
   expect(data.supplements).not.toBeNull();
   expect(data.supplements!.planItems).toEqual([{ supplementName: "Zinc", dose: "1 cápsula", slot: "desayuno" }]);
   expect(data.supplements!.takes).toEqual([{ supplementName: "Zinc", status: "taken", plannedDose: "1 cápsula", actualDose: null, date: "2026-07-15" }]);
-  expect(data.supplements!.catalog).toEqual([{ name: "Zinc", components: [{ name: "Zinc", amount: 10, unit: "mg" }] }]);
+  expect(data.supplements!.catalog).toEqual([{ id: "s1", name: "Zinc", components: [{ name: "Zinc", amount: 10, unit: "mg" }] }]);
 });
 
 test("hasAnyData false si SOLO hay datos de suplementos (no justifican un informe solos)", async () => {
