@@ -14,6 +14,7 @@ import { eq } from "drizzle-orm";
 import { getReport, upsertReport, listReports } from "../reports/repository";
 import { collectReportData, hasAnyData } from "../reports/collect";
 import { appendMemory } from "../memory/repository";
+import { supplementsRoutes } from "./supplements";
 import type { AppDeps } from "../app";
 
 const ExtractSchema = z.object({
@@ -206,6 +207,9 @@ export function nutritionRoutes(deps: AppDeps) {
     const rep = await getReport(deps.db, c.get("userId"), c.req.param("kind") as ReportKind, periodStart);
     return rep ? c.json(rep) : c.json({ error: "No encontrado" }, 404);
   });
+
+  // ---- Suplementos (catálogo) — montado al final para no interferir con /foods/* ni /meals/* ----
+  r.route("/supplements", supplementsRoutes(deps));
 
   return r;
 }

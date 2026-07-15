@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, jsonb, timestamp, integer, bigint, boolean, doublePrecision, real, index, uniqueIndex, customType } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
-import type { TrainingProfile, Program, PlannedExercise } from "@pulsia/shared";
+import type { TrainingProfile, Program, PlannedExercise, SupplementComponent, Frequency, AdjustmentItem } from "@pulsia/shared";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() { return "bytea"; },
@@ -165,6 +165,64 @@ export const nutritionGoal = pgTable("nutrition_goal", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const supplement = pgTable("supplement", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  name: text("name").notNull(),
+  brand: text("brand"),
+  servingLabel: text("serving_label").notNull(),
+  components: jsonb("components").$type<SupplementComponent[]>().notNull(),
+  labelMaxPerDay: text("label_max_per_day"),
+  source: text("source").notNull(), // 'label' | 'estimate'
+  info: text("info"),   // explicación IA de los componentes (nullable: alta manual)
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  byUser: index("supplement_user_idx").on(t.userId),
+}));
+
+// Plan de tomas (PR2). Un 'active' por usuario; regenerar archiva el anterior.
+export const supplementPlan = pgTable("supplement_plan", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  status: text("status").notNull(), // 'active' | 'archived'
+  userNote: text("user_note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  byUser: index("supplement_plan_user_idx").on(t.userId),
+}));
+
+export const supplementPlanItem = pgTable("supplement_plan_item", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  planId: uuid("plan_id").references(() => supplementPlan.id, { onDelete: "cascade" }).notNull(),
+  supplementId: uuid("supplement_id").references(() => supplement.id, { onDelete: "cascade" }).notNull(),
+  slot: text("slot").notNull(), // TakeSlot
+  frequency: jsonb("frequency").$type<Frequency>().notNull(),
+  dose: text("dose").notNull(),
+  reason: text("reason"),
+}, (t) => ({
+  byPlan: index("supplement_plan_item_plan_idx").on(t.planId),
+}));
+
+// Historial de tomas (PR2). Snapshot: el historial no cambia si se edita catálogo/plan.
+// plan_item_id es set null (precedente meal_item.food_id): borrar suplemento/plan no borra historial.
+export const supplementTake = pgTable("supplement_take", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  date: text("date").notNull(), // YYYY-MM-DD, día calendario del dispositivo
+  planItemId: uuid("plan_item_id").references(() => supplementPlanItem.id, { onDelete: "set null" }), // el snapshot sobrevive
+  supplementName: text("supplement_name").notNull(),
+  plannedDose: text("planned_dose").notNull(),
+  slot: text("slot").notNull(),
+  status: text("status").notNull(), // 'taken' | 'deviated' | 'skipped'
+  actualDose: text("actual_dose"),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  // (user_id, date) queda cubierto como prefijo del índice único.
+  oncePerItemDay: uniqueIndex("supplement_take_unique_idx").on(t.userId, t.date, t.planItemId),
+}));
+
 export const report = pgTable("report", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
@@ -175,6 +233,18 @@ export const report = pgTable("report", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
   byUserKindPeriod: uniqueIndex("report_user_kind_period_idx").on(t.userId, t.kind, t.periodStart),
+}));
+
+// Ajuste del informe diario para el día siguiente (PR3).
+export const supplementAdjustment = pgTable("supplement_adjustment", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  forDate: text("for_date").notNull(), // YYYY-MM-DD
+  items: jsonb("items").$type<AdjustmentItem[]>().notNull(),
+  reportId: uuid("report_id").references(() => report.id, { onDelete: "cascade" }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  onePerDay: uniqueIndex("supplement_adjustment_unique_idx").on(t.userId, t.forDate),
 }));
 
 export const exerciseCatalog = pgTable("exercise_catalog", {

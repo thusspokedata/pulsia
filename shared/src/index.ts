@@ -9,6 +9,7 @@ export * from "./schemas/metrics";
 export * from "./schemas/ecg";
 export * from "./progress/trends";
 export * from "./schemas/nutrition";
+export * from "./schemas/supplements";
 export * from "./nutrition/macros";
 export * from "./nutrition/goal";
 export * from "./nutrition/exerciseBurn";

@@ -1,0 +1,83 @@
+import { test, expect } from "bun:test";
+import {
+  SupplementExtractionSchema, SupplementInputSchema, SupplementSchema,
+  TakeSlotSchema, AdjustmentItemSchema, FrequencySchema, TAKE_SLOTS,
+} from "./supplements";
+
+const extraction = {
+  name: "ZMA Pro",
+  brand: "BrandX",
+  servingLabel: "2 cápsulas",
+  components: [
+    { name: "Magnesio (citrato)", amount: 375, unit: "mg" },
+    { name: "Zinc", amount: 10, unit: "mg" },
+  ],
+  labelMaxPerDay: "2 cápsulas al día",
+  source: "label",
+  info: "El magnesio contribuye a la función muscular normal. El zinc participa en el sistema inmune.",
+};
+
+test("SupplementExtractionSchema acepta una extracción completa", () => {
+  const p = SupplementExtractionSchema.parse(extraction);
+  expect(p.components).toHaveLength(2);
+  expect(p.info).toContain("magnesio");
+});
+
+test("SupplementExtractionSchema exige al menos un componente y rechaza amount <= 0", () => {
+  expect(SupplementExtractionSchema.safeParse({ ...extraction, components: [] }).success).toBe(false);
+  expect(SupplementExtractionSchema.safeParse({
+    ...extraction, components: [{ name: "Zinc", amount: 0, unit: "mg" }],
+  }).success).toBe(false);
+});
+
+test("SupplementInputSchema permite alta manual sin info ni brand ni labelMaxPerDay", () => {
+  const p = SupplementInputSchema.parse({
+    name: "Creatina", servingLabel: "5 g",
+    components: [{ name: "Creatina monohidrato", amount: 5, unit: "g" }],
+    source: "estimate",
+  });
+  expect(p.info ?? null).toBeNull();
+});
+
+test("SupplementSchema es el input + id/createdAt", () => {
+  const p = SupplementSchema.parse({
+    ...extraction, id: "11111111-1111-4111-8111-111111111111", createdAt: 0,
+  });
+  expect(p.id).toBeDefined();
+});
+
+test("TAKE_SLOTS conserva el orden canónico del día", () => {
+  expect(TAKE_SLOTS).toEqual(["desayuno", "almuerzo", "cena", "post_entreno", "antes_de_dormir"]);
+  expect(TakeSlotSchema.safeParse("merienda").success).toBe(false);
+});
+
+test("FrequencySchema: daily / every_other_day con anchorDate / weekdays no vacío", () => {
+  expect(FrequencySchema.safeParse({ type: "daily" }).success).toBe(true);
+  expect(FrequencySchema.safeParse({ type: "every_other_day", anchorDate: "2026-07-15" }).success).toBe(true);
+  expect(FrequencySchema.safeParse({ type: "every_other_day" }).success).toBe(false);
+  expect(FrequencySchema.safeParse({ type: "weekdays", days: [1, 3, 5] }).success).toBe(true);
+  expect(FrequencySchema.safeParse({ type: "weekdays", days: [] }).success).toBe(false);
+  expect(FrequencySchema.safeParse({ type: "weekdays", days: [7] }).success).toBe(false);
+});
+
+test("FrequencySchema: anchorDate debe ser una fecha real, no solo el formato", () => {
+  expect(FrequencySchema.safeParse({ type: "every_other_day", anchorDate: "2026-07-15" }).success).toBe(true);
+  expect(FrequencySchema.safeParse({ type: "every_other_day", anchorDate: "2026-99-99" }).success).toBe(false);
+});
+
+test("FrequencySchema: weekdays rechaza días duplicados", () => {
+  expect(FrequencySchema.safeParse({ type: "weekdays", days: [1, 1] }).success).toBe(false);
+});
+
+test("AdjustmentItemSchema NUNCA acepta increase", () => {
+  const base = { supplementId: "11111111-1111-4111-8111-111111111111", reason: "ayer comiste rico en magnesio" };
+  expect(AdjustmentItemSchema.safeParse({ ...base, action: "skip" }).success).toBe(true);
+  expect(AdjustmentItemSchema.safeParse({ ...base, action: "reduce", dose: "2.5 g" }).success).toBe(true);
+  expect(AdjustmentItemSchema.safeParse({ ...base, action: "increase" }).success).toBe(false);
+});
+
+test("AdjustmentItemSchema: reduce exige dose", () => {
+  expect(AdjustmentItemSchema.safeParse({
+    supplementId: "11111111-1111-4111-8111-111111111111", action: "reduce", reason: "x",
+  }).success).toBe(false);
+});
