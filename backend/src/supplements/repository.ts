@@ -38,6 +38,7 @@ export async function getSupplement(db: Db, userId: string, id: string): Promise
   return row ? toSupplement(row) : null;
 }
 
+// Full replace: el cliente debe mandar la info preservada (el form la conserva); si no, se pierde.
 export async function updateSupplement(db: Db, userId: string, id: string, input: SupplementInput): Promise<Supplement | null> {
   const rows = await db.update(supplement).set({
     name: input.name, brand: input.brand ?? null,
@@ -56,6 +57,6 @@ export async function setSupplementInfo(db: Db, userId: string, id: string, info
 
 export async function deleteSupplement(db: Db, userId: string, id: string): Promise<boolean> {
   const rows = await db.delete(supplement)
-    .where(and(eq(supplement.id, id), eq(supplement.userId, userId))).returning();
+    .where(and(eq(supplement.id, id), eq(supplement.userId, userId))).returning({ id: supplement.id });
   return rows.length > 0;
 }

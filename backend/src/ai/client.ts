@@ -220,6 +220,9 @@ export class AnthropicAiClient implements AiClient {
         },
       ],
     });
+    if (res.stop_reason === "max_tokens") {
+      throw new Error("La respuesta se truncó (etiqueta demasiado compleja).");
+    }
     const block = res.content.find((b) => b.type === "tool_use");
     if (!block || block.type !== "tool_use") {
       throw new Error("La IA no devolvió los datos del suplemento.");
@@ -237,6 +240,9 @@ export class AnthropicAiClient implements AiClient {
       max_tokens: 1024,
       messages: [{ role: "user", content: [{ type: "text", text: buildSupplementExplainPrompt(supplement) }] }],
     });
+    if (res.stop_reason === "max_tokens") {
+      throw new Error("La respuesta se truncó (etiqueta demasiado compleja).");
+    }
     const text = res.content
       .filter((b) => b.type === "text")
       .map((b: any) => b.text)
