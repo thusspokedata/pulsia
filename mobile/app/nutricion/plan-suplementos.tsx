@@ -47,8 +47,12 @@ function EditItem({ item, onSave, onCancel }: { item: PlanItemView; onSave: (pat
     if (!canSave) return;
     let frequency: Frequency;
     if (type === "daily") frequency = { type: "daily" };
-    else if (type === "every_other_day") frequency = { type: "every_other_day", anchorDate: dateKey(Date.now()) };
-    else frequency = { type: "weekdays", days: days.map(Number) };
+    else if (type === "every_other_day") {
+      // Si el ítem ya era día-por-medio, conservar su ancla (re-anclar a hoy podría
+      // invertir la paridad de todo el esquema); solo anclar a hoy al CAMBIAR a este tipo.
+      const anchorDate = item.frequency.type === "every_other_day" ? item.frequency.anchorDate : dateKey(Date.now());
+      frequency = { type: "every_other_day", anchorDate };
+    } else frequency = { type: "weekdays", days: days.map(Number) };
     onSave({ slot, frequency, dose: dose.trim() });
   }
 

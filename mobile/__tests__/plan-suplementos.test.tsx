@@ -61,6 +61,23 @@ test("editar un ítem: cambiar la dosis dispara PATCH", async () => {
   await waitFor(() => expect(updatePlanItem).toHaveBeenCalledWith("http://x", plan.items[0].id, expect.objectContaining({ dose: "1 cápsula" })));
 });
 
+test("editar solo la dosis de un ítem día-por-medio preserva el anchorDate original", async () => {
+  const eodItem = {
+    id: "44444444-4444-4444-8444-444444444444", supplementId: "s2", supplementName: "Zink",
+    slot: "desayuno", frequency: { type: "every_other_day", anchorDate: "2026-07-10" }, dose: "1 tableta", reason: null,
+  };
+  (getPlan as jest.Mock).mockResolvedValueOnce({ ...plan, items: [eodItem] });
+  (updatePlanItem as jest.Mock).mockResolvedValueOnce({ ...eodItem, dose: "2 tabletas" });
+  await render(<PlanSuplementosScreen />);
+  await fireEvent.press(await screen.findByText(/Zink/)); // expande edición
+  await fireEvent.changeText(screen.getByDisplayValue("1 tableta"), "2 tabletas");
+  await fireEvent.press(screen.getByText(/Guardar cambios/i));
+  await waitFor(() => expect(updatePlanItem).toHaveBeenCalled());
+  const patch = (updatePlanItem as jest.Mock).mock.calls[0][2];
+  expect(patch.dose).toBe("2 tabletas");
+  expect(patch.frequency).toEqual({ type: "every_other_day", anchorDate: "2026-07-10" }); // NO re-anclado a hoy
+});
+
 test("muestra el disclaimer no-médico", async () => {
   await render(<PlanSuplementosScreen />);
   await waitFor(() => expect(screen.getByText(/no reemplaza.*(médico|profesional)/i)).toBeTruthy());
