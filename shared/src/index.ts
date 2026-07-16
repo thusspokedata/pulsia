@@ -13,6 +13,7 @@ export * from "./schemas/supplements";
 export * from "./nutrition/macros";
 export * from "./nutrition/goal";
 export * from "./nutrition/exerciseBurn";
+export * from "./nutrition/references";
 export * from "./schemas/report";
 export * from "./supplements/checklist";
 export * from "./supplements/overlap";
