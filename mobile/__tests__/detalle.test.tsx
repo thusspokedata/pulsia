@@ -60,3 +60,25 @@ test("el error del hook se muestra en cualquier pestaña", async () => {
   await render(<DetalleDiaScreen />);
   expect(screen.getByText("sin red")).toBeTruthy();
 });
+
+test("un micro sin dato muestra — en vez de desaparecer de la tabla", async () => {
+  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, sugars_g: null } } });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  expect(screen.getByText("Azúcares")).toBeTruthy(); // la fila sigue estando
+  expect(screen.getByText("—")).toBeTruthy();
+});
+
+test("día sin ningún micro cargado: empty state en vez de una tabla de guiones", async () => {
+  mockDay({
+    summary: {
+      ...summary,
+      dayTotals: { ...summary.dayTotals, sugars_g: null, fiber_g: null, saturated_fat_g: null, salt_g: null },
+      cholesterolMg: null,
+    },
+  });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  expect(screen.getByText(/Todavía no hay datos de nutrientes/)).toBeTruthy();
+  expect(screen.queryByText("Azúcares")).toBeNull();
+});

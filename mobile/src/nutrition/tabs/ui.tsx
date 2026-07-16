@@ -25,10 +25,10 @@ export function SectionTitle({ children }: { children: ReactNode }) {
 
 // Barra de progreso. `over` = se pasó de un LÍMITE (ámbar y llena); nunca se usa para un piso
 // como la fibra, donde pasarse es bueno.
-export function Bar({ pct, over }: { pct: number; over: boolean }) {
+export function Bar({ pct, over, testID }: { pct: number; over: boolean; testID?: string }) {
   return (
     <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.surfaceMuted, overflow: "hidden" }}>
-      <View style={{ width: over ? "100%" : `${pct}%`, height: 8, backgroundColor: over ? colors.warning : colors.accent }} />
+      <View testID={testID} style={{ width: over ? "100%" : `${pct}%`, height: 8, backgroundColor: over ? colors.warning : colors.accent }} />
     </View>
   );
 }
