@@ -179,3 +179,30 @@ test("pestaña Calorías sin comidas: empty state, sin torta", async () => {
   expect(screen.getByText(/Todavía no registraste comidas/)).toBeTruthy();
   expect(screen.queryByTestId("pie-arc-0")).toBeNull();
 });
+
+test("pestaña Macros: dona con las 3 porciones, kcal al centro y % real vs meta", async () => {
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-macros"));
+  expect(screen.getByTestId("pie-arc-2")).toBeTruthy(); // 3 porciones
+  expect(screen.getByTestId("macros-center-kcal").props.children).toBe(1740);
+  // OJO: la leyenda es UN solo <Text>, así que getByText matchea la línea ENTERA.
+  expect(screen.getByText("120 g · 28% · meta 28%")).toBeTruthy();
+  expect(screen.getByText("180 g · 41% · meta 42%")).toBeTruthy();
+  expect(screen.getByText("60 g · 31% · meta 30%")).toBeTruthy();
+});
+
+test("pestaña Macros sin meta: muestra el % real sin la comparación", async () => {
+  mockDay({ goalView: { status: "incomplete", missing: ["peso"] } });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-macros"));
+  expect(screen.getByText("120 g · 28%")).toBeTruthy(); // sin el sufijo de meta
+  expect(screen.queryByText(/meta/)).toBeNull();
+});
+
+test("pestaña Macros sin comidas: empty state, sin dona", async () => {
+  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, protein_g: 0, carbs_g: 0, fat_g: 0 } } });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-macros"));
+  expect(screen.getByText(/Todavía no registraste comidas/)).toBeTruthy();
+  expect(screen.queryByTestId("pie-arc-0")).toBeNull();
+});

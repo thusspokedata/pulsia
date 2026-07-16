@@ -5,16 +5,18 @@ import { useNutritionDay } from "../../src/nutrition/useNutritionDay";
 import { ResumenTab } from "../../src/nutrition/tabs/ResumenTab";
 import { CaloriasTab } from "../../src/nutrition/tabs/CaloriasTab";
 import { NutrientesTab } from "../../src/nutrition/tabs/NutrientesTab";
+import { MacrosTab } from "../../src/nutrition/tabs/MacrosTab";
 import { SegmentToggle } from "../../src/components/SegmentToggle";
 import { colors, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 
-type TabKey = "resumen" | "calorias" | "nutrientes";
+type TabKey = "resumen" | "calorias" | "nutrientes" | "macros";
 
 const TABS: { value: TabKey; label: string }[] = [
   { value: "resumen", label: "Resumen" },
   { value: "calorias", label: "Calorías" },
   { value: "nutrientes", label: "Nutrientes" },
+  { value: "macros", label: "Macros" },
 ];
 
 export default function DetalleDiaScreen() {
@@ -40,6 +42,7 @@ export default function DetalleDiaScreen() {
       )}
       {tab === "calorias" && <CaloriasTab meals={meals} />}
       {tab === "nutrientes" && <NutrientesTab summary={summary} goalView={goalView} />}
+      {tab === "macros" && <MacrosTab summary={summary} goalView={goalView} />}
 
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
     </ScrollView>
