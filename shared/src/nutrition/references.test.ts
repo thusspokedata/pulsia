@@ -24,4 +24,6 @@ test("saturadas: 10% de la energía / 9 kcal por gramo, a 1 decimal", () => {
 test("saturadas: meta no positiva → 0 (no se muestra referencia negativa ni NaN)", () => {
   expect(saturatedFatRefG(0)).toBe(0);
   expect(saturatedFatRefG(-100)).toBe(0);
+  expect(saturatedFatRefG(NaN)).toBe(0);
+  expect(saturatedFatRefG(Infinity)).toBe(0);
 });

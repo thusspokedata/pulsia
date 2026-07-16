@@ -22,6 +22,8 @@ export const NUTRIENT_REFERENCE_KIND = {
 // kcal, y por eso no vive en NUTRIENT_REFERENCES. 9 kcal por gramo de grasa; 1 decimal, como el
 // resto de los micros (ver sumNullableMicro en macros.ts).
 export function saturatedFatRefG(goalKcal: number): number {
-  if (goalKcal <= 0) return 0;
+  // Number.isFinite además de <= 0: NaN <= 0 es false, así que sin el guard un NaN se colaría
+  // hasta la UI (la meta de kcal puede llegar de un parseo del móvil).
+  if (!Number.isFinite(goalKcal) || goalKcal <= 0) return 0;
   return Math.round(((goalKcal * 0.1) / 9) * 10) / 10;
 }
