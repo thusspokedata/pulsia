@@ -36,3 +36,15 @@ export function Bar({ pct, over, testID }: { pct: number; over: boolean; testID?
 export function EmptyState({ children }: { children: ReactNode }) {
   return <Text style={{ color: colors.textMuted, fontSize: 13 }}>{children}</Text>;
 }
+
+// Fila de leyenda de una torta/dona: puntito del color de la porción + label + el valor a la
+// derecha. El valor va como children porque su formato cambia por gráfico (kcal vs gramos y %).
+export function LegendRow({ color, label, children }: { color: string; label: string; children: ReactNode }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: 2 }}>
+      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color }} />
+      <Text style={{ color: colors.text, fontSize: 14, flex: 1 }}>{label}</Text>
+      <Text style={{ color: colors.textMuted, fontSize: 13 }}>{children}</Text>
+    </View>
+  );
+}

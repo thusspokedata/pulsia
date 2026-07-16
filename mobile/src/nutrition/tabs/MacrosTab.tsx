@@ -4,7 +4,7 @@ import type { GoalView } from "../goalView";
 import type { NutritionDaySummary } from "../daySummary";
 import { PieChart } from "../../components/PieChart";
 import { colors, spacing } from "../../theme/tokens";
-import { Card, SectionTitle, EmptyState } from "./ui";
+import { Card, SectionTitle, EmptyState, LegendRow } from "./ui";
 
 const MACRO_COLORS: Record<MacroSlice["key"], string> = {
   protein: colors.accent,
@@ -59,14 +59,10 @@ export function MacrosTab({ summary, goalView }: Props) {
         />
       </View>
       {slices.map((s) => (
-        <View key={s.key} style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: 2 }}>
-          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: MACRO_COLORS[s.key] }} />
-          <Text style={{ color: colors.text, fontSize: 14, flex: 1 }}>{s.label}</Text>
-          <Text style={{ color: colors.textMuted, fontSize: 13 }}>
-            {s.g} g · {s.pctActual}%
-            {s.pctTarget != null ? ` · meta ${s.pctTarget}%` : ""}
-          </Text>
-        </View>
+        <LegendRow key={s.key} color={MACRO_COLORS[s.key]} label={s.label}>
+          {s.g} g · {s.pctActual}%
+          {s.pctTarget != null ? ` · meta ${s.pctTarget}%` : ""}
+        </LegendRow>
       ))}
     </Card>
   );
