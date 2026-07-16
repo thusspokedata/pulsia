@@ -1,5 +1,10 @@
 import type { Meal, MealType } from "../schemas/nutrition";
 
+// Criterio de redondeo de `pct`/`pctActual`/`pctTarget`, compartido por todas las tortas de este
+// archivo (comidas y macros): cada porcentaje se redondea por separado, así que pueden sumar 99 o
+// 101 (p.ej. tres tercios). Es solo texto de la leyenda: los arcos de cada torta se dibujan
+// siempre con las kcal, nunca con el %.
+
 export type MealSliceKey = MealType | "sin_tipo";
 
 export interface MealSlice {
@@ -40,12 +45,49 @@ export function caloriesByMeal(meals: Meal[]): MealSlice[] {
   const total = [...kcalBy.values()].reduce((a, v) => a + v, 0);
   if (total <= 0) return [];
   // El % se calcula antes de redondear: el schema permite kcal no-enteros, aunque hoy los ítems
-  // lleguen ya redondeados desde foodMacrosForQuantity.
-  // OJO: cada pct se redondea por separado, así que pueden sumar 99 o 101 (p.ej. tres tercios). Es
-  // solo texto de la leyenda: los arcos de la torta se dibujan con `kcal`, nunca con `pct`.
+  // lleguen ya redondeados desde foodMacrosForQuantity. (Criterio de redondeo de `pct`: ver arriba.)
   return MEAL_ORDER.flatMap(({ key, label }) => {
     const kcal = kcalBy.get(key) ?? 0;
     if (kcal <= 0) return [];
     return [{ key, label, kcal: Math.round(kcal), pct: Math.round((kcal / total) * 100) }];
   });
+}
+
+export interface MacroGrams {
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+}
+
+export interface MacroSlice {
+  key: "protein" | "carbs" | "fat";
+  label: string;
+  g: number;
+  kcal: number;
+  pctActual: number; // 0–100, sobre las kcal derivadas de los macros
+  pctTarget: number | null; // null si no hay meta
+}
+
+// Las kcal de la torta se DERIVAN de los gramos (4/4/9), no se toman de dayTotals.kcal: los dos
+// números pueden diferir por redondeos de etiqueta, y una torta tiene que cerrar en 100%.
+const MACRO_ROWS = [
+  { key: "protein", label: "Proteína", field: "protein_g", kcalPerG: 4 },
+  { key: "carbs", label: "Carbohidratos", field: "carbs_g", kcalPerG: 4 },
+  { key: "fat", label: "Grasa", field: "fat_g", kcalPerG: 9 },
+] as const;
+
+export function macroSplit(comido: MacroGrams, meta: MacroGrams | null): MacroSlice[] {
+  const kcalOf = (src: MacroGrams) => MACRO_ROWS.map((r) => src[r.field] * r.kcalPerG);
+  const actual = kcalOf(comido);
+  const totalActual = actual.reduce((a, v) => a + v, 0);
+  const target = meta ? kcalOf(meta) : null;
+  const totalTarget = target ? target.reduce((a, v) => a + v, 0) : 0;
+  return MACRO_ROWS.map((r, i) => ({
+    key: r.key,
+    label: r.label,
+    g: Math.round(comido[r.field]),
+    kcal: Math.round(actual[i]),
+    pctActual: totalActual > 0 ? Math.round((actual[i] / totalActual) * 100) : 0,
+    pctTarget: target && totalTarget > 0 ? Math.round((target[i] / totalTarget) * 100) : null,
+  }));
 }
