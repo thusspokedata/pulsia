@@ -71,8 +71,13 @@ export default function NutrienteScreen() {
         </Card>
       )}
 
-      {/* Con "Día" el gráfico sería un solo punto. El gate por `ranked.length` evita que un rango
-          vacío muestre dos mensajes distintos diciendo lo mismo: ya está el empty state de abajo. */}
+      {/* El gate `days >= 7` es explícito a propósito, aunque hoy sea redundante: con "Día" el rango
+          pedido al backend es de un solo día, así que nunca podría haber dos puntos y el gate de
+          `points.length >= 2` de abajo ya alcanzaría para ocultar el gráfico. Lo dejamos igual
+          porque declara la intención ("con Día no hay evolución") sin depender de ese acoplamiento:
+          si mañana "Día" pidiera, por ejemplo, ±3 días, sin este gate aparecería un gráfico que
+          nadie pidió. El gate por `ranked.length` evita, aparte, que un rango vacío muestre dos
+          mensajes distintos diciendo lo mismo: ya está el empty state de abajo. */}
       {!loading && !error && days >= 7 && ranked.length > 0 && (
         <Card>
           <SectionTitle>Evolución</SectionTitle>

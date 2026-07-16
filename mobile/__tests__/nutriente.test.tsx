@@ -99,10 +99,16 @@ test("alimentos con aporte ínfimo: la barra no queda en NaN%", async () => {
 // Julio 2026, hora local.
 const at = (day: number) => new Date(2026, 6, day, 10).getTime();
 
-test("con 'Día' no hay gráfico: un solo punto no es una curva", async () => {
+test("con 'Día' no hay gráfico, aunque haya puntos de sobra: un día no es una tendencia", async () => {
+  // 2 días de datos a propósito: si apareciera el gráfico sería por el gate de rango, no por
+  // falta de puntos. Con el mock de un solo día, este test pasaba incluso con el gate roto.
+  (listMeals as jest.Mock).mockResolvedValue([
+    meal([item("Huevo", 120, 200)], at(10)),
+    meal([item("Queso", 60, 100)], at(11)),
+  ]);
   await render(<NutrienteScreen />);
   await waitFor(() => expect(screen.getByText("Huevo")).toBeTruthy());
-  expect(screen.queryByTestId("linechart-max")).toBeNull();
+  expect(screen.queryByTestId("linechart-refline")).toBeNull();
 });
 
 test("con 7 días aparece la curva, con la referencia y la cobertura de registro", async () => {
