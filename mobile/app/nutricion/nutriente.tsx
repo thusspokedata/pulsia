@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { ScrollView, View, Text, Pressable, ActivityIndicator } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { foodsHighestIn, type RankNutrient } from "@pulsia/shared";
+import { foodsHighestIn, NUTRIENT_REFERENCES, NUTRIENT_REFERENCE_KIND, type RankNutrient } from "@pulsia/shared";
 import { useMealsRange } from "../../src/nutrition/useMealsRange";
 import { ChipGroup } from "../../src/components/ChipGroup";
 import { Card, SectionTitle, EmptyState, Bar } from "../../src/nutrition/tabs/ui";
+import { LineChart } from "../../src/components/LineChart";
+import { dailyNutrientSeries } from "../../src/nutrition/nutrientSeries";
 import { colors, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 
@@ -42,6 +44,16 @@ export default function NutrienteScreen() {
   // sale con amount 0. Sin el guard, la barra del "que más aporta" haría 0/0 → width "NaN%".
   const maxAmount = ranked[0]?.amount || 1;
 
+  const series = dailyNutrientSeries(meals, nutrient);
+  // Las saturadas son el 10% de la energía, así que su referencia depende de la meta de kcal, que
+  // esta pantalla no carga: van sin línea. El tipo de NUTRIENT_REFERENCES ya las excluye.
+  const refValue = nutrient in NUTRIENT_REFERENCES
+    ? NUTRIENT_REFERENCES[nutrient as keyof typeof NUTRIENT_REFERENCES]
+    : null;
+  const refLine = refValue != null
+    ? { value: refValue, label: `${NUTRIENT_REFERENCE_KIND[nutrient] === "min" ? "mínimo" : "máx"} ${refValue} ${unit}` }
+    : undefined;
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.md }}>
       <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>
@@ -56,6 +68,24 @@ export default function NutrienteScreen() {
       {!loading && !error && ranked.length === 0 && (
         <Card>
           <EmptyState>Ningún alimento registrado aporta {NUTRIENT_LABEL[nutrient]} en este período.</EmptyState>
+        </Card>
+      )}
+
+      {/* Con "Día" el gráfico sería un solo punto. El gate por `ranked.length` evita que un rango
+          vacío muestre dos mensajes distintos diciendo lo mismo: ya está el empty state de abajo. */}
+      {!loading && !error && days >= 7 && ranked.length > 0 && (
+        <Card>
+          <SectionTitle>Evolución</SectionTitle>
+          {series.points.length >= 2 ? (
+            <>
+              <LineChart data={series.points} unit={unit} refLine={refLine} />
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                Promedio {series.average} {unit} · {series.points.length} de {days} días con registro
+              </Text>
+            </>
+          ) : (
+            <EmptyState>Registrá al menos dos días para ver la evolución.</EmptyState>
+          )}
         </Card>
       )}
 
