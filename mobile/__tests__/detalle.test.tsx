@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from "@testing-library/react-native";
 import DetalleDiaScreen from "../app/nutricion/detalle";
 import { useNutritionDay } from "../src/nutrition/useNutritionDay";
+import { colors } from "../src/theme/tokens";
 
 jest.mock("expo-router", () => ({
   router: { push: jest.fn() },
@@ -34,9 +35,9 @@ beforeEach(() => {
 
 test("arranca en Resumen: calorías, macros en barras y líquido", async () => {
   await render(<DetalleDiaScreen />);
-  // getAllByText, no getByText: desde la Task 7 "Calorías" también es el label del segmento, y
-  // coincide en texto con este SectionTitle del Resumen.
-  expect(screen.getAllByText("Calorías").length).toBeGreaterThan(0);
+  // Sin aserción sobre el texto "Calorías": desde la Task 7 lo llevan tanto el label del segmento
+  // como el título de la card, así que verificarlo no distingue una pestaña de la otra. El
+  // "te quedan 700" de acá abajo sí: ese dato solo puede venir de la card del Resumen.
   expect(screen.getByText(/te quedan 700/)).toBeTruthy();
   expect(screen.getByText("Proteína")).toBeTruthy();
   expect(screen.getByText("2100 ml")).toBeTruthy();
@@ -97,21 +98,35 @@ test("la fibra es un PISO: llegar a la referencia no avisa", async () => {
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
   expect(screen.getByText("22 / 30 g")).toBeTruthy();
-  expect(screen.getByTestId("nutr-fiber_g-bar").props.style.backgroundColor).not.toBe("#B45309"); // colors.warning
+  expect(screen.getByTestId("nutr-fiber_g-bar").props.style.backgroundColor).not.toBe(colors.warning);
 });
 
 test("fibra POR ENCIMA del piso: sigue sin avisar (pasarse de fibra es bueno)", async () => {
   mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, fiber_g: 45 } } });
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
-  expect(screen.getByTestId("nutr-fiber_g-bar").props.style.backgroundColor).not.toBe("#B45309");
+  expect(screen.getByTestId("nutr-fiber_g-bar").props.style.backgroundColor).not.toBe(colors.warning);
 });
 
 test("sal por encima del límite: la barra pinta ámbar", async () => {
   mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, salt_g: 9 } } });
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
-  expect(screen.getByTestId("nutr-salt_g-bar").props.style.backgroundColor).toBe("#B45309"); // colors.warning
+  expect(screen.getByTestId("nutr-salt_g-bar").props.style.backgroundColor).toBe(colors.warning);
+});
+
+test("valor exactamente igual al límite NO avisa (tocar el límite no es pasarse)", async () => {
+  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, salt_g: 5 } } }); // ref de sal = 5
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  expect(screen.getByTestId("nutr-salt_g-bar").props.style.backgroundColor).not.toBe(colors.warning);
+});
+
+test("un valor por encima de la referencia no desborda la barra (clamp al 100%)", async () => {
+  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, fiber_g: 45 } } }); // 150% del piso
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  expect(screen.getByTestId("nutr-fiber_g-bar").props.style.width).toBe("100%");
 });
 
 test("micro sin dato: muestra — y no dibuja barra", async () => {
@@ -145,6 +160,16 @@ test("pestaña Calorías: torta con una porción por comida + leyenda con kcal y
   expect(screen.getByText("Desayuno")).toBeTruthy();
   expect(screen.getByText("500 kcal · 25%")).toBeTruthy();
   expect(screen.getByText("1500 kcal · 75%")).toBeTruthy();
+});
+
+test("el arco de cada comida es proporcional a sus kcal, no a la cantidad de comidas", async () => {
+  mockDay({ meals: mealsFixture });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-calorias"));
+  // Cena = 1500/2000 = 75% = 270° → arco largo. Si la torta ignorara las kcal y repartiera en
+  // partes iguales (180° cada una), este flag sería 0.
+  const d = screen.getByTestId("pie-arc-1").props.d as string;
+  expect(d).toMatch(/A 90 90 0 1 1 /); // large-arc-flag = 1
 });
 
 test("pestaña Calorías sin comidas: empty state, sin torta", async () => {
