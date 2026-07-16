@@ -31,6 +31,24 @@ test("con varias porciones cada arco es un Path con su 'd'", async () => {
   expect(typeof screen.getByTestId("pie-arc-0").props.d).toBe("string");
 });
 
+test("dona con una sola porción: el anillo degenerado conserva los radios interno y externo", async () => {
+  await render(<PieChart data={[{ label: "A", value: 10, color: "#111" }]} size={160} innerRadius={30} />);
+  const arc = screen.getByTestId("pie-arc-0");
+  // r del trazo = punto medio del anillo, y el ancho del trazo lo extiende hasta r=80 por fuera y 30 por dentro.
+  expect(arc.props.r).toBe(55);
+  expect(arc.props.strokeWidth).toBe(50);
+});
+
+test("el primer arco arranca a las 12 en punto y usa el arco corto si la porción es menor a 180°", async () => {
+  await render(<PieChart data={three} size={160} />);
+  // three[0] = 300/1000 = 108° → arco corto (large-arc-flag 0). El path arranca en el centro (torta).
+  const d = screen.getByTestId("pie-arc-0").props.d as string;
+  expect(d.startsWith("M 80 80 L 80 0")).toBe(true); // centro → borde superior = las 12 en punto
+  const [, large, sweep] = d.match(/A 80 80 0 (\d) (\d)/)!;
+  expect(large).toBe("0"); // 108° < 180°
+  expect(sweep).toBe("1"); // sentido horario
+});
+
 test("sin datos (o todo en 0) no dibuja nada", async () => {
   await render(<PieChart data={[]} size={160} />);
   expect(screen.queryByTestId("pie-arc-0")).toBeNull();

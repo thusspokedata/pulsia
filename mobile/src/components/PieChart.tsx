@@ -68,7 +68,7 @@ export function PieChart({ data, size, innerRadius = 0, center }: Props) {
           )
         ) : (
           arcs.map((a, i) => (
-            <Path key={a.d.label} testID={`pie-arc-${i}`} d={arcPath(c, c, r, innerRadius, a.a0, a.a1)} fill={a.d.color} />
+            <Path key={i} testID={`pie-arc-${i}`} d={arcPath(c, c, r, innerRadius, a.a0, a.a1)} fill={a.d.color} />
           ))
         )}
       </Svg>
