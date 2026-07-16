@@ -43,6 +43,13 @@ test("arranca en Resumen: calorías, macros en barras y líquido", async () => {
   expect(screen.getByText("2100 ml")).toBeTruthy();
 });
 
+test("calorías justo en la meta: dice 'meta cumplida', igual que los macros (no 'te quedan 0')", async () => {
+  mockDay({ goalView: { ...goalView, kcal: { ...goalView.kcal, comido: 2500, restante: 0, over: false } } });
+  await render(<DetalleDiaScreen />);
+  expect(screen.getByText("meta cumplida")).toBeTruthy();
+  expect(screen.queryByText(/te quedan/)).toBeNull();
+});
+
 test("tocar Nutrientes cambia de pestaña y muestra los micros", async () => {
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));

@@ -1,6 +1,6 @@
 import { View, Text, Pressable } from "react-native";
 import { router } from "expo-router";
-import { remainingLabel } from "../goalView";
+import { remainingLabel, restanteLabel } from "../goalView";
 import type { GoalView } from "../goalView";
 import type { NutritionDaySummary } from "../daySummary";
 import { colors } from "../../theme/tokens";
@@ -24,7 +24,7 @@ export function ResumenTab({ summary, goalView }: Props) {
                 {goalView.kcal!.comido} <Text style={{ fontSize: 15, color: colors.textMuted }}>/ {goalView.kcal!.meta}</Text>
               </Text>
               <Text style={{ color: goalView.kcal!.over ? colors.warning : colors.textMuted, fontSize: 13 }}>
-                {goalView.kcal!.over ? `${-goalView.kcal!.restante} de más` : `te quedan ${goalView.kcal!.restante}`}
+                {restanteLabel(goalView.kcal!.restante, "te quedan")}
               </Text>
             </View>
             {/* La barra mide contra el presupuesto real del día (meta + ejercicio), igual que el restante. */}

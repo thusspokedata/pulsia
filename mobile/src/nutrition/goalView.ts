@@ -43,9 +43,16 @@ export function buildGoalView(
   };
 }
 
-// Texto del restante según estado (compartido por la card y el detalle).
-export function remainingLabel(restante: number): string {
-  if (restante > 0) return `faltan ${restante}`;
+// Texto del restante según estado. `positiveWord` es el verbo para el caso "falta algo"
+// (macros dicen "faltan N", la card de kcal dice "te quedan N"); "meta cumplida" y "N de más"
+// son el mismo wording en ambos lugares.
+export function restanteLabel(restante: number, positiveWord: string): string {
+  if (restante > 0) return `${positiveWord} ${restante}`;
   if (restante === 0) return "meta cumplida";
   return `${-restante} de más`;
+}
+
+// Wording de los macros (compartido por la card y el detalle).
+export function remainingLabel(restante: number): string {
+  return restanteLabel(restante, "faltan");
 }
