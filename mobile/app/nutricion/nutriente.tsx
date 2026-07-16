@@ -69,7 +69,11 @@ export default function NutrienteScreen() {
                   {f.amount} {unit} · {f.pctOfTotal}%
                 </Text>
               </View>
-              <Bar pct={Math.round((f.amount / ranked[0].amount) * 100)} over={false} />
+              <Bar
+                pct={Math.round((f.amount / ranked[0].amount) * 100)}
+                over={false}
+                testID={`rank-${f.name}-bar`}
+              />
               <Text style={{ color: colors.icon, fontSize: 11 }}>{f.grams} g</Text>
             </View>
           ))}

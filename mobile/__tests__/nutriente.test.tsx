@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react-native";
 import NutrienteScreen from "../app/nutricion/nutriente";
 import { listMeals } from "../src/api/nutrition";
 
@@ -55,4 +55,35 @@ test("si falla la carga, muestra el error", async () => {
   (listMeals as jest.Mock).mockRejectedValue(new Error("sin red"));
   await render(<NutrienteScreen />);
   await waitFor(() => expect(screen.getByText("sin red")).toBeTruthy());
+});
+
+test("cambiar de rango rápido: la respuesta vieja que llega tarde no pisa la nueva", async () => {
+  // A (Día) queda colgada y resuelve DESPUÉS de B (30 días).
+  let resolveA!: (v: unknown) => void;
+  (listMeals as jest.Mock)
+    .mockImplementationOnce(() => new Promise((r) => { resolveA = r; }))
+    .mockResolvedValueOnce([meal([item("Manteca", 10, 30)])]);
+
+  await render(<NutrienteScreen />);
+  await fireEvent.press(screen.getByText("30 días"));
+  await waitFor(() => expect(screen.getByText("Manteca")).toBeTruthy());
+
+  // Llega la vieja, tarde: hay que forzar el drenado de la cadena de microtasks de `load()`
+  // (await listMeals → setMeals → setLoading) dentro de act() antes de afirmar nada, si no
+  // la aserción corre antes de que el estado equivocado llegue a aplicarse y el test no reproduce la race.
+  await act(async () => {
+    resolveA([meal([item("Huevo", 120, 440)])]);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  expect(screen.getByText("Manteca")).toBeTruthy();
+  expect(screen.queryByText("Huevo")).toBeNull(); // no pisó a la nueva
+});
+
+test("el ancho de la barra refleja el aporte relativo, no siempre está llena", async () => {
+  await render(<NutrienteScreen />);
+  await waitFor(() => expect(screen.getByText("Huevo")).toBeTruthy());
+  expect(screen.getByTestId("rank-Huevo-bar").props.style.width).toBe("100%");
+  expect(screen.getByTestId("rank-Queso-bar").props.style.width).toBe("25%");
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getBackendUrl } from "../storage/config";
 import { listMeals } from "../api/nutrition";
 import type { Meal } from "@pulsia/shared";
@@ -23,19 +23,27 @@ export function useMealsRange(days: number, offset: number): MealsRange {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Contador de pedido en vuelo: si al resolver una respuesta ya no es la más reciente
+  // (el usuario cambió de rango mientras tanto), se descarta sin tocar el estado. Evita que
+  // una respuesta vieja que llega tarde pise el resultado del rango que el usuario ve ahora.
+  const requestId = useRef(0);
 
   const load = useCallback(async () => {
+    const id = ++requestId.current;
     setLoading(true);
     setError(null);
     try {
       const url = await getBackendUrl();
       const { from, to } = rangeBounds(days, offset);
-      setMeals(await listMeals(url, from, to));
+      const result = await listMeals(url, from, to);
+      if (id !== requestId.current) return; // llegó tarde: ya no es el pedido vigente
+      setMeals(result);
     } catch (e) {
+      if (id !== requestId.current) return;
       setError((e as Error).message);
       setMeals([]); // no dejar colgado el ranking del rango anterior si este falló
     }
-    setLoading(false);
+    if (id === requestId.current) setLoading(false);
   }, [days, offset]);
 
   useEffect(() => {
