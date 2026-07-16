@@ -35,6 +35,11 @@ test("respeta el orden canónico, no el orden de llegada", () => {
   expect(slices.map((s) => s.key)).toEqual(["desayuno", "almuerzo", "cena"]);
 });
 
+test("los pct se redondean por separado y pueden no sumar 100 (la torta usa kcal, no pct)", () => {
+  const slices = caloriesByMeal([meal("desayuno", [100]), meal("almuerzo", [100]), meal("cena", [100])]);
+  expect(slices.map((s) => s.pct)).toEqual([33, 33, 33]); // suman 99, a propósito
+});
+
 test("las comidas de 0 kcal no generan porción", () => {
   const slices = caloriesByMeal([meal("desayuno", [0]), meal("cena", [500])]);
   expect(slices.map((s) => s.key)).toEqual(["cena"]);
