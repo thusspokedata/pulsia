@@ -79,3 +79,9 @@ test("las keys y el orden son proteína, carbos, grasa (mismo orden que las barr
   const slices = macroSplit({ protein_g: 1, carbs_g: 1, fat_g: 1 }, null);
   expect(slices.map((s) => s.key)).toEqual(["protein", "carbs", "fat"]);
 });
+
+test("meta con todo en 0 se trata como si no hubiera meta (pctTarget null, no 0/0)", () => {
+  const slices = macroSplit({ protein_g: 100, carbs_g: 100, fat_g: 22.2 }, { protein_g: 0, carbs_g: 0, fat_g: 0 });
+  expect(slices.map((s) => s.pctTarget)).toEqual([null, null, null]);
+  expect(slices.map((s) => s.pctActual)).toEqual([40, 40, 20]); // lo comido no se ve afectado
+});

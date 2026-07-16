@@ -5,6 +5,9 @@ import type { Meal, MealType } from "../schemas/nutrition";
 // 101 (p.ej. tres tercios). Es solo texto de la leyenda: los arcos de cada torta se dibujan
 // siempre con las kcal, nunca con el %.
 
+// 0 cuando no hay total: evita 0/0 → NaN. También atrapa un total NaN (NaN > 0 es false).
+const pct = (v: number, total: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
+
 export type MealSliceKey = MealType | "sin_tipo";
 
 export interface MealSlice {
@@ -49,7 +52,7 @@ export function caloriesByMeal(meals: Meal[]): MealSlice[] {
   return MEAL_ORDER.flatMap(({ key, label }) => {
     const kcal = kcalBy.get(key) ?? 0;
     if (kcal <= 0) return [];
-    return [{ key, label, kcal: Math.round(kcal), pct: Math.round((kcal / total) * 100) }];
+    return [{ key, label, kcal: Math.round(kcal), pct: pct(kcal, total) }];
   });
 }
 
@@ -87,7 +90,9 @@ export function macroSplit(comido: MacroGrams, meta: MacroGrams | null): MacroSl
     label: r.label,
     g: Math.round(comido[r.field]),
     kcal: Math.round(actual[i]),
-    pctActual: totalActual > 0 ? Math.round((actual[i] / totalActual) * 100) : 0,
-    pctTarget: target && totalTarget > 0 ? Math.round((target[i] / totalTarget) * 100) : null,
+    pctActual: pct(actual[i], totalActual),
+    // El guard de totalTarget se queda: sin meta (o con una meta toda en 0) esto es null, no 0 —
+    // un 0/0 no significa "0% de la meta", significa que no hay meta contra la cual comparar.
+    pctTarget: target && totalTarget > 0 ? pct(target[i], totalTarget) : null,
   }));
 }
