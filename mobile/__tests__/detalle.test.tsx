@@ -34,7 +34,9 @@ beforeEach(() => {
 
 test("arranca en Resumen: calorías, macros en barras y líquido", async () => {
   await render(<DetalleDiaScreen />);
-  expect(screen.getByText("Calorías")).toBeTruthy();
+  // getAllByText, no getByText: desde la Task 7 "Calorías" también es el label del segmento, y
+  // coincide en texto con este SectionTitle del Resumen.
+  expect(screen.getAllByText("Calorías").length).toBeGreaterThan(0);
   expect(screen.getByText(/te quedan 700/)).toBeTruthy();
   expect(screen.getByText("Proteína")).toBeTruthy();
   expect(screen.getByText("2100 ml")).toBeTruthy();
@@ -127,4 +129,28 @@ test("meta incompleta: saturadas se muestra sin referencia (el 10% depende de la
   expect(screen.getByText("18 g")).toBeTruthy(); // sin "/ ref"
   expect(screen.queryByTestId("nutr-saturated_fat_g-bar")).toBeNull();
   expect(screen.getByText("40 / 50 g")).toBeTruthy(); // las fijas sí siguen
+});
+
+const mealsFixture = [
+  { id: "m1", eatenAt: 1, mealType: "desayuno", note: null, items: [{ kcal: 500, protein_g: 0, carbs_g: 0, fat_g: 0 }] },
+  { id: "m2", eatenAt: 2, mealType: "cena", note: null, items: [{ kcal: 1500, protein_g: 0, carbs_g: 0, fat_g: 0 }] },
+];
+
+test("pestaña Calorías: torta con una porción por comida + leyenda con kcal y %", async () => {
+  mockDay({ meals: mealsFixture });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-calorias"));
+  expect(screen.getByTestId("pie-arc-0")).toBeTruthy();
+  expect(screen.getByTestId("pie-arc-1")).toBeTruthy();
+  expect(screen.getByText("Desayuno")).toBeTruthy();
+  expect(screen.getByText("500 kcal · 25%")).toBeTruthy();
+  expect(screen.getByText("1500 kcal · 75%")).toBeTruthy();
+});
+
+test("pestaña Calorías sin comidas: empty state, sin torta", async () => {
+  mockDay({ meals: [] });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-calorias"));
+  expect(screen.getByText(/Todavía no registraste comidas/)).toBeTruthy();
+  expect(screen.queryByTestId("pie-arc-0")).toBeNull();
 });

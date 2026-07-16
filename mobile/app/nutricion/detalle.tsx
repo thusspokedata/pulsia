@@ -3,15 +3,17 @@ import { ScrollView, Text } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useNutritionDay } from "../../src/nutrition/useNutritionDay";
 import { ResumenTab } from "../../src/nutrition/tabs/ResumenTab";
+import { CaloriasTab } from "../../src/nutrition/tabs/CaloriasTab";
 import { NutrientesTab } from "../../src/nutrition/tabs/NutrientesTab";
 import { SegmentToggle } from "../../src/components/SegmentToggle";
 import { colors, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 
-type TabKey = "resumen" | "nutrientes";
+type TabKey = "resumen" | "calorias" | "nutrientes";
 
 const TABS: { value: TabKey; label: string }[] = [
   { value: "resumen", label: "Resumen" },
+  { value: "calorias", label: "Calorías" },
   { value: "nutrientes", label: "Nutrientes" },
 ];
 
@@ -19,7 +21,7 @@ export default function DetalleDiaScreen() {
   const screenPad = useScreenPadding(spacing.lg);
   const { offset: offsetParam } = useLocalSearchParams<{ offset?: string }>();
   const offset = Number(offsetParam ?? 0) || 0;
-  const { error, summary, goalView } = useNutritionDay(offset);
+  const { error, meals, summary, goalView } = useNutritionDay(offset);
   const [tab, setTab] = useState<TabKey>("resumen");
 
   return (
@@ -36,6 +38,7 @@ export default function DetalleDiaScreen() {
           <ResumenTab summary={summary} goalView={goalView} />
         </>
       )}
+      {tab === "calorias" && <CaloriasTab meals={meals} />}
       {tab === "nutrientes" && <NutrientesTab summary={summary} goalView={goalView} />}
 
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
