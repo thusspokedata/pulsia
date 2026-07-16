@@ -65,6 +65,7 @@ export function NutrientesTab({ summary, goalView, offset }: Props) {
           <Pressable
             key={r.key}
             testID={`nutr-${r.key}-row`}
+            accessibilityRole="button"
             // Sin dato no hay nada que desglosar: la fila se ve pero no navega a una lista vacía.
             disabled={r.value == null}
             onPress={() => router.push(`/nutricion/nutriente?key=${r.key}&offset=${offset}`)}

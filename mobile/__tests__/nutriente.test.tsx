@@ -87,3 +87,11 @@ test("el ancho de la barra refleja el aporte relativo, no siempre está llena", 
   expect(screen.getByTestId("rank-Huevo-bar").props.style.width).toBe("100%");
   expect(screen.getByTestId("rank-Queso-bar").props.style.width).toBe("25%");
 });
+
+test("alimentos con aporte ínfimo: la barra no queda en NaN%", async () => {
+  // 0.04 mg redondea a 0 en foodsHighestIn → el divisor de la barra sería 0.
+  (listMeals as jest.Mock).mockResolvedValue([meal([item("Galletita", 10, 0.04)])]);
+  await render(<NutrienteScreen />);
+  await waitFor(() => expect(screen.getByText("Galletita")).toBeTruthy());
+  expect(screen.getByTestId("rank-Galletita-bar").props.style.width).toBe("0%");
+});

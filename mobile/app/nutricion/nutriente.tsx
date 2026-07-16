@@ -38,6 +38,9 @@ export default function NutrienteScreen() {
   const { meals, loading, error } = useMealsRange(days, offset);
   const ranked = foodsHighestIn(meals, nutrient);
   const unit = NUTRIENT_UNIT[nutrient];
+  // El aporte se redondea a 1 decimal en foodsHighestIn, así que un alimento con trazas (0.04 g)
+  // sale con amount 0. Sin el guard, la barra del "que más aporta" haría 0/0 → width "NaN%".
+  const maxAmount = ranked[0]?.amount || 1;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.md }}>
@@ -70,7 +73,7 @@ export default function NutrienteScreen() {
                 </Text>
               </View>
               <Bar
-                pct={Math.round((f.amount / ranked[0].amount) * 100)}
+                pct={Math.round((f.amount / maxAmount) * 100)}
                 over={false}
                 testID={`rank-${f.name}-bar`}
               />
