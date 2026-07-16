@@ -41,7 +41,7 @@ export default function DetalleDiaScreen() {
         </>
       )}
       {tab === "calorias" && <CaloriasTab meals={meals} />}
-      {tab === "nutrientes" && <NutrientesTab summary={summary} goalView={goalView} />}
+      {tab === "nutrientes" && <NutrientesTab summary={summary} goalView={goalView} offset={offset} />}
       {tab === "macros" && <MacrosTab summary={summary} goalView={goalView} />}
 
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
