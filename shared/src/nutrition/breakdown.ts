@@ -96,3 +96,41 @@ export function macroSplit(comido: MacroGrams, meta: MacroGrams | null): MacroSl
     pctTarget: target && totalTarget > 0 ? pct(target[i], totalTarget) : null,
   }));
 }
+
+// Los micros que se pueden rankear. Son los del snapshot de MealItem que tienen referencia en la
+// UI; `water_ml` queda afuera a propósito (el líquido tiene su propia vista).
+export type RankNutrient = "sugars_g" | "fiber_g" | "saturated_fat_g" | "salt_g" | "cholesterol_mg";
+
+export interface FoodRank {
+  name: string;
+  amount: number; // del nutriente, sumado en el rango
+  grams: number; // cantidad comida, sumada — sin esto no se puede decidir si bajar la porción
+  pctOfTotal: number; // 0–100
+}
+
+// Qué alimentos aportaron un nutriente, de mayor a menor. Agrupa por nombre: el mismo alimento
+// comido en 5 comidas distintas es UNA fila, que es como se piensa ("¿cuánto queso comí?").
+// Los ítems sin el dato (null) o en 0 no entran ni al ranking ni al total: un alimento que no
+// aporta nada no enseña nada, y contarlo como 0 solo ensucia la lista.
+export function foodsHighestIn(meals: Meal[], nutrient: RankNutrient): FoodRank[] {
+  const by = new Map<string, { amount: number; grams: number }>();
+  for (const m of meals) {
+    for (const item of m.items) {
+      const v = item[nutrient];
+      if (v == null || v <= 0) continue;
+      const acc = by.get(item.foodName) ?? { amount: 0, grams: 0 };
+      by.set(item.foodName, { amount: acc.amount + v, grams: acc.grams + item.grams });
+    }
+  }
+  const total = [...by.values()].reduce((a, v) => a + v.amount, 0);
+  if (total <= 0) return [];
+  return [...by.entries()]
+    .map(([name, v]) => ({
+      name,
+      amount: Math.round(v.amount * 10) / 10, // 1 decimal, como el resto de los micros
+      grams: Math.round(v.grams),
+      pctOfTotal: pct(v.amount, total),
+    }))
+    // Desempate por nombre: sin esto el orden depende del de inserción y la lista baila.
+    .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
+}

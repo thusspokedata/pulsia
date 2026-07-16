@@ -1,11 +1,13 @@
 import { render, screen, fireEvent } from "@testing-library/react-native";
+import { router } from "expo-router";
 import DetalleDiaScreen from "../app/nutricion/detalle";
 import { useNutritionDay } from "../src/nutrition/useNutritionDay";
 import { colors } from "../src/theme/tokens";
 
+let mockOffset = "0";
 jest.mock("expo-router", () => ({
   router: { push: jest.fn() },
-  useLocalSearchParams: () => ({ offset: "0" }),
+  useLocalSearchParams: () => ({ offset: mockOffset }),
 }));
 jest.mock("../src/nutrition/useNutritionDay", () => ({ useNutritionDay: jest.fn() }));
 
@@ -30,6 +32,7 @@ function mockDay(over: Partial<any> = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockOffset = "0";
   mockDay();
 });
 
@@ -222,4 +225,27 @@ test("pestaña Macros sin comidas: empty state, sin dona", async () => {
   await fireEvent.press(screen.getByTestId("seg-macros"));
   expect(screen.getByText(/Todavía no registraste comidas/)).toBeTruthy();
   expect(screen.queryByTestId("pie-arc-0")).toBeNull();
+});
+
+test("tocar un nutriente abre el desglose de alimentos, con su key y el día que estás mirando", async () => {
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  await fireEvent.press(screen.getByTestId("nutr-cholesterol_mg-row"));
+  expect(router.push).toHaveBeenCalledWith("/nutricion/nutriente?key=cholesterol_mg&offset=0");
+});
+
+test("el desglose se abre en el día que estás mirando, no siempre en hoy", async () => {
+  mockOffset = "5"; // mirando 5 días atrás (offset positivo = pasado)
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  await fireEvent.press(screen.getByTestId("nutr-cholesterol_mg-row"));
+  expect(router.push).toHaveBeenCalledWith("/nutricion/nutriente?key=cholesterol_mg&offset=5");
+});
+
+test("un nutriente SIN dato no navega (no hay nada que desglosar)", async () => {
+  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, fiber_g: null } } });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  await fireEvent.press(screen.getByTestId("nutr-fiber_g-row"));
+  expect(router.push).not.toHaveBeenCalled();
 });
