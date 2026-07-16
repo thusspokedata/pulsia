@@ -36,7 +36,7 @@ export default function DetalleDiaScreen() {
           <ResumenTab summary={summary} goalView={goalView} />
         </>
       )}
-      {tab === "nutrientes" && <NutrientesTab summary={summary} />}
+      {tab === "nutrientes" && <NutrientesTab summary={summary} goalView={goalView} />}
 
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
     </ScrollView>

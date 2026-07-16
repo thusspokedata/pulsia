@@ -82,3 +82,49 @@ test("día sin ningún micro cargado: empty state en vez de una tabla de guiones
   expect(screen.getByText(/Todavía no hay datos de nutrientes/)).toBeTruthy();
   expect(screen.queryByText("Azúcares")).toBeNull();
 });
+
+test("cada micro se compara contra su referencia; pasarse de un LÍMITE avisa", async () => {
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  expect(screen.getByText("40 / 50 g")).toBeTruthy(); // azúcares, ref fija
+  expect(screen.getByText("210 / 300 mg")).toBeTruthy(); // colesterol
+  expect(screen.getByText("18 / 24.4 g")).toBeTruthy(); // saturadas: 10% de 2200 kcal / 9
+});
+
+test("la fibra es un PISO: llegar a la referencia no avisa", async () => {
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  expect(screen.getByText("22 / 30 g")).toBeTruthy();
+  expect(screen.getByTestId("nutr-fiber_g-bar").props.style.backgroundColor).not.toBe("#B45309"); // colors.warning
+});
+
+test("fibra POR ENCIMA del piso: sigue sin avisar (pasarse de fibra es bueno)", async () => {
+  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, fiber_g: 45 } } });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  expect(screen.getByTestId("nutr-fiber_g-bar").props.style.backgroundColor).not.toBe("#B45309");
+});
+
+test("sal por encima del límite: la barra pinta ámbar", async () => {
+  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, salt_g: 9 } } });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  expect(screen.getByTestId("nutr-salt_g-bar").props.style.backgroundColor).toBe("#B45309"); // colors.warning
+});
+
+test("micro sin dato: muestra — y no dibuja barra", async () => {
+  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, fiber_g: null } } });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  expect(screen.getByText("—")).toBeTruthy();
+  expect(screen.queryByTestId("nutr-fiber_g-bar")).toBeNull();
+});
+
+test("meta incompleta: saturadas se muestra sin referencia (el 10% depende de la meta de kcal)", async () => {
+  mockDay({ goalView: { status: "incomplete", missing: ["peso"] } });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  expect(screen.getByText("18 g")).toBeTruthy(); // sin "/ ref"
+  expect(screen.queryByTestId("nutr-saturated_fat_g-bar")).toBeNull();
+  expect(screen.getByText("40 / 50 g")).toBeTruthy(); // las fijas sí siguen
+});

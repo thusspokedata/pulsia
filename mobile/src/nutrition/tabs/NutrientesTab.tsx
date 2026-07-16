@@ -1,23 +1,45 @@
 import { View, Text } from "react-native";
+import { NUTRIENT_REFERENCES, NUTRIENT_REFERENCE_KIND, saturatedFatRefG } from "@pulsia/shared";
+import type { GoalView } from "../goalView";
 import type { NutritionDaySummary } from "../daySummary";
 import { colors } from "../../theme/tokens";
-import { Card, SectionTitle, EmptyState } from "./ui";
+import { Card, SectionTitle, EmptyState, Bar } from "./ui";
 
 interface Props {
   summary: NutritionDaySummary;
+  goalView: GoalView | null;
 }
 
-export function NutrientesTab({ summary }: Props) {
-  const { dayTotals, cholesterolMg } = summary;
-  const rows = [
-    ["Azúcares", dayTotals.sugars_g, "g"],
-    ["Fibra", dayTotals.fiber_g, "g"],
-    ["Grasas saturadas", dayTotals.saturated_fat_g, "g"],
-    ["Sal", dayTotals.salt_g, "g"],
-    ["Colesterol", cholesterolMg, "mg"],
-  ] as [string, number | null, string][];
+type RowKey = keyof typeof NUTRIENT_REFERENCE_KIND;
 
-  if (rows.every(([, v]) => v == null)) {
+interface NutrRow {
+  key: RowKey;
+  label: string;
+  value: number | null;
+  ref: number | null; // null = sin referencia que mostrar (saturadas sin meta de kcal)
+  unit: string;
+}
+
+export function NutrientesTab({ summary, goalView }: Props) {
+  const { dayTotals, cholesterolMg } = summary;
+  const goalKcal = goalView?.status === "ok" ? goalView.kcal!.meta : null;
+
+  const rows: NutrRow[] = [
+    { key: "sugars_g", label: "Azúcares", value: dayTotals.sugars_g, ref: NUTRIENT_REFERENCES.sugars_g, unit: "g" },
+    { key: "fiber_g", label: "Fibra", value: dayTotals.fiber_g, ref: NUTRIENT_REFERENCES.fiber_g, unit: "g" },
+    {
+      key: "saturated_fat_g",
+      label: "Grasas saturadas",
+      value: dayTotals.saturated_fat_g,
+      // La OMS acota las saturadas al 10% de la ENERGÍA, así que sin meta de kcal no hay referencia.
+      ref: goalKcal != null ? saturatedFatRefG(goalKcal) : null,
+      unit: "g",
+    },
+    { key: "salt_g", label: "Sal", value: dayTotals.salt_g, ref: NUTRIENT_REFERENCES.salt_g, unit: "g" },
+    { key: "cholesterol_mg", label: "Colesterol", value: cholesterolMg, ref: NUTRIENT_REFERENCES.cholesterol_mg, unit: "mg" },
+  ];
+
+  if (rows.every((r) => r.value == null)) {
     return (
       <Card>
         <SectionTitle>Nutrientes</SectionTitle>
@@ -29,12 +51,26 @@ export function NutrientesTab({ summary }: Props) {
   return (
     <Card>
       <SectionTitle>Nutrientes</SectionTitle>
-      {rows.map(([label, v, unit]) => (
-        <View key={label} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 }}>
-          <Text style={{ color: colors.text, fontSize: 14 }}>{label}</Text>
-          <Text style={{ color: colors.textMuted, fontSize: 14 }}>{v == null ? "—" : `${Math.round(v)} ${unit}`}</Text>
-        </View>
-      ))}
+      <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18 }}>
+        La referencia es pública (OMS), no una meta calculada para vos. La fibra es un piso a alcanzar; el resto, límites a
+        no pasar.
+      </Text>
+      {rows.map((r) => {
+        // `over` solo aplica a los límites: pasarse del piso de fibra es BUENO, no se avisa.
+        const over = r.value != null && r.ref != null && NUTRIENT_REFERENCE_KIND[r.key] === "max" && r.value > r.ref;
+        const pct = r.value != null && r.ref != null && r.ref > 0 ? Math.min(100, Math.round((r.value / r.ref) * 100)) : 0;
+        return (
+          <View key={r.key} style={{ gap: 4, marginTop: 4 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
+              <Text style={{ color: colors.text, fontSize: 14 }}>{r.label}</Text>
+              <Text style={{ color: over ? colors.warning : colors.textMuted, fontSize: 13 }}>
+                {r.value == null ? "—" : r.ref == null ? `${Math.round(r.value)} ${r.unit}` : `${Math.round(r.value)} / ${r.ref} ${r.unit}`}
+              </Text>
+            </View>
+            {r.value != null && r.ref != null && <Bar pct={pct} over={over} testID={`nutr-${r.key}-bar`} />}
+          </View>
+        );
+      })}
     </Card>
   );
 }
