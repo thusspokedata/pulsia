@@ -199,6 +199,16 @@ test("pestaña Macros sin meta: muestra el % real sin la comparación", async ()
   expect(screen.queryByText(/meta/)).toBeNull();
 });
 
+test("la dona reparte por CALORÍAS, no por gramos (la grasa tiene 9 kcal/g)", async () => {
+  // 100 g de carbos (400 kcal) y 50 g de grasa (450 kcal): por kcal la grasa es la porción MAYOR
+  // (190°, arco largo); por gramos sería la menor (120°, arco corto).
+  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, protein_g: 0, carbs_g: 100, fat_g: 50 } } });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-macros"));
+  const d = screen.getByTestId("pie-arc-1").props.d as string; // arc 1 = grasa (la proteína en 0 no dibuja)
+  expect(d).toMatch(/A 90 90 0 1 1 /); // arco EXTERNO con large-arc-flag = 1
+});
+
 test("pestaña Macros sin comidas: empty state, sin dona", async () => {
   mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, protein_g: 0, carbs_g: 0, fat_g: 0 } } });
   await render(<DetalleDiaScreen />);
