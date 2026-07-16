@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { caloriesByMeal, macroSplit } from "./breakdown";
+import { caloriesByMeal, macroSplit, foodsHighestIn } from "./breakdown";
 import type { Meal } from "../schemas/nutrition";
 
 const meal = (mealType: Meal["mealType"], kcals: number[]): Meal =>
@@ -84,4 +84,53 @@ test("meta con todo en 0 se trata como si no hubiera meta (pctTarget null, no 0/
   const slices = macroSplit({ protein_g: 100, carbs_g: 100, fat_g: 22.2 }, { protein_g: 0, carbs_g: 0, fat_g: 0 });
   expect(slices.map((s) => s.pctTarget)).toEqual([null, null, null]);
   expect(slices.map((s) => s.pctActual)).toEqual([40, 40, 20]); // lo comido no se ve afectado
+});
+
+// El fixture de arriba (`meal`) solo pone kcal. Para el ranking hacen falta ítems con nombre,
+// gramos y micros, así que va uno propio.
+const itemsMeal = (items: any[]): Meal => ({ id: "m", eatenAt: 1, mealType: null, note: null, items } as any);
+const it = (foodName: string, grams: number, o: any = {}) =>
+  ({ foodName, grams, kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, cholesterol_mg: null, sugars_g: null, ...o });
+
+test("ordena los alimentos por aporte del nutriente, de mayor a menor", () => {
+  const meals = [itemsMeal([it("Queso", 100, { cholesterol_mg: 90 }), it("Huevo", 60, { cholesterol_mg: 220 })])];
+  expect(foodsHighestIn(meals, "cholesterol_mg").map((f) => f.name)).toEqual(["Huevo", "Queso"]);
+});
+
+test("suma el mismo alimento comido varias veces (aporte y gramos)", () => {
+  const meals = [
+    itemsMeal([it("Queso", 100, { cholesterol_mg: 90 })]),
+    itemsMeal([it("Queso", 50, { cholesterol_mg: 45 })]),
+  ];
+  expect(foodsHighestIn(meals, "cholesterol_mg")).toEqual([
+    { name: "Queso", amount: 135, grams: 150, pctOfTotal: 100 },
+  ]);
+});
+
+test("el % es sobre el total del nutriente en el rango", () => {
+  const meals = [itemsMeal([it("Queso", 100, { cholesterol_mg: 75 }), it("Huevo", 60, { cholesterol_mg: 225 })])];
+  expect(foodsHighestIn(meals, "cholesterol_mg").map((f) => f.pctOfTotal)).toEqual([75, 25]);
+});
+
+test("los ítems SIN el dato se saltean y no cuentan en el total", () => {
+  // Si el alimento sin dato contara como 0, seguiría apareciendo con 0% y ensuciaría la lista.
+  const meals = [itemsMeal([it("Queso", 100, { cholesterol_mg: 100 }), it("Lechuga", 50)])];
+  const ranked = foodsHighestIn(meals, "cholesterol_mg");
+  expect(ranked.map((f) => f.name)).toEqual(["Queso"]);
+  expect(ranked[0].pctOfTotal).toBe(100);
+});
+
+test("los ítems con el dato en 0 tampoco aparecen (aportan nada que aprender)", () => {
+  const meals = [itemsMeal([it("Queso", 100, { cholesterol_mg: 100 }), it("Manzana", 150, { cholesterol_mg: 0 })])];
+  expect(foodsHighestIn(meals, "cholesterol_mg").map((f) => f.name)).toEqual(["Queso"]);
+});
+
+test("empate de aporte: ordena por nombre, para que la lista no baile entre renders", () => {
+  const meals = [itemsMeal([it("Zapallo", 100, { sugars_g: 5 }), it("Aceituna", 100, { sugars_g: 5 })])];
+  expect(foodsHighestIn(meals, "sugars_g").map((f) => f.name)).toEqual(["Aceituna", "Zapallo"]);
+});
+
+test("sin comidas, o sin ningún dato del nutriente → lista vacía (sin dividir por cero)", () => {
+  expect(foodsHighestIn([], "cholesterol_mg")).toEqual([]);
+  expect(foodsHighestIn([itemsMeal([it("Lechuga", 50)])], "cholesterol_mg")).toEqual([]);
 });
