@@ -1,0 +1,44 @@
+import { apiFetch } from "./client";
+import type { CardioActivity } from "@pulsia/shared";
+
+// Trae las actividades de cardio del usuario. Sin rango devuelve todo; con from/to
+// (epoch ms) el backend filtra por startedAt.
+export async function listCardio(baseUrl: string, from?: number, to?: number): Promise<CardioActivity[]> {
+  const qs = from != null && to != null ? `?from=${from}&to=${to}` : "";
+  const res = await apiFetch(baseUrl, `/cardio${qs}`);
+  if (!res.ok) throw new Error("No se pudieron cargar las actividades");
+  return (await res.json()) as CardioActivity[];
+}
+
+// Crea una actividad de cardio. El backend devuelve 409 si ya existe una en ese momento
+// (dedupe por solape temporal), que traducimos a un mensaje específico.
+export async function createCardio(baseUrl: string, activity: CardioActivity): Promise<{ id: string }> {
+  const res = await apiFetch(baseUrl, "/cardio", { method: "POST", body: JSON.stringify(activity) });
+  if (!res.ok) {
+    if (res.status === 409) throw new Error("Ya existe una actividad en ese momento");
+    throw new Error("No se pudo guardar la actividad");
+  }
+  return (await res.json()) as { id: string };
+}
+
+// Trae UNA actividad de cardio por id.
+export async function getCardioById(baseUrl: string, id: string): Promise<CardioActivity> {
+  const res = await apiFetch(baseUrl, `/cardio/${id}`);
+  if (!res.ok) throw new Error("No se pudo cargar la actividad");
+  return (await res.json()) as CardioActivity;
+}
+
+// Actualiza parcialmente una actividad (solo campos editables manualmente).
+export async function updateCardio(
+  baseUrl: string, id: string,
+  patch: Partial<Pick<CardioActivity, "type" | "durationMs" | "distanceM" | "notes">>,
+): Promise<void> {
+  const res = await apiFetch(baseUrl, `/cardio/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+  if (!res.ok) throw new Error("No se pudo actualizar la actividad");
+}
+
+// Elimina una actividad de cardio del backend.
+export async function deleteCardio(baseUrl: string, id: string): Promise<void> {
+  const res = await apiFetch(baseUrl, `/cardio/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("No se pudo borrar la actividad");
+}
