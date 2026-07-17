@@ -26,10 +26,12 @@
 | `mobile/src/session/summary.ts` | Rest por-fila resta solape con `session.pauseIntervals` | Modificar |
 | `mobile/src/storage/pauseState.ts` | `PauseState` con `intervals` + validador/migración + helpers puros | Modificar |
 | `mobile/app/sesion.tsx` | Wiring: mantener intervalos, pausar/reanudar/terminar/restaurar | Modificar |
+| `mobile/src/components/SessionIndicator.tsx` | Timer del banner: usar `totalPausedMs(intervals)` en vez de `pausedMs`/`pausedAt` | Modificar |
 | `mobile/__tests__/session-engine.test.ts` | Tests de `overlapMs` y `finishSession` | Modificar |
 | `mobile/__tests__/summary.test.ts` | Tests de rest por-fila con pausas | Modificar |
 | `mobile/__tests__/pause-state-storage.test.ts` | Tests de `PauseState` + helpers | Modificar |
 | `mobile/__tests__/sesion.test.tsx` | Mock de `pauseState` con los helpers reales | Modificar |
+| `mobile/__tests__/session-indicator.test.tsx` | Mock con helper real + mockPauseState con `intervals` | Modificar |
 
 ---
 
