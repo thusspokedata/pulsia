@@ -136,10 +136,32 @@ export function overlapMs(a0: number, a1: number, b0: number, b1: number): numbe
   return Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
 }
 
-export function finishSession(session: WorkoutSession, args: { nowMs: number; pausedMs?: number }): WorkoutSession {
-  // El tiempo pausado (ir al baño, etc.) no cuenta en el total. Nunca negativo.
-  const total = Math.max(0, args.nowMs - session.startedAt - (args.pausedMs ?? 0));
-  return { ...session, endedAt: args.nowMs, totalDurationMs: total };
+export function finishSession(
+  session: WorkoutSession,
+  args: { nowMs: number; pauseIntervals?: { startedAt: number; endedAt: number | null }[] },
+): WorkoutSession {
+  const nowMs = args.nowMs;
+  // Normalizar: cerrar el intervalo abierto en `now`. Los intervalos son la fuente del total y
+  // de la corrección por-serie, así que ambos quedan consistentes por construcción.
+  const ivs = (args.pauseIntervals ?? []).map((iv) => ({ startedAt: iv.startedAt, endedAt: iv.endedAt ?? nowMs }));
+
+  // Total: descontar el tiempo de pausa que cae dentro de la ventana de la sesión. Nunca negativo.
+  const totalPaused = ivs.reduce((acc, iv) => acc + overlapMs(session.startedAt, nowMs, iv.startedAt, iv.endedAt), 0);
+  const total = Math.max(0, nowMs - session.startedAt - totalPaused);
+
+  // Por serie terminada: restar el solape de las pausas con [startedAt, endedAt] de esa serie, para
+  // que el tiempo de pausa mid-serie no se cuente como trabajo.
+  const exercises = session.exercises.map((ex) => ({
+    ...ex,
+    sets: ex.sets.map((s) => {
+      if (s.endedAt == null || s.durationMs == null) return s;
+      const paused = ivs.reduce((acc, iv) => acc + overlapMs(s.startedAt, s.endedAt as number, iv.startedAt, iv.endedAt), 0);
+      return { ...s, durationMs: Math.max(0, s.durationMs - paused) };
+    }),
+  }));
+
+  const base = { ...session, exercises, endedAt: nowMs, totalDurationMs: total };
+  return ivs.length > 0 ? { ...base, pauseIntervals: ivs } : base;
 }
 
 export function setNotes(session: WorkoutSession, notes: string): WorkoutSession {

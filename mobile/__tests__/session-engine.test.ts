@@ -141,25 +141,72 @@ test("finishSession setea endedAt y totalDurationMs", () => {
   expect(s.totalDurationMs).toBe(3600000);
 });
 
-test("finishSession con pausedMs resta el tiempo pausado del total", () => {
+test("finishSession resta del total el tiempo de las pausas", () => {
   let s = start(); // startedAt = 1000
-  s = finishSession(s, { nowMs: 3601000, pausedMs: 600000 });
-  expect(s.endedAt).toBe(3601000);
+  s = finishSession(s, { nowMs: 3601000, pauseIntervals: [{ startedAt: 1000000, endedAt: 1600000 }] });
   expect(s.totalDurationMs).toBe(3000000); // 3600000 - 600000
+  expect(s.pauseIntervals).toEqual([{ startedAt: 1000000, endedAt: 1600000 }]);
 });
 
-test("finishSession sin pausedMs se comporta igual que antes (retrocompat)", () => {
-  let s = start();
-  const a = finishSession(s, { nowMs: 3601000 });
-  const b = finishSession(s, { nowMs: 3601000, pausedMs: 0 });
+test("finishSession sin pauseIntervals se comporta igual que antes (retrocompat)", () => {
+  const a = finishSession(start(), { nowMs: 3601000 });
+  const b = finishSession(start(), { nowMs: 3601000, pauseIntervals: [] });
   expect(a.totalDurationMs).toBe(3600000);
   expect(b.totalDurationMs).toBe(3600000);
+  expect(a.pauseIntervals).toBeUndefined();
+  expect(b.pauseIntervals).toBeUndefined();
 });
 
 test("finishSession nunca deja totalDurationMs negativo", () => {
   let s = start(); // startedAt = 1000
-  s = finishSession(s, { nowMs: 2000, pausedMs: 999999 });
+  s = finishSession(s, { nowMs: 2000, pauseIntervals: [{ startedAt: 1000, endedAt: 999999 }] });
   expect(s.totalDurationMs).toBe(0);
+});
+
+test("finishSession: pausa MID-SERIE descuenta el tiempo de esa serie (no cuenta como trabajo)", () => {
+  // Serie: [2000, 12000] = 10 s brutos. Pausa [5000, 8000] = 3 s dentro de la serie.
+  let s = start();
+  s = tapRep(s, { exerciseOrder: 0, setStartMs: 2000, nowMs: 3000 });
+  s = endSet(s, { exerciseOrder: 0, weightKg: 40, rpe: 8, nowMs: 12000 });
+  s = finishSession(s, { nowMs: 13000, pauseIntervals: [{ startedAt: 5000, endedAt: 8000 }] });
+  const set = s.exercises[0].sets[0];
+  expect(set.durationMs).toBe(7000); // 10000 - 3000
+});
+
+test("finishSession: pausa MID-DESCANSO no toca la duración de las series", () => {
+  // Serie: [2000, 5000] = 3 s. Pausa [7000, 9000] cae DESPUÉS de la serie (descanso).
+  let s = start();
+  s = tapRep(s, { exerciseOrder: 0, setStartMs: 2000, nowMs: 3000 });
+  s = endSet(s, { exerciseOrder: 0, weightKg: 40, rpe: 8, nowMs: 5000 });
+  s = finishSession(s, { nowMs: 12000, pauseIntervals: [{ startedAt: 7000, endedAt: 9000 }] });
+  expect(s.exercises[0].sets[0].durationMs).toBe(3000); // intacta
+  expect(s.totalDurationMs).toBe(11000 - 2000); // (12000-1000) - 2000 pausa
+});
+
+test("finishSession: pausas superpuestas que suman más que la serie clampean la duración a 0", () => {
+  // Serie: [2000, 5000] = 3 s. Dos pausas que SE SOLAPAN entre sí, cada una solapando la serie:
+  // [1000,4000] aporta 2 s y [3000,9000] aporta otros 2 s → suma 4 s > 3 s de la serie.
+  // Sin el clamp, la resta daría un durationMs negativo.
+  let s = start();
+  s = tapRep(s, { exerciseOrder: 0, setStartMs: 2000, nowMs: 3000 });
+  s = endSet(s, { exerciseOrder: 0, weightKg: 40, rpe: 8, nowMs: 5000 });
+  s = finishSession(s, {
+    nowMs: 12000,
+    pauseIntervals: [
+      { startedAt: 1000, endedAt: 4000 },
+      { startedAt: 3000, endedAt: 9000 },
+    ],
+  });
+  expect(s.exercises[0].sets[0].durationMs).toBe(0);
+});
+
+test("finishSession: la serie abierta (endedAt null) no se toca", () => {
+  let s = start();
+  s = tapRep(s, { exerciseOrder: 0, setStartMs: 2000, nowMs: 3000 }); // serie abierta
+  s = finishSession(s, { nowMs: 12000, pauseIntervals: [{ startedAt: 5000, endedAt: 8000 }] });
+  const set = s.exercises[0].sets[0];
+  expect(set.endedAt).toBeNull();
+  expect(set.durationMs).toBeNull();
 });
 
 test("endSet puebla hrAvg/hrMax cuando se pasan", () => {
