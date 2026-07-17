@@ -84,6 +84,11 @@ const baseConfig = { encryptionKey: KEY, defaultModel: "claude-sonnet-4-6", invi
 const aiClient = {
   generateProgram: async () => ({ name: "x", weeks: [] }),
   extractFood: async () => ({ name: "Banana", basis: "per_100g", kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120, source: "estimate" }),
+  describeFood: async () => ({
+    name: "Almendra", basis: "per_100g" as const, kcal: 579, protein_g: 21, carbs_g: 22, fat_g: 50,
+    saturated_fat_g: 3.8, sugars_g: 4.4, fiber_g: 12.5, salt_g: 0, cholesterol_mg: 0, water_ml: 4,
+    unitWeightG: 1.2, source: "estimate" as const,
+  }),
 };
 const deps = (db: any, aiClientOverride: any = aiClient): any => ({ db, config: baseConfig, aiClient: aiClientOverride });
 
@@ -438,4 +443,48 @@ test("POST /nutrition/reports/generate: daily con ajuste pero SIN plan activo �
   });
   expect(res.status).toBe(200);
   expect(db._inserts.find((i: any) => i.table === supplementAdjustment)).toBeUndefined();
+});
+
+// ---- Alta por texto (#foods/describe) ----
+
+const ALMENDRA = {
+  name: "Almendra", basis: "per_100g" as const, kcal: 579, protein_g: 21, carbs_g: 22, fat_g: 50,
+  saturated_fat_g: 3.8, sugars_g: 4.4, fiber_g: 12.5, salt_g: 0, cholesterol_mg: 0, water_ml: 4,
+  unitWeightG: 1.2, source: "estimate" as const,
+};
+
+const describePost = (app: any, text: string) =>
+  app.request("/nutrition/foods/describe", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+
+test("POST /nutrition/foods/describe → devuelve el alimento estimado desde el texto, sin persistir", async () => {
+  const res = await describePost(createApp(deps(fakeDb())), "almendra");
+  expect(res.status).toBe(200);
+  expect(await res.json()).toMatchObject({ name: "Almendra", kcal: 579 });
+});
+
+test("POST /nutrition/foods/describe: el server PISA el source aunque la IA diga 'label'", async () => {
+  // Por texto no hay etiqueta que leer. Si el modelo dijera "label" porque cree saber la etiqueta
+  // de una marca, el catálogo mentiría sobre la procedencia del dato.
+  const mentiroso = { ...aiClient, describeFood: async () => ({ ...ALMENDRA, source: "label" as const }) };
+  const res = await describePost(createApp(deps(fakeDb(), mentiroso)), "almendra");
+  expect(res.status).toBe(200);
+  expect((await res.json()).source).toBe("estimate");
+});
+
+test("POST /nutrition/foods/describe: texto muy corto → 400", async () => {
+  expect((await describePost(createApp(deps(fakeDb())), "a")).status).toBe(400);
+});
+
+test("POST /nutrition/foods/describe: texto larguísimo → 400 (no se paga por tokenizar una novela)", async () => {
+  expect((await describePost(createApp(deps(fakeDb())), "x".repeat(101))).status).toBe(400);
+});
+
+test("POST /nutrition/foods/describe: si la IA falla → 502 con el mensaje de cargarlo a mano", async () => {
+  const roto = { ...aiClient, describeFood: async () => { throw new Error("boom"); } };
+  const res = await describePost(createApp(deps(fakeDb(), roto)), "almendra");
+  expect(res.status).toBe(502);
+  expect((await res.json()).error).toMatch(/a mano/);
 });

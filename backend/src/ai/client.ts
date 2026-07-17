@@ -46,6 +46,7 @@ export interface AiClient {
     mediaType: string;
     apiKey: string;
   }): Promise<import("@pulsia/shared").FoodExtraction>;
+  describeFood?(input: { text: string; apiKey: string }): Promise<import("@pulsia/shared").FoodExtraction>;
   extractSupplement?(input: {
     imageBase64: string;
     mediaType: string;
@@ -184,9 +185,26 @@ export class AnthropicAiClient implements AiClient {
       description: "Devuelve los datos nutricionales del alimento de la foto.",
       content: [
         { type: "image", source: { type: "base64", media_type: mediaType as any, data: imageBase64 } },
-        { type: "text", text: buildFoodPrompt() },
+        { type: "text", text: buildFoodPrompt("photo") },
       ],
       truncatedMsg: "La respuesta se truncó (etiqueta demasiado compleja).",
+      missingMsg: "La IA no devolvió los datos del alimento.",
+    });
+  }
+
+  // Camino de texto: el usuario escribe "almendra" y la IA estima. Sin bloque de imagen — que es
+  // exactamente de dónde sale el ahorro frente a extractFood.
+  async describeFood({ text, apiKey }: { text: string; apiKey: string }) {
+    const client = new Anthropic({ apiKey });
+    return callStructuredTool({
+      client,
+      model: "claude-opus-4-8",
+      maxTokens: 1024,
+      schema: FoodExtractionSchema,
+      toolName: "return_food",
+      description: "Devuelve los datos nutricionales estimados del alimento nombrado.",
+      content: [{ type: "text", text: `${buildFoodPrompt("text")}\n\nAlimento: ${text}` }],
+      truncatedMsg: "La respuesta se truncó.",
       missingMsg: "La IA no devolvió los datos del alimento.",
     });
   }

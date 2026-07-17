@@ -3,10 +3,11 @@ import { ScrollView, View, Text, TextInput, Pressable, ActivityIndicator } from 
 import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { getBackendUrl } from "../../src/storage/config";
-import { extractFood, createFood, getFood, updateFood } from "../../src/api/nutrition";
-import type { FoodBasis, FoodSource } from "@pulsia/shared";
+import { extractFood, describeFood, createFood, getFood, updateFood } from "../../src/api/nutrition";
+import type { FoodBasis, FoodExtraction, FoodSource } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
+import { SourceChip } from "../../src/nutrition/SourceChip";
 
 type Form = {
   name: string; basis: FoodBasis; kcal: string; protein_g: string; carbs_g: string; fat_g: string;
@@ -20,6 +21,7 @@ export default function AgregarAlimentoScreen() {
   const screenPad = useScreenPadding(spacing.lg);
   const baseUrl = useRef<string | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
+  const [foodText, setFoodText] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +50,37 @@ export default function AgregarAlimentoScreen() {
     })();
   }, [foodId]);
 
+  // Compartida por los dos caminos de alta con IA (foto y texto): el formulario tiene que quedar
+  // igual venga de donde venga.
+  function prefillFrom(ex: FoodExtraction) {
+    const numStr = (v: number | null | undefined) => (v == null ? "" : String(v));
+    setForm({
+      name: ex.name, basis: ex.basis, kcal: String(ex.kcal), protein_g: String(ex.protein_g),
+      carbs_g: String(ex.carbs_g), fat_g: String(ex.fat_g),
+      saturated_fat_g: numStr(ex.saturated_fat_g), sugars_g: numStr(ex.sugars_g),
+      fiber_g: numStr(ex.fiber_g), salt_g: numStr(ex.salt_g),
+      cholesterol_mg: numStr(ex.cholesterol_mg), water_ml: numStr(ex.water_ml),
+      unitWeightG: ex.unitWeightG == null ? "" : String(ex.unitWeightG), source: ex.source,
+    });
+  }
+
+  async function describeAndPrefill() {
+    setError(null);
+    const text = foodText.trim();
+    // El `disabled` del botón es lo que hoy bloquea esto de verdad; el guard queda como red por si
+    // alguien llama al handler desde otro lado o saca el disabled.
+    if (text.length < 2) return;
+    if (!baseUrl.current) { setError("No se pudo conectar con el servidor."); return; }
+    setAnalyzing(true);
+    try {
+      prefillFrom(await describeFood(baseUrl.current, text));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
   async function pickAndExtract(source: "camera" | "library") {
     setError(null);
     const perm = source === "camera"
@@ -64,15 +97,7 @@ export default function AgregarAlimentoScreen() {
     setAnalyzing(true);
     try {
       const ex = await extractFood(baseUrl.current, asset.base64!, mime);
-      const numStr = (v: number | null | undefined) => (v == null ? "" : String(v));
-      setForm({
-        name: ex.name, basis: ex.basis, kcal: String(ex.kcal), protein_g: String(ex.protein_g),
-        carbs_g: String(ex.carbs_g), fat_g: String(ex.fat_g),
-        saturated_fat_g: numStr(ex.saturated_fat_g), sugars_g: numStr(ex.sugars_g),
-        fiber_g: numStr(ex.fiber_g), salt_g: numStr(ex.salt_g),
-        cholesterol_mg: numStr(ex.cholesterol_mg), water_ml: numStr(ex.water_ml),
-        unitWeightG: ex.unitWeightG == null ? "" : String(ex.unitWeightG), source: ex.source,
-      });
+      prefillFrom(ex);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -146,6 +171,24 @@ export default function AgregarAlimentoScreen() {
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.md }}>
       <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>{foodId ? "Editar alimento" : "Agregar alimento"}</Text>
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
+        <TextInput
+          testID="food-text-input"
+          value={foodText}
+          onChangeText={setFoodText}
+          placeholder="Escribí un alimento (p.ej. almendra)"
+          placeholderTextColor={colors.icon}
+          style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.md, color: colors.text }}
+        />
+        <Pressable
+          testID="food-text-submit"
+          onPress={describeAndPrefill}
+          disabled={analyzing || foodText.trim().length < 2}
+          style={{ backgroundColor: colors.accent, borderRadius: radius.md, paddingHorizontal: spacing.md, justifyContent: "center", opacity: analyzing || foodText.trim().length < 2 ? 0.5 : 1 }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "600" }}>Buscar</Text>
+        </Pressable>
+      </View>
+      <View style={{ flexDirection: "row", gap: spacing.sm }}>
         <Pressable onPress={() => pickAndExtract("camera")} style={{ flex: 1, backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
           <Text style={{ color: "#fff", fontWeight: "600" }}>📷 Foto</Text>
         </Pressable>
@@ -160,6 +203,7 @@ export default function AgregarAlimentoScreen() {
       )}
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
 
+      {form.name.trim() !== "" && <SourceChip source={form.source} />}
       {field("Nombre", "name")}
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
         {chip("Sólido (100g)", form.basis === "per_100g", () => setForm((f) => ({ ...f, basis: "per_100g" })))}
@@ -181,9 +225,6 @@ export default function AgregarAlimentoScreen() {
       {field(`Colesterol (mg, opcional)`, "cholesterol_mg", "numeric")}
       {field(`Agua (ml por 100${form.basis === "per_100ml" ? "ml" : "g"}, opcional)`, "water_ml", "numeric")}
       {field("Peso por unidad (opcional)", "unitWeightG", "numeric")}
-      <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-        Fuente: {form.source === "label" ? "etiqueta (preciso)" : "estimado por IA"}
-      </Text>
 
       <Pressable onPress={save} disabled={saving} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
         <Text style={{ color: "#fff", fontWeight: "700" }}>{saving ? "Guardando…" : foodId ? "Guardar cambios" : "Guardar en el catálogo"}</Text>

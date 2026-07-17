@@ -24,6 +24,8 @@ const ExtractSchema = z.object({
   mediaType: z.enum(["image/jpeg", "image/png", "image/webp"]),
 });
 
+const DescribeSchema = z.object({ text: z.string().trim().min(2).max(100) });
+
 function parseQueryNumber(raw: string | undefined): number | undefined {
   if (raw == null) return undefined;
   const n = Number(raw);
@@ -49,6 +51,27 @@ export function nutritionRoutes(deps: AppDeps) {
     } catch (e) {
       console.warn("extractFood falló:", (e as Error).message);
       return c.json({ error: "No se pudo analizar la foto. Reintentá o cargá el alimento a mano." }, 502);
+    }
+  });
+
+  // ---- Alta por texto (sincrónica, no persiste) ----
+  r.post("/foods/describe", async (c) => {
+    const userId = c.get("userId");
+    const parsed = DescribeSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Body inválido", detail: parsed.error.issues }, 400);
+    if (!deps.aiClient.describeFood) return c.json({ error: "El servidor no soporta descripción de alimentos." }, 500);
+    const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
+    const apiKey = resolveAiKey(settingsRow, deps.config);
+    if (!apiKey) return c.json({ error: "No hay API key de IA disponible." }, 400);
+    try {
+      const food = await deps.aiClient.describeFood({ text: parsed.data.text, apiKey });
+      // Por texto no hay etiqueta que leer: el dato es SIEMPRE una estimación. No se lo pedimos al
+      // prompt y confiamos — se pisa acá. Si el modelo contestara "label" porque cree saber la
+      // etiqueta de una marca, el catálogo mentiría sobre la procedencia del dato.
+      return c.json({ ...food, source: "estimate" as const });
+    } catch (e) {
+      console.warn("describeFood falló:", (e as Error).message);
+      return c.json({ error: "No se pudo analizar el alimento. Reintentá o cargalo a mano." }, 502);
     }
   });
 

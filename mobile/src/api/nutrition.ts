@@ -19,6 +19,16 @@ export async function extractFood(baseUrl: string, imageBase64: string, mediaTyp
   return (await res.json()) as FoodExtraction;
 }
 
+export async function describeFood(baseUrl: string, text: string): Promise<FoodExtraction> {
+  // El timeout largo no es por el payload (son 2 palabras) sino por el modelo: el default de 15s
+  // no alcanza para una respuesta de Opus.
+  const res = await apiFetch(baseUrl, "/nutrition/foods/describe", {
+    method: "POST", body: JSON.stringify({ text }), timeoutMs: 60000,
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo analizar el alimento."));
+  return (await res.json()) as FoodExtraction;
+}
+
 export async function createFood(baseUrl: string, input: FoodInput): Promise<Food> {
   const res = await apiFetch(baseUrl, "/nutrition/foods", { method: "POST", body: JSON.stringify(input) });
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo guardar el alimento."));
