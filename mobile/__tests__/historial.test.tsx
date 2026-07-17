@@ -2,7 +2,8 @@ import { render, screen, fireEvent, waitFor, act } from "@testing-library/react-
 import { Alert } from "react-native";
 import HistorialScreen from "../app/(tabs)/historial";
 import { getSessions, getSessionById, deleteSessionById, putSession } from "../src/api/sessions";
-import type { WorkoutSession } from "@pulsia/shared";
+import { listCardio } from "../src/api/cardio";
+import type { CardioActivity, WorkoutSession } from "@pulsia/shared";
 
 // Mock del componente nativo (SVG) para no cargar react-native-svg en jest.
 jest.mock("react-native-body-highlighter", () => ({
@@ -45,6 +46,21 @@ const mockSessionB: WorkoutSession = {
   endedAt: 1783003600000,
 } as WorkoutSession;
 
+const mockCardio: CardioActivity = {
+  id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+  type: "run",
+  startedAt: 1782950000000,
+  durationMs: 1800000,
+  distanceM: 2500,
+  avgHr: null,
+  maxHr: null,
+  elevationGainM: null,
+  kcal: null,
+  kcalSource: "estimate",
+  source: "manual",
+  notes: "",
+};
+
 // getSessions devuelve la lista liviana (el backend NO manda los ejercicios); getSessionById
 // trae la sesión completa al tocar. Los mockSession* tienen los campos livianos, así sirven para la lista.
 jest.mock("../src/api/sessions", () => ({
@@ -56,11 +72,17 @@ jest.mock("../src/api/sessions", () => ({
   deleteSessionById: jest.fn(async () => undefined),
   putSession: jest.fn(async () => undefined),
 }));
+// listCardio devuelve [] por defecto: los tests solo-sesión ven un timeline igual al de antes.
+jest.mock("../src/api/cardio", () => ({
+  listCardio: jest.fn(async () => []),
+  deleteCardio: jest.fn(async () => undefined),
+}));
 jest.mock("../src/storage/config", () => ({
   getBackendUrl: jest.fn(async () => "http://backend.test"),
 }));
 jest.mock("expo-router", () => ({
   useFocusEffect: (cb: () => void | (() => void)) => cb(),
+  router: { push: jest.fn() },
 }));
 
 test("lista ambas sesiones ordenadas por fecha desc", async () => {
@@ -69,6 +91,24 @@ test("lista ambas sesiones ordenadas por fecha desc", async () => {
     expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy();
     expect(screen.getByTestId(`hist-item-${mockSessionB.id}`)).toBeTruthy();
   });
+});
+
+test("el historial unificado muestra tanto la sesión de fuerza como la actividad de cardio", async () => {
+  // Persistente (no `Once`): un focus-effect colgado de otro test no debe robarse la resolución.
+  (getSessions as jest.Mock).mockResolvedValue([
+    { id: mockSessionA.id, programId: mockSessionA.programId, dayLabel: mockSessionA.dayLabel, location: "gym", startedAt: mockSessionA.startedAt, totalDurationMs: mockSessionA.totalDurationMs, completionPct: 90 },
+  ]);
+  (listCardio as jest.Mock).mockResolvedValue([mockCardio]);
+  try {
+    await render(<HistorialScreen />);
+    await waitFor(() => {
+      expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy();
+      expect(screen.getByTestId(`cardio-item-${mockCardio.id}`)).toBeTruthy();
+    });
+  } finally {
+    // No dejar cardio bleeding hacia los tests solo-sesión siguientes.
+    (listCardio as jest.Mock).mockResolvedValue([]);
+  }
 });
 
 test("la fila del historial muestra el % de cumplimiento", async () => {
