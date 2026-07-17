@@ -6,6 +6,7 @@ import { listFoods, deleteFood } from "../../src/api/nutrition";
 import type { Food } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
+import { SourceChip } from "../../src/nutrition/SourceChip";
 
 export default function CatalogoScreen() {
   const screenPad = useScreenPadding(spacing.lg);
@@ -49,7 +50,10 @@ export default function CatalogoScreen() {
       {filtered.map((f) => (
         <View key={f.id} style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <Pressable style={{ flex: 1 }} onPress={() => router.push(`/nutricion/agregar-alimento?foodId=${f.id}`)}>
-            <Text style={{ color: colors.text, fontWeight: "600" }}>{f.name}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+              <Text style={{ color: colors.text, fontWeight: "600", flexShrink: 1 }}>{f.name}</Text>
+              <SourceChip source={f.source} />
+            </View>
             <Text style={{ color: colors.textMuted, fontSize: 12 }}>
               {f.kcal} kcal · P{f.protein_g} C{f.carbs_g} G{f.fat_g} /100{f.basis === "per_100ml" ? "ml" : "g"}
               {f.sugars_g != null ? ` · azúc ${f.sugars_g}` : ""}
