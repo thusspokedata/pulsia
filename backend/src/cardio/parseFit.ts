@@ -1,4 +1,5 @@
 import { Decoder, Stream } from "@garmin/fitsdk";
+import { CardioFitPreviewSchema } from "@pulsia/shared";
 import type { CardioType, CardioFitPreview } from "@pulsia/shared";
 
 // Traduce el `sport` (y a veces `subSport`) del .FIT a nuestro CardioType. Aproximado a propósito:
@@ -37,11 +38,12 @@ export function parseFit(buffer: Buffer): CardioFitPreview {
   if (durationMs <= 0) throw new Error("El .FIT no tiene una duración válida");
 
   const records: any[] = messages.recordMesgs ?? [];
+  // Descartamos records anteriores al inicio (FC de preparación): darían t < 0, que viola el schema.
   const hrSeries = records
-    .filter((r) => typeof r.heartRate === "number" && r.timestamp instanceof Date)
+    .filter((r) => typeof r.heartRate === "number" && r.timestamp instanceof Date && (r.timestamp as Date).getTime() >= startedAt)
     .map((r) => ({ t: (r.timestamp as Date).getTime() - startedAt, bpm: Math.round(r.heartRate) }));
 
-  return {
+  const result = {
     type: mapSport(session.sport, session.subSport),
     startedAt,
     durationMs,
@@ -52,4 +54,7 @@ export function parseFit(buffer: Buffer): CardioFitPreview {
     kcal: intOrNull(session.totalCalories),
     hrSeries: hrSeries.length > 0 ? hrSeries : undefined,
   };
+  // Validamos la salida contra el schema: cualquier invariante rota (t<0, distancia/elevación
+  // negativa, etc.) es un throw acá → la ruta lo convierte en 400, nunca un preview inválido silencioso.
+  return CardioFitPreviewSchema.parse(result);
 }

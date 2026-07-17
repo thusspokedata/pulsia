@@ -35,6 +35,24 @@ test("parseFit deja null los campos device ausentes y omite hrSeries sin FC", ()
   expect(p.hrSeries).toBeUndefined();
 });
 
+test("parseFit descarta records de FC anteriores al inicio (nunca t < 0)", () => {
+  const bytes = buildFitFixture({
+    startTimeMs: START, sport: "walking", totalTimerTime: 1800,
+    hr: [{ atMs: START - 5000, bpm: 90 }, { atMs: START + 30_000, bpm: 120 }],
+  });
+  const p = parseFit(Buffer.from(bytes));
+  expect(p.hrSeries).toEqual([{ t: 30_000, bpm: 120 }]);
+  for (const point of p.hrSeries ?? []) expect(point.t).toBeGreaterThanOrEqual(0);
+});
+
+test("parseFit deriva durationMs de totalElapsedTime cuando no hay totalTimerTime", () => {
+  const bytes = buildFitFixture({
+    startTimeMs: START, sport: "running", totalTimerTime: null, totalElapsedTime: 900,
+  });
+  const p = parseFit(Buffer.from(bytes));
+  expect(p.durationMs).toBe(900_000);
+});
+
 test("parseFit lanza si el archivo no tiene sesión", () => {
   const bytes = buildFitFixture({ withSession: false, hr: [{ atMs: START, bpm: 100 }] });
   expect(() => parseFit(Buffer.from(bytes))).toThrow(/sesión/i);

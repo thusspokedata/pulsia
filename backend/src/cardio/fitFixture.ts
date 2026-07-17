@@ -3,7 +3,8 @@ import { Encoder, Profile } from "@garmin/fitsdk";
 export interface FitFixtureOpts {
   startTimeMs?: number;
   sport?: string;
-  totalTimerTime?: number; // segundos
+  totalTimerTime?: number | null; // segundos; null lo omite del mesg (para forzar el fallback)
+  totalElapsedTime?: number; // segundos; se escribe solo si viene (fallback de totalTimerTime)
   totalDistance?: number | null; // metros
   totalCalories?: number | null;
   avgHeartRate?: number | null;
@@ -19,6 +20,7 @@ export function buildFitFixture(opts: FitFixtureOpts = {}): Uint8Array {
     startTimeMs = 1_700_000_000_000,
     sport = "walking",
     totalTimerTime = 1800,
+    totalElapsedTime,
     totalDistance = 2500,
     totalCalories = 150,
     avgHeartRate = 110,
@@ -31,7 +33,9 @@ export function buildFitFixture(opts: FitFixtureOpts = {}): Uint8Array {
   const enc = new Encoder();
   enc.writeMesg({ mesgNum: Profile.MesgNum.FILE_ID, type: "activity", timeCreated: new Date(startTimeMs) });
   if (withSession) {
-    const session: Record<string, unknown> = { mesgNum: Profile.MesgNum.SESSION, startTime: new Date(startTimeMs), sport, totalTimerTime };
+    const session: Record<string, unknown> = { mesgNum: Profile.MesgNum.SESSION, startTime: new Date(startTimeMs), sport };
+    if (totalTimerTime != null) session.totalTimerTime = totalTimerTime;
+    if (totalElapsedTime != null) session.totalElapsedTime = totalElapsedTime;
     if (totalDistance != null) session.totalDistance = totalDistance;
     if (totalCalories != null) session.totalCalories = totalCalories;
     if (avgHeartRate != null) session.avgHeartRate = avgHeartRate;
