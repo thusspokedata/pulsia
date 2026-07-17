@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, View, Text, Pressable, TextInput, ActivityIndicator, Alert } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { CardioActivitySchema, CARDIO_TYPES, CARDIO_LABELS, type CardioActivity, type CardioType } from "@pulsia/shared";
-import { createCardio, getCardioById, updateCardio, deleteCardio } from "../src/api/cardio";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
+import { CardioActivitySchema, CARDIO_TYPES, CARDIO_LABELS, type CardioActivity, type CardioType, type CardioFitPreview } from "@pulsia/shared";
+import { createCardio, getCardioById, updateCardio, deleteCardio, parseFitCardio } from "../src/api/cardio";
+import { buildFitActivity } from "../src/cardio/buildFitActivity";
 import { getBackendUrl } from "../src/storage/config";
 import { newSessionId } from "../src/session/id";
 import { dayAtNoon, dayLabel } from "../src/session/metricDate";
@@ -46,6 +49,10 @@ export default function CardioScreen() {
   const [hrText, setHrText] = useState("");
   const [notes, setNotes] = useState("");
   const [dayOffset, setDayOffset] = useState(0);
+
+  // Import de .FIT (solo en alta): el preview parseado del reloj y el flag de carga del picker/parseo.
+  const [fitPreview, setFitPreview] = useState<CardioFitPreview | null>(null);
+  const [importing, setImporting] = useState(false);
 
   // En modo edición guardamos la actividad cargada para mostrar los campos NO
   // editables (fecha, FC media) como solo-lectura: updateCardio solo parchea
@@ -105,6 +112,39 @@ export default function CardioScreen() {
     };
   }
 
+  async function onImportFit() {
+    const url = baseUrl.current;
+    if (!url) {
+      setError("Configurá el backend");
+      return;
+    }
+    setError(null);
+    let picked;
+    try {
+      // `.fit` no tiene MIME estándar registrado → hay que abrir "*/*".
+      picked = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
+    } catch {
+      setError("No se pudo abrir el selector de archivos");
+      return;
+    }
+    if (picked.canceled || !picked.assets || picked.assets.length === 0) return;
+    setImporting(true);
+    try {
+      const base64 = await FileSystem.readAsStringAsync(picked.assets[0].uri, { encoding: "base64" });
+      const preview = await parseFitCardio(url, base64);
+      setFitPreview(preview);
+      // Prefill de los campos editables con lo que midió el reloj.
+      setType(preview.type);
+      setDurationText(numText(Math.round(preview.durationMs / 60000)));
+      setDistanceText(preview.distanceM != null ? numText(preview.distanceM / 1000) : "");
+      setHrText(preview.avgHr != null ? String(preview.avgHr) : "");
+    } catch (e) {
+      setError((e as Error).message || "No se pudo leer el archivo .FIT");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function onCreate() {
     const url = baseUrl.current;
     if (!url) {
@@ -114,6 +154,29 @@ export default function CardioScreen() {
     setError(null);
     const fields = readNumericFields();
     if (!fields) return;
+    // Si venimos de un import .FIT, confirmamos ese preview (source:"fit", kcal/FC del reloj).
+    if (fitPreview) {
+      const activity = buildFitActivity(
+        fitPreview,
+        { type, durationMs: fields.durationMs, distanceM: fields.distanceM, avgHr: fields.avgHr, notes },
+        newSessionId(),
+      );
+      const parsed = CardioActivitySchema.safeParse(activity);
+      if (!parsed.success) {
+        setError("Datos inválidos, revisá los campos");
+        return;
+      }
+      setSaving(true);
+      try {
+        await createCardio(url, parsed.data);
+        router.back();
+      } catch (e) {
+        setError((e as Error).message || "No se pudo guardar la actividad");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     const activity = {
       id: newSessionId(),
       type,
@@ -209,6 +272,36 @@ export default function CardioScreen() {
         <Text style={{ color: colors.textMuted }}>Cargando…</Text>
       ) : (
         <>
+          {/* Importar .FIT: solo en alta (no en edición) */}
+          {!isEdit && (
+            <>
+              <Pressable
+                testID="cardio-import-fit"
+                onPress={onImportFit}
+                disabled={importing}
+                style={{
+                  borderWidth: 1,
+                  borderColor: colors.accent,
+                  borderRadius: radius.md,
+                  paddingVertical: spacing.md,
+                  alignItems: "center",
+                  opacity: importing ? 0.6 : 1,
+                }}
+              >
+                {importing ? (
+                  <ActivityIndicator color={colors.accent} />
+                ) : (
+                  <Text style={{ color: colors.accentText, fontWeight: "600" }}>Importar archivo .FIT</Text>
+                )}
+              </Pressable>
+              {fitPreview && (
+                <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                  Importado del reloj{fitPreview.kcal != null ? ` · ${fitPreview.kcal} kcal medidas` : ""}. Revisá el tipo y confirmá.
+                </Text>
+              )}
+            </>
+          )}
+
           {/* Tipo */}
           <View style={{ gap: spacing.sm }}>
             <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>Tipo</Text>
