@@ -9,6 +9,7 @@ export interface RestState {
   sessionId: string;
   setStart: number; // instante en que nació la serie en curso (fin/skip del descanso o inicio de sesión)
   restUntil: number | null; // fin del descanso activo, o null si no hay descanso corriendo
+  restRemaining: number | null; // ms restantes del descanso congelado al pausar, o null si no hay descanso congelado
 }
 
 // Devuelve el estado guardado, o null si no hay o el JSON es inválido / no tiene la forma esperada.
@@ -22,11 +23,17 @@ export async function getRestState(): Promise<RestState | null> {
       typeof json !== "object" ||
       typeof json.sessionId !== "string" ||
       typeof json.setStart !== "number" ||
-      !(json.restUntil === null || typeof json.restUntil === "number")
+      !(json.restUntil === null || typeof json.restUntil === "number") ||
+      !(json.restRemaining === null || typeof json.restRemaining === "number")
     ) {
       return null;
     }
-    return { sessionId: json.sessionId, setStart: json.setStart, restUntil: json.restUntil };
+    return {
+      sessionId: json.sessionId,
+      setStart: json.setStart,
+      restUntil: json.restUntil,
+      restRemaining: json.restRemaining,
+    };
   } catch {
     return null;
   }

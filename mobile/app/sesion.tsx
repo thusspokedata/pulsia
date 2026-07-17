@@ -202,10 +202,14 @@ export default function SesionScreen() {
           if (!mounted.current) return;
           if (rs && rs.sessionId === active.id) {
             setStartRef.current = rs.setStart;
-            // El descanso se re-arma solo si la sesión no quedó pausada (durante la pausa el descanso
-            // está congelado y su remanente vive en restRemainingRef, fuera de este store). Si ya venció
-            // con la app cerrada, el tick lo cierra en el próximo latido y fija setStartRef = restUntil.
-            if (rs.restUntil != null && !resumedPaused) {
+            if (resumedPaused) {
+              // Reanudó pausada: restaurar el remanente del descanso congelado (si lo había) para que
+              // "Reanudar" re-arme la cuenta regresiva. NO se re-arma restUntil ahora (sigue congelado
+              // mientras la sesión está pausada); resumeIfPaused lo hará al reanudar.
+              restRemainingRef.current = rs.restRemaining;
+            } else if (rs.restUntil != null) {
+              // Había un descanso en curso (no pausado): re-armarlo. Si ya venció con la app cerrada, el
+              // tick lo cierra en el próximo latido y fija setStartRef = restUntil (fin real).
               restDoneRef.current = false;
               setRestUntil(rs.restUntil);
             }
@@ -254,7 +258,7 @@ export default function SesionScreen() {
       const startRef = Date.now();
       setStartRef.current = startRef;
       // Persistir el timing por-serie (setStartRef + descanso) para sobrevivir un remontaje.
-      void setRestState({ sessionId: s.id, setStart: startRef, restUntil: null });
+      void setRestState({ sessionId: s.id, setStart: startRef, restUntil: null, restRemaining: null });
       setActiveOrder(firstIncompleteOrder(s));
       apply(s);
     })();
@@ -425,7 +429,7 @@ export default function SesionScreen() {
     setRestUntil(restUntilMs);
     // La serie en curso arrancó en setStartRef y el descanso vence en restUntilMs: si la pantalla
     // se remonta, la serie siguiente nace en el fin real del descanso (no en el instante del remontaje).
-    void setRestState({ sessionId: sess.id, setStart: setStartRef.current, restUntil: restUntilMs });
+    void setRestState({ sessionId: sess.id, setStart: setStartRef.current, restUntil: restUntilMs, restRemaining: null });
   }
 
   function onAdjustReps(delta: number) {
@@ -505,12 +509,15 @@ export default function SesionScreen() {
     intervalsRef.current = endPause(intervalsRef.current, now);
     setPaused(false);
     // Retomar el descanso con lo que le quedaba (el contador estaba congelado).
+    let resumedRestUntil: number | null = null;
     if (restRemainingRef.current != null) {
       restDoneRef.current = false; // permitir que la campana suene una vez al cruzar 0
-      setRestUntil(now + restRemainingRef.current);
+      resumedRestUntil = now + restRemainingRef.current;
+      setRestUntil(resumedRestUntil);
       restRemainingRef.current = null;
     }
     void setPauseState({ sessionId: sess.id, intervals: intervalsRef.current });
+    void setRestState({ sessionId: sess.id, setStart: setStartRef.current, restUntil: resumedRestUntil, restRemaining: null });
   }
 
   function onPauseToggle() {
@@ -529,6 +536,9 @@ export default function SesionScreen() {
       setRestUntil(null);
     }
     void setPauseState({ sessionId: sess.id, intervals: intervalsRef.current });
+    // Persistir el timing con el descanso congelado: si la app se cierra pausada, al reanudar hay
+    // que re-armar el descanso con lo que le quedaba en vez de perderlo (y contarlo como trabajo).
+    void setRestState({ sessionId: sess.id, setStart: setStartRef.current, restUntil: null, restRemaining: restRemainingRef.current });
   }
 
   async function onFinish() {
@@ -676,7 +686,7 @@ export default function SesionScreen() {
               const skipAt = Date.now();
               setStartRef.current = skipAt;
               setRestUntil(null);
-              void setRestState({ sessionId: sess.id, setStart: skipAt, restUntil: null });
+              void setRestState({ sessionId: sess.id, setStart: skipAt, restUntil: null, restRemaining: null });
             }}
           >
             <Text style={{ color: colors.textMuted, fontSize: 12 }}>Saltar descanso</Text>

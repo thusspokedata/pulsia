@@ -10,18 +10,46 @@ test("sin nada guardado devuelve null", async () => {
 });
 
 test("guarda y recupera el estado (con descanso activo)", async () => {
-  await setRestState({ sessionId: "s1", setStart: 1_000_000, restUntil: 1_090_000 });
-  expect(await getRestState()).toEqual({ sessionId: "s1", setStart: 1_000_000, restUntil: 1_090_000 });
+  await setRestState({ sessionId: "s1", setStart: 1_000_000, restUntil: 1_090_000, restRemaining: null });
+  expect(await getRestState()).toEqual({
+    sessionId: "s1",
+    setStart: 1_000_000,
+    restUntil: 1_090_000,
+    restRemaining: null,
+  });
 });
 
 test("guarda y recupera el estado (sin descanso, restUntil null)", async () => {
-  await setRestState({ sessionId: "s1", setStart: 1_000_000, restUntil: null });
-  expect(await getRestState()).toEqual({ sessionId: "s1", setStart: 1_000_000, restUntil: null });
+  await setRestState({ sessionId: "s1", setStart: 1_000_000, restUntil: null, restRemaining: null });
+  expect(await getRestState()).toEqual({
+    sessionId: "s1",
+    setStart: 1_000_000,
+    restUntil: null,
+    restRemaining: null,
+  });
 });
 
 test("clear borra el estado guardado", async () => {
-  await setRestState({ sessionId: "s1", setStart: 1_000_000, restUntil: null });
+  await setRestState({ sessionId: "s1", setStart: 1_000_000, restUntil: null, restRemaining: null });
   await clearRestState();
+  expect(await getRestState()).toBeNull();
+});
+
+test("guarda y recupera el remanente de descanso congelado (restRemaining número)", async () => {
+  await setRestState({ sessionId: "s1", setStart: 1_000_000, restUntil: null, restRemaining: 60_000 });
+  expect(await getRestState()).toEqual({
+    sessionId: "s1",
+    setStart: 1_000_000,
+    restUntil: null,
+    restRemaining: 60_000,
+  });
+});
+
+test("get devuelve null si restRemaining tiene tipo inesperado", async () => {
+  await AsyncStorage.setItem(
+    "pulsia.restState",
+    JSON.stringify({ sessionId: "s1", setStart: 1_000_000, restUntil: null, restRemaining: "x" }),
+  );
   expect(await getRestState()).toBeNull();
 });
 
