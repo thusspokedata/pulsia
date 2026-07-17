@@ -47,6 +47,15 @@ test("SupplementSchema es el input + id/createdAt", () => {
   expect(p.id).toBeDefined();
 });
 
+test("SupplementSchema exige que id sea un UUID, no cualquier string", () => {
+  expect(SupplementSchema.safeParse({
+    ...extraction, id: "no-es-un-uuid", createdAt: 0,
+  }).success).toBe(false);
+  expect(SupplementSchema.safeParse({
+    ...extraction, id: "11111111-1111-4111-8111-111111111111", createdAt: 0,
+  }).success).toBe(true);
+});
+
 test("TAKE_SLOTS conserva el orden canónico del día", () => {
   expect(TAKE_SLOTS).toEqual(["desayuno", "almuerzo", "cena", "post_entreno", "antes_de_dormir"]);
   expect(TakeSlotSchema.safeParse("merienda").success).toBe(false);
