@@ -3,6 +3,7 @@ import { z } from "zod";
 import { CardioActivitySchema } from "@pulsia/shared";
 import { insertCardio, findCardioAtSecond, listCardio, getCardio, getCardioOwnerId, updateCardio, deleteCardio } from "../cardio/repository";
 import { parseFit } from "../cardio/parseFit";
+import type { AppDeps } from "../app";
 
 // Parsea un query param a número finito, o undefined si falta / no parsea. Sin este guard,
 // Number("abc") = NaN y gte(startedAt, NaN) genera un filtro basura en vez de "sin filtro".
@@ -15,7 +16,6 @@ const finiteQuery = (v: string | undefined): number | undefined => {
 const ParseFitSchema = z.object({ fitBase64: z.string().min(1) });
 // Techo de 5 MB de archivo → ~6.9 MB de base64. Los .FIT típicos son 50-500 KB.
 const MAX_FIT_B64 = 7_000_000;
-import type { AppDeps } from "../app";
 
 export function cardioRoutes(deps: AppDeps) {
   const r = new Hono<{ Variables: { userId: string } }>();

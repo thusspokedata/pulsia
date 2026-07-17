@@ -361,12 +361,14 @@ export default function CardioScreen() {
             </View>
           )}
 
-          {/* Fecha: navegador editable en alta; solo-lectura en edición */}
+          {/* Fecha: navegador editable en alta manual; solo-lectura en edición y en import
+              (el .FIT trae su propia fecha — buildFitActivity usa preview.startedAt, así que el
+              navegador ahí sería engañoso: el cambio se descartaría en silencio). */}
           <View style={{ gap: spacing.sm }}>
             <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>Fecha</Text>
-            {isEdit ? (
+            {isEdit || fitPreview ? (
               <Text style={{ color: colors.textMuted, fontSize: 13 }}>
-                {loaded != null ? fmtDate(loaded.startedAt) : "—"}
+                {(loaded ?? fitPreview) != null ? fmtDate((loaded ?? fitPreview)!.startedAt) : "—"}
               </Text>
             ) : (
               <View
