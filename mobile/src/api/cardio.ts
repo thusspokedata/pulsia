@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import type { CardioActivity } from "@pulsia/shared";
+import type { CardioActivity, CardioFitPreview } from "@pulsia/shared";
 
 // Trae las actividades de cardio del usuario. Sin rango devuelve todo; con from/to
 // (epoch ms) el backend filtra por startedAt.
@@ -41,4 +41,15 @@ export async function updateCardio(
 export async function deleteCardio(baseUrl: string, id: string): Promise<void> {
   const res = await apiFetch(baseUrl, `/cardio/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("No se pudo borrar la actividad");
+}
+
+// Manda el .FIT (base64) a parsear. Devuelve el preview SIN persistir. En error, propaga el
+// mensaje del backend (400 con "No parece un archivo .FIT", etc.) para mostrarlo tal cual.
+export async function parseFitCardio(baseUrl: string, fitBase64: string): Promise<CardioFitPreview> {
+  const res = await apiFetch(baseUrl, "/cardio/parse", { method: "POST", body: JSON.stringify({ fitBase64 }) });
+  if (!res.ok) {
+    const msg = await res.json().then((b: { error?: string }) => b.error).catch(() => undefined);
+    throw new Error(msg || "No se pudo leer el archivo .FIT");
+  }
+  return (await res.json()) as CardioFitPreview;
 }
