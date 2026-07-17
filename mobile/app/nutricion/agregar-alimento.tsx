@@ -67,6 +67,8 @@ export default function AgregarAlimentoScreen() {
   async function describeAndPrefill() {
     setError(null);
     const text = foodText.trim();
+    // El `disabled` del botón es lo que hoy bloquea esto de verdad; el guard queda como red por si
+    // alguien llama al handler desde otro lado o saca el disabled.
     if (text.length < 2) return;
     if (!baseUrl.current) { setError("No se pudo conectar con el servidor."); return; }
     setAnalyzing(true);
@@ -223,9 +225,6 @@ export default function AgregarAlimentoScreen() {
       {field(`Colesterol (mg, opcional)`, "cholesterol_mg", "numeric")}
       {field(`Agua (ml por 100${form.basis === "per_100ml" ? "ml" : "g"}, opcional)`, "water_ml", "numeric")}
       {field("Peso por unidad (opcional)", "unitWeightG", "numeric")}
-      <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-        Fuente: {form.source === "label" ? "etiqueta (preciso)" : "estimado por IA"}
-      </Text>
 
       <Pressable onPress={save} disabled={saving} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
         <Text style={{ color: "#fff", fontWeight: "700" }}>{saving ? "Guardando…" : foodId ? "Guardar cambios" : "Guardar en el catálogo"}</Text>

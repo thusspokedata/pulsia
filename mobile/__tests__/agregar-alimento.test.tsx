@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import * as ImagePicker from "expo-image-picker";
 import AgregarAlimentoScreen from "../app/nutricion/agregar-alimento";
-import { describeFood } from "../src/api/nutrition";
+import { describeFood, extractFood } from "../src/api/nutrition";
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn() },
@@ -30,6 +31,9 @@ const ALMENDRA = {
 beforeEach(() => {
   jest.clearAllMocks();
   (describeFood as jest.Mock).mockResolvedValue(ALMENDRA);
+  // `clearAllMocks` limpia las llamadas pero NO las implementaciones: sin esto, el mock que pone el
+  // test de la foto se filtraría a los que corren después.
+  (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: true });
 });
 
 test("escribir el alimento precarga el formulario, sin foto", async () => {
@@ -53,6 +57,21 @@ test("el formulario precargado muestra de dónde salió el dato", async () => {
   await fireEvent.changeText(screen.getByTestId("food-text-input"), "almendra");
   await fireEvent.press(screen.getByTestId("food-text-submit"));
   await waitFor(() => expect(screen.getByTestId("source-chip-estimate")).toBeTruthy());
+});
+
+test("la foto de una etiqueta precarga el formulario y lo marca como dato de etiqueta", async () => {
+  // Cubre dos cosas: que prefillFrom propaga el `source` del dato (con "estimate" no se puede ver,
+  // porque coincide con el default del form), y el camino de la foto, que no tenía ningún test.
+  (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
+    canceled: false,
+    assets: [{ base64: "ZmFrZQ==", mimeType: "image/jpeg" }],
+  });
+  (extractFood as jest.Mock).mockResolvedValue({ ...ALMENDRA, name: "Muesli Lidl", source: "label" });
+
+  await render(<AgregarAlimentoScreen />);
+  await fireEvent.press(screen.getByText(/galer/i));
+  await waitFor(() => expect(screen.getByDisplayValue("Muesli Lidl")).toBeTruthy());
+  expect(screen.getByTestId("source-chip-label")).toBeTruthy();
 });
 
 test("si la IA falla, lo dice y no rompe el formulario", async () => {
