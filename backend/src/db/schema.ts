@@ -301,6 +301,31 @@ export const setLog = pgTable("set_log", {
   skipped: boolean("skipped").default(false).notNull(),
 });
 
+// Cardio (caminata/running/elíptica/…). Tabla propia, NO workout_session: esa exige
+// program_id (FK real a programs), week_number y day_label — una caminata no cuelga de
+// ningún programa de fuerza. Ver docs/superpowers/specs/2026-07-17-cardio-*.
+export const cardioActivity = pgTable("cardio_activity", {
+  id: uuid("id").primaryKey(), // generado en el cliente, como workout_session
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  type: text("type").notNull(), // CardioType (enum en Zod; text en PG, como location)
+  startedAt: bigint("started_at", { mode: "number" }).notNull(),
+  durationMs: integer("duration_ms").notNull(),
+  distanceM: integer("distance_m"),
+  avgHr: integer("avg_hr"),
+  maxHr: integer("max_hr"),
+  elevationGainM: integer("elevation_gain_m"),
+  kcal: integer("kcal"),
+  kcalSource: text("kcal_source").notNull(), // 'device' | 'estimate' — lo fuerza el server
+  source: text("source").notNull(),          // 'manual' | 'fit'
+  hrSeries: jsonb("hr_series").$type<{ t: number; bpm: number }[]>(),
+  notes: text("notes").default("").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => ({
+  // Toda lectura es "las actividades de este usuario en este rango".
+  byUserStarted: index("cardio_activity_user_started_idx").on(t.userId, t.startedAt),
+}));
+
 export const appRelease = pgTable("app_release", {
   id: text("id").primaryKey(), // siempre "latest" (fila única)
   versionCode: integer("version_code").notNull(),
