@@ -30,6 +30,15 @@ jest.mock("../src/storage/pauseState", () => {
   };
 });
 
+const mockSetRest = jest.fn();
+const mockClearRest = jest.fn();
+let mockRestState: any = null;
+jest.mock("../src/storage/restState", () => ({
+  getRestState: async () => mockRestState,
+  setRestState: async (s: any) => { mockRestState = s; mockSetRest(s); },
+  clearRestState: async () => { mockRestState = null; mockClearRest(); },
+}));
+
 const mockEnqueue = jest.fn();
 jest.mock("../src/storage/pendingSessions", () => ({
   enqueueSession: async (s: any) => mockEnqueue(s),
@@ -136,8 +145,27 @@ jest.mock("../src/ble/useHeartRate", () => ({
 
 import SesionScreen from "../app/sesion";
 
+const RESUME_ID = "11111111-1111-4111-8111-111111111111";
+const makeResumeActive = (startedAt: number, sets: any[]) => ({
+  id: RESUME_ID,
+  programId: "22222222-2222-4222-8222-222222222222",
+  weekNumber: 1, dayLabel: "Día 1", location: "gym",
+  startedAt, endedAt: null, totalDurationMs: null, notes: "",
+  exercises: [{
+    catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", order: 0,
+    planned: { sets: 2, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90 },
+    skipped: false, sets, note: "", substitutedFromId: null,
+  }],
+});
+const finishedSet = (startedAt: number, endedAt: number) => ({
+  setNumber: 1, reps: 8, weightKg: null, rpe: null,
+  startedAt, endedAt, durationMs: endedAt - startedAt,
+  repTimestamps: [], hrAvg: null, hrMax: null, skipped: false,
+});
+
 beforeEach(() => {
   mockActive = null;
+  mockRestState = null;
   mockPauseState = null;
   mockProgramId = "22222222-2222-4222-8222-222222222222";
   mockOneOffProgramId = "33333333-3333-4333-8333-333333333333";
@@ -869,4 +897,145 @@ test("regresión cross-exercise: cambiar de ejercicio con una serie abierta no l
   expect(sum.workMs + sum.restMs).toBe(sum.durationMs);
 
   spy.mockRestore();
+});
+
+// --- Persistencia del timing por-serie (setStartRef + descanso) para sobrevivir un remontaje ---
+
+test("terminar la serie persiste el descanso pendiente", async () => {
+  const t0 = 1_000_000;
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0);
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("end-set"));
+  spy.mockReturnValue(t0 + 40_000);
+  await fireEvent.press(screen.getByTestId("end-set"));
+  const rs = mockSetRest.mock.calls.at(-1)?.[0];
+  expect(rs).toEqual({ sessionId: RESUME_ID, setStart: t0, restUntil: t0 + 130_000, restRemaining: null });
+  spy.mockRestore();
+});
+
+test("saltar el descanso persiste el timing (skip, sin descanso)", async () => {
+  const t0 = 1_000_000;
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0);
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("end-set"));
+  spy.mockReturnValue(t0 + 40_000);
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => screen.getByTestId("rest-timer"));
+  spy.mockReturnValue(t0 + 50_000);
+  await fireEvent.press(screen.getByTestId("skip-rest"));
+  expect(mockSetRest.mock.calls.at(-1)?.[0]).toEqual({ sessionId: RESUME_ID, setStart: t0 + 50_000, restUntil: null, restRemaining: null });
+  spy.mockRestore();
+});
+
+test("armar una sesión nueva persiste el timing inicial", async () => {
+  const t0 = 1_000_000;
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0);
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("end-set"));
+  expect(mockSetRest.mock.calls.at(-1)?.[0]).toEqual({ sessionId: RESUME_ID, setStart: t0, restUntil: null, restRemaining: null });
+  spy.mockRestore();
+});
+
+test("terminar el entrenamiento limpia el timing persistido", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("finish"));
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => expect(mockClearRest).toHaveBeenCalled());
+});
+
+test("reanudar antes de la primera serie: la serie arranca en el inicio de sesión, no en el remontaje", async () => {
+  const t0 = 1_000_000;
+  mockActive = makeResumeActive(t0, []);
+  mockRestState = { sessionId: RESUME_ID, setStart: t0, restUntil: null, restRemaining: null };
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0 + 300_000);
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("end-set"));
+  spy.mockReturnValue(t0 + 345_000);
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => {
+    const set = mockSetActive.mock.calls.at(-1)?.[0].exercises[0].sets[0];
+    expect(set.startedAt).toBe(t0);
+    expect(set.durationMs).toBe(345_000);
+  });
+  spy.mockRestore();
+});
+
+test("reanudar tras vencer el descanso con la app cerrada: la serie siguiente arranca al fin del descanso", async () => {
+  const t0 = 1_000_000;
+  mockActive = makeResumeActive(t0, [finishedSet(t0, t0 + 40_000)]);
+  mockRestState = { sessionId: RESUME_ID, setStart: t0, restUntil: t0 + 130_000, restRemaining: null };
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0 + 300_000);
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("end-set"));
+  expect(screen.queryByTestId("rest-timer")).toBeNull();
+  spy.mockReturnValue(t0 + 345_000);
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => {
+    const sets = mockSetActive.mock.calls.at(-1)?.[0].exercises[0].sets;
+    expect(sets[1].startedAt).toBe(t0 + 130_000);
+    expect(sets[1].durationMs).toBe(215_000);
+  });
+  spy.mockRestore();
+});
+
+test("reanudar con un descanso en curso re-muestra el temporizador", async () => {
+  const t0 = 1_000_000;
+  mockActive = makeResumeActive(t0, [finishedSet(t0, t0 + 40_000)]);
+  mockRestState = { sessionId: RESUME_ID, setStart: t0, restUntil: t0 + 130_000, restRemaining: null };
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0 + 60_000);
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("rest-timer"));
+  spy.mockRestore();
+});
+
+test("pausar durante el descanso persiste el remanente congelado", async () => {
+  const t0 = 1_000_000;
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0);
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("end-set"));
+  // Serie 1: 40s de trabajo → descanso 90s hasta t0+130s.
+  spy.mockReturnValue(t0 + 40_000);
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => screen.getByTestId("rest-timer"));
+  // Pausar a los 30s del descanso (t0+70s) → quedan 60s congelados.
+  spy.mockReturnValue(t0 + 70_000);
+  await fireEvent.press(screen.getByTestId("pause-toggle"));
+  const rs = mockSetRest.mock.calls.at(-1)?.[0];
+  expect(rs.restRemaining).toBe(60_000);
+  expect(rs.restUntil).toBeNull();
+  spy.mockRestore();
+});
+
+test("reanudar una sesión pausada en medio del descanso re-arma el descanso, sin contar el descanso como trabajo", async () => {
+  const t0 = 1_000_000;
+  jest.useFakeTimers();
+  const spy = jest.spyOn(Date, "now");
+  // 1 serie terminada (t0→t0+40s); descanso 90s vencería en t0+130s, pausado a los 30s (t0+70s) → 60s congelados.
+  mockActive = makeResumeActive(t0, [finishedSet(t0, t0 + 40_000)]);
+  mockPauseState = { sessionId: RESUME_ID, intervals: [{ startedAt: t0 + 70_000, endedAt: null }] };
+  mockRestState = { sessionId: RESUME_ID, setStart: t0, restUntil: null, restRemaining: 60_000 };
+  spy.mockReturnValue(t0 + 200_000); // remontaje pausada, mucho después
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("pause-toggle"));
+  await fireEvent.press(screen.getByTestId("pause-toggle")); // Reanudar → re-arma 60s → vence t0+260s
+  await waitFor(() => screen.getByTestId("rest-timer"));
+  spy.mockReturnValue(t0 + 260_000);
+  await act(async () => { jest.advanceTimersByTime(1_000); });
+  await waitFor(() => expect(screen.queryByTestId("rest-timer")).toBeNull());
+  spy.mockReturnValue(t0 + 280_000);
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => {
+    const sets = mockSetActive.mock.calls.at(-1)?.[0].exercises[0].sets;
+    expect(sets[1].startedAt).toBe(t0 + 260_000); // fin del descanso re-armado, NO el clamp a lastSetEnd
+    expect(sets[1].durationMs).toBe(20_000); // con el bug: 240_000
+  });
+  spy.mockRestore();
+  jest.useRealTimers();
 });
