@@ -44,12 +44,25 @@ test("rowsToSession convierte filas anidadas a WorkoutSession", () => {
   expect((s.exercises[0] as any).sessionId).toBeUndefined();
   // Filas viejas sin hrSeries: se mapea a undefined (no null), como espera el schema .optional().
   expect(s.hrSeries).toBeUndefined();
+  // Ídem pauseIntervals: filas viejas sin la columna se mapean a undefined.
+  expect(s.pauseIntervals).toBeUndefined();
 });
 
 test("rowsToSession mapea hrSeries cuando la fila lo trae", () => {
   const row = { ...nestedRow, hrSeries: [{ t: 0, bpm: 120 }, { t: 5000, bpm: 130 }] };
   const s = rowsToSession(row as any);
   expect(s.hrSeries).toEqual([{ t: 0, bpm: 120 }, { t: 5000, bpm: 130 }]);
+});
+
+test("rowsToSession mapea pauseIntervals cuando la fila lo trae", () => {
+  const row = { ...nestedRow, pauseIntervals: [{ startedAt: 100, endedAt: 200 }] };
+  const s = rowsToSession(row as any);
+  expect(s.pauseIntervals).toEqual([{ startedAt: 100, endedAt: 200 }]);
+});
+
+test("rowsToSession sin pauseIntervals lo mapea a undefined", () => {
+  const s = rowsToSession(nestedRow as any);
+  expect(s.pauseIntervals).toBeUndefined();
 });
 
 test("rowsToSession mapea note y substitutedFromId", () => {
@@ -130,6 +143,63 @@ test("upsertSession inserta hrSeries null cuando la sesión no la trae", async (
   };
   await upsertSession(db, "u", s);
   expect(insertedValues.hrSeries).toBeNull();
+});
+
+test("upsertSession pasa pauseIntervals al insert de workoutSession", async () => {
+  let insertedValues: any = null;
+  const tx: any = {
+    delete: () => ({ where: async () => {} }),
+    insert: () => ({
+      values: (v: any) => {
+        insertedValues = v;
+        return { returning: async () => [{ id: "ex-1" }] };
+      },
+    }),
+  };
+  const db: any = { transaction: async (fn: any) => fn(tx) };
+  const s: WorkoutSession = {
+    id: "11111111-1111-4111-8111-111111111111",
+    programId: "22222222-2222-4222-8222-222222222222",
+    weekNumber: 1,
+    dayLabel: "Día 1",
+    location: "gym",
+    startedAt: 1782900000000,
+    endedAt: null,
+    totalDurationMs: null,
+    notes: "",
+    exercises: [],
+    pauseIntervals: [{ startedAt: 100, endedAt: 200 }],
+  };
+  await upsertSession(db, "u", s);
+  expect(insertedValues.pauseIntervals).toEqual([{ startedAt: 100, endedAt: 200 }]);
+});
+
+test("upsertSession inserta pauseIntervals null cuando la sesión no la trae", async () => {
+  let insertedValues: any = null;
+  const tx: any = {
+    delete: () => ({ where: async () => {} }),
+    insert: () => ({
+      values: (v: any) => {
+        insertedValues = v;
+        return { returning: async () => [{ id: "ex-1" }] };
+      },
+    }),
+  };
+  const db: any = { transaction: async (fn: any) => fn(tx) };
+  const s: WorkoutSession = {
+    id: "11111111-1111-4111-8111-111111111111",
+    programId: "22222222-2222-4222-8222-222222222222",
+    weekNumber: 1,
+    dayLabel: "Día 1",
+    location: "gym",
+    startedAt: 1782900000000,
+    endedAt: null,
+    totalDurationMs: null,
+    notes: "",
+    exercises: [],
+  };
+  await upsertSession(db, "u", s);
+  expect(insertedValues.pauseIntervals).toBeNull();
 });
 
 test("listSessions incluye completionPct y proyecta liviano (sin exercises)", async () => {

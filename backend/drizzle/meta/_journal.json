@@ -120,6 +120,13 @@
       "when": 1784075874157,
       "tag": "0016_lonely_skrulls",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1784315535536,
+      "tag": "0017_powerful_dark_beast",
+      "breakpoints": true
     }
   ]
 }
