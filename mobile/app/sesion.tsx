@@ -11,6 +11,7 @@ import { getProfile } from "../src/storage/profile";
 import { getLastWeights } from "../src/api/sessions";
 import { getActiveSession, setActiveSession, clearActiveSession } from "../src/storage/activeSession";
 import { getPauseState, setPauseState, clearPauseState, startPause, endPause, isPaused, totalPausedMs, type OpenPauseInterval } from "../src/storage/pauseState";
+import { getRestState, setRestState, clearRestState } from "../src/storage/restState";
 import { enqueueSession } from "../src/storage/pendingSessions";
 import { syncPending } from "../src/sync/syncSessions";
 import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets, discardOpenSets, setNotes, substituteExercise, substituteInProgram } from "../src/session/engine";
@@ -189,9 +190,32 @@ export default function SesionScreen() {
           // si no, el tiempo fuera de la pantalla se contaría como entrenamiento activo.
           const ps = await getPauseState();
           if (!mounted.current) return;
+          const resumedPaused = ps != null && ps.sessionId === active.id && isPaused(ps.intervals);
           if (ps && ps.sessionId === active.id) {
             intervalsRef.current = ps.intervals;
             setPaused(isPaused(ps.intervals));
+          }
+          // Restaurar el timing por-serie persistido (análogo a la pausa): sin esto la serie
+          // siguiente arrancaría en el instante del remontaje y perdería el trabajo transcurrido
+          // desde el inicio de sesión / fin del descanso.
+          const rs = await getRestState();
+          if (!mounted.current) return;
+          if (rs && rs.sessionId === active.id) {
+            setStartRef.current = rs.setStart;
+            if (resumedPaused) {
+              // Reanudó pausada: restaurar el remanente del descanso congelado (si lo había) para que
+              // "Reanudar" re-arme la cuenta regresiva. NO se re-arma restUntil ahora (sigue congelado
+              // mientras la sesión está pausada); resumeIfPaused lo hará al reanudar.
+              restRemainingRef.current = rs.restRemaining;
+            } else if (rs.restUntil != null) {
+              // Había un descanso en curso (no pausado): re-armarlo. Si ya venció con la app cerrada, el
+              // tick lo cierra en el próximo latido y fija setStartRef = restUntil (fin real).
+              restDoneRef.current = false;
+              setRestUntil(rs.restUntil);
+            }
+          } else {
+            // Sesión sin timing persistido (previa a esta feature): anclar al inicio de sesión, no al remontaje.
+            setStartRef.current = active.startedAt;
           }
           setSession(active);
           setActiveOrder(firstIncompleteOrder(active));
@@ -231,7 +255,10 @@ export default function SesionScreen() {
         nowMs: Date.now(),
       });
       hr.resetFullLog(); // arranca el log de FC de sesión limpio (sobrevive los resets por-serie)
-      setStartRef.current = Date.now();
+      const startRef = Date.now();
+      setStartRef.current = startRef;
+      // Persistir el timing por-serie (setStartRef + descanso) para sobrevivir un remontaje.
+      void setRestState({ sessionId: s.id, setStart: startRef, restUntil: null, restRemaining: null });
       setActiveOrder(firstIncompleteOrder(s));
       apply(s);
     })();
@@ -398,7 +425,11 @@ export default function SesionScreen() {
     setRpe("");
     // Arranca el descanso con cuenta regresiva; la campana suena al cruzar 0.
     restDoneRef.current = false;
-    setRestUntil(Date.now() + current.planned.restSeconds * 1000);
+    const restUntilMs = Date.now() + current.planned.restSeconds * 1000;
+    setRestUntil(restUntilMs);
+    // La serie en curso arrancó en setStartRef y el descanso vence en restUntilMs: si la pantalla
+    // se remonta, la serie siguiente nace en el fin real del descanso (no en el instante del remontaje).
+    void setRestState({ sessionId: sess.id, setStart: setStartRef.current, restUntil: restUntilMs, restRemaining: null });
   }
 
   function onAdjustReps(delta: number) {
@@ -478,12 +509,15 @@ export default function SesionScreen() {
     intervalsRef.current = endPause(intervalsRef.current, now);
     setPaused(false);
     // Retomar el descanso con lo que le quedaba (el contador estaba congelado).
+    let resumedRestUntil: number | null = null;
     if (restRemainingRef.current != null) {
       restDoneRef.current = false; // permitir que la campana suene una vez al cruzar 0
-      setRestUntil(now + restRemainingRef.current);
+      resumedRestUntil = now + restRemainingRef.current;
+      setRestUntil(resumedRestUntil);
       restRemainingRef.current = null;
     }
     void setPauseState({ sessionId: sess.id, intervals: intervalsRef.current });
+    void setRestState({ sessionId: sess.id, setStart: setStartRef.current, restUntil: resumedRestUntil, restRemaining: null });
   }
 
   function onPauseToggle() {
@@ -502,6 +536,9 @@ export default function SesionScreen() {
       setRestUntil(null);
     }
     void setPauseState({ sessionId: sess.id, intervals: intervalsRef.current });
+    // Persistir el timing con el descanso congelado: si la app se cierra pausada, al reanudar hay
+    // que re-armar el descanso con lo que le quedaba en vez de perderlo (y contarlo como trabajo).
+    void setRestState({ sessionId: sess.id, setStart: setStartRef.current, restUntil: null, restRemaining: restRemainingRef.current });
   }
 
   async function onFinish() {
@@ -524,6 +561,7 @@ export default function SesionScreen() {
       await enqueueSession(done);
       await clearActiveSession();
       await clearPauseState();
+      await clearRestState();
       if (oneOffRef.current) await clearOneOff();
     } catch {
       if (mounted.current) setFinishError(true);
@@ -556,6 +594,7 @@ export default function SesionScreen() {
           onPress: async () => {
             await clearActiveSession();
             await clearPauseState();
+            await clearRestState();
             if (oneOffRef.current) await clearOneOff();
             router.replace("/");
           },
@@ -644,8 +683,10 @@ export default function SesionScreen() {
             onPress={() => {
               restDoneRef.current = true;
               // Saltar el descanso lo termina ahora → la serie siguiente nace en este instante.
-              setStartRef.current = Date.now();
+              const skipAt = Date.now();
+              setStartRef.current = skipAt;
               setRestUntil(null);
+              void setRestState({ sessionId: sess.id, setStart: skipAt, restUntil: null, restRemaining: null });
             }}
           >
             <Text style={{ color: colors.textMuted, fontSize: 12 }}>Saltar descanso</Text>
