@@ -34,8 +34,8 @@ export default function DetalleDiaScreen() {
       {tab === "resumen" && (
         <>
           <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18 }}>
-            Comido = lo registrado · Meta = tu objetivo · Restante = Meta − Comido + Ejercicio. El gasto del ejercicio se
-            estima desde tus sesiones (FC o duración).
+            Comido = lo registrado · Meta = tu objetivo · Restante = Meta − Comido + Ejercicio. El gasto del ejercicio
+            sale de tus sesiones y actividades de cardio (las kcal del reloj mandan; si no, se estiman por FC o duración).
           </Text>
           <ResumenTab summary={summary} goalView={goalView} />
         </>

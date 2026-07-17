@@ -92,7 +92,7 @@ export default function NutricionScreen() {
                 {goalView.kcal!.over ? `${-goalView.kcal!.restante} kcal de más` : `te quedan ${goalView.kcal!.restante} kcal`}
               </Text>
               {goalView.kcal!.exercise > 0 && (
-                <Text style={{ color: colors.textMuted, fontSize: 12 }}>🏋 +{goalView.kcal!.exercise} kcal ejercicio</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 12 }}>🔥 +{goalView.kcal!.exercise} kcal ejercicio</Text>
               )}
             </View>
           ) : (
