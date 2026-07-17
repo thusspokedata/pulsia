@@ -28,7 +28,6 @@ Pulsia tiene tres grandes dominios, todos alimentando una **memoria evolutiva de
 - **Frecuencia cardíaca** en vivo desde una banda de pulso **BLE** (Bluetooth).
 - Resumen de sesión con **mapa corporal** de músculos trabajados + curva de FC.
 - Actividades de **cardio** (caminata, running, elíptica, bici, natación, remo) con estimación de gasto calórico por tipo de actividad (MET).
-- Español e inglés.
 
 ### 🍎 Nutrición
 - Alta de alimentos por **foto + IA** (visión) o **escribiendo el nombre** → catálogo personal.
