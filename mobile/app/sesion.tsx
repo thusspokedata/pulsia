@@ -13,7 +13,7 @@ import { getActiveSession, setActiveSession, clearActiveSession } from "../src/s
 import { getPauseState, setPauseState, clearPauseState } from "../src/storage/pauseState";
 import { enqueueSession } from "../src/storage/pendingSessions";
 import { syncPending } from "../src/sync/syncSessions";
-import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets, setNotes, substituteExercise, substituteInProgram } from "../src/session/engine";
+import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets, discardOpenSets, setNotes, substituteExercise, substituteInProgram } from "../src/session/engine";
 import { newSessionId } from "../src/session/id";
 import { useHeartRate } from "../src/ble/useHeartRate";
 import { aggregateHr } from "../src/ble/hrAggregate";
@@ -56,6 +56,29 @@ function firstIncomplete(s: WorkoutSession): SessionExercise | undefined {
 // Orden del primer ejercicio incompleto; 0 si no hay ninguno.
 function firstIncompleteOrder(s: WorkoutSession): number {
   return firstIncomplete(s)?.order ?? 0;
+}
+
+// Fin de la última serie terminada de TODA la sesión (0 si no hay ninguna). Global y no por
+// ejercicio: el usuario puede alternar entre ejercicios y una serie nueva nunca puede empezar
+// antes de que haya terminado la anterior, sea del ejercicio que sea.
+function lastSetEnd(s: WorkoutSession): number {
+  return s.exercises.reduce(
+    (acc, ex) => ex.sets.reduce((a, x) => (x.endedAt != null && x.endedAt > a ? x.endedAt : a), acc),
+    0,
+  );
+}
+
+// Instante en que nace una serie nueva. El modelo es "una serie empieza cuando termina el
+// descanso anterior" (o al arrancar la sesión) → `ref` es setStartRef, que se actualiza en cada
+// fin de descanso. El clamp contra la última serie terminada cubre el caso en que el usuario NO
+// esperó la campana y tocó "Terminar serie" con el descanso todavía corriendo: ahí `ref` todavía
+// apunta al descanso ANTERIOR, y sin el clamp la serie nueva re-contaría la serie previa entera
+// más su descanso. Con el clamp, el descanso cortado a mano se atribuye a trabajo: la app no
+// puede saber qué parte de esa ventana fue trabajo real, y el usuario demostró no estar
+// descansando (completó una serie). Nunca inventa tiempo: Trabajo + Descanso = Total igual, ya
+// que el descanso se deriva restando el trabajo del total (ver summary.ts).
+function setStartFor(s: WorkoutSession, ref: number): number {
+  return Math.max(ref, lastSetEnd(s));
 }
 
 export default function SesionScreen() {
@@ -265,6 +288,10 @@ export default function SesionScreen() {
     if (restUntil == null) return;
     if (nowMs >= restUntil && !restDoneRef.current) {
       restDoneRef.current = true;
+      // Fin del descanso = nacimiento de la serie siguiente. Usamos `restUntil` y no Date.now():
+      // el descanso terminó exactamente ahí, mientras que el tick que lo detecta puede llegar
+      // hasta 1s tarde (o mucho más si la app estuvo en background).
+      setStartRef.current = restUntil;
       setRestUntil(null);
       if (soundsEnabledRef.current) {
         try {
@@ -329,14 +356,15 @@ export default function SesionScreen() {
     // Ejercicio ya completo (todas las series planificadas hechas y sin serie abierta):
     // no crear una serie fantasma. Para corregir están las filas "Series hechas".
     if (!openSet && doneSets >= current.planned.sets) return;
+    // La serie ya nació cuando terminó el descanso anterior (setStartRef): NO pisar ese valor acá,
+    // solo reiniciar los samples de HR de la serie nueva.
     if (!openSet) {
-      setStartRef.current = Date.now();
       hr.resetSamples();
     }
     apply(
       tapRep(sess, {
         exerciseOrder: current.order,
-        setStartMs: setStartRef.current,
+        setStartMs: setStartFor(sess, setStartRef.current),
         nowMs: Date.now(),
         initialReps: parsePlannedReps(current.planned.reps),
       }),
@@ -352,11 +380,11 @@ export default function SesionScreen() {
     // para que "Terminar serie" guarde directo (antes había que tocar +1/−1 primero).
     let base = sess;
     if (!openSet) {
-      setStartRef.current = Date.now();
       hr.resetSamples(); // serie instantánea: no arrastrar HR de la serie/descanso previos
+      // La serie nació al terminar el descanso anterior (setStartRef); acá solo la materializamos.
       base = adjustReps(sess, {
         exerciseOrder: current.order,
-        setStartMs: setStartRef.current,
+        setStartMs: setStartFor(sess, setStartRef.current),
         delta: 0,
         initialReps: parsePlannedReps(current.planned.reps),
       });
@@ -385,14 +413,14 @@ export default function SesionScreen() {
     if (!current) return;
     // Ejercicio ya completo: no-op (mismo criterio que onTap).
     if (!openSet && doneSets >= current.planned.sets) return;
+    // Igual que onTap: la serie ya empezó al terminar el descanso; solo reiniciamos el HR.
     if (!openSet) {
-      setStartRef.current = Date.now();
       hr.resetSamples();
     }
     apply(
       adjustReps(sess, {
         exerciseOrder: current.order,
-        setStartMs: setStartRef.current,
+        setStartMs: setStartFor(sess, setStartRef.current),
         delta,
         initialReps: parsePlannedReps(current.planned.reps),
       }),
@@ -402,6 +430,29 @@ export default function SesionScreen() {
   function onSkip() {
     if (!current) return;
     apply(skipExercise(sess, { exerciseOrder: current.order }));
+  }
+
+  // Cierra la serie abierta del ejercicio que se está dejando, en el instante del cambio.
+  // Invariante que protege: las series no se solapan → workMs ≤ totalDurationMs.
+  // Sin esto, una serie abandonada de A queda con endedAt=null y closeOpenSets (al finalizar) le
+  // pone endedAt=finishTime: su durationMs abarca toda la sesión y se solapa con las series de B,
+  // haciendo que el trabajo (suma de durationMs) supere el total. Elegimos la Opción A —cerrar
+  // acá— antes que bloquear el tap en B: refleja la realidad (dejaste de trabajar en A al pasar a
+  // B) sin taps muertos, y la duración de A queda tap→cambio, sin inventar tiempo. `openSet`/
+  // `current` en este handler son los del ejercicio ACTIVO previo (el que se abandona).
+  function closeOpenSetBeforeLeaving() {
+    if (!current || !openSet) return;
+    // Serie sin reps (caso borde: reps planificadas no parseables): descartar la serie fantasma.
+    if (openSet.reps <= 0) {
+      apply(discardOpenSets(sess, { exerciseOrder: current.order }));
+      return;
+    }
+    // Con reps: cerrarla con peso/RPE/HR visibles (son del ejercicio que se deja) en este instante.
+    const { hrAvg, hrMax } = aggregateHr(hr.getSamples());
+    hr.resetSamples(); // el próximo ejercicio arranca con HR limpio
+    apply(endSet(sess, { exerciseOrder: current.order, weightKg: parseNum(weight), rpe: parseNum(rpe), nowMs: Date.now(), hrAvg, hrMax }));
+    setWeight("");
+    setRpe("");
   }
 
   async function confirmChange() {
@@ -563,6 +614,9 @@ export default function SesionScreen() {
                   // Cambiar de ejercicio activo NO corta el descanso/campana en curso: el usuario
                   // puede navegar entre ejercicios mientras descansa y la cuenta regresiva (y su
                   // campana) siguen corriendo en segundo plano.
+                  // Antes de cambiar: cerrar la serie abierta del ejercicio que se deja, para que no
+                  // se solape con lo que se trabaje en el siguiente (ver closeOpenSetBeforeLeaving).
+                  if (current && e.order !== current.order) closeOpenSetBeforeLeaving();
                   setActiveOrder(e.order);
                 }}
                 style={{
@@ -593,7 +647,15 @@ export default function SesionScreen() {
         <View testID="rest-timer" style={{ alignItems: "center", backgroundColor: colors.accentSoft, borderRadius: radius.md, padding: spacing.md, gap: spacing.xs }}>
           <Text style={{ color: colors.accentText, fontSize: 12 }}>Descanso</Text>
           <Text style={{ color: colors.accentText, fontSize: 32, fontWeight: "700" }}>{fmt(Math.max(0, restUntil - nowMs))}</Text>
-          <Pressable testID="skip-rest" onPress={() => { restDoneRef.current = true; setRestUntil(null); }}>
+          <Pressable
+            testID="skip-rest"
+            onPress={() => {
+              restDoneRef.current = true;
+              // Saltar el descanso lo termina ahora → la serie siguiente nace en este instante.
+              setStartRef.current = Date.now();
+              setRestUntil(null);
+            }}
+          >
             <Text style={{ color: colors.textMuted, fontSize: 12 }}>Saltar descanso</Text>
           </Pressable>
         </View>
