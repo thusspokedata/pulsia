@@ -1,7 +1,8 @@
-import { sumNullableMicro, sumDayExerciseBurn } from "@pulsia/shared";
-import type { AthleteContext, Meal, WaterLog, PlanView } from "@pulsia/shared";
+import { sumNullableMicro, dayExerciseBurn } from "@pulsia/shared";
+import type { AthleteContext, Meal, WaterLog, PlanView, CardioActivity } from "@pulsia/shared";
 import { listMeals as listMealsImpl, listWater as listWaterImpl } from "../nutrition/repository";
 import { listSessions as listSessionsImpl } from "../sessions/repository";
+import { listCardio as listCardioImpl } from "../cardio/repository";
 import { getMetrics as getMetricsImpl } from "../metrics/repository";
 import {
   getActivePlan as getActivePlanImpl, listTakesForRange as listTakesForRangeImpl,
@@ -41,6 +42,7 @@ export interface CollectDeps {
   listMeals: (db: Db, userId: string, from: number, to: number) => Promise<Meal[]>;
   listWater: (db: Db, userId: string, from: number, to: number) => Promise<WaterLog[]>;
   listSessions: (db: Db, userId: string) => Promise<any[]>;
+  listCardio: (db: Db, userId: string) => Promise<CardioActivity[]>;
   getMetrics: (db: Db, userId: string, opts: { from: number; to: number }) => Promise<{ metricType: string; value: number; measuredAt: number }[]>;
   getActivePlan: (db: Db, userId: string) => Promise<PlanView | null>;
   listTakesForRange: (db: Db, userId: string, fromDate: string, toDate: string) => Promise<TakeRow[]>;
@@ -50,6 +52,7 @@ const defaultDeps: CollectDeps = {
   listMeals: (db, u, f, t) => listMealsImpl(db, u, f, t),
   listWater: (db, u, f, t) => listWaterImpl(db, u, f, t),
   listSessions: (db, u) => listSessionsImpl(db, u),
+  listCardio: (db, u) => listCardioImpl(db, u),
   getMetrics: (db, u, opts) => getMetricsImpl(db, u, opts),
   getActivePlan: (db, u) => getActivePlanImpl(db, u),
   listTakesForRange: (db, u, f, t) => listTakesForRangeImpl(db, u, f, t),
@@ -66,9 +69,9 @@ export async function collectReportData(
   const toDateStr = epochToUtcDateStr(to);
   // Todo en un solo Promise.all: takes/catalog no dependen del plan activo, así que se piden en
   // paralelo con él en vez de encadenar; si no hay plan activo se descartan (supplements: null).
-  const [meals, water, allSessions, metrics, activePlan, takes, catalog] = await Promise.all([
+  const [meals, water, allSessions, allCardio, metrics, activePlan, takes, catalog] = await Promise.all([
     deps.listMeals(db, userId, from, to), deps.listWater(db, userId, from, to),
-    deps.listSessions(db, userId), deps.getMetrics(db, userId, { from, to }),
+    deps.listSessions(db, userId), deps.listCardio(db, userId), deps.getMetrics(db, userId, { from, to }),
     deps.getActivePlan(db, userId), deps.listTakesForRange(db, userId, fromDateStr, toDateStr),
     deps.listSupplements(db, userId),
   ]);
@@ -93,8 +96,11 @@ export async function collectReportData(
   const fromFood = sumNullableMicro(items.map((it) => it.water_ml)) ?? 0;
   const drank = water.reduce((a, w) => a + w.ml, 0);
   const daySessions = allSessions.filter((s) => s.startedAt >= from && s.startedAt <= to);
+  const dayCardio = allCardio
+    .filter((a) => a.startedAt >= from && a.startedAt <= to)
+    .map((a) => ({ type: a.type, durationMs: a.durationMs, avgHr: a.avgHr, kcal: a.kcal }));
   const bmr = athlete.goal.status === "ok" ? (athlete.goal.bmr ?? null) : null;
-  const exercise = sumDayExerciseBurn(daySessions, { weightKg: athlete.weightKg, age: athlete.age, sex: athlete.sex, bmr });
+  const exercise = dayExerciseBurn(daySessions, dayCardio, { weightKg: athlete.weightKg, age: athlete.age, sex: athlete.sex, bmr });
   const metricsByType: Partial<Record<string, number>> = {};
   for (const m of metrics) metricsByType[m.metricType] = m.value; // ordenados asc → queda el último
   const periodDays = Math.max(1, Math.round((to - from + 1) / 86_400_000));

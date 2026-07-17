@@ -5,8 +5,9 @@ import { listMeals, listWater, getNutritionGoal } from "../api/nutrition";
 import { getProfile } from "../storage/profile";
 import { getLatestMetrics } from "../api/metrics";
 import { getSessions, type SessionListItem } from "../api/sessions";
-import { computeNutritionGoal, sumDayExerciseBurn } from "@pulsia/shared";
-import type { Meal, WaterLog, NutritionGoalInput, TrainingProfile, NutritionGoalResult } from "@pulsia/shared";
+import { computeNutritionGoal, dayExerciseBurn } from "@pulsia/shared";
+import type { Meal, WaterLog, NutritionGoalInput, TrainingProfile, NutritionGoalResult, CardioBurnInput } from "@pulsia/shared";
+import { listCardio } from "../api/cardio";
 import { buildGoalView, type GoalView } from "./goalView";
 import { buildNutritionDaySummary, type NutritionDaySummary } from "./daySummary";
 import { dayBounds } from "./dayBounds";
@@ -32,17 +33,19 @@ export function useNutritionDay(offset: number): NutritionDay {
   const [profile, setProfile] = useState<TrainingProfile | null>(null);
   const [weightKg, setWeightKg] = useState<number | undefined>(undefined);
   const [daySessions, setDaySessions] = useState<SessionListItem[]>([]);
+  const [dayCardio, setDayCardio] = useState<CardioBurnInput[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     const url = await getBackendUrl(); baseUrl.current = url;
     const { from, to } = dayBounds(offset);
     try {
-      const [ms, ws, gi, p, ss] = await Promise.all([
-        listMeals(url, from, to), listWater(url, from, to), getNutritionGoal(url), getProfile(), getSessions(url),
+      const [ms, ws, gi, p, ss, cardio] = await Promise.all([
+        listMeals(url, from, to), listWater(url, from, to), getNutritionGoal(url), getProfile(), getSessions(url), listCardio(url, from, to),
       ]);
       setMeals(ms); setWater(ws); setGoalInput(gi); setProfile(p);
       setDaySessions(ss.filter((s) => s.startedAt >= from && s.startedAt <= to));
+      setDayCardio(cardio.map((a) => ({ type: a.type, durationMs: a.durationMs, avgHr: a.avgHr, kcal: a.kcal })));
       let w = p?.weightKg;
       try { const latest = await getLatestMetrics(url); if (latest.weight_kg?.value != null) w = latest.weight_kg.value; } catch { /* offline */ }
       setWeightKg(w); setError(null);
@@ -60,7 +63,7 @@ export function useNutritionDay(offset: number): NutritionDay {
       })
     : null;
   const bmrForBurn = goalResult?.status === "ok" ? goalResult.bmr : null; // narrowing: la variante incomplete no tiene bmr
-  const exercise = sumDayExerciseBurn(daySessions, { weightKg, age: profile?.age, sex: profile?.sex, bmr: bmrForBurn });
+  const exercise = dayExerciseBurn(daySessions, dayCardio, { weightKg, age: profile?.age, sex: profile?.sex, bmr: bmrForBurn });
   const goalView = goalResult
     ? buildGoalView(goalResult, {
         kcal: summary.dayTotals.kcal, protein_g: summary.dayTotals.protein_g,

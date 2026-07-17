@@ -13,7 +13,7 @@ function fakeDb(opts: any) {
 
 // Deps con defaults vacíos (sin plan activo): las suites spreadean y overridean lo que necesitan.
 const baseDeps = {
-  listMeals: async () => [], listWater: async () => [], listSessions: async () => [], getMetrics: async () => [],
+  listMeals: async () => [], listWater: async () => [], listSessions: async () => [], listCardio: async () => [], getMetrics: async () => [],
   getActivePlan: async () => null, listTakesForRange: async () => [], listSupplements: async () => [],
 };
 const athleteIncomplete = { goal: { status: "incomplete" } } as any;
@@ -36,6 +36,23 @@ test("collectReportData agrega comidas, líquido y gasto", async () => {
   expect(data.sessionsCount).toBe(1);
   expect(data.metrics.weight_kg).toBe(80);
   expect(hasAnyData(data)).toBe(true);
+});
+
+test("collectReportData suma el gasto de cardio del período (device kcal + estimado)", async () => {
+  const deps = {
+    ...baseDeps,
+    // sesión 1h sin FC → MET 5*80 = 400 bruto (sin bmr)
+    listSessions: async () => [{ id: "s", startedAt: 1, totalDurationMs: 3600000, avgHr: null, dayLabel: "A", location: "gym", programId: "p", completionPct: 100 }],
+    // una caminata con kcal del reloj (device → se usa tal cual) y otra fuera del período (se ignora)
+    listCardio: async () => [
+      { id: "c1", type: "walk", startedAt: 5, durationMs: 1800000, avgHr: null, maxHr: null, elevationGainM: null, distanceM: null, kcal: 150, kcalSource: "device", source: "fit", notes: "" },
+      { id: "c2", type: "run", startedAt: 999, durationMs: 600000, avgHr: null, maxHr: null, elevationGainM: null, distanceM: null, kcal: 99, kcalSource: "device", source: "fit", notes: "" },
+    ],
+  };
+  const athlete = { weightKg: 80, age: 40, sex: "male", goal: { status: "ok", kcal: 2000, protein_g: 150, carbs_g: 200, fat_g: 60, bmr: null } } as any;
+  // período [0, 10]: entra la sesión (startedAt 1) y c1 (startedAt 5), NO c2 (startedAt 999)
+  const data = await collectReportData({} as any, "u", 0, 10, athlete, deps as any);
+  expect(data.exercise).toBe(550); // 400 fuerza + 150 device del cardio; c2 fuera de rango
 });
 
 test("hasAnyData false si no hay nada", async () => {
