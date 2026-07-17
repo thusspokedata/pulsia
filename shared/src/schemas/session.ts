@@ -39,6 +39,12 @@ export const HrSeriesPointSchema = z.object({
   bpm: z.number().int().min(0),
 });
 
+// Intervalo de pausa (epoch ms). En la sesión persistida siempre está cerrado.
+export const PauseIntervalSchema = z.object({
+  startedAt: z.number().int(),
+  endedAt: z.number().int(),
+});
+
 export const WorkoutSessionSchema = z.object({
   id: z.string().uuid(),
   programId: z.string().uuid(),
@@ -51,10 +57,12 @@ export const WorkoutSessionSchema = z.object({
   notes: z.string().default(""),
   exercises: z.array(SessionExerciseSchema),
   hrSeries: z.array(HrSeriesPointSchema).optional(),
+  pauseIntervals: z.array(PauseIntervalSchema).optional(),
 });
 
 export type SetLog = z.infer<typeof SetLogSchema>;
 export type PlannedExercise = z.infer<typeof PlannedExerciseSchema>;
 export type SessionExercise = z.infer<typeof SessionExerciseSchema>;
 export type HrSeriesPoint = z.infer<typeof HrSeriesPointSchema>;
+export type PauseInterval = z.infer<typeof PauseIntervalSchema>;
 export type WorkoutSession = z.infer<typeof WorkoutSessionSchema>;

@@ -10,7 +10,7 @@ import { getBackendUrl } from "../src/storage/config";
 import { getProfile } from "../src/storage/profile";
 import { getLastWeights } from "../src/api/sessions";
 import { getActiveSession, setActiveSession, clearActiveSession } from "../src/storage/activeSession";
-import { getPauseState, setPauseState, clearPauseState } from "../src/storage/pauseState";
+import { getPauseState, setPauseState, clearPauseState, startPause, endPause, isPaused, totalPausedMs, type OpenPauseInterval } from "../src/storage/pauseState";
 import { enqueueSession } from "../src/storage/pendingSessions";
 import { syncPending } from "../src/sync/syncSessions";
 import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets, discardOpenSets, setNotes, substituteExercise, substituteInProgram } from "../src/session/engine";
@@ -98,8 +98,7 @@ export default function SesionScreen() {
   const [changeNote, setChangeNote] = useState("");
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [lastWeights, setLastWeights] = useState<Record<string, number>>({});
-  const pausedMsRef = useRef(0); // tiempo pausado acumulado (ms)
-  const pauseStartedRef = useRef(0); // Date.now() del inicio de la pausa en curso
+  const intervalsRef = useRef<OpenPauseInterval[]>([]); // intervalos de pausa (fuente de verdad)
   const restRemainingRef = useRef<number | null>(null); // ms restantes de descanso congelados al pausar
   const started = useRef(false);
   const oneOffRef = useRef(false);
@@ -191,14 +190,8 @@ export default function SesionScreen() {
           const ps = await getPauseState();
           if (!mounted.current) return;
           if (ps && ps.sessionId === active.id) {
-            pausedMsRef.current = ps.pausedMs;
-            if (ps.pausedAt != null) {
-              // La sesión quedó pausada: el tiempo desde pausedAt hasta ahora cuenta como pausa.
-              pauseStartedRef.current = ps.pausedAt;
-              setPaused(true);
-            } else {
-              setPaused(false);
-            }
+            intervalsRef.current = ps.intervals;
+            setPaused(isPaused(ps.intervals));
           }
           setSession(active);
           setActiveOrder(firstIncompleteOrder(active));
@@ -482,8 +475,7 @@ export default function SesionScreen() {
   function resumeIfPaused() {
     if (!paused) return;
     const now = Date.now();
-    // Acumular la duración de la pausa en curso.
-    pausedMsRef.current += now - pauseStartedRef.current;
+    intervalsRef.current = endPause(intervalsRef.current, now);
     setPaused(false);
     // Retomar el descanso con lo que le quedaba (el contador estaba congelado).
     if (restRemainingRef.current != null) {
@@ -491,7 +483,7 @@ export default function SesionScreen() {
       setRestUntil(now + restRemainingRef.current);
       restRemainingRef.current = null;
     }
-    void setPauseState({ sessionId: sess.id, pausedMs: pausedMsRef.current, pausedAt: null });
+    void setPauseState({ sessionId: sess.id, intervals: intervalsRef.current });
   }
 
   function onPauseToggle() {
@@ -499,9 +491,9 @@ export default function SesionScreen() {
       resumeIfPaused();
       return;
     }
-    // Pausar: marcar el inicio de la pausa.
+    // Pausar: abrir un intervalo nuevo.
     const now = Date.now();
-    pauseStartedRef.current = now;
+    intervalsRef.current = startPause(intervalsRef.current, now);
     setPaused(true);
     // Congelar el descanso activo: guardar lo que resta y frenar el contador (así la campana
     // no dispara mientras está pausado).
@@ -509,7 +501,7 @@ export default function SesionScreen() {
       restRemainingRef.current = restUntil - now;
       setRestUntil(null);
     }
-    void setPauseState({ sessionId: sess.id, pausedMs: pausedMsRef.current, pausedAt: now });
+    void setPauseState({ sessionId: sess.id, intervals: intervalsRef.current });
   }
 
   async function onFinish() {
@@ -520,14 +512,14 @@ export default function SesionScreen() {
     // (el resumen se muestra en este mismo componente, no hay unmount que dispare el cleanup).
     restDoneRef.current = true;
     setRestUntil(null);
-    // Tiempo pausado total: acumulado + una pausa en curso (si la hay) hasta ahora.
-    const pausedMs = pausedMsRef.current + (paused ? now - pauseStartedRef.current : 0);
+    // Cerrar el intervalo abierto (si la sesión estaba pausada) en `now`, y usarlo como fuente.
+    const pauseIntervals = endPause(intervalsRef.current, now);
     const s = closeOpenSets(sess, { activeOrder: current?.order ?? null, weightKg: parseNum(weight), rpe: parseNum(rpe), nowMs: now, hrAvg, hrMax });
     // Curva de FC de toda la sesión (descansos incluidos): downsample del log completo del
     // BLE, adjuntado ANTES de finishSession para que sobreviva el spread de {...session}.
     const fullLog = hr.getFullLog();
     const sWithHr = fullLog.length > 0 ? { ...s, hrSeries: buildHrSeries(fullLog, s.startedAt) } : s;
-    const done = finishSession(sWithHr, { nowMs: now, pausedMs });
+    const done = finishSession(sWithHr, { nowMs: now, pauseIntervals });
     try {
       await enqueueSession(done);
       await clearActiveSession();
@@ -579,7 +571,7 @@ export default function SesionScreen() {
         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flexShrink: 0 }}>
           {paused && <Text style={{ color: colors.accentText, fontSize: 12 }}>⏸ Pausado</Text>}
           <Text style={{ color: colors.text, fontSize: 12 }}>
-            ⏱ {fmt(nowMs - session.startedAt - pausedMsRef.current - (paused ? nowMs - pauseStartedRef.current : 0))}
+            ⏱ {fmt(nowMs - session.startedAt - totalPausedMs(intervalsRef.current, nowMs))}
           </Text>
           <Pressable
             testID="pause-toggle"

@@ -17,6 +17,7 @@ export function rowsToSession(row: any): WorkoutSession {
     totalDurationMs: row.totalDurationMs,
     notes: row.notes,
     hrSeries: row.hrSeries ?? undefined,
+    pauseIntervals: row.pauseIntervals ?? undefined,
     exercises: (row.exercises ?? []).map((ex: any) => ({
       catalogId: ex.catalogId,
       garminName: ex.garminName,
@@ -51,6 +52,7 @@ export async function upsertSession(db: Db, userId: string, s: WorkoutSession): 
       dayLabel: s.dayLabel, location: s.location, startedAt: s.startedAt,
       endedAt: s.endedAt, totalDurationMs: s.totalDurationMs, notes: s.notes,
       hrSeries: s.hrSeries ?? null,
+      pauseIntervals: s.pauseIntervals ?? null,
     });
     for (const ex of s.exercises) {
       const [exRow] = await tx.insert(sessionExercise).values({

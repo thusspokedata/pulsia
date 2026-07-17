@@ -1,5 +1,6 @@
 import type { WorkoutSession, SessionExercise, SetLog } from "@pulsia/shared";
 import { getExerciseById, sessionCompletionPct } from "@pulsia/shared";
+import { overlapMs } from "./engine";
 
 export interface SetRow {
   setNumber: number;
@@ -165,11 +166,18 @@ export function summarize(session: WorkoutSession): SessionSummary {
   const primaryMuscles = [...primarySet];
   const secondaryMuscles = [...secondarySet];
 
-  // perSet: rest = próxima.startedAt - esta.endedAt (>= 0); null en la última.
+  // perSet: rest = próxima.startedAt - esta.endedAt (>= 0), menos el solape con las pausas; null en la última.
+  const pauseIvs = session.pauseIntervals ?? [];
   const perSet: SetRow[] = flat.map(({ set, garminName }, i) => {
     const next = flat[i + 1];
-    const restMsRow =
-      next != null && set.endedAt != null ? Math.max(0, next.set.startedAt - set.endedAt) : null;
+    let restMsRow: number | null = null;
+    if (next != null && set.endedAt != null) {
+      const paused = pauseIvs.reduce(
+        (acc, iv) => acc + overlapMs(set.endedAt as number, next.set.startedAt, iv.startedAt, iv.endedAt),
+        0,
+      );
+      restMsRow = Math.max(0, next.set.startedAt - set.endedAt - paused);
+    }
     const volumeKg = set.weightKg != null ? set.reps * set.weightKg : null;
     return {
       setNumber: set.setNumber,

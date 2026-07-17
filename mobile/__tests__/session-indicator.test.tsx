@@ -13,7 +13,10 @@ let mockActive: any = null;
 jest.mock("../src/storage/activeSession", () => ({ getActiveSession: async () => mockActive }));
 
 let mockPauseState: any = null;
-jest.mock("../src/storage/pauseState", () => ({ getPauseState: async () => mockPauseState }));
+jest.mock("../src/storage/pauseState", () => {
+  const actual = jest.requireActual("../src/storage/pauseState");
+  return { ...actual, getPauseState: async () => mockPauseState };
+});
 
 import { SessionIndicator } from "../src/components/SessionIndicator";
 
@@ -44,8 +47,11 @@ test("descuenta el tiempo pausado del banner si el estado de pausa corresponde a
     id: "abc", programId: "p", weekNumber: 1, dayLabel: "Día 1", location: "gym",
     startedAt: t0, endedAt: null, totalDurationMs: null, notes: "", exercises: [],
   };
-  // 5s acumulados + pausa en curso desde t0+15s → a t0+20s son 5s más = 10s pausados.
-  mockPauseState = { sessionId: "abc", pausedMs: 5_000, pausedAt: t0 + 15_000 };
+  // 5s acumulados (cerrados) + pausa en curso desde t0+15s → a t0+20s son 5s más = 10s pausados.
+  mockPauseState = {
+    sessionId: "abc",
+    intervals: [{ startedAt: t0 + 5_000, endedAt: t0 + 10_000 }, { startedAt: t0 + 15_000, endedAt: null }],
+  };
   await render(<SessionIndicator />);
   // Bruto 20s - 10s pausados = 10s → "0:10".
   await waitFor(() => expect(screen.getByText(/0:10$/)).toBeTruthy());

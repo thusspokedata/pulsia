@@ -333,6 +333,49 @@ test("hrSeries null cuando la sesión no la tiene", () => {
   expect(s.hrSeries).toBeNull();
 });
 
+test("perSet: el rest por-fila descuenta el solape con las pausas", () => {
+  const s = session({
+    startedAt: 0,
+    endedAt: 30000,
+    totalDurationMs: 27000,
+    pauseIntervals: [{ startedAt: 8000, endedAt: 11000 }],
+    exercises: [
+      exercise({
+        catalogId: "barbell_bench_press",
+        garminName: "Barbell Bench Press",
+        order: 0,
+        sets: [
+          setLog({ setNumber: 1, startedAt: 2000, endedAt: 5000, durationMs: 3000, reps: 8 }),
+          setLog({ setNumber: 2, startedAt: 20000, endedAt: 23000, durationMs: 3000, reps: 8 }),
+        ],
+      }),
+    ],
+  });
+  const sum = summarize(s);
+  expect(sum.perSet[0].restMs).toBe(12000); // 15000 - 3000
+  expect(sum.perSet[1].restMs).toBeNull(); // última
+});
+
+test("perSet: sin pauseIntervals el rest por-fila es el hueco crudo (retrocompat)", () => {
+  const s = session({
+    startedAt: 0,
+    endedAt: 30000,
+    totalDurationMs: 30000,
+    exercises: [
+      exercise({
+        catalogId: "barbell_bench_press",
+        garminName: "Barbell Bench Press",
+        order: 0,
+        sets: [
+          setLog({ setNumber: 1, startedAt: 2000, endedAt: 5000, durationMs: 3000, reps: 8 }),
+          setLog({ setNumber: 2, startedAt: 20000, endedAt: 23000, durationMs: 3000, reps: 8 }),
+        ],
+      }),
+    ],
+  });
+  expect(summarize(s).perSet[0].restMs).toBe(15000);
+});
+
 test("durationMs fallback a endedAt-startedAt cuando totalDurationMs es null", () => {
   const ex = exercise({
     catalogId: "barbell_bench_press",
