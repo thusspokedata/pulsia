@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { CardioActivitySchema, CardioHrPointSchema, CARDIO_TYPES, CARDIO_LABELS } from "./cardio";
+import { CardioActivitySchema, CardioHrPointSchema, CARDIO_TYPES, CARDIO_LABELS, CardioFitPreviewSchema } from "./cardio";
 import { HrSeriesPointSchema } from "./session";
 
 const valid = {
@@ -80,4 +80,36 @@ test("CARDIO_LABELS cubre todos los tipos (exhaustividad)", () => {
     expect(CARDIO_LABELS[t].length).toBeGreaterThan(0);
   }
   expect(Object.keys(CARDIO_LABELS).length).toBe(CARDIO_TYPES.length);
+});
+
+test("CardioFitPreviewSchema acepta un preview completo del reloj", () => {
+  const preview = {
+    type: "walk" as const,
+    startedAt: 1_700_000_000_000,
+    durationMs: 1_800_000,
+    distanceM: 2500,
+    avgHr: 110,
+    maxHr: 130,
+    elevationGainM: 12,
+    kcal: 150,
+    hrSeries: [{ t: 0, bpm: 108 }],
+  };
+  const parsed = CardioFitPreviewSchema.parse(preview);
+  expect(parsed.type).toBe("walk");
+  expect(parsed.kcal).toBe(150);
+});
+
+test("CardioFitPreviewSchema acepta campos device nulos y hrSeries ausente", () => {
+  const parsed = CardioFitPreviewSchema.parse({
+    type: "run",
+    startedAt: 1_700_000_000_000,
+    durationMs: 600_000,
+    distanceM: null,
+    avgHr: null,
+    maxHr: null,
+    elevationGainM: null,
+    kcal: null,
+  });
+  expect(parsed.hrSeries).toBeUndefined();
+  expect(parsed.kcal).toBeNull();
 });

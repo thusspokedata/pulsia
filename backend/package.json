@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
+    "@garmin/fitsdk": "^21.208.0",
     "@pulsia/shared": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.6.14",

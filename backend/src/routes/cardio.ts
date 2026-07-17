@@ -1,6 +1,9 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import { CardioActivitySchema } from "@pulsia/shared";
 import { insertCardio, findCardioAtSecond, listCardio, getCardio, getCardioOwnerId, updateCardio, deleteCardio } from "../cardio/repository";
+import { parseFit } from "../cardio/parseFit";
+import type { AppDeps } from "../app";
 
 // Parsea un query param a número finito, o undefined si falta / no parsea. Sin este guard,
 // Number("abc") = NaN y gte(startedAt, NaN) genera un filtro basura en vez de "sin filtro".
@@ -9,7 +12,10 @@ const finiteQuery = (v: string | undefined): number | undefined => {
   const n = Number(v);
   return Number.isFinite(n) ? n : undefined;
 };
-import type { AppDeps } from "../app";
+
+const ParseFitSchema = z.object({ fitBase64: z.string().min(1) });
+// Techo de 5 MB de archivo → ~6.9 MB de base64. Los .FIT típicos son 50-500 KB.
+const MAX_FIT_B64 = 7_000_000;
 
 export function cardioRoutes(deps: AppDeps) {
   const r = new Hono<{ Variables: { userId: string } }>();
@@ -51,8 +57,26 @@ export function cardioRoutes(deps: AppDeps) {
     return c.json(await listCardio(deps.db, c.get("userId"), from, to));
   });
 
-  // ⚠️ Cuando llegue POST /cardio/parse (fase 3), va declarado ANTES de /:id
-  // o el param `:id` lo captura como si "parse" fuera un id.
+  // ⚠️ Literal ANTES de /:id, o el param `:id` captura "parse". Parsea un .FIT y devuelve el
+  // preview SIN persistir (el archivo es solo transporte, no se guarda). Parseo = ms, sin runner async.
+  r.post("/parse", async (c) => {
+    let raw: unknown;
+    try { raw = await c.req.json(); } catch { return c.json({ error: "JSON inválido" }, 400); }
+    const parsed = ParseFitSchema.safeParse(raw);
+    if (!parsed.success) return c.json({ error: "Falta el archivo .FIT" }, 400);
+    if (parsed.data.fitBase64.length > MAX_FIT_B64) return c.json({ error: "El archivo es demasiado grande (máx 5 MB)" }, 400);
+    const buf = Buffer.from(parsed.data.fitBase64, "base64");
+    // Magic bytes: el header FIT tiene ".FIT" en los bytes 8-11 (equivalente al %PDF del ECG).
+    if (buf.length < 12 || buf.subarray(8, 12).toString("latin1") !== ".FIT") {
+      return c.json({ error: "No parece un archivo .FIT" }, 400);
+    }
+    try {
+      return c.json(parseFit(buf));
+    } catch (e) {
+      // Nunca un 500 con stack: cualquier fallo del parser es culpa del archivo → 400 legible.
+      return c.json({ error: (e as Error).message || "No se pudo leer el archivo .FIT" }, 400);
+    }
+  });
 
   r.get("/:id", async (c) => {
     const id = c.req.param("id");

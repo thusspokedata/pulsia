@@ -1,6 +1,7 @@
 import { test, expect } from "bun:test";
 import { createApp } from "../app";
 import { SINGLE_USER_ID } from "../constants";
+import { buildFitFixture } from "../cardio/fitFixture";
 
 const KEY = "a".repeat(64);
 const AID = "11111111-1111-4111-8111-111111111111";
@@ -129,4 +130,55 @@ test("GET /cardio con from/to no numéricos los ignora (no rompe con NaN)", asyn
   const res = await app.request("/cardio?from=abc&to=xyz");
   expect(res.status).toBe(200);
   expect(await res.json()).toHaveLength(1);
+});
+
+test("POST /cardio/parse devuelve el preview de un .FIT válido", async () => {
+  const app = createApp(deps(fakeDb()) as any);
+  const fitB64 = Buffer.from(buildFitFixture({ sport: "walking", totalCalories: 150 })).toString("base64");
+  const res = await app.request("/cardio/parse", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fitBase64: fitB64 }),
+  });
+  expect(res.status).toBe(200);
+  const preview = await res.json();
+  expect(preview.type).toBe("walk");
+  expect(preview.kcal).toBe(150);
+});
+
+test("POST /cardio/parse rechaza algo que no es .FIT con 400", async () => {
+  const app = createApp(deps(fakeDb()) as any);
+  const res = await app.request("/cardio/parse", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fitBase64: Buffer.from("no soy un fit de verdad").toString("base64") }),
+  });
+  expect(res.status).toBe(400);
+});
+
+test("POST /cardio/parse rechaza un base64 demasiado grande con 400", async () => {
+  const app = createApp(deps(fakeDb()) as any);
+  const huge = "A".repeat(7_000_001);
+  const res = await app.request("/cardio/parse", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fitBase64: huge }),
+  });
+  expect(res.status).toBe(400);
+  // Debe rechazar por el guard de tamaño, no por los magic bytes: un base64 de 7 MB de "A"
+  // decodifica a bytes que igual fallan el magic ".FIT", así que sin este assert la mutación
+  // del límite sobrevive (el 400 lo daría el otro gate). El mensaje fija el gate correcto.
+  expect((await res.json()).error).toMatch(/demasiado grande/i);
+});
+
+test("POST /cardio/parse no queda capturada por /:id (orden de rutas)", async () => {
+  // Con base64 vacío da 400 (lo rechaza ParseFitSchema.min(1) antes de los magic bytes): lo tomó
+  // /parse. Si /:id la capturara, el POST ni siquiera matchearía (no hay POST /:id) y daría 404.
+  const app = createApp(deps(fakeDb()) as any);
+  const res = await app.request("/cardio/parse", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fitBase64: "" }),
+  });
+  expect(res.status).toBe(400);
 });
