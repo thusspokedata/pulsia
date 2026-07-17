@@ -172,8 +172,8 @@ test("POST /cardio/parse rechaza un base64 demasiado grande con 400", async () =
 });
 
 test("POST /cardio/parse no queda capturada por /:id (orden de rutas)", async () => {
-  // Con base64 vacío da 400 por magic bytes (lo tomó /parse). Si /:id la capturara, el POST
-  // ni siquiera matchearía (no hay POST /:id) y daría 404.
+  // Con base64 vacío da 400 (lo rechaza ParseFitSchema.min(1) antes de los magic bytes): lo tomó
+  // /parse. Si /:id la capturara, el POST ni siquiera matchearía (no hay POST /:id) y daría 404.
   const app = createApp(deps(fakeDb()) as any);
   const res = await app.request("/cardio/parse", {
     method: "POST",

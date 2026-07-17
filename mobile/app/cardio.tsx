@@ -437,13 +437,13 @@ export default function CardioScreen() {
           <Pressable
             testID="cardio-save"
             onPress={isEdit ? onUpdate : onCreate}
-            disabled={saving}
+            disabled={saving || importing}
             style={{
               backgroundColor: colors.accent,
               borderRadius: radius.md,
               paddingVertical: spacing.md,
               alignItems: "center",
-              opacity: saving ? 0.6 : 1,
+              opacity: saving || importing ? 0.6 : 1,
             }}
           >
             {saving ? (

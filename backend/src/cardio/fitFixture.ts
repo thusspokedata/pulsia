@@ -31,7 +31,10 @@ export function buildFitFixture(opts: FitFixtureOpts = {}): Uint8Array {
   } = opts;
 
   const enc = new Encoder();
-  enc.writeMesg({ mesgNum: Profile.MesgNum.FILE_ID, type: "activity", timeCreated: new Date(startTimeMs) });
+  // Los tipos generados del SDK (Encodable<Mesg>) no modelan el patrón documentado de la propia API:
+  // un objeto con `mesgNum` + campos por nombre. Casteamos en un único punto (código de test).
+  const writeMesg = (m: Record<string, unknown>) => enc.writeMesg(m as unknown as Parameters<typeof enc.writeMesg>[0]);
+  writeMesg({ mesgNum: Profile.MesgNum.FILE_ID, type: "activity", timeCreated: new Date(startTimeMs) });
   if (withSession) {
     const session: Record<string, unknown> = { mesgNum: Profile.MesgNum.SESSION, startTime: new Date(startTimeMs), sport };
     if (totalTimerTime != null) session.totalTimerTime = totalTimerTime;
@@ -41,10 +44,10 @@ export function buildFitFixture(opts: FitFixtureOpts = {}): Uint8Array {
     if (avgHeartRate != null) session.avgHeartRate = avgHeartRate;
     if (maxHeartRate != null) session.maxHeartRate = maxHeartRate;
     if (totalAscent != null) session.totalAscent = totalAscent;
-    enc.writeMesg(session);
+    writeMesg(session);
   }
   for (const p of hr) {
-    enc.writeMesg({ mesgNum: Profile.MesgNum.RECORD, timestamp: new Date(p.atMs), heartRate: p.bpm });
+    writeMesg({ mesgNum: Profile.MesgNum.RECORD, timestamp: new Date(p.atMs), heartRate: p.bpm });
   }
   return enc.close();
 }

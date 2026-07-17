@@ -37,14 +37,16 @@ export function parseFit(buffer: Buffer): CardioFitPreview {
   const durationMs = Math.round(seconds * 1000);
   if (durationMs <= 0) throw new Error("El .FIT no tiene una duración válida");
 
-  const records: any[] = messages.recordMesgs ?? [];
+  const records = messages.recordMesgs ?? [];
   // Descartamos records anteriores al inicio (FC de preparación): darían t < 0, que viola el schema.
   const hrSeries = records
     .filter((r) => typeof r.heartRate === "number" && r.timestamp instanceof Date && (r.timestamp as Date).getTime() >= startedAt)
-    .map((r) => ({ t: (r.timestamp as Date).getTime() - startedAt, bpm: Math.round(r.heartRate) }));
+    .map((r) => ({ t: (r.timestamp as Date).getTime() - startedAt, bpm: Math.round(r.heartRate as number) }));
 
   const result = {
-    type: mapSport(session.sport, session.subSport),
+    // read() convierte los enums a string en runtime (convertTypesToStrings), pero los tipos
+    // generados del SDK los declaran como enums numéricos: casteamos a lo que de verdad llega.
+    type: mapSport(session.sport as string | undefined, session.subSport as string | undefined),
     startedAt,
     durationMs,
     distanceM: intOrNull(session.totalDistance),
