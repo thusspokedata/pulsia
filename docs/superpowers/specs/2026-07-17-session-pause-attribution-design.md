@@ -91,7 +91,7 @@ Derivados en la UI (reemplazan los refs de hoy):
 
 Solapamiento de dos ventanas `[a0,a1]` y `[b0,b1]`:
 
-```
+```text
 overlapMs(a0, a1, b0, b1) = max(0, min(a1, b1) − max(a0, b0))
 ```
 
@@ -108,7 +108,7 @@ overlapMs(a0, a1, b0, b1) = max(0, min(a1, b1) − max(a0, b0))
 
 `summarize`, rest por-fila (`perSet[i].restMs`):
 
-```
+```text
 gap = next.startedAt − set.endedAt
 paused = Σ overlapMs(set.endedAt, next.startedAt, iv.startedAt, iv.endedAt)   // iv de session.pauseIntervals
 restMs = max(0, gap − paused)
