@@ -60,3 +60,41 @@ export async function deleteMetric(db: Db, userId: string, id: string): Promise<
     .returning({ id: bodyMetric.id });
   return rows.length > 0;
 }
+
+// Inserta las lecturas de un import deduplicando por (metricType, measuredAt) contra lo que ya
+// existe en el rango — así reimportar ventanas de 7 días superpuestas es idempotente.
+export async function insertReadingsDedup(
+  db: Db,
+  userId: string,
+  rows: { measuredAt: number; entries: { metricType: string; value: number }[] }[],
+): Promise<{ imported: number; duplicates: number }> {
+  const batchSeen = new Set<string>();
+  const all: { metricType: string; value: number; measuredAt: number }[] = [];
+  for (const r of rows) {
+    for (const e of r.entries) {
+      const k = `${e.metricType}@${r.measuredAt}`;
+      if (batchSeen.has(k)) continue;
+      batchSeen.add(k);
+      all.push({ metricType: e.metricType, value: e.value, measuredAt: r.measuredAt });
+    }
+  }
+  if (all.length === 0) return { imported: 0, duplicates: 0 };
+
+  const times = all.map((x) => x.measuredAt);
+  const min = Math.min(...times);
+  const max = Math.max(...times);
+  const existing = await db
+    .select({ metricType: bodyMetric.metricType, measuredAt: bodyMetric.measuredAt })
+    .from(bodyMetric)
+    .where(and(eq(bodyMetric.userId, userId), gte(bodyMetric.measuredAt, min), lte(bodyMetric.measuredAt, max)));
+  const seen = new Set(existing.map((r) => `${r.metricType}@${r.measuredAt}`));
+
+  const toInsert = all.filter((x) => !seen.has(`${x.metricType}@${x.measuredAt}`));
+  const duplicates = all.length - toInsert.length;
+  if (toInsert.length > 0) {
+    await db.insert(bodyMetric).values(
+      toInsert.map((x) => ({ userId, metricType: x.metricType, value: x.value, measuredAt: x.measuredAt })),
+    );
+  }
+  return { imported: toInsert.length, duplicates };
+}

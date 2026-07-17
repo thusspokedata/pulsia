@@ -85,3 +85,51 @@ test("DELETE /metrics/:id responde 404 cuando no borra nada", async () => {
   const res = await app.request("/metrics/x", { method: "DELETE" });
   expect(res.status).toBe(404);
 });
+
+const SLEEP_CSV =
+  "Sleep Score 7 Days,Score,Resting Heart Rate,Body Battery,Pulse Ox,Respiration,HRV Status,Quality,Duration,Sleep Need,Bedtime,Wake Time\n" +
+  "2026-07-17,85,52,69,95.54,13.86,45,Good,7h 1min,9h 0min,1:14 AM,8:23 AM";
+const SLEEP_B64 = Buffer.from(SLEEP_CSV).toString("base64");
+
+test("POST /metrics/import/sleep/parse devuelve el preview sin persistir", async () => {
+  let inserted = false;
+  const db: any = { insert: () => ({ values: () => { inserted = true; return { returning: async () => [] }; } }) };
+  const app = createApp({ db, config: baseConfig, aiClient } as any);
+  const res = await app.request("/metrics/import/sleep/parse", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ csvBase64: SLEEP_B64 }),
+  });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.rows).toHaveLength(1);
+  expect(body.rows[0].date).toBe("2026-07-17");
+  expect(inserted).toBe(false);
+});
+
+test("POST /metrics/import/sleep/parse con base64 basura → 400 legible", async () => {
+  const db: any = {};
+  const app = createApp({ db, config: baseConfig, aiClient } as any);
+  const res = await app.request("/metrics/import/sleep/parse", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ csvBase64: Buffer.from("no es un csv").toString("base64") }),
+  });
+  expect(res.status).toBe(400);
+});
+
+test("POST /metrics/import/sleep inserta y devuelve conteos", async () => {
+  const values: any[] = [];
+  const db: any = {
+    select: () => ({ from: () => ({ where: async () => [] }) }),
+    insert: () => ({ values: async (v: any[]) => { values.push(...v); } }),
+  };
+  const app = createApp({ db, config: baseConfig, aiClient } as any);
+  const res = await app.request("/metrics/import/sleep", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ csvBase64: SLEEP_B64 }),
+  });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.imported).toBe(8);
+  expect(body.duplicates).toBe(0);
+  expect(values.length).toBe(8);
+});
