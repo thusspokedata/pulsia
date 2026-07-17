@@ -55,17 +55,6 @@ export function estimateSessionBurn(args: SessionBurnArgs): SessionBurn {
   return burnFrom({ ...args, met: MET_STRENGTH });
 }
 
-export function sumDayExerciseBurn(
-  sessions: { totalDurationMs: number | null; avgHr: number | null }[],
-  athlete: { weightKg?: number; age?: number; sex?: Sex; bmr?: number | null },
-): number {
-  // Suma de enteros (cada sesión ya redondea) → no hace falta redondear de nuevo.
-  return sessions.reduce(
-    (a, s) => a + estimateSessionBurn({ durationMs: s.totalDurationMs, avgHr: s.avgHr, ...athlete }).kcal,
-    0,
-  );
-}
-
 export interface CardioBurn { kcal: number; method: "device" | "hr" | "met" | "none" }
 export interface CardioBurnInput {
   type: CardioType;
@@ -81,9 +70,8 @@ export function estimateCardioBurn(a: CardioBurnInput, athlete: AthleteBurnArgs)
   return burnFrom({ durationMs: a.durationMs, avgHr: a.avgHr, met: MET_BY_CARDIO[a.type], ...athlete });
 }
 
-// Gasto del día = fuerza + cardio. Reemplaza a sumDayExerciseBurn (que se borra en la fase 4,
-// cuando migren los dos call-sites): dos funciones que suman gasto es cómo la pantalla y los
-// informes terminan discrepando.
+// Gasto del día = fuerza + cardio. Única fuente del gasto de ejercicio: dos funciones que suman
+// gasto es cómo la pantalla y los informes terminan discrepando.
 export function dayExerciseBurn(
   sessions: { totalDurationMs: number | null; avgHr: number | null }[],
   activities: CardioBurnInput[],

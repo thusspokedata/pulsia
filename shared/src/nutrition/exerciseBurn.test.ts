@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { estimateSessionBurn, sumDayExerciseBurn } from "./exerciseBurn";
+import { estimateSessionBurn } from "./exerciseBurn";
 
 const HOUR = 3600_000;
 
@@ -50,15 +50,6 @@ test("FC muy baja no da negativo (clamp del kcal/min)", () => {
 test("neto no baja de 0 (gross < BMR de la duración)", () => {
   const r = estimateSessionBurn({ durationMs: HOUR, avgHr: null, weightKg: 40, age: 40, bmr: 20000 });
   expect(r.kcal).toBe(0);
-});
-
-test("sumDayExerciseBurn suma varias sesiones", () => {
-  const athlete = { weightKg: 80, age: 40, sex: "male" as const, bmr: null };
-  const total = sumDayExerciseBurn(
-    [{ totalDurationMs: HOUR, avgHr: null }, { totalDurationMs: HOUR / 2, avgHr: null }],
-    athlete,
-  );
-  expect(total).toBe(400 + 200);
 });
 
 import { estimateCardioBurn, dayExerciseBurn, MET_BY_CARDIO } from "./exerciseBurn";
