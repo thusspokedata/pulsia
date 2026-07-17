@@ -4,6 +4,7 @@ export * from "./schemas/oneoff";
 export * from "./schemas/program";
 export * from "./catalog/exercises";
 export * from "./schemas/session";
+export * from "./schemas/cardio";
 export * from "./session/completion";
 export * from "./schemas/metrics";
 export * from "./schemas/ecg";

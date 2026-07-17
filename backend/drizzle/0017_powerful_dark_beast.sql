@@ -1,1 +1,0 @@
-ALTER TABLE "workout_session" ADD COLUMN "pause_intervals" jsonb;

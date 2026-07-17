@@ -1,5 +1,6 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react-native";
 import { Alert } from "react-native";
+import { summarize } from "../src/session/summary";
 
 const mockReplace = jest.fn();
 let mockParams: any = { week: "1", dayLabel: "Día 1", location: "gym" };
@@ -697,4 +698,175 @@ test("terminar la sesión cancela la campana nativa programada (el resumen no de
   await waitFor(() => expect(mockSchedule).toHaveBeenCalled());
   await fireEvent.press(screen.getByTestId("finish")); // el resumen se muestra en el mismo componente (sin unmount)
   await waitFor(() => expect(mockCancel).toHaveBeenCalledWith("notif-1"));
+});
+
+// --- Tiempo de trabajo por serie -------------------------------------------------------------
+// Regresión del bug "Trabajo 0:14 / Descanso 42:52": desde que la burbuja de reps arranca
+// pre-llenada, el usuario ya no tapea y casi toda serie pasa por el camino "instantáneo" de
+// onEndSet, que creaba y cerraba la serie en el mismo instante → durationMs ≈ 0 y, como el
+// descanso se deriva restando (total − trabajo), el descanso se comía la sesión entera.
+// Modelo correcto: la serie empieza cuando TERMINA el descanso anterior (o al arrancar la sesión).
+
+test("regresión: 'Terminar serie' sin tapear reps registra el trabajo real, no ~0", async () => {
+  const t0 = 1_000_000;
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0); // la sesión arranca en t0 → la primera serie también
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("end-set"));
+  // El usuario entrena 45s y toca "Terminar serie" SIN tocar la burbuja de reps (camino real).
+  spy.mockReturnValue(t0 + 45_000);
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => {
+    const set = mockSetActive.mock.calls.at(-1)?.[0].exercises[0].sets[0];
+    expect(set.endedAt).toBe(t0 + 45_000);
+    expect(set.startedAt).toBe(t0); // no el instante del press
+    expect(set.durationMs).toBe(45_000); // con el bug: 0
+  });
+  spy.mockRestore();
+});
+
+test("la serie siguiente arranca cuando termina el descanso: Trabajo + Descanso = Total", async () => {
+  const t0 = 1_000_000;
+  jest.useFakeTimers();
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0);
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("end-set"));
+
+  // Serie 1: 40s de trabajo, sin tapear. Arranca el descanso planificado (90s) → hasta t0+130s.
+  spy.mockReturnValue(t0 + 40_000);
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => screen.getByTestId("rest-timer"));
+
+  // Corre el descanso completo: al cruzar 0 el tick del intervalo lo cierra y nace la serie 2.
+  spy.mockReturnValue(t0 + 130_000);
+  await act(async () => {
+    jest.advanceTimersByTime(1_000);
+  });
+  await waitFor(() => expect(screen.queryByTestId("rest-timer")).toBeNull());
+
+  // Serie 2: otros 40s de trabajo (t0+130s → t0+170s).
+  spy.mockReturnValue(t0 + 170_000);
+  await fireEvent.press(screen.getByTestId("end-set"));
+
+  // Terminar en t0+180s → total 180s.
+  spy.mockReturnValue(t0 + 180_000);
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
+
+  const done = mockEnqueue.mock.calls.at(-1)?.[0];
+  const sets = done.exercises[0].sets;
+  expect(sets.map((s: any) => s.durationMs)).toEqual([40_000, 40_000]);
+
+  const sum = summarize(done);
+  expect(sum.durationMs).toBe(180_000);
+  expect(sum.workMs).toBe(80_000); // con el bug: ~0
+  expect(sum.restMs).toBe(100_000); // 90s de descanso + los 10s finales sin serie
+  expect(sum.workMs + sum.restMs).toBe(sum.durationMs);
+
+  spy.mockRestore();
+  jest.useRealTimers();
+});
+
+test("saltar el descanso también hace nacer la serie siguiente en ese instante", async () => {
+  const t0 = 1_000_000;
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0);
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("end-set"));
+
+  // Serie 1: 30s de trabajo → descanso hasta t0+120s.
+  spy.mockReturnValue(t0 + 30_000);
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => screen.getByTestId("rest-timer"));
+
+  // El usuario salta el descanso a los 20s (t0+50s): ahí empieza la serie 2.
+  spy.mockReturnValue(t0 + 50_000);
+  await fireEvent.press(screen.getByTestId("skip-rest"));
+
+  // Serie 2: 25s de trabajo (t0+50s → t0+75s).
+  spy.mockReturnValue(t0 + 75_000);
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => {
+    const sets = mockSetActive.mock.calls.at(-1)?.[0].exercises[0].sets;
+    expect(sets[1].startedAt).toBe(t0 + 50_000); // el instante del skip, no el del press
+    expect(sets[1].durationMs).toBe(25_000);
+  });
+  spy.mockRestore();
+});
+
+test("terminar una serie MIENTRAS corre el descanso no re-cuenta la serie anterior", async () => {
+  const t0 = 1_000_000;
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0);
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("end-set"));
+
+  // Serie 1: 40s → descanso hasta t0+130s.
+  spy.mockReturnValue(t0 + 40_000);
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => screen.getByTestId("rest-timer"));
+
+  // El usuario no espera la campana: termina la serie 2 en t0+70s, con el descanso corriendo.
+  // La serie 2 no puede empezar antes de que termine la 1 → arranca en t0+40s, dura 30s.
+  spy.mockReturnValue(t0 + 70_000);
+  await fireEvent.press(screen.getByTestId("end-set"));
+  await waitFor(() => {
+    const sets = mockSetActive.mock.calls.at(-1)?.[0].exercises[0].sets;
+    expect(sets[1].startedAt).toBe(t0 + 40_000);
+    expect(sets[1].durationMs).toBe(30_000); // NO 70_000 (re-contaría la serie 1 y el descanso)
+  });
+  spy.mockRestore();
+});
+
+test("regresión cross-exercise: cambiar de ejercicio con una serie abierta no la deja solapar (workMs ≤ total)", async () => {
+  // El usuario abre una serie en A (tapea reps), cambia de ejercicio activo a B SIN terminarla y
+  // trabaja en B. Con el bug, la serie de A quedaba abierta y closeOpenSets (al finalizar) le ponía
+  // endedAt=finishTime → su durationMs abarcaba toda la sesión y se solapaba con las series de B:
+  // workMs (suma de durationMs) SUPERABA totalDurationMs y restMs clampeaba a 0.
+  mockProgram = twoExerciseProgram;
+  const t0 = 1_000_000;
+  const spy = jest.spyOn(Date, "now");
+  spy.mockReturnValue(t0);
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("tap-rep"));
+
+  // El usuario tapea una rep en A (order 0): abre una serie (endedAt=null).
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+
+  // A los 30s cambia el ejercicio activo a B (order 1) SIN terminar la serie de A.
+  spy.mockReturnValue(t0 + 30_000);
+  await fireEvent.press(screen.getByTestId("ex-item-1"));
+
+  // Trabaja en B: una serie de 30s (t0+30s → t0+60s).
+  await fireEvent.press(screen.getByTestId("tap-rep"));
+  spy.mockReturnValue(t0 + 60_000);
+  await fireEvent.press(screen.getByTestId("end-set"));
+
+  // Termina la sesión en t0+90s → total 90s.
+  spy.mockReturnValue(t0 + 90_000);
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
+
+  const done = mockEnqueue.mock.calls.at(-1)?.[0];
+  const a = done.exercises[0].sets;
+  const b = done.exercises[1].sets;
+  // La serie de A se cerró al cambiar de ejercicio (no quedó abierta hasta el final).
+  expect(a).toHaveLength(1);
+  expect(a[0].endedAt).toBe(t0 + 30_000);
+  expect(a[0].durationMs).toBe(30_000); // con el bug: 90_000 (hasta el finish)
+  // La serie de B arranca cuando se dejó A y dura lo suyo, sin solaparse con A.
+  expect(b[0].startedAt).toBe(t0 + 30_000);
+  expect(b[0].durationMs).toBe(30_000);
+  expect(a[0].endedAt).toBeLessThanOrEqual(b[0].startedAt); // no se solapan
+
+  const sum = summarize(done);
+  expect(sum.durationMs).toBe(90_000);
+  expect(sum.workMs).toBe(60_000);
+  // Invariante clave: las series no se solapan → el trabajo nunca supera el total (con el bug: 150k > 90k).
+  expect(sum.workMs).toBeLessThanOrEqual(sum.durationMs);
+  expect(sum.restMs).toBe(30_000);
+  expect(sum.workMs + sum.restMs).toBe(sum.durationMs);
+
+  spy.mockRestore();
 });
