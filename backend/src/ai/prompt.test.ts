@@ -15,7 +15,7 @@ const profile: TrainingProfile = {
 test("el prompt incluye los parámetros del perfil", () => {
   const prompt = buildGenerationPrompt(profile);
   expect(prompt).toContain("hypertrophy");
-  expect(prompt).toContain("4");
+  expect(prompt).toContain("Días por semana: 4"); // el "4" suelto matcheaba la numeración de la regla 4
   expect(prompt).toContain("dolor lumbar leve");
 });
 

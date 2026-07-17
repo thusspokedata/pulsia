@@ -27,7 +27,9 @@ test("dos suplementos con el mismo componente (por primera palabra) ambos daily 
   ];
   const warnings = detectComponentOverlaps(items, catalog, "2026-07-16");
   expect(warnings).toHaveLength(1);
-  expect(warnings[0].toLowerCase()).toContain("magnesio");
+  // Las comillas anclan al componente interpolado: sin ellas, `toLowerCase()` hacía que
+  // "Magnesio Citrato Pro" (el nombre del producto) matcheara aunque el componente no se nombrara.
+  expect(warnings[0]).toContain('"magnesio"');
   expect(warnings[0]).toContain("Magnesio Citrato Pro");
   expect(warnings[0]).toContain("ZMA Nocturno");
 });
@@ -91,7 +93,7 @@ test("every_other_day con anclas de paridad OPUESTA nunca coinciden → sin warn
   ];
   const warnings = detectComponentOverlaps(sameParity, catalog, "2026-07-16");
   expect(warnings).toHaveLength(1);
-  expect(warnings[0].toLowerCase()).toContain("magnesio");
+  expect(warnings[0]).toContain('"magnesio"'); // el componente, no el eco del nombre del producto
 });
 
 test("mismo suplemento en 2 franjas (split dosing) → sin warning (mismo producto no es duplicación)", () => {

@@ -23,7 +23,7 @@ test("GET /download es PÚBLICO (sin auth) y renderiza la versión + apkUrl + QR
   expect(res.status).toBe(200);
   expect(res.headers.get("content-type")).toContain("text/html");
   const html = await res.text();
-  expect(html).toContain("vc8");
+  expect(html).toContain('Última versión: <span class="ver">vc8</span>'); // no el "vc8" del apkUrl/label/title
   expect(html).toContain("https://x.test/p-vc8.apk");
   expect(html).toContain("<svg");
 });
