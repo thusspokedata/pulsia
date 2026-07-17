@@ -796,6 +796,33 @@ Expected: sin errores.
 
 ---
 
+### Task 8: Persistir `pauseIntervals` en el backend (ampliación de alcance)
+
+Para que el rest por-fila corregido sobreviva al round-trip y el Historial muestre lo mismo que la pantalla de fin. Espeja el patrón de `hrSeries`.
+
+**Files:**
+- Modify: `backend/src/db/schema.ts` (columna `pause_intervals` en `workoutSession`, después de `hrSeries`)
+- Modify: `backend/src/sessions/repository.ts` (`rowsToSession` + `upsertSession`)
+- Test: `backend/src/sessions/repository.test.ts` (espejo de los tests de `hrSeries`)
+- Generate: `backend/drizzle/00XX_*.sql` vía `drizzle-kit generate` (solo genera el SQL; NO aplicar contra ninguna DB)
+
+Cambios:
+- `schema.ts`: `pauseIntervals: jsonb("pause_intervals").$type<{ startedAt: number; endedAt: number }[]>(),` (nullable, igual que `hrSeries`).
+- `rowsToSession`: `pauseIntervals: row.pauseIntervals ?? undefined,` (después de `hrSeries`).
+- `upsertSession` insert: `pauseIntervals: s.pauseIntervals ?? null,` (después de `hrSeries`).
+- Tests: espejar los 4 de `hrSeries` (rowsToSession undefined/present; upsert null/present).
+- Migración: `cd backend && bun run db:generate` → verificar que el SQL SOLO agregue la columna `pause_intervals`. NO correr `db:migrate` (eso es deploy, fuera de alcance).
+
+### Task 9: Renombrar el tipo de storage a `OpenPauseInterval`
+
+Eliminar la colisión de nombre con el `PauseInterval` cerrado de `shared`.
+
+**Files:**
+- Modify: `mobile/src/storage/pauseState.ts` (renombrar `interface PauseInterval` → `OpenPauseInterval`; actualizar firmas de helpers y export)
+- Modify: `mobile/app/sesion.tsx` (import `type PauseInterval` → `OpenPauseInterval`)
+
+El `PauseInterval` de `shared/src/schemas/session.ts` (cerrado) NO se toca. Correr `cd mobile && npx tsc --noEmit` (limpio) + suite completa verde.
+
 ## Self-review (cobertura del spec)
 
 - **Corrección canónica en `finishSession`** → Task 3. ✅
