@@ -48,6 +48,14 @@ test("migra el formato viejo sin pausa en curso a intervalos vacíos", async () 
   expect(await getPauseState()).toEqual({ sessionId: "s1", intervals: [] });
 });
 
+test("get devuelve null si un elemento de intervals es inválido", async () => {
+  await AsyncStorage.setItem(
+    "pulsia.pauseState",
+    JSON.stringify({ sessionId: "s1", intervals: [{ startedAt: 100, endedAt: 200 }, { startedAt: "bad", endedAt: null }] }),
+  );
+  expect(await getPauseState()).toBeNull();
+});
+
 describe("helpers de intervalos", () => {
   test("isPaused: true solo si el último está abierto", () => {
     expect(isPaused([])).toBe(false);

@@ -19,11 +19,15 @@ jest.mock("../src/storage/activeSession", () => ({
 const mockSetPause = jest.fn();
 const mockClearPause = jest.fn();
 let mockPauseState: any = null;
-jest.mock("../src/storage/pauseState", () => ({
-  getPauseState: async () => mockPauseState,
-  setPauseState: async (s: any) => { mockPauseState = s; mockSetPause(s); },
-  clearPauseState: async () => { mockPauseState = null; mockClearPause(); },
-}));
+jest.mock("../src/storage/pauseState", () => {
+  const actual = jest.requireActual("../src/storage/pauseState");
+  return {
+    ...actual,
+    getPauseState: async () => mockPauseState,
+    setPauseState: async (s: any) => { mockPauseState = s; mockSetPause(s); },
+    clearPauseState: async () => { mockPauseState = null; mockClearPause(); },
+  };
+});
 
 const mockEnqueue = jest.fn();
 jest.mock("../src/storage/pendingSessions", () => ({
@@ -342,19 +346,20 @@ test("el botón pausar/reanudar existe y alterna su rótulo", async () => {
   await waitFor(() => expect(screen.getByText("Pausar")).toBeTruthy());
 });
 
-test("al pausar se persiste el estado (setPauseState con pausedAt); al reanudar pausedAt es null", async () => {
+test("al pausar se persiste el estado (intervalo abierto); al reanudar el intervalo se cierra", async () => {
   await render(<SesionScreen />);
   await waitFor(() => screen.getByTestId("pause-toggle"));
   await fireEvent.press(screen.getByTestId("pause-toggle")); // pausa
   await waitFor(() => expect(mockSetPause).toHaveBeenCalled());
   const paused = mockSetPause.mock.calls.at(-1)?.[0];
   expect(paused.sessionId).toBe("11111111-1111-4111-8111-111111111111");
-  expect(typeof paused.pausedAt).toBe("number");
-  // Reanudar: pausedAt vuelve a null.
+  expect(paused.intervals.length).toBe(1);
+  expect(paused.intervals.at(-1).endedAt).toBeNull();
+  // Reanudar: el último intervalo queda cerrado (endedAt numérico).
   await fireEvent.press(screen.getByTestId("pause-toggle"));
   await waitFor(() => {
     const resumed = mockSetPause.mock.calls.at(-1)?.[0];
-    expect(resumed.pausedAt).toBeNull();
+    expect(typeof resumed.intervals.at(-1).endedAt).toBe("number");
   });
 });
 
@@ -377,30 +382,33 @@ test("cancelar limpia el estado de pausa persistido", async () => {
   spy.mockRestore();
 });
 
-test("al remontar con pausa persistida (pausedAt no nulo) el total al terminar excluye ese tiempo", async () => {
+test("al remontar con pausa persistida (intervalo abierto) el total al terminar excluye ese tiempo", async () => {
   const t0 = 1_000_000;
   const spy = jest.spyOn(Date, "now");
-  spy.mockReturnValue(t0);
-  // Sesión activa ya en curso (arrancó en t0) con pausa persistida: 2s acumulados + pausa en
-  // curso desde t0 (pausedAt = t0). Simula un remontaje mientras estaba pausada.
+  // El remontaje ocurre en t0+8s: la sesión arrancó en t0, ya tuvo una pausa cerrada de 2s
+  // (t0+1s a t0+3s) y quedó pausada de nuevo desde t0+5s (intervalo abierto al remontar).
+  spy.mockReturnValue(t0 + 8_000);
   mockActive = {
     id: "11111111-1111-4111-8111-111111111111",
     programId: "22222222-2222-4222-8222-222222222222",
     weekNumber: 1, dayLabel: "Día 1", location: "gym",
     startedAt: t0, endedAt: null, totalDurationMs: null, notes: "", exercises: [],
   };
-  mockPauseState = { sessionId: "11111111-1111-4111-8111-111111111111", pausedMs: 2_000, pausedAt: t0 };
+  mockPauseState = {
+    sessionId: "11111111-1111-4111-8111-111111111111",
+    intervals: [{ startedAt: t0 + 1_000, endedAt: t0 + 3_000 }, { startedAt: t0 + 5_000, endedAt: null }],
+  };
   await render(<SesionScreen />);
   await waitFor(() => screen.getByTestId("finish"));
-  // Reanudar en t0 + 10s → la pausa en curso duró 10s → total pausado 2s + 10s = 12s.
+  // Reanudar en t0 + 10s → la pausa en curso (desde t0+5s) duró 5s → total pausado 2s + 5s = 7s.
   spy.mockReturnValue(t0 + 10_000);
   await fireEvent.press(screen.getByTestId("pause-toggle")); // reanuda
-  // Terminar en t0 + 30s → bruto 30s, menos 12s pausados = 18s.
+  // Terminar en t0 + 30s → bruto 30s, menos 7s pausados = 23s.
   spy.mockReturnValue(t0 + 30_000);
   await fireEvent.press(screen.getByTestId("finish"));
   await waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
   const done = mockEnqueue.mock.calls.at(-1)?.[0];
-  expect(done.totalDurationMs).toBe(18_000);
+  expect(done.totalDurationMs).toBe(23_000);
   spy.mockRestore();
 });
 

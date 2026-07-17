@@ -3,7 +3,7 @@ import { Pressable, Text } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import type { WorkoutSession } from "@pulsia/shared";
 import { getActiveSession } from "../storage/activeSession";
-import { getPauseState, type PauseState } from "../storage/pauseState";
+import { getPauseState, totalPausedMs, type PauseState } from "../storage/pauseState";
 import { colors, radius, spacing } from "../theme/tokens";
 
 // Formato mm:ss (duplicado local, como en otras pantallas).
@@ -43,12 +43,8 @@ export function SessionIndicator() {
 
   if (!session) return null;
 
-  // Descontar el tiempo pausado si el estado de pausa corresponde a esta sesión:
-  // acumulado + (si hay una pausa en curso) el tiempo transcurrido desde pausedAt.
-  const pausedMs =
-    pause && pause.sessionId === session.id
-      ? pause.pausedMs + (pause.pausedAt != null ? Math.max(0, nowMs - pause.pausedAt) : 0)
-      : 0;
+  // Descontar el tiempo pausado (acumulado + pausa en curso) si el estado corresponde a esta sesión.
+  const pausedMs = pause && pause.sessionId === session.id ? totalPausedMs(pause.intervals, nowMs) : 0;
 
   return (
     <Pressable
