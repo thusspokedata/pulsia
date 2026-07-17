@@ -60,3 +60,71 @@ test("sumDayExerciseBurn suma varias sesiones", () => {
   );
   expect(total).toBe(400 + 200);
 });
+
+import { estimateCardioBurn, dayExerciseBurn, MET_BY_CARDIO } from "./exerciseBurn";
+
+test("REGRESIÓN: fuerza sigue usando MET 5 (no cambia por el refactor)", () => {
+  // Mismo caso que "MET fallback sin FC (5 MET) y neto": 5*80*1h = 400; neto 400 - 71.58 = 328
+  const r = estimateSessionBurn({ durationMs: HOUR, avgHr: null, weightKg: 80, age: 40, sex: "male", bmr: 1718 });
+  expect(r.kcal).toBe(328);
+});
+
+test("MET_BY_CARDIO: caminata pesa menos que running", () => {
+  expect(MET_BY_CARDIO.walk).toBeLessThan(MET_BY_CARDIO.run);
+  expect(MET_BY_CARDIO.walk).toBe(3.5);
+  expect(MET_BY_CARDIO.run).toBe(9.8);
+});
+
+test("cardio con kcal del reloj: se usa tal cual, sin estimar", () => {
+  const r = estimateCardioBurn(
+    { type: "walk", durationMs: HOUR, avgHr: 105, kcal: 140 },
+    { weightKg: 80, age: 40, sex: "male", bmr: 1718 },
+  );
+  expect(r).toEqual({ kcal: 140, method: "device" });
+});
+
+test("cardio sin kcal y sin FC: MET del tipo, neto de BMR", () => {
+  // walk: 3.5*80*1h = 280 gross; neto 280 - (1718/1440)*60 = 280 - 71.58 = 208.42 → 208
+  const r = estimateCardioBurn(
+    { type: "walk", durationMs: HOUR, avgHr: null, kcal: null },
+    { weightKg: 80, age: 40, sex: "male", bmr: 1718 },
+  );
+  expect(r).toEqual({ kcal: 208, method: "met" });
+});
+
+test("cardio sin kcal: running usa su propio MET (no el de fuerza)", () => {
+  // run: 9.8*80*1h = 784 bruto
+  const r = estimateCardioBurn(
+    { type: "run", durationMs: HOUR, avgHr: null, kcal: null },
+    { weightKg: 80, age: 40, sex: "male", bmr: null },
+  );
+  expect(r.kcal).toBe(784);
+});
+
+test("cardio sin kcal pero con FC: Keytel gana al MET", () => {
+  const r = estimateCardioBurn(
+    { type: "walk", durationMs: HOUR, avgHr: 140, kcal: null },
+    { weightKg: 80, age: 40, sex: "male", bmr: 1718 },
+  );
+  expect(r).toEqual({ kcal: 749, method: "hr" });
+});
+
+test("cardio sin peso y sin kcal del reloj → 0/none", () => {
+  const r = estimateCardioBurn({ type: "walk", durationMs: HOUR, avgHr: null, kcal: null }, { age: 40 });
+  expect(r).toEqual({ kcal: 0, method: "none" });
+});
+
+test("dayExerciseBurn suma sesiones de fuerza + actividades de cardio", () => {
+  const athlete = { weightKg: 80, age: 40, sex: "male" as const, bmr: null };
+  const total = dayExerciseBurn(
+    [{ totalDurationMs: HOUR, avgHr: null }],                                   // fuerza: 5*80 = 400
+    [{ type: "walk", durationMs: HOUR, avgHr: null, kcal: null },               // walk:  3.5*80 = 280
+     { type: "run", durationMs: HOUR, avgHr: null, kcal: 500 }],                // device: 500
+    athlete,
+  );
+  expect(total).toBe(400 + 280 + 500);
+});
+
+test("dayExerciseBurn con listas vacías da 0", () => {
+  expect(dayExerciseBurn([], [], { weightKg: 80 })).toBe(0);
+});

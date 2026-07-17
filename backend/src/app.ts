@@ -14,6 +14,7 @@ import { metricsRoutes } from "./routes/metrics";
 import { ecgRoutes } from "./routes/ecg";
 import { progressRoutes } from "./routes/progress";
 import { nutritionRoutes } from "./routes/nutrition";
+import { cardioRoutes } from "./routes/cardio";
 import { downloadRoutes } from "./routes/download";
 import { SINGLE_USER_ID } from "./constants";
 
@@ -68,6 +69,8 @@ export function createApp(deps: AppDeps) {
   app.use("/progress/*", auth);
   app.use("/nutrition", auth);
   app.use("/nutrition/*", auth);
+  app.use("/cardio", auth);
+  app.use("/cardio/*", auth);
   app.route("/settings", settingsRoutes(deps));
   app.route("/programs", programsRoutes(deps));
   app.route("/profile", profileRoutes(deps));
@@ -78,5 +81,6 @@ export function createApp(deps: AppDeps) {
   app.route("/ecg", ecgRoutes(deps));
   app.route("/progress", progressRoutes(deps));
   app.route("/nutrition", nutritionRoutes(deps));
+  app.route("/cardio", cardioRoutes(deps));
   return app;
 }
