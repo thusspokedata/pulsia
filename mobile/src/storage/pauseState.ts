@@ -5,7 +5,7 @@ const KEY = "pulsia.pauseState";
 // Un intervalo de pausa; el último puede estar abierto (endedAt null = pausa en curso). Los
 // intervalos son secuenciales y NO se solapan entre sí (por construcción de startPause/endPause):
 // una pausa nueva solo se abre cuando la anterior ya se cerró.
-export interface PauseInterval {
+export interface OpenPauseInterval {
   startedAt: number;
   endedAt: number | null;
 }
@@ -15,14 +15,14 @@ export interface PauseInterval {
 // derivan de ellos (ver finishSession).
 export interface PauseState {
   sessionId: string;
-  intervals: PauseInterval[];
+  intervals: OpenPauseInterval[];
 }
 
-function isInterval(x: unknown): x is PauseInterval {
+function isInterval(x: unknown): x is OpenPauseInterval {
   return (
     x != null && typeof x === "object" &&
-    typeof (x as PauseInterval).startedAt === "number" &&
-    ((x as PauseInterval).endedAt === null || typeof (x as PauseInterval).endedAt === "number")
+    typeof (x as OpenPauseInterval).startedAt === "number" &&
+    ((x as OpenPauseInterval).endedAt === null || typeof (x as OpenPauseInterval).endedAt === "number")
   );
 }
 
@@ -61,21 +61,21 @@ export async function clearPauseState(): Promise<void> {
 
 // ---- Helpers puros de manipulación de intervalos ----
 
-export function isPaused(intervals: PauseInterval[]): boolean {
+export function isPaused(intervals: OpenPauseInterval[]): boolean {
   const last = intervals[intervals.length - 1];
   return last != null && last.endedAt == null;
 }
 
-export function startPause(intervals: PauseInterval[], now: number): PauseInterval[] {
+export function startPause(intervals: OpenPauseInterval[], now: number): OpenPauseInterval[] {
   if (isPaused(intervals)) return intervals;
   return [...intervals, { startedAt: now, endedAt: null }];
 }
 
-export function endPause(intervals: PauseInterval[], now: number): PauseInterval[] {
+export function endPause(intervals: OpenPauseInterval[], now: number): OpenPauseInterval[] {
   if (!isPaused(intervals)) return intervals;
   return intervals.map((iv, i) => (i === intervals.length - 1 ? { ...iv, endedAt: now } : iv));
 }
 
-export function totalPausedMs(intervals: PauseInterval[], now: number): number {
+export function totalPausedMs(intervals: OpenPauseInterval[], now: number): number {
   return intervals.reduce((acc, iv) => acc + Math.max(0, (iv.endedAt ?? now) - iv.startedAt), 0);
 }

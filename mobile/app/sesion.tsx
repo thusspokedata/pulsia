@@ -10,7 +10,7 @@ import { getBackendUrl } from "../src/storage/config";
 import { getProfile } from "../src/storage/profile";
 import { getLastWeights } from "../src/api/sessions";
 import { getActiveSession, setActiveSession, clearActiveSession } from "../src/storage/activeSession";
-import { getPauseState, setPauseState, clearPauseState, startPause, endPause, isPaused, totalPausedMs, type PauseInterval } from "../src/storage/pauseState";
+import { getPauseState, setPauseState, clearPauseState, startPause, endPause, isPaused, totalPausedMs, type OpenPauseInterval } from "../src/storage/pauseState";
 import { enqueueSession } from "../src/storage/pendingSessions";
 import { syncPending } from "../src/sync/syncSessions";
 import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets, setNotes, substituteExercise, substituteInProgram } from "../src/session/engine";
@@ -75,7 +75,7 @@ export default function SesionScreen() {
   const [changeNote, setChangeNote] = useState("");
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [lastWeights, setLastWeights] = useState<Record<string, number>>({});
-  const intervalsRef = useRef<PauseInterval[]>([]); // intervalos de pausa (fuente de verdad)
+  const intervalsRef = useRef<OpenPauseInterval[]>([]); // intervalos de pausa (fuente de verdad)
   const restRemainingRef = useRef<number | null>(null); // ms restantes de descanso congelados al pausar
   const started = useRef(false);
   const oneOffRef = useRef(false);
