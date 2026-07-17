@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { WorkoutSessionSchema, SessionExerciseSchema } from "./session";
+import { WorkoutSessionSchema, SessionExerciseSchema, PauseIntervalSchema } from "./session";
 
 const validSession = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -99,4 +99,21 @@ test("SessionExercise tiene note y substitutedFromId con defaults", () => {
   });
   expect(parsed.note).toBe("");
   expect(parsed.substitutedFromId).toBe(null);
+});
+
+test("PauseIntervalSchema valida un intervalo cerrado", () => {
+  expect(PauseIntervalSchema.parse({ startedAt: 100, endedAt: 200 })).toEqual({ startedAt: 100, endedAt: 200 });
+});
+
+test("una sesión sin pauseIntervals sigue siendo válida (retrocompat)", () => {
+  const parsed = WorkoutSessionSchema.parse(validSession);
+  expect(parsed.pauseIntervals).toBeUndefined();
+});
+
+test("una sesión con pauseIntervals los conserva", () => {
+  const parsed = WorkoutSessionSchema.parse({
+    ...validSession,
+    pauseIntervals: [{ startedAt: 100, endedAt: 200 }],
+  });
+  expect(parsed.pauseIntervals).toEqual([{ startedAt: 100, endedAt: 200 }]);
 });
