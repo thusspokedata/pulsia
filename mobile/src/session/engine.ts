@@ -131,6 +131,11 @@ export function skipExercise(session: WorkoutSession, args: { exerciseOrder: num
   return updateExercise(session, args.exerciseOrder, (ex) => ({ ...ex, skipped: true }));
 }
 
+// Milisegundos de solapamiento entre dos ventanas de tiempo [a0,a1] y [b0,b1]. Nunca negativo.
+export function overlapMs(a0: number, a1: number, b0: number, b1: number): number {
+  return Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
+}
+
 export function finishSession(session: WorkoutSession, args: { nowMs: number; pausedMs?: number }): WorkoutSession {
   // El tiempo pausado (ir al baño, etc.) no cuenta en el total. Nunca negativo.
   const total = Math.max(0, args.nowMs - session.startedAt - (args.pausedMs ?? 0));

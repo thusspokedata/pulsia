@@ -1,4 +1,4 @@
-import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, discardOpenSets, closeOpenSets, setNotes, substituteExercise, substituteInProgram } from "../src/session/engine";
+import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, discardOpenSets, closeOpenSets, setNotes, substituteExercise, substituteInProgram, overlapMs } from "../src/session/engine";
 import type { Program } from "@pulsia/shared";
 
 const program = {
@@ -255,4 +255,29 @@ test("substituteInProgram reemplaza todas las apariciones del catalogId viejo, e
   const swapped = all.find((e) => e.catalogId === "dumbbell_row")!;
   expect(swapped.garminName).toBe("Dumbbell Row");
   expect(swapped.notes).toBe("no tengo barra");
+});
+
+describe("overlapMs", () => {
+  test("sin solape devuelve 0", () => {
+    expect(overlapMs(0, 100, 200, 300)).toBe(0);
+    expect(overlapMs(200, 300, 0, 100)).toBe(0);
+  });
+  test("solape parcial por la derecha", () => {
+    expect(overlapMs(0, 100, 80, 300)).toBe(20);
+  });
+  test("solape parcial por la izquierda", () => {
+    expect(overlapMs(80, 300, 0, 100)).toBe(20);
+  });
+  test("contención total: la ventana b está dentro de a", () => {
+    expect(overlapMs(0, 100, 30, 60)).toBe(30);
+  });
+  test("contención total: la ventana a está dentro de b", () => {
+    expect(overlapMs(30, 60, 0, 100)).toBe(30);
+  });
+  test("ventanas idénticas", () => {
+    expect(overlapMs(10, 50, 10, 50)).toBe(40);
+  });
+  test("toque en el borde da 0 (no negativo)", () => {
+    expect(overlapMs(0, 100, 100, 200)).toBe(0);
+  });
 });
