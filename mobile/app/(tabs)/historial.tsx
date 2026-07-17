@@ -1,27 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, View, Text, Pressable, Alert } from "react-native";
-import { useFocusEffect } from "expo-router";
-import type { WorkoutSession } from "@pulsia/shared";
+import { router, useFocusEffect } from "expo-router";
+import type { CardioActivity, WorkoutSession } from "@pulsia/shared";
 import { getSessions, getSessionById, deleteSessionById, putSession, type SessionListItem } from "../../src/api/sessions";
+import { listCardio, deleteCardio } from "../../src/api/cardio";
 import { getBackendUrl } from "../../src/storage/config";
+import { buildTimeline, type TimelineItem } from "../../src/session/timeline";
 import { summarize } from "../../src/session/summary";
 import { SessionSummary } from "../../src/components/SessionSummary";
 import { NotesEditor } from "../../src/components/NotesEditor";
+import { TimelineRow } from "../../src/components/TimelineRow";
 import { colors, spacing, radius } from "../../src/theme/tokens";
 
-function fmt(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
-
-const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-function fmtDate(ms: number): string {
-  const d = new Date(ms);
-  return `${d.getDate()} ${MESES[d.getMonth()]} ${d.getFullYear()}`;
-}
-
 export default function HistorialScreen() {
-  const [items, setItems] = useState<SessionListItem[]>([]);
+  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [selected, setSelected] = useState<WorkoutSession | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,20 +38,21 @@ export default function HistorialScreen() {
           if (lastLoaded.current !== "no-url") {
             lastLoaded.current = "no-url";
             setError("Configurá el backend");
-            setItems([]);
+            setTimeline([]);
             setLoading(false);
           }
           return;
         }
         try {
-          const list = await getSessions(url);
+          // Ambas fuentes en paralelo: un fallo en cualquiera cae al canal `error` de la lista.
+          const [sessions, cardios] = await Promise.all([getSessions(url), listCardio(url)]);
           if (!active) return;
-          const sorted = [...list].sort((a, b) => b.startedAt - a.startedAt);
-          const serialized = JSON.stringify(sorted);
+          const merged = buildTimeline(sessions, cardios);
+          const serialized = JSON.stringify(merged);
           if (serialized === lastLoaded.current) return;
           lastLoaded.current = serialized;
           setError(null);
-          setItems(sorted);
+          setTimeline(merged);
           setLoading(false);
         } catch {
           if (active && lastLoaded.current !== "error") {
@@ -91,6 +84,10 @@ export default function HistorialScreen() {
     }
   }
 
+  function onOpenCardio(activity: CardioActivity) {
+    router.push(`/cardio?id=${activity.id}`);
+  }
+
   async function saveDetailNotes() {
     const url = baseUrl.current;
     if (!url || !selected) return;
@@ -107,19 +104,43 @@ export default function HistorialScreen() {
   function confirmDelete(item: SessionListItem) {
     Alert.alert("Eliminar entrenamiento", "Se borrará de la base de datos. ¿Seguro?", [
       { text: "No", style: "cancel" },
-      { text: "Sí, eliminar", style: "destructive", onPress: () => onDelete(item) },
+      { text: "Sí, eliminar", style: "destructive", onPress: () => onDeleteSession(item) },
     ]);
   }
 
-  async function onDelete(item: SessionListItem) {
+  function confirmDeleteCardio(activity: CardioActivity) {
+    Alert.alert("Eliminar actividad", "Se borrará de la base de datos. ¿Seguro?", [
+      { text: "No", style: "cancel" },
+      { text: "Sí, eliminar", style: "destructive", onPress: () => onDeleteCardio(activity) },
+    ]);
+  }
+
+  async function onDeleteSession(item: SessionListItem) {
     const url = baseUrl.current;
     if (!url) return;
     setDetailError(null); // limpiar cualquier error previo antes de reintentar
     try {
       await deleteSessionById(url, item.id);
-      setItems((prev) => {
-        const next = prev.filter((x) => x.id !== item.id);
+      setTimeline((prev) => {
+        const next = prev.filter((x) => !(x.kind === "session" && x.id === item.id));
         // Actualizar el dedupe del focus-effect para que no reintroduzca el item borrado.
+        lastLoaded.current = JSON.stringify(next);
+        return next;
+      });
+    } catch {
+      setDetailError("No se pudo eliminar");
+    }
+  }
+
+  async function onDeleteCardio(activity: CardioActivity) {
+    const url = baseUrl.current;
+    if (!url) return;
+    setDetailError(null); // limpiar cualquier error previo antes de reintentar
+    try {
+      await deleteCardio(url, activity.id);
+      setTimeline((prev) => {
+        const next = prev.filter((x) => !(x.kind === "cardio" && x.id === activity.id));
+        // Igual que la sesión: sincronizar el dedupe para que el focus-effect no lo reintroduzca.
         lastLoaded.current = JSON.stringify(next);
         return next;
       });
@@ -149,43 +170,36 @@ export default function HistorialScreen() {
         <Text style={{ color: colors.textMuted }}>{error}</Text>
       ) : loading ? (
         <Text style={{ color: colors.textMuted }}>Cargando…</Text>
-      ) : items.length === 0 ? (
-        <Text style={{ color: colors.textMuted }}>Todavía no hay entrenamientos</Text>
       ) : (
-        items.map((s) => (
+        <>
           <Pressable
-            key={s.id}
-            testID={`hist-item-${s.id}`}
-            onPress={() => onOpen(s)}
-            disabled={detailLoading}
+            testID="cardio-add"
+            onPress={() => router.push("/cardio")}
             style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              backgroundColor: colors.surface,
+              backgroundColor: colors.accent,
               borderRadius: radius.md,
-              padding: spacing.md,
-              gap: spacing.sm,
+              paddingVertical: spacing.md,
+              alignItems: "center",
             }}
           >
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ color: colors.text, fontSize: 15, fontWeight: "600" }} numberOfLines={1}>
-                {s.dayLabel}
-              </Text>
-              <Text style={{ color: colors.textMuted, fontSize: 12 }}>{fmtDate(s.startedAt)}</Text>
-            </View>
-            <Text style={{ color: colors.textMuted, fontSize: 13 }}>⏱ {fmt(s.totalDurationMs ?? 0)}</Text>
-            <Text testID={`hist-pct-${s.id}`} style={{ color: colors.textMuted, fontSize: 13 }}>{`${s.completionPct}%`}</Text>
-            <Pressable
-              testID={`hist-del-${s.id}`}
-              onPress={() => confirmDelete(s)}
-              hitSlop={8}
-              style={{ paddingHorizontal: spacing.xs, paddingVertical: spacing.xs }}
-            >
-              <Text style={{ fontSize: 16 }}>🗑</Text>
-            </Pressable>
+            <Text style={{ color: "#fff", fontWeight: "600" }}>Registrar actividad</Text>
           </Pressable>
-        ))
+          {timeline.length === 0 ? (
+            <Text style={{ color: colors.textMuted }}>Todavía no hay actividad</Text>
+          ) : (
+            timeline.map((it) => (
+              <TimelineRow
+                key={`${it.kind}-${it.id}`}
+                item={it}
+                disabled={detailLoading}
+                onOpenSession={onOpen}
+                onDeleteSession={confirmDelete}
+                onOpenCardio={onOpenCardio}
+                onDeleteCardio={confirmDeleteCardio}
+              />
+            ))
+          )}
+        </>
       )}
     </ScrollView>
   );
