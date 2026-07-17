@@ -54,7 +54,9 @@ test("el prompt del plan pide pensar la semana completa y no duplicar componente
   expect(p).toMatch(/no.*duplicar|nunca.*duplic/i);
   // Alternar productos debe hacerse con `weekdays` complementarios; every_other_day NO sirve
   // (el server ancla todos los día-por-medio a la misma fecha → misma paridad → coinciden).
-  expect(p).toMatch(/weekdays.*complementari/is);
+  // Sin la flag `s`: con ella el `.` cruzaba líneas y enlazaba el enum de `frequency` de la regla 1
+  // con un "complementari" 40 líneas después, así que la frase podía desaparecer y el test seguía verde.
+  expect(p).toMatch(/alternar entre productos usá `weekdays` con días complementarios/);
   expect(p).toMatch(/NO uses `?every_other_day`? para alternar/i);
   expect(p).not.toMatch(/día por medio complementario/i);
   // Techo combinado: la etiqueta más baja de los productos involucrados, no una etiqueta ambigua.

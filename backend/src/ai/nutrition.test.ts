@@ -5,7 +5,8 @@ test("modo foto: habla de la foto y deja que la IA elija label o estimate", () =
   const p = buildFoodPrompt("photo");
   expect(p).toMatch(/FOTO/);
   expect(p).toMatch(/TABLA NUTRICIONAL/);
-  expect(p).toMatch(/source: "label"/);
+  // Anclado a la regla 1: `source: "label"` suelto también aparece en la regla 5 (naming).
+  expect(p).toMatch(/TABLA NUTRICIONAL visible.*source: "label"/);
 });
 
 test("modo texto: no habla de foto y fuerza estimate (no hay etiqueta que leer)", () => {

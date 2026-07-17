@@ -21,7 +21,9 @@ const extraction = {
 test("SupplementExtractionSchema acepta una extracción completa", () => {
   const p = SupplementExtractionSchema.parse(extraction);
   expect(p.components).toHaveLength(2);
-  expect(p.info).toContain("magnesio");
+  expect(p.info).toBe(extraction.info); // el info del caller, no un literal cualquiera con "magnesio"
+  // `info` es obligatorio acá: es lo único que separa Extraction de Input (ver comentario en el schema).
+  expect(SupplementExtractionSchema.safeParse({ ...extraction, info: undefined }).success).toBe(false);
 });
 
 test("SupplementExtractionSchema exige al menos un componente y rechaza amount <= 0", () => {

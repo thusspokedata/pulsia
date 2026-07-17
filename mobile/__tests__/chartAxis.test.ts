@@ -21,7 +21,7 @@ test("innerTicks: excluye los bordes (para no pisar min/max)", () => {
 });
 
 test("shortDate: timestamp → 'd mes'", () => {
-  const s = shortDate(new Date(2026, 6, 9, 12, 0, 0).getTime());
-  expect(s).toMatch(/9/);
-  expect(s.length).toBeGreaterThan(2);
+  // Igualdad exacta: /9/ matcheaba el día aunque el mes saliera numérico ("9/7/2026"),
+  // así que el formato "d mes" que promete el nombre del test no se verificaba.
+  expect(shortDate(new Date(2026, 6, 9, 12, 0, 0).getTime())).toBe("9 jul");
 });

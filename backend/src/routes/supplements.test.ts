@@ -361,7 +361,8 @@ test("GET /nutrition/supplements/plan → warnings de solapamiento de componente
   expect(res.status).toBe(200);
   const body = await res.json();
   expect(body.warnings.length).toBeGreaterThan(0);
-  expect(body.warnings[0]).toMatch(/zinc/i);
+  // Las comillas anclan al componente: /zinc/i matcheaba el nombre del producto ("Zinc Extra").
+  expect(body.warnings[0]).toContain('"zinc"');
 });
 
 test("PATCH /nutrition/supplements/plan/items/:id → 400 con id no-UUID (carry-over)", async () => {

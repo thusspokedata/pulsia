@@ -11,7 +11,8 @@ test("pide UN entreno, sin progresión", () => {
   const p = buildOneOffPrompt(profile, {
     location: "home", focus: ["chest"], sessionMinutes: 60, equipment: ["dumbbell"],
   });
-  expect(p.toLowerCase()).toContain("un entrenamiento");
+  // La frase de la tarea, no el eco de la regla 4 ("Es un entrenamiento de un único día").
+  expect(p).toContain("Diseñá UN ENTRENAMIENTO de un solo día");
   expect(p.toLowerCase()).toContain("casa");
   expect(p.toLowerCase()).not.toContain("progresión");
 });
@@ -20,9 +21,9 @@ test("incluye TODOS los músculos pedidos", () => {
   const p = buildOneOffPrompt(profile, {
     location: "gym", focus: ["chest", "triceps", "shoulders"], sessionMinutes: 60, equipment: ["dumbbell"],
   });
-  expect(p).toContain("chest");
-  expect(p).toContain("triceps");
-  expect(p).toContain("shoulders");
+  // Anclado a la línea del pedido: los nombres sueltos los ecoa el catálogo de ejercicios,
+  // así que el `focus` podía no llegar al prompt y los 3 toContain seguían pasando.
+  expect(p).toContain("grupos musculares: chest, triceps, shoulders");
 });
 
 test("usa el equipo explícito para armar el catálogo (dumbbell), no el del profile", () => {
