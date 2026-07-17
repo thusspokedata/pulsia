@@ -50,3 +50,19 @@ export const CardioActivitySchema = z.object({
   notes: z.string().default(""),
 });
 export type CardioActivity = z.infer<typeof CardioActivitySchema>;
+
+// Preview del parseo de un .FIT: lo que midió el reloj, antes de confirmarse como actividad.
+// No lleva id/source/kcalSource/notes — los agrega el móvil al confirmar (POST /cardio). `type`
+// es la conjetura del parser a partir del `sport` del archivo; el usuario la corrige en el preview.
+export const CardioFitPreviewSchema = z.object({
+  type: CardioTypeSchema,
+  startedAt: z.number().int(),
+  durationMs: z.number().int().positive(),
+  distanceM: z.number().int().min(0).nullable(),
+  avgHr: z.number().int().min(0).nullable(),
+  maxHr: z.number().int().min(0).nullable(),
+  elevationGainM: z.number().int().min(0).nullable(),
+  kcal: z.number().int().min(0).nullable(),
+  hrSeries: z.array(CardioHrPointSchema).optional(),
+});
+export type CardioFitPreview = z.infer<typeof CardioFitPreviewSchema>;
