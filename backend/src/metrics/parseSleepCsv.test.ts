@@ -61,3 +61,18 @@ test("parseSleepCsv omite un valor fuera de rango pero conserva el resto de la f
 test("parseSleepCsv tira error si no hay ninguna noche válida", () => {
   expect(() => parseSleepCsv(HEADER + "\n")).toThrow();
 });
+
+test("parseSleepCsv salta una fecha de calendario inválida (no la normaliza)", () => {
+  const csv = [
+    HEADER,
+    "2026-02-30,80,50,60,96,14,44,Good,7h 0min,8h 0min,1:00 AM,8:00 AM",
+    "2026-07-10,80,50,60,96,14,44,Good,7h 0min,8h 0min,1:00 AM,8:00 AM",
+  ].join("\n");
+  const { rows, skipped } = parseSleepCsv(csv);
+  // La fecha inválida NO debe aparecer normalizada (p. ej. como 2 de marzo).
+  expect(rows.some((r) => r.date === "2026-02-30")).toBe(false);
+  expect(rows.every((r) => r.date !== "2026-03-02")).toBe(true);
+  expect(skipped.some((s) => /fecha/i.test(s.reason))).toBe(true);
+  // La fila válida siguiente sí entra (una fecha mala no tumba el resto).
+  expect(rows.some((r) => r.date === "2026-07-10")).toBe(true);
+});

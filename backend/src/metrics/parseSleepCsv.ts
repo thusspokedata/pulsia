@@ -60,6 +60,12 @@ export function parseSleepCsv(csv: string): SleepCsvPreview {
     const [y, mo, d] = dateRaw.split("-").map((n) => parseInt(n, 10));
     const measuredAt = Date.UTC(y, mo - 1, d, 12, 0, 0);
 
+    const utc = new Date(measuredAt);
+    if (utc.getUTCFullYear() !== y || utc.getUTCMonth() !== mo - 1 || utc.getUTCDate() !== d) {
+      skipped.push({ line: i + 1, reason: `Fecha de calendario inválida: "${dateRaw}"` });
+      continue;
+    }
+
     const entries: BodyMetricEntry[] = [];
     for (let c = 1; c < header.length; c++) {
       const metric = colMetric[c];
