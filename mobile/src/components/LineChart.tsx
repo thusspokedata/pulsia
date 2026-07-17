@@ -11,13 +11,26 @@ const GT = 14; // gutter superior (deja lugar a la unidad)
 const GB = 16; // gutter inferior (fechas del eje X)
 
 // Gráfico de línea con ejes: gridlines + valores en Y, fechas en X. Marca fina en color de acento.
-export function LineChart({ data, height = 176, unit = "" }: { data: XY[]; height?: number; unit?: string }) {
+export function LineChart({
+  data,
+  height = 176,
+  unit = "",
+  refLine,
+}: {
+  data: XY[];
+  height?: number;
+  unit?: string;
+  refLine?: { value: number; label: string };
+}) {
   if (data.length === 0) {
     return <Text style={{ color: colors.textMuted, padding: spacing.md }}>Sin datos todavía.</Text>;
   }
   const ys = data.map((d) => d.y);
   const xs = data.map((d) => d.x);
-  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  // La referencia entra al dominio del eje: si los datos están muy por debajo (colesterol 100 vs
+  // ref 300), sin esto la línea caería fuera del área dibujada, que es justo cuando más importa.
+  const refY = refLine ? [refLine.value] : [];
+  const minY = Math.min(...ys, ...refY), maxY = Math.max(...ys, ...refY);
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const spanY = maxY - minY;
   const plotH = height - GT - GB;
@@ -73,6 +86,31 @@ export function LineChart({ data, height = 176, unit = "" }: { data: XY[]; heigh
             {shortDate(l.ts)}
           </SvgText>
         ))}
+
+        {refLine && (
+          <G>
+            <Line
+              testID="linechart-refline"
+              x1={GL}
+              y1={yPix(refLine.value)}
+              x2={W - GR}
+              y2={yPix(refLine.value)}
+              stroke={colors.textMuted}
+              strokeWidth={1}
+              strokeDasharray="4 3"
+            />
+            <SvgText
+              testID="linechart-reflabel"
+              x={W - GR}
+              y={yPix(refLine.value) - 3}
+              fontSize={10}
+              fill={colors.textMuted}
+              textAnchor="end"
+            >
+              {refLine.label}
+            </SvgText>
+          </G>
+        )}
 
         <Path d={toPath(pts)} stroke={colors.accent} strokeWidth={2} fill="none" />
         {pts.map((p, i) => (

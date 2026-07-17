@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { ScrollView, View, Text, Pressable, ActivityIndicator } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { foodsHighestIn, type RankNutrient } from "@pulsia/shared";
+import { foodsHighestIn, NUTRIENT_REFERENCES, NUTRIENT_REFERENCE_KIND, type RankNutrient } from "@pulsia/shared";
 import { useMealsRange } from "../../src/nutrition/useMealsRange";
 import { ChipGroup } from "../../src/components/ChipGroup";
 import { Card, SectionTitle, EmptyState, Bar } from "../../src/nutrition/tabs/ui";
+import { LineChart } from "../../src/components/LineChart";
+import { dailyNutrientSeries } from "../../src/nutrition/nutrientSeries";
 import { colors, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 
@@ -42,6 +44,16 @@ export default function NutrienteScreen() {
   // sale con amount 0. Sin el guard, la barra del "que más aporta" haría 0/0 → width "NaN%".
   const maxAmount = ranked[0]?.amount || 1;
 
+  const series = dailyNutrientSeries(meals, nutrient);
+  // Las saturadas son el 10% de la energía, así que su referencia depende de la meta de kcal, que
+  // esta pantalla no carga: van sin línea. El tipo de NUTRIENT_REFERENCES ya las excluye.
+  const refValue = nutrient in NUTRIENT_REFERENCES
+    ? NUTRIENT_REFERENCES[nutrient as keyof typeof NUTRIENT_REFERENCES]
+    : null;
+  const refLine = refValue != null
+    ? { value: refValue, label: `${NUTRIENT_REFERENCE_KIND[nutrient] === "min" ? "mínimo" : "máx"} ${refValue} ${unit}` }
+    : undefined;
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.md }}>
       <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>
@@ -56,6 +68,36 @@ export default function NutrienteScreen() {
       {!loading && !error && ranked.length === 0 && (
         <Card>
           <EmptyState>Ningún alimento registrado aporta {NUTRIENT_LABEL[nutrient]} en este período.</EmptyState>
+        </Card>
+      )}
+
+      {/* El gate `days >= 7` es explícito a propósito, aunque hoy sea redundante: con "Día" el rango
+          pedido al backend es de un solo día, así que nunca podría haber dos puntos y el gate de
+          `points.length >= 2` de abajo ya alcanzaría para ocultar el gráfico. Lo dejamos igual
+          porque declara la intención ("con Día no hay evolución") sin depender de ese acoplamiento:
+          si mañana "Día" pidiera, por ejemplo, ±3 días, sin este gate aparecería un gráfico que
+          nadie pidió. El gate es por `series.points.length`, NO por `ranked.length`: el ranking
+          descarta los aportes en 0 (no tiene sentido rankear "lo que más aporta 0"), pero la curva
+          SÍ cuenta un 0 declarado como dato real (ver `dailyNutrientSeries`). Si gatearamos por
+          `ranked` acá, una dieta con el nutriente en 0 declarado (p.ej. colesterol en varios días
+          basados en plantas) mostraría el empty state de "ningún alimento aporta..." y ocultaría
+          la curva — que sería justo la mejor noticia posible, un plano en 0. Gatear por
+          `series.points.length` sigue evitando el mensaje duplicado: un rango sin NINGÚN dato
+          (`points.length === 0`) implica también `ranked.length === 0`, así que solo queda el
+          empty state de abajo. */}
+      {!loading && !error && days >= 7 && series.points.length > 0 && (
+        <Card>
+          <SectionTitle>Evolución</SectionTitle>
+          {series.points.length >= 2 ? (
+            <>
+              <LineChart data={series.points} unit={unit} refLine={refLine} />
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                Promedio {series.average} {unit} · {series.points.length} de {days} días con registro
+              </Text>
+            </>
+          ) : (
+            <EmptyState>Registrá al menos dos días para ver la evolución.</EmptyState>
+          )}
         </Card>
       )}
 

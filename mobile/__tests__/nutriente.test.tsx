@@ -9,7 +9,7 @@ jest.mock("expo-router", () => ({
 jest.mock("../src/storage/config", () => ({ getBackendUrl: jest.fn(async () => "http://x") }));
 jest.mock("../src/api/nutrition", () => ({ listMeals: jest.fn(async () => []) }));
 
-const meal = (items: any[]) => ({ id: "m", eatenAt: 1, mealType: null, note: null, items });
+const meal = (items: any[], eatenAt = 1) => ({ id: "m", eatenAt, mealType: null, note: null, items });
 const item = (foodName: string, grams: number, cholesterol_mg: number | null) => ({
   id: "i", foodId: null, foodName, quantity: grams, quantityUnit: "g", grams,
   kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0,
@@ -94,4 +94,61 @@ test("alimentos con aporte ínfimo: la barra no queda en NaN%", async () => {
   await render(<NutrienteScreen />);
   await waitFor(() => expect(screen.getByText("Galletita")).toBeTruthy());
   expect(screen.getByTestId("rank-Galletita-bar").props.style.width).toBe("0%");
+});
+
+// Julio 2026, hora local.
+const at = (day: number) => new Date(2026, 6, day, 10).getTime();
+
+test("con 'Día' no hay gráfico, aunque haya puntos de sobra: un día no es una tendencia", async () => {
+  // 2 días de datos a propósito: si apareciera el gráfico sería por el gate de rango, no por
+  // falta de puntos. Con el mock de un solo día, este test pasaba incluso con el gate roto.
+  (listMeals as jest.Mock).mockResolvedValue([
+    meal([item("Huevo", 120, 200)], at(10)),
+    meal([item("Queso", 60, 100)], at(11)),
+  ]);
+  await render(<NutrienteScreen />);
+  await waitFor(() => expect(screen.getByText("Huevo")).toBeTruthy());
+  expect(screen.queryByTestId("linechart-refline")).toBeNull();
+});
+
+test("con 7 días aparece la curva, con la referencia y la cobertura de registro", async () => {
+  (listMeals as jest.Mock).mockResolvedValue([
+    meal([item("Huevo", 120, 200)], at(10)),
+    meal([item("Queso", 60, 100)], at(11)),
+  ]);
+  await render(<NutrienteScreen />);
+  await fireEvent.press(screen.getByText("7 días"));
+  await waitFor(() => expect(screen.getByTestId("linechart-refline")).toBeTruthy());
+  // Promedio sobre los días CON registro (2), no sobre 7: (200+100)/2 = 150.
+  expect(screen.getByText("Promedio 150 mg · 2 de 7 días con registro")).toBeTruthy();
+});
+
+test("un solo día con registro: no dibuja curva, lo dice", async () => {
+  (listMeals as jest.Mock).mockResolvedValue([meal([item("Huevo", 120, 200)], at(10))]);
+  await render(<NutrienteScreen />);
+  await fireEvent.press(screen.getByText("7 días"));
+  await waitFor(() => expect(screen.getByText(/al menos dos días/)).toBeTruthy());
+  expect(screen.queryByTestId("linechart-refline")).toBeNull();
+});
+
+test("rango sin ningún dato: solo el empty state que ya existía, sin nota de evolución duplicada", async () => {
+  (listMeals as jest.Mock).mockResolvedValue([meal([item("Lechuga", 50, null)], at(10))]);
+  await render(<NutrienteScreen />);
+  await fireEvent.press(screen.getByText("7 días"));
+  await waitFor(() => expect(screen.getByText(/Ningún alimento registrado aporta/)).toBeTruthy());
+  expect(screen.queryByText(/al menos dos días/)).toBeNull();
+});
+
+test("varios días con el nutriente en 0 declarado: muestra la curva, no 'no hay datos'", async () => {
+  // Un 0 declarado es un dato real (dieta basada en plantas → colesterol 0). El ranking lo filtra
+  // porque no tiene sentido rankear un aporte de 0, pero la curva sí lo cuenta: un plano en 0
+  // contra la referencia de 300 es justamente la mejor noticia posible.
+  (listMeals as jest.Mock).mockResolvedValue([
+    meal([item("Lentejas", 200, 0)], at(10)),
+    meal([item("Arroz", 150, 0)], at(11)),
+  ]);
+  await render(<NutrienteScreen />);
+  await fireEvent.press(screen.getByText("7 días"));
+  await waitFor(() => expect(screen.getByTestId("linechart-refline")).toBeTruthy());
+  expect(screen.getByText(/2 de 7 días con registro/)).toBeTruthy();
 });

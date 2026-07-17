@@ -40,3 +40,27 @@ test("sin datos muestra el placeholder", async () => {
   await render(<LineChart data={[]} />);
   expect(screen.getByText("Sin datos todavía.")).toBeTruthy();
 });
+
+test("la referencia entra al dominio del eje Y: si está por encima de los datos, el máx es la referencia", async () => {
+  // Colesterol 100/120 con ref 300: sin esto la línea caería fuera del gráfico.
+  await render(<LineChart data={[{ x: 0, y: 100 }, { x: 1, y: 120 }]} unit="mg" refLine={{ value: 300, label: "máx 300 mg" }} />);
+  expect(labelText("linechart-max")).toBe("300");
+  expect(labelText("linechart-min")).toBe("100");
+});
+
+test("la referencia también estira el dominio hacia abajo (piso de fibra por debajo de lo comido)", async () => {
+  await render(<LineChart data={[{ x: 0, y: 40 }, { x: 1, y: 50 }]} unit="g" refLine={{ value: 30, label: "mínimo 30 g" }} />);
+  expect(labelText("linechart-min")).toBe("30");
+  expect(labelText("linechart-max")).toBe("50");
+});
+
+test("dibuja la línea de referencia con su etiqueta", async () => {
+  await render(<LineChart data={[{ x: 0, y: 100 }, { x: 1, y: 120 }]} refLine={{ value: 300, label: "máx 300 mg" }} />);
+  expect(screen.getByTestId("linechart-refline")).toBeTruthy();
+  expect(labelText("linechart-reflabel")).toBe("máx 300 mg");
+});
+
+test("sin refLine no dibuja nada de referencia (los gráficos de Progreso no cambian)", async () => {
+  await render(<LineChart data={[{ x: 0, y: 100 }, { x: 1, y: 120 }]} />);
+  expect(screen.queryByTestId("linechart-refline")).toBeNull();
+});
