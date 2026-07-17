@@ -138,3 +138,17 @@ test("rango sin ningún dato: solo el empty state que ya existía, sin nota de e
   await waitFor(() => expect(screen.getByText(/Ningún alimento registrado aporta/)).toBeTruthy());
   expect(screen.queryByText(/al menos dos días/)).toBeNull();
 });
+
+test("varios días con el nutriente en 0 declarado: muestra la curva, no 'no hay datos'", async () => {
+  // Un 0 declarado es un dato real (dieta basada en plantas → colesterol 0). El ranking lo filtra
+  // porque no tiene sentido rankear un aporte de 0, pero la curva sí lo cuenta: un plano en 0
+  // contra la referencia de 300 es justamente la mejor noticia posible.
+  (listMeals as jest.Mock).mockResolvedValue([
+    meal([item("Lentejas", 200, 0)], at(10)),
+    meal([item("Arroz", 150, 0)], at(11)),
+  ]);
+  await render(<NutrienteScreen />);
+  await fireEvent.press(screen.getByText("7 días"));
+  await waitFor(() => expect(screen.getByTestId("linechart-refline")).toBeTruthy());
+  expect(screen.getByText(/2 de 7 días con registro/)).toBeTruthy();
+});

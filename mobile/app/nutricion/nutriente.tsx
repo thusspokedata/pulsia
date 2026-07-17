@@ -76,9 +76,16 @@ export default function NutrienteScreen() {
           `points.length >= 2` de abajo ya alcanzaría para ocultar el gráfico. Lo dejamos igual
           porque declara la intención ("con Día no hay evolución") sin depender de ese acoplamiento:
           si mañana "Día" pidiera, por ejemplo, ±3 días, sin este gate aparecería un gráfico que
-          nadie pidió. El gate por `ranked.length` evita, aparte, que un rango vacío muestre dos
-          mensajes distintos diciendo lo mismo: ya está el empty state de abajo. */}
-      {!loading && !error && days >= 7 && ranked.length > 0 && (
+          nadie pidió. El gate es por `series.points.length`, NO por `ranked.length`: el ranking
+          descarta los aportes en 0 (no tiene sentido rankear "lo que más aporta 0"), pero la curva
+          SÍ cuenta un 0 declarado como dato real (ver `dailyNutrientSeries`). Si gatearamos por
+          `ranked` acá, una dieta con el nutriente en 0 declarado (p.ej. colesterol en varios días
+          basados en plantas) mostraría el empty state de "ningún alimento aporta..." y ocultaría
+          la curva — que sería justo la mejor noticia posible, un plano en 0. Gatear por
+          `series.points.length` sigue evitando el mensaje duplicado: un rango sin NINGÚN dato
+          (`points.length === 0`) implica también `ranked.length === 0`, así que solo queda el
+          empty state de abajo. */}
+      {!loading && !error && days >= 7 && series.points.length > 0 && (
         <Card>
           <SectionTitle>Evolución</SectionTitle>
           {series.points.length >= 2 ? (
