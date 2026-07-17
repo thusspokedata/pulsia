@@ -30,8 +30,12 @@ test("escanear, elegir una banda y verla emparejada", async () => {
   await waitFor(() => screen.getByTestId("band-AA:BB:CC"));
   await fireEvent.press(screen.getByTestId("band-AA:BB:CC"));
 
+  // Parseado y por campo: sobre el JSON crudo, "AA:BB:CC" matcheaba estando en CUALQUIER
+  // campo, así que un deviceId vacío (banda impareable, no reconecta nunca) pasaba en verde.
   await waitFor(async () => {
-    expect(await AsyncStorage.getItem("pulsia.pairedBand")).toContain("AA:BB:CC");
+    expect(JSON.parse((await AsyncStorage.getItem("pulsia.pairedBand"))!)).toEqual({
+      deviceId: "AA:BB:CC", name: "Polar H10",
+    });
   });
   expect(screen.getByText("Polar H10 (emparejada)")).toBeTruthy();
 });

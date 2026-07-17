@@ -49,7 +49,9 @@ test("ajuste skip marca la entrada (no la borra) y reduce cambia la dosis efecti
   const out = resolveDayChecklist({ planItems: [mgItem, znItem], adjustments, takes: [], date: "2026-07-15" });
   const mg = out.find((e) => e.planItemId === ITEM_MG)!;
   expect(mg.adjusted?.action).toBe("skip");
-  expect(mg.adjusted?.reason).toMatch(/magnesio/);
+  // Igualdad exacta: el fixture tiene DOS textos con "magnesio" (el motivo del ajuste y el del
+  // ítem del plan), así que /magnesio/ no distinguía mostrarle al usuario la explicación equivocada.
+  expect(mg.adjusted?.reason).toBe("ayer comiste rico en magnesio");
   expect(mg.dose).toBe("2 cápsulas"); // skip no toca la dosis
   const zn = out.find((e) => e.planItemId === ITEM_ZN)!;
   expect(zn.adjusted).toMatchObject({ action: "reduce" });

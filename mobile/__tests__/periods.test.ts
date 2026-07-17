@@ -5,9 +5,10 @@ const NOW = new Date("2026-07-14T15:00:00").getTime(); // martes 14 jul 2026
 test("dayPeriod hoy: 00:00 a 23:59:59.999 y label", () => {
   const p = dayPeriod(0, new Date("2026-07-14T15:00:00").getTime());
   expect(new Date(p.start).getHours()).toBe(0);
-  expect(new Date(p.end).getHours()).toBe(23);
+  // El span exacto: getHours()===23 pasaba igual con un día que terminara 23:59:55.
+  expect(p.end - p.start).toBe(24 * 3600_000 - 1);
   expect(p.kind).toBe("daily");
-  expect(p.label).toMatch(/14/);
+  expect(p.label).toBe("14 de julio"); // /14/ matcheaba el día aunque el mes fuera el equivocado
 });
 
 test("dayPeriod offset 1 = ayer (positivo = pasado)", () => {
@@ -23,6 +24,8 @@ test("weekPeriod: lunes 00:00 a domingo 23:59; offset 1 = semana anterior", () =
   expect(start.getDay()).toBe(1);   // lunes
   expect(start.getHours()).toBe(0);
   expect(new Date(w.end).getDay()).toBe(0); // domingo
+  // El span exacto: getDay()===0 pasaba igual con una semana acortada (domingo 21:59).
+  expect(w.end - w.start).toBe(7 * 86400000 - 1);
   expect(w.kind).toBe("weekly");
   // la semana de 14/jul (martes) arranca el lunes 13
   expect(start.getDate()).toBe(13);

@@ -7,11 +7,13 @@ test("con release: incluye la versión, el label, el link al APK y el QR svg", (
     "<svg id='qr'></svg>",
   );
   expect(html).toContain("<!DOCTYPE html>");
-  expect(html).toContain("vc8");
+  // Anclado al span de la versión: "vc8" suelto ya viene en el apkUrl, el label y el <title>.
+  expect(html).toContain('Última versión: <span class="ver">vc8</span>');
   expect(html).toContain("vc8 con login");
   expect(html).toContain("https://x.test/pulsia-vc8.apk");
   expect(html).toContain("<svg id='qr'>");
-  expect(html).toContain("Descargar");
+  // El botón entero: "Descargar" suelto lo ecoa el hint de abajo ("...o tocá Descargar.").
+  expect(html).toContain('<a class="btn" href="https://x.test/pulsia-vc8.apk">Descargar APK</a>');
 });
 
 test("sin release (null): mensaje amable, sin link ni QR", () => {

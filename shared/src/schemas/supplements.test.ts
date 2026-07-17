@@ -21,7 +21,9 @@ const extraction = {
 test("SupplementExtractionSchema acepta una extracción completa", () => {
   const p = SupplementExtractionSchema.parse(extraction);
   expect(p.components).toHaveLength(2);
-  expect(p.info).toContain("magnesio");
+  expect(p.info).toBe(extraction.info); // el info del caller, no un literal cualquiera con "magnesio"
+  // `info` es obligatorio acá: es lo único que separa Extraction de Input (ver comentario en el schema).
+  expect(SupplementExtractionSchema.safeParse({ ...extraction, info: undefined }).success).toBe(false);
 });
 
 test("SupplementExtractionSchema exige al menos un componente y rechaza amount <= 0", () => {
@@ -45,6 +47,15 @@ test("SupplementSchema es el input + id/createdAt", () => {
     ...extraction, id: "11111111-1111-4111-8111-111111111111", createdAt: 0,
   });
   expect(p.id).toBeDefined();
+});
+
+test("SupplementSchema exige que id sea un UUID, no cualquier string", () => {
+  expect(SupplementSchema.safeParse({
+    ...extraction, id: "no-es-un-uuid", createdAt: 0,
+  }).success).toBe(false);
+  expect(SupplementSchema.safeParse({
+    ...extraction, id: "11111111-1111-4111-8111-111111111111", createdAt: 0,
+  }).success).toBe(true);
 });
 
 test("TAKE_SLOTS conserva el orden canónico del día", () => {
