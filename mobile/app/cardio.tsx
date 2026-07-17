@@ -74,7 +74,8 @@ export default function CardioScreen() {
         setType(a.type);
         setDurationText(numText(a.durationMs / 60000));
         setDistanceText(a.distanceM != null ? numText(a.distanceM / 1000) : "");
-        setHrText(a.avgHr != null ? numText(a.avgHr) : "");
+        // La FC es solo-lectura en edición (el patch no incluye avgHr), así que no
+        // precargamos hrText: sería estado muerto (solo se renderiza en alta).
         setNotes(a.notes);
       } catch {
         if (active) setError("No se pudo cargar la actividad");

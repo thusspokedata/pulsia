@@ -1,4 +1,4 @@
-import { listCardio, createCardio, deleteCardio } from "../src/api/cardio";
+import { listCardio, createCardio, getCardioById, updateCardio, deleteCardio } from "../src/api/cardio";
 
 const AID = "11111111-1111-4111-8111-111111111111";
 const activity = {
@@ -34,6 +34,25 @@ test("createCardio hace POST /cardio con el body", async () => {
 test("createCardio lanza en 409 (duplicado)", async () => {
   mockFetch({ error: "Ya importaste esta actividad" }, false, 409);
   await expect(createCardio("http://x", activity)).rejects.toThrow();
+});
+
+test("getCardioById hace GET /cardio/:id y devuelve la actividad", async () => {
+  const fn = mockFetch(activity);
+  const res = await getCardioById("http://x", AID);
+  expect(res).toEqual(activity);
+  const [url, init] = fn.mock.calls[0];
+  expect(url).toBe(`http://x/cardio/${AID}`);
+  expect(init?.method ?? "GET").toBe("GET");
+});
+
+test("updateCardio hace PATCH /cardio/:id con el patch en el body", async () => {
+  const fn = mockFetch({});
+  const patch = { type: "run" as const, durationMs: 1200000, distanceM: 3000, notes: "más rápido" };
+  await updateCardio("http://x", AID, patch);
+  const [url, init] = fn.mock.calls[0];
+  expect(url).toBe(`http://x/cardio/${AID}`);
+  expect(init.method).toBe("PATCH");
+  expect(JSON.parse(init.body)).toEqual(patch);
 });
 
 test("deleteCardio hace DELETE /cardio/:id", async () => {
