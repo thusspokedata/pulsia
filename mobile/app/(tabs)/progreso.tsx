@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ScrollView, View, Text, TextInput, Pressable } from "react-native";
+import { router } from "expo-router";
 import { getBackendUrl } from "../../src/storage/config";
 import { getLatestMetrics, getMetricSeries, postReading } from "../../src/api/metrics";
 import { getPerformance } from "../../src/api/progress";
@@ -326,6 +327,10 @@ export default function ProgresoScreen() {
         <Pressable testID="act-save" onPress={() => onSaveFlow(actForm, ACTIVITY_METRIC_TYPES, setActForm, setActSaving)} disabled={actSaving}
           style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: actSaving ? 0.6 : 1 }}>
           <Text style={{ color: "#fff", fontWeight: "600" }}>{actSaving ? "Guardando…" : "Guardar actividad"}</Text>
+        </Pressable>
+        <Pressable testID="sleep-import-cta" onPress={() => router.push("/importar-sueno")}
+          style={{ borderWidth: 1, borderColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
+          <Text style={{ color: colors.accentText, fontWeight: "600" }}>Importar sueño de Garmin (CSV)</Text>
         </Pressable>
 
         <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>Cómo te sentís</Text>
