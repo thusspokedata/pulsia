@@ -184,7 +184,7 @@ export class AnthropicAiClient implements AiClient {
       description: "Devuelve los datos nutricionales del alimento de la foto.",
       content: [
         { type: "image", source: { type: "base64", media_type: mediaType as any, data: imageBase64 } },
-        { type: "text", text: buildFoodPrompt() },
+        { type: "text", text: buildFoodPrompt("photo") },
       ],
       truncatedMsg: "La respuesta se truncó (etiqueta demasiado compleja).",
       missingMsg: "La IA no devolvió los datos del alimento.",
