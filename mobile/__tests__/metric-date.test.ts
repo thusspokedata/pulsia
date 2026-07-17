@@ -13,9 +13,7 @@ test("dayLabel: hoy/ayer y fecha para días más lejanos", () => {
   const now = new Date(2026, 6, 11, 9, 30).getTime();
   expect(dayLabel(0, now)).toBe("hoy");
   expect(dayLabel(1, now)).toBe("ayer");
-  // 3 días atrás → no es "hoy"/"ayer" y menciona el día 8
-  const lejos = dayLabel(3, now);
-  expect(lejos).not.toBe("hoy");
-  expect(lejos).not.toBe("ayer");
-  expect(lejos).toContain("8");
+  // 3 días atrás → fecha legible. Igualdad exacta: el "8" suelto matcheaba un dígito
+  // de adentro del epoch crudo, así que dayLabel podía devolver "1783504800000" y pasar.
+  expect(dayLabel(3, now)).toBe("mié, 8 jul");
 });
