@@ -139,13 +139,20 @@ const MUST_INCLUDE: Record<string, string[]> = {
   deadliftExerciseName: ["romanianDeadlift", "sumoDeadlift", "barbellDeadlift"],
 };
 
-// Algunos curados el SDK los nombra sin mencionar el implemento ("T Bar Row", "Arnold Press"),
-// así que inferEquipment los etiquetaría "bodyweight" y isLegitBodyweight los descartaría.
-// Son ejercicios con carga: acá va el equipamiento real.
+// inferEquipment falla en dos casos y acá va el equipamiento real:
+//  1. El SDK nombra el ejercicio sin mencionar el implemento ("T Bar Row", "Arnold Press",
+//     "Leg Press", "Goblet Squat"), así que quedan etiquetados "bodyweight" e
+//     isLegitBodyweight los descartaría, aunque son ejercicios con carga.
+//  2. El ejercicio hereda el equipamiento de su categoría y no le corresponde: los jalones
+//     al pecho viven bajo pullUpExerciseName, pero se hacen en polea, no en barra fija.
 const MUST_EQUIPMENT: Record<string, EquipmentVal[]> = {
   tBarRow: ["barbell"],
   oneArmBentOverRow: ["dumbbell"],
   arnoldPress: ["dumbbell"],
+  legPress: ["machine"],
+  gobletSquat: ["dumbbell"],
+  wideGripLatPulldown: ["cable_machine"],
+  closeGripLatPulldown: ["cable_machine"],
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -1422,7 +1422,7 @@ export const EXERCISE_CATALOG_DATA: CatalogExercise[] = [
     displayName: "Close Grip Lat Pulldown",
     primaryMuscles: ["back"],
     secondaryMuscles: ["biceps"],
-    equipment: ["pull_up_bar"],
+    equipment: ["cable_machine"],
   },
   {
     id: "wide_grip_lat_pulldown",
@@ -1431,7 +1431,7 @@ export const EXERCISE_CATALOG_DATA: CatalogExercise[] = [
     displayName: "Wide Grip Lat Pulldown",
     primaryMuscles: ["back"],
     secondaryMuscles: ["biceps"],
-    equipment: ["pull_up_bar"],
+    equipment: ["cable_machine"],
   },
   {
     id: "pull_up",
@@ -2016,7 +2016,7 @@ export const EXERCISE_CATALOG_DATA: CatalogExercise[] = [
     displayName: "Leg Press",
     primaryMuscles: ["quads"],
     secondaryMuscles: ["glutes", "hamstrings"],
-    equipment: ["bodyweight"],
+    equipment: ["machine"],
   },
   {
     id: "barbell_front_squat",
@@ -2052,7 +2052,7 @@ export const EXERCISE_CATALOG_DATA: CatalogExercise[] = [
     displayName: "Goblet Squat",
     primaryMuscles: ["quads"],
     secondaryMuscles: ["glutes", "hamstrings"],
-    equipment: ["bodyweight"],
+    equipment: ["dumbbell"],
   },
   {
     id: "barbell_stepover",
