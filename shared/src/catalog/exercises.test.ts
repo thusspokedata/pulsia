@@ -63,3 +63,21 @@ test("no-regresión: ningún id congelado desapareció del catálogo", () => {
   const perdidos = FROZEN_CATALOG_IDS.filter((id) => !actuales.has(id));
   expect(perdidos).toEqual([]);
 });
+
+test("el catálogo incluye los ejercicios básicos de gimnasio", () => {
+  const nombres = EXERCISE_CATALOG.map((e) => e.garminName.toLowerCase());
+  const basicos = [
+    "leg press",
+    "seated cable row",
+    "goblet squat",
+    "barbell front squat",
+    "dumbbell flye",
+    "cable crossover",
+    "t bar row",
+    "wide grip lat pulldown",
+    "dumbbell shoulder press",
+    "dumbbell hammer curl",
+  ];
+  const faltantes = basicos.filter((b) => !nombres.includes(b));
+  expect(faltantes).toEqual([]);
+});
