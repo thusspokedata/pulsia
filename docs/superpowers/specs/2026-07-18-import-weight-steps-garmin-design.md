@@ -19,7 +19,7 @@ sleep_hours | 2026-07-17 10:00 UTC  ← carga manual (mediodía local, UTC+2)
 sleep_hours | 2026-07-17 12:00 UTC  ← import del CSV (mediodía UTC)
 ```
 
-209 filas del owner (`a.saleme@pm.me`) están a mediodía UTC; la familia tiene **0**.
+209 filas del owner están a mediodía UTC; la familia tiene **0**.
 
 ## Formatos reales (muestras provistas)
 
