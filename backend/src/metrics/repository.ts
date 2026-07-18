@@ -77,6 +77,12 @@ export async function deleteMetric(db: Db, userId: string, id: string): Promise<
 // la idempotencia, así reimportar ventanas de 7 días superpuestas no duplica nada. ON CONFLICT DO
 // NOTHING además cierra la carrera entre reintentos concurrentes (el cliente móvil corta a los 15s)
 // y `returning` cuenta lo que realmente se insertó.
+// Postgres topea en 65.535 los parámetros de una sentencia. Son 4 por fila (userId, metricType,
+// value, measuredAt), o sea ~16.383 filas — y el CSV de sueño emite hasta 8 métricas por día, así
+// que el techo real son ~2.047 días (5,6 años) de historial. Verificado: 2.100 días fallan con un
+// CSV de apenas 92 KB, muy por debajo de MAX_CSV_B64 (~2,2 MB), que por eso no alcanza a proteger.
+const INSERT_CHUNK = 5000;
+
 export async function insertReadingsDedup(
   db: Db,
   userId: string,
@@ -94,10 +100,14 @@ export async function insertReadingsDedup(
   }
   if (all.length === 0) return { imported: 0, duplicates: 0 };
 
-  const inserted = await db
-    .insert(bodyMetric)
-    .values(all.map((x) => ({ userId, metricType: x.metricType, value: x.value, measuredAt: x.measuredAt })))
-    .onConflictDoNothing({ target: [bodyMetric.userId, bodyMetric.metricType, bodyMetric.measuredAt] })
-    .returning({ id: bodyMetric.id });
-  return { imported: inserted.length, duplicates: all.length - inserted.length };
+  let imported = 0;
+  for (let i = 0; i < all.length; i += INSERT_CHUNK) {
+    const inserted = await db
+      .insert(bodyMetric)
+      .values(all.slice(i, i + INSERT_CHUNK).map((x) => ({ userId, metricType: x.metricType, value: x.value, measuredAt: x.measuredAt })))
+      .onConflictDoNothing({ target: [bodyMetric.userId, bodyMetric.metricType, bodyMetric.measuredAt] })
+      .returning({ id: bodyMetric.id });
+    imported += inserted.length;
+  }
+  return { imported, duplicates: all.length - imported };
 }

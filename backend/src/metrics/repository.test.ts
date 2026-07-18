@@ -73,10 +73,12 @@ test("deleteMetric devuelve true/false según haya borrado", async () => {
 // filas, simulando las que el índice único dejó pasar.
 function fakeDedupDb(insertedCount: (rows: any[]) => number) {
   const captured: any[] = [];
+  const batches: number[] = [];
   const db: any = {
     insert: () => ({
       values: (v: any[]) => {
         captured.push(...v);
+        batches.push(v.length);
         return {
           onConflictDoNothing: () => ({
             returning: async () => v.slice(0, insertedCount(v)).map((_, i) => ({ id: `id-${i}` })),
@@ -85,7 +87,7 @@ function fakeDedupDb(insertedCount: (rows: any[]) => number) {
       },
     }),
   };
-  return { db, captured };
+  return { db, captured, batches: () => batches };
 }
 
 test("insertReadingsDedup cuenta como duplicadas las filas que el índice único rechazó", async () => {
@@ -118,4 +120,19 @@ test("insertReadingsDedup no toca la DB si no hay filas", async () => {
   const db: any = { insert: () => { throw new Error("no debería insertar"); } };
   const res = await insertReadingsDedup(db, "u1", [{ measuredAt: 100, entries: [] }]);
   expect(res).toEqual({ imported: 0, duplicates: 0 });
+});
+
+test("insertReadingsDedup parte el insert en chunks para no pasarse del tope de parámetros de Postgres", async () => {
+  // 12.000 filas: son 4 parámetros por fila, así que en una sola sentencia (48.000) todavía entraría,
+  // pero un historial de sueño más largo no — el chunk tiene que partirlo igual.
+  const { db, captured, batches } = fakeDedupDb((v) => v.length);
+  const rows = Array.from({ length: 12_000 }, (_, i) => ({
+    measuredAt: i * 86_400_000,
+    entries: [{ metricType: "sleep_score", value: 85 }],
+  }));
+  const res = await insertReadingsDedup(db, "u1", rows);
+  expect(res.imported).toBe(12_000);
+  expect(captured).toHaveLength(12_000);
+  expect(batches()).toEqual([5000, 5000, 2000]);
+  expect(Math.max(...batches()) * 4).toBeLessThan(65_535);
 });
