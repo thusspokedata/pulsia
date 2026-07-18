@@ -328,9 +328,9 @@ export default function ProgresoScreen() {
           style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: actSaving ? 0.6 : 1 }}>
           <Text style={{ color: "#fff", fontWeight: "600" }}>{actSaving ? "Guardando…" : "Guardar actividad"}</Text>
         </Pressable>
-        <Pressable testID="sleep-import-cta" onPress={() => router.push("/importar-sueno")}
+        <Pressable testID="sleep-import-cta" onPress={() => router.push("/importar-garmin")}
           style={{ borderWidth: 1, borderColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
-          <Text style={{ color: colors.accentText, fontWeight: "600" }}>Importar sueño de Garmin (CSV)</Text>
+          <Text style={{ color: colors.accentText, fontWeight: "600" }}>Importar datos de Garmin (CSV)</Text>
         </Pressable>
 
         <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>Cómo te sentís</Text>
