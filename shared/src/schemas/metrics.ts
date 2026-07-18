@@ -10,6 +10,7 @@ export const BP_METRIC_TYPES = ["bp_systolic", "bp_diastolic", "bp_pulse"] as co
 export const ACTIVITY_METRIC_TYPES = [
   "steps", "floors", "sleep_hours", "sleep_quality", "resting_hr",
   "sleep_score", "sleep_need_hours", "body_battery", "hrv", "respiration", "pulse_ox",
+  "steps_goal",
 ] as const;
 export const SUBJECTIVE_METRIC_TYPES = ["stress", "mood", "energy"] as const;
 // Métricas de "flujo diario" (promedio reciente, NO delta de tendencia).
@@ -29,6 +30,7 @@ export const METRIC_UNITS: Record<MetricType, string> = {
   steps: "pasos", floors: "pisos", sleep_hours: "h", sleep_quality: "/5", resting_hr: "bpm",
   sleep_score: "/100", sleep_need_hours: "h", body_battery: "/100",
   hrv: "ms", respiration: "rpm", pulse_ox: "%",
+  steps_goal: "pasos",
   stress: "/5", mood: "/5", energy: "/5",
 };
 
@@ -40,6 +42,7 @@ export const METRIC_LABELS: Record<MetricType, string> = {
   resting_hr: "FC en reposo",
   sleep_score: "Puntaje de sueño", sleep_need_hours: "Sueño necesario", body_battery: "Body Battery",
   hrv: "HRV", respiration: "Respiración", pulse_ox: "SpO₂",
+  steps_goal: "Objetivo de pasos",
   stress: "Estrés", mood: "Ánimo", energy: "Energía",
 };
 
@@ -52,6 +55,7 @@ export const METRIC_RANGES: Record<MetricType, [number, number]> = {
   resting_hr: [30, 120],
   sleep_score: [0, 100], sleep_need_hours: [0, 24], body_battery: [0, 100],
   hrv: [0, 300], respiration: [4, 40], pulse_ox: [50, 100],
+  steps_goal: [0, 100000],
   stress: [1, 5], mood: [1, 5], energy: [1, 5],
 };
 
