@@ -459,7 +459,7 @@ export const EXERCISE_CATALOG_DATA: CatalogExercise[] = [
     displayName: "Dumbbell Hammer Curl",
     primaryMuscles: ["biceps"],
     secondaryMuscles: ["forearms"],
-    equipment: ["dumbbell", "machine"],
+    equipment: ["dumbbell"],
   },
   {
     id: "ez_bar_preacher_curl",
@@ -657,7 +657,7 @@ export const EXERCISE_CATALOG_DATA: CatalogExercise[] = [
     displayName: "Dumbbell Flye",
     primaryMuscles: ["chest"],
     secondaryMuscles: ["shoulders"],
-    equipment: ["dumbbell"],
+    equipment: ["dumbbell", "bench"],
   },
   {
     id: "incline_dumbbell_flye",
@@ -666,7 +666,7 @@ export const EXERCISE_CATALOG_DATA: CatalogExercise[] = [
     displayName: "Incline Dumbbell Flye",
     primaryMuscles: ["chest"],
     secondaryMuscles: ["shoulders"],
-    equipment: ["dumbbell"],
+    equipment: ["dumbbell", "bench"],
   },
   {
     id: "decline_dumbbell_flye",
@@ -1620,7 +1620,7 @@ export const EXERCISE_CATALOG_DATA: CatalogExercise[] = [
     displayName: "Chest Supported Dumbbell Row",
     primaryMuscles: ["back"],
     secondaryMuscles: ["biceps"],
-    equipment: ["dumbbell"],
+    equipment: ["dumbbell", "bench"],
   },
   {
     id: "barbell_row",

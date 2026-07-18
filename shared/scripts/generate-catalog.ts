@@ -139,12 +139,19 @@ const MUST_INCLUDE: Record<string, string[]> = {
   deadliftExerciseName: ["romanianDeadlift", "sumoDeadlift", "barbellDeadlift"],
 };
 
-// inferEquipment falla en dos casos y acá va el equipamiento real:
+// inferEquipment falla en tres casos y acá va el equipamiento real:
 //  1. El SDK nombra el ejercicio sin mencionar el implemento ("T Bar Row", "Arnold Press",
 //     "Leg Press", "Goblet Squat"), así que quedan etiquetados "bodyweight" e
 //     isLegitBodyweight los descartaría, aunque son ejercicios con carga.
 //  2. El ejercicio hereda el equipamiento de su categoría y no le corresponde: los jalones
 //     al pecho viven bajo pullUpExerciseName, pero se hacen en polea, no en barra fija.
+//  3. El nombre engaña a la heurística: "Dumbbell Hammer Curl" activa la regla de "hammer"
+//     (pensada para las máquinas Hammer Strength) y le agrega un "machine" que no existe,
+//     escondiéndole el curl martillo a quien solo tiene mancuernas. Al revés también pasa:
+//     las aperturas y el remo con pecho apoyado necesitan banco, pero su nombre de Garmin
+//     no dice "bench" y se le recetarían a alguien sin banco.
+// Ojo: catalogForEquipment() exige TODO lo listado, así que un implemento de más esconde
+// el ejercicio y uno de menos se lo receta a quien no puede hacerlo.
 const MUST_EQUIPMENT: Record<string, EquipmentVal[]> = {
   tBarRow: ["barbell"],
   oneArmBentOverRow: ["dumbbell"],
@@ -153,6 +160,10 @@ const MUST_EQUIPMENT: Record<string, EquipmentVal[]> = {
   gobletSquat: ["dumbbell"],
   wideGripLatPulldown: ["cable_machine"],
   closeGripLatPulldown: ["cable_machine"],
+  chestSupportedDumbbellRow: ["dumbbell", "bench"],
+  dumbbellFlye: ["dumbbell", "bench"],
+  inclineDumbbellFlye: ["dumbbell", "bench"],
+  dumbbellHammerCurl: ["dumbbell"],
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -421,6 +432,17 @@ if (catalog.length < 150) {
     cap--;
     catalog = generate(cap);
   }
+}
+
+// Si el catálogo excede el máximo estando ya en MIN_CAP, el bucle de arriba no tiene margen
+// para bajar el cap y escribiría un archivo sobredimensionado en silencio. Preferimos reventar
+// acá que descubrirlo en CI, igual que hace la guarda de MUST_INCLUDE.
+if (catalog.length > MAX_TOTAL) {
+  throw new Error(
+    `El catálogo generado tiene ${catalog.length} ejercicios y el máximo es ${MAX_TOTAL}. ` +
+      `El cap ya está en el piso (${MIN_CAP}), que no se puede bajar sin expulsar ids congelados. ` +
+      `Revisá MUST_INCLUDE o subí MAX_TOTAL a conciencia (y la cota del test en exercises.test.ts).`,
+  );
 }
 
 console.log(`\nFinal CAP = ${cap}, TOTAL = ${catalog.length} exercises`);
