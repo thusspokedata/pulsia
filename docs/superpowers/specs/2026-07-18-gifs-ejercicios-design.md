@@ -123,6 +123,19 @@ contenido de este módulo y ningún consumidor se entera.
 mapea nombres Garmin → slugs de Everkinetic, convierte a WebP y escribe los assets más el mapa. El
 **output se commitea**, para que el build no dependa de que un repo ajeno siga vivo.
 
+**La fuente se fija a una revisión inmutable.** El script apunta a un **commit SHA o tag concreto**
+de `everkinetic/data`, nunca a `main` ni a una rama. Además, antes de regenerar valida:
+
+- el **hash de cada archivo** descargado contra un manifiesto commiteado (`media.lock.json`), y
+- que el `LICENSE.md` del upstream **siga siendo CC-BY-SA-4.0** en esa revisión.
+
+Si algo no coincide, la ingesta **aborta** en vez de escribir assets. El motivo no es solo
+reproducibilidad: un repo ajeno puede cambiar de licencia, reemplazar imágenes o desaparecer, y
+nosotros estamos redistribuyendo ese contenido en una app con posible salida comercial. Enterarse
+de un cambio de licencia por un hash que no matchea es mucho mejor que no enterarse. Es la misma
+lógica que la guarda dura de `MUST_INCLUDE` en el generador del catálogo: preferimos reventar a
+fallar en silencio.
+
 **Cues:** se generan **una vez** con Opus contra el catálogo final, se revisan a mano y quedan
 commiteados como **datos estáticos**. No hay llamada a la IA en runtime. Un ejercicio sin cues
 muestra solo la animación.
