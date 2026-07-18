@@ -31,9 +31,12 @@ test("catalogForEquipment filtra por equipamiento disponible", () => {
   expect(home.length).toBeGreaterThan(0);
 });
 
-test("el catálogo tiene un tamaño razonable (150-250)", () => {
+test("el catálogo tiene un tamaño razonable (150-300)", () => {
+  // La cota alta subió de 250 a 300 al sumar los básicos de MUST_INCLUDE (2026-07-18).
+  // Coincide con MAX_TOTAL en generate-catalog.ts: si cambia una, cambiá la otra.
+  // Sigue existiendo para atajar una explosión accidental del generador.
   expect(EXERCISE_CATALOG.length).toBeGreaterThanOrEqual(150);
-  expect(EXERCISE_CATALOG.length).toBeLessThanOrEqual(250);
+  expect(EXERCISE_CATALOG.length).toBeLessThanOrEqual(300);
 });
 
 test("las dominadas asistidas con banda requieren también barra (pull_up_bar)", () => {
