@@ -123,6 +123,31 @@ const BUCKET_PRIORITY: EquipmentVal[] = [
   "bodyweight", "pull_up_bar", "resistance_band", "trx",
 ];
 
+// ── Ejercicios básicos garantizados ──────────────────────────────────────────
+// El criterio de selección (menos palabras, alfabético) no sabe qué ejercicio es importante:
+// deja entrar "Barbell Stepover" y descarta el leg press. Estos entran SIEMPRE, sin competir
+// por el cap. Claves = sdkKey de CATEGORIES; valores = camelName exacto del SDK de Garmin.
+const MUST_INCLUDE: Record<string, string[]> = {
+  benchPressExerciseName: ["inclineDumbbellBenchPress", "closeGripBarbellBenchPress"],
+  rowExerciseName: ["seatedCableRow", "tBarRow", "oneArmBentOverRow", "chestSupportedDumbbellRow"],
+  pullUpExerciseName: ["pullUp", "wideGripLatPulldown", "closeGripLatPulldown"],
+  squatExerciseName: ["legPress", "gobletSquat", "barbellFrontSquat", "dumbbellSplitSquat", "barbellHackSquat"],
+  flyeExerciseName: ["dumbbellFlye", "cableCrossover", "inclineDumbbellFlye"],
+  curlExerciseName: ["dumbbellHammerCurl", "ezBarPreacherCurl"],
+  tricepsExtensionExerciseName: ["lyingEzBarTricepsExtension"],
+  shoulderPressExerciseName: ["dumbbellShoulderPress", "barbellShoulderPress", "arnoldPress"],
+  deadliftExerciseName: ["romanianDeadlift", "sumoDeadlift", "barbellDeadlift"],
+};
+
+// Algunos curados el SDK los nombra sin mencionar el implemento ("T Bar Row", "Arnold Press"),
+// así que inferEquipment los etiquetaría "bodyweight" y isLegitBodyweight los descartaría.
+// Son ejercicios con carga: acá va el equipamiento real.
+const MUST_EQUIPMENT: Record<string, EquipmentVal[]> = {
+  tBarRow: ["barbell"],
+  oneArmBentOverRow: ["dumbbell"],
+  arnoldPress: ["dumbbell"],
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** camelCase → "Title Case Words" */
@@ -249,11 +274,14 @@ function generate(cap: number): CatalogExercise[] {
       const garminName = humanize(camelName);
       const lower = garminName.toLowerCase();
       if (isExcluded(lower)) continue;
-      const equipment = inferEquipment(lower, cfg.sdkKey);
+      const isMust = (MUST_INCLUDE[cfg.sdkKey] ?? []).includes(camelName);
+      const equipment = MUST_EQUIPMENT[camelName] ?? inferEquipment(lower, cfg.sdkKey);
       const bucket = getBucket(equipment);
 
-      // For bodyweight bucket, filter out likely mis-tagged weighted moves
-      if (bucket === "bodyweight" && !isLegitBodyweight(lower, cfg.sdkKey)) continue;
+      // For bodyweight bucket, filter out likely mis-tagged weighted moves.
+      // La lista curada de MUST_INCLUDE no pasa por esta heurística: es exactamente
+      // el criterio mecánico que MUST_INCLUDE viene a corregir.
+      if (bucket === "bodyweight" && !isMust && !isLegitBodyweight(lower, cfg.sdkKey)) continue;
 
       candidates.push({ camelName, garminName, lower, equipment, bucket });
     }
@@ -273,23 +301,40 @@ function generate(cap: number): CatalogExercise[] {
       });
     }
 
+    // Los básicos entran primero y no consumen cupo del cap.
+    const mustCamel = new Set(MUST_INCLUDE[cfg.sdkKey] ?? []);
+    const forced = candidates.filter((c) => mustCamel.has(c.camelName));
+
+    // Guarda: si un nombre de MUST_INCLUDE no llegó a candidatos (tipeo, o lo filtró isExcluded),
+    // reventamos. Si no, un tipeo no hace nada y nadie se entera.
+    if (forced.length !== mustCamel.size) {
+      const encontrados = new Set(forced.map((c) => c.camelName));
+      const perdidos = [...mustCamel].filter((n) => !encontrados.has(n));
+      throw new Error(
+        `MUST_INCLUDE[${cfg.sdkKey}]: estos nombres no existen en el SDK o los filtró isExcluded/isLegitBodyweight: ${perdidos.join(", ")}`,
+      );
+    }
+
     // Round-robin selection across buckets in priority order
     const bucketPointers = new Map<EquipmentVal, number>();
     for (const b of BUCKET_PRIORITY) bucketPointers.set(b, 0);
 
-    const selected: Candidate[] = [];
+    const selected: Candidate[] = [...forced];
+    const target = cap + forced.length;
     let added = true;
-    while (selected.length < cap && added) {
+    while (selected.length < target && added) {
       added = false;
       for (const bucket of BUCKET_PRIORITY) {
-        if (selected.length >= cap) break;
+        if (selected.length >= target) break;
         const list = bucketMap.get(bucket);
         if (!list) continue;
         const ptr = bucketPointers.get(bucket)!;
         if (ptr >= list.length) continue;
-        selected.push(list[ptr]);
+        const cand = list[ptr];
         bucketPointers.set(bucket, ptr + 1);
         added = true;
+        if (mustCamel.has(cand.camelName)) continue; // ya entró como forzado
+        selected.push(cand);
       }
     }
 
