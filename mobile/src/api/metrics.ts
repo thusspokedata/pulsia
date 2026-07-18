@@ -24,23 +24,44 @@ export async function deleteMetric(baseUrl: string, id: string): Promise<void> {
   if (!res.ok) throw new Error("No se pudo borrar la medición");
 }
 
-// Manda el CSV de sueño (base64) a parsear. Devuelve el preview SIN persistir; propaga el
-// mensaje del backend en error (mismo patrón que parseFitCardio).
-export async function parseSleepCsv(baseUrl: string, csvBase64: string): Promise<MetricCsvPreview> {
-  const res = await apiFetch(baseUrl, "/metrics/import/sleep/parse", { method: "POST", body: JSON.stringify({ csvBase64 }) });
+export type GarminCsvKind = "sleep" | "weight" | "steps";
+
+const GARMIN_CSV_PARSE_ERROR: Record<GarminCsvKind, string> = {
+  sleep: "No se pudo leer el CSV de sueño",
+  weight: "No se pudo leer el CSV de peso",
+  steps: "No se pudo leer el CSV de pasos",
+};
+
+const GARMIN_CSV_IMPORT_ERROR: Record<GarminCsvKind, string> = {
+  sleep: "No se pudo importar el sueño",
+  weight: "No se pudo importar el peso",
+  steps: "No se pudo importar los pasos",
+};
+
+// Manda el CSV de Garmin (base64) a parsear. Devuelve el preview SIN persistir; propaga el
+// mensaje del backend en error (mismo patrón que parseFitCardio). Siempre manda el offset de
+// huso horario del dispositivo para que el backend arme timestamps a mediodía local.
+export async function parseGarminCsv(baseUrl: string, kind: GarminCsvKind, csvBase64: string): Promise<MetricCsvPreview> {
+  const res = await apiFetch(baseUrl, `/metrics/import/${kind}/parse`, {
+    method: "POST",
+    body: JSON.stringify({ csvBase64, tzOffsetMinutes: new Date().getTimezoneOffset() }),
+  });
   if (!res.ok) {
     const msg = await res.json().then((b: { error?: string }) => b.error).catch(() => undefined);
-    throw new Error(msg || "No se pudo leer el CSV de sueño");
+    throw new Error(msg || GARMIN_CSV_PARSE_ERROR[kind]);
   }
   return (await res.json()) as MetricCsvPreview;
 }
 
-// Importa el CSV de sueño (dedupe por noche en el backend). Devuelve conteos + preview usado.
-export async function importSleepCsv(baseUrl: string, csvBase64: string): Promise<MetricImportResult> {
-  const res = await apiFetch(baseUrl, "/metrics/import/sleep", { method: "POST", body: JSON.stringify({ csvBase64 }) });
+// Importa el CSV de Garmin (dedupe en el backend). Devuelve conteos + preview usado.
+export async function importGarminCsv(baseUrl: string, kind: GarminCsvKind, csvBase64: string): Promise<MetricImportResult> {
+  const res = await apiFetch(baseUrl, `/metrics/import/${kind}`, {
+    method: "POST",
+    body: JSON.stringify({ csvBase64, tzOffsetMinutes: new Date().getTimezoneOffset() }),
+  });
   if (!res.ok) {
     const msg = await res.json().then((b: { error?: string }) => b.error).catch(() => undefined);
-    throw new Error(msg || "No se pudo importar el sueño");
+    throw new Error(msg || GARMIN_CSV_IMPORT_ERROR[kind]);
   }
   return (await res.json()) as MetricImportResult;
 }
