@@ -5,6 +5,7 @@ import {
   type MetricCsvPreview,
   type BodyMetricEntry,
 } from "@pulsia/shared";
+import { splitCsvLine, localNoonEpoch } from "./csvUtils";
 
 // Header (trim+lower) → metricType. La col 0 es la fecha (el header de Garmin la llama
 // "Sleep Score 7 Days" por error) y se trata aparte. Columnas no mapeadas se ignoran
@@ -32,14 +33,9 @@ export function parseHmToHours(raw: string): number | null {
   return h + min / 60;
 }
 
-// CSV simple del export de Garmin (sin comillas ni comas embebidas): split por coma + trim.
-function splitCsvLine(line: string): string[] {
-  return line.split(",").map((c) => c.trim());
-}
-
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-export function parseSleepCsv(csv: string): MetricCsvPreview {
+export function parseSleepCsv(csv: string, offMin: number): MetricCsvPreview {
   const lines = csv.split(/\r?\n/).filter((l) => l.trim() !== "");
   if (lines.length < 2) throw new Error("El CSV no tiene filas de datos");
 
@@ -58,13 +54,15 @@ export function parseSleepCsv(csv: string): MetricCsvPreview {
       continue;
     }
     const [y, mo, d] = dateRaw.split("-").map((n) => parseInt(n, 10));
-    const measuredAt = Date.UTC(y, mo - 1, d, 12, 0, 0);
 
-    const utc = new Date(measuredAt);
+    // Chequeo de fecha real contra los componentes de calendario parseados (no contra el
+    // epoch ya desplazado por offMin, que podría cruzar de día y esconder una fecha inválida).
+    const utc = new Date(Date.UTC(y, mo - 1, d, 12, 0, 0));
     if (utc.getUTCFullYear() !== y || utc.getUTCMonth() !== mo - 1 || utc.getUTCDate() !== d) {
       skipped.push({ line: i + 1, reason: `Fecha de calendario inválida: "${dateRaw}"` });
       continue;
     }
+    const measuredAt = localNoonEpoch(y, mo, d, offMin);
 
     const entries: BodyMetricEntry[] = [];
     for (let c = 1; c < header.length; c++) {

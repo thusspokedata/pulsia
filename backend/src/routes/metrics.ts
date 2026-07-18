@@ -1,8 +1,10 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { MetricReadingSchema, MetricTypeSchema } from "@pulsia/shared";
+import { MetricReadingSchema, MetricTypeSchema, type MetricCsvPreview } from "@pulsia/shared";
 import { insertReading, getMetrics, getLatestMetrics, deleteMetric, insertReadingsDedup } from "../metrics/repository";
 import { parseSleepCsv } from "../metrics/parseSleepCsv";
+import { parseWeightCsv } from "../metrics/parseWeightCsv";
+import { parseStepsCsv } from "../metrics/parseStepsCsv";
 import type { AppDeps } from "../app";
 
 // Devuelve undefined si el query param está ausente o no es un número válido
@@ -40,36 +42,46 @@ export function metricsRoutes(deps: AppDeps) {
     return c.json(await getLatestMetrics(deps.db, c.get("userId")));
   });
 
-  const ImportSleepSchema = z.object({ csvBase64: z.string().min(1) });
-  // Tope: ~2.2 MB de CSV → base64 ~3 MB. Un export de sueño típico son unos pocos KB.
+  const ImportCsvSchema = z.object({
+    csvBase64: z.string().min(1),
+    tzOffsetMinutes: z.number().int().min(-840).max(840).optional(),
+  });
+  // Tope: ~2.2 MB de CSV → base64 ~3 MB. Un export de sueño/peso/pasos típico son unos pocos KB.
   const MAX_CSV_B64 = 3_000_000;
 
-  r.post("/import/sleep/parse", async (c) => {
-    const parsed = ImportSleepSchema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) return c.json({ error: "Falta el archivo CSV" }, 400);
-    if (parsed.data.csvBase64.length > MAX_CSV_B64) return c.json({ error: "El archivo es demasiado grande" }, 400);
-    const csv = Buffer.from(parsed.data.csvBase64, "base64").toString("utf8");
-    try {
-      return c.json(parseSleepCsv(csv));
-    } catch (e) {
-      return c.json({ error: (e as Error).message || "No se pudo leer el CSV" }, 400);
-    }
-  });
+  // Las 6 rutas de import (sleep/weight/steps × parse/persist) difieren solo en qué parser
+  // usan y si escriben a la DB — este helper evita repetir el body-parsing y el manejo de
+  // errores 6 veces. tzOffsetMinutes ausente (clientes viejos) default a 0 = mediodía UTC,
+  // el comportamiento previo.
+  function registerCsvImport(
+    path: string,
+    parser: (csv: string, offMin: number) => MetricCsvPreview,
+    persist: boolean,
+  ) {
+    r.post(path, async (c) => {
+      const parsed = ImportCsvSchema.safeParse(await c.req.json().catch(() => null));
+      if (!parsed.success) return c.json({ error: "Falta el archivo CSV" }, 400);
+      if (parsed.data.csvBase64.length > MAX_CSV_B64) return c.json({ error: "El archivo es demasiado grande" }, 400);
+      const csv = Buffer.from(parsed.data.csvBase64, "base64").toString("utf8");
+      const offMin = parsed.data.tzOffsetMinutes ?? 0;
+      let preview: MetricCsvPreview;
+      try {
+        preview = parser(csv, offMin);
+      } catch (e) {
+        return c.json({ error: (e as Error).message || "No se pudo leer el CSV" }, 400);
+      }
+      if (!persist) return c.json(preview);
+      const { imported, duplicates } = await insertReadingsDedup(deps.db, c.get("userId"), preview.rows);
+      return c.json({ imported, duplicates, rows: preview.rows, skipped: preview.skipped });
+    });
+  }
 
-  r.post("/import/sleep", async (c) => {
-    const parsed = ImportSleepSchema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) return c.json({ error: "Falta el archivo CSV" }, 400);
-    if (parsed.data.csvBase64.length > MAX_CSV_B64) return c.json({ error: "El archivo es demasiado grande" }, 400);
-    const csv = Buffer.from(parsed.data.csvBase64, "base64").toString("utf8");
-    let preview;
-    try {
-      preview = parseSleepCsv(csv);
-    } catch (e) {
-      return c.json({ error: (e as Error).message || "No se pudo leer el CSV" }, 400);
-    }
-    const { imported, duplicates } = await insertReadingsDedup(deps.db, c.get("userId"), preview.rows);
-    return c.json({ imported, duplicates, rows: preview.rows, skipped: preview.skipped });
-  });
+  registerCsvImport("/import/sleep/parse", parseSleepCsv, false);
+  registerCsvImport("/import/sleep", parseSleepCsv, true);
+  registerCsvImport("/import/weight/parse", parseWeightCsv, false);
+  registerCsvImport("/import/weight", parseWeightCsv, true);
+  registerCsvImport("/import/steps/parse", parseStepsCsv, false);
+  registerCsvImport("/import/steps", parseStepsCsv, true);
 
   r.delete("/:id", async (c) => {
     const ok = await deleteMetric(deps.db, c.get("userId"), c.req.param("id"));

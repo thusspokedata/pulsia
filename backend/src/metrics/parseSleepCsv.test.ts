@@ -18,7 +18,7 @@ test("parseHmToHours convierte 'Xh Ymin' a horas decimales", () => {
 });
 
 test("parseSleepCsv mapea columnas por nombre de header", () => {
-  const { rows } = parseSleepCsv(SAMPLE);
+  const { rows } = parseSleepCsv(SAMPLE, 0);
   expect(rows).toHaveLength(2);
   const first = rows[0];
   expect(first.date).toBe("2026-07-17");
@@ -34,8 +34,13 @@ test("parseSleepCsv mapea columnas por nombre de header", () => {
   expect(byType.sleep_quality).toBeUndefined();
 });
 
-test("parseSleepCsv usa mediodía UTC como measuredAt", () => {
-  const { rows } = parseSleepCsv(SAMPLE);
+test("parseSleepCsv usa mediodía local (offset del cliente) como measuredAt", () => {
+  const { rows } = parseSleepCsv(SAMPLE, -120);
+  expect(rows[0].measuredAt).toBe(Date.UTC(2026, 6, 17, 10, 0, 0));
+});
+
+test("parseSleepCsv con offset 0 usa mediodía UTC (compatible hacia atrás)", () => {
+  const { rows } = parseSleepCsv(SAMPLE, 0);
   expect(rows[0].measuredAt).toBe(Date.UTC(2026, 6, 17, 12, 0, 0));
 });
 
@@ -45,21 +50,21 @@ test("parseSleepCsv salta una fila cuya col 0 no es fecha", () => {
     "no-fecha,85,52,69,95.5,13.8,45,Good,7h 0min,9h 0min,1:00 AM,8:00 AM",
     "2026-07-10,80,50,60,96,14,44,Good,7h 0min,8h 0min,1:00 AM,8:00 AM",
   ].join("\n");
-  const { rows, skipped } = parseSleepCsv(csv);
+  const { rows, skipped } = parseSleepCsv(csv, 0);
   expect(skipped.some((s) => /no es una fecha/i.test(s.reason))).toBe(true);
   expect(rows.some((r) => r.date === "2026-07-10")).toBe(true);
 });
 
 test("parseSleepCsv omite un valor fuera de rango pero conserva el resto de la fila", () => {
   const csv = [HEADER, "2026-07-09,80,50,60,5,14,44,Good,7h 0min,8h 0min,1:00 AM,8:00 AM"].join("\n");
-  const { rows } = parseSleepCsv(csv);
+  const { rows } = parseSleepCsv(csv, 0);
   const byType = Object.fromEntries(rows[0].entries.map((e) => [e.metricType, e.value]));
   expect(byType.pulse_ox).toBeUndefined();
   expect(byType.sleep_score).toBe(80);
 });
 
 test("parseSleepCsv tira error si no hay ninguna noche válida", () => {
-  expect(() => parseSleepCsv(HEADER + "\n")).toThrow();
+  expect(() => parseSleepCsv(HEADER + "\n", 0)).toThrow();
 });
 
 test("parseSleepCsv salta una fecha de calendario inválida (no la normaliza)", () => {
@@ -68,7 +73,7 @@ test("parseSleepCsv salta una fecha de calendario inválida (no la normaliza)", 
     "2026-02-30,80,50,60,96,14,44,Good,7h 0min,8h 0min,1:00 AM,8:00 AM",
     "2026-07-10,80,50,60,96,14,44,Good,7h 0min,8h 0min,1:00 AM,8:00 AM",
   ].join("\n");
-  const { rows, skipped } = parseSleepCsv(csv);
+  const { rows, skipped } = parseSleepCsv(csv, -120);
   // La fecha inválida NO debe aparecer normalizada (p. ej. como 2 de marzo).
   expect(rows.some((r) => r.date === "2026-02-30")).toBe(false);
   expect(rows.every((r) => r.date !== "2026-03-02")).toBe(true);
