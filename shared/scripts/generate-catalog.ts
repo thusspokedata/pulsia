@@ -123,6 +123,49 @@ const BUCKET_PRIORITY: EquipmentVal[] = [
   "bodyweight", "pull_up_bar", "resistance_band", "trx",
 ];
 
+// ── Ejercicios básicos garantizados ──────────────────────────────────────────
+// El criterio de selección (menos palabras, alfabético) no sabe qué ejercicio es importante:
+// deja entrar "Barbell Stepover" y descarta el leg press. Estos entran SIEMPRE, sin competir
+// por el cap. Claves = sdkKey de CATEGORIES; valores = camelName exacto del SDK de Garmin.
+const MUST_INCLUDE: Record<string, string[]> = {
+  benchPressExerciseName: ["inclineDumbbellBenchPress", "closeGripBarbellBenchPress"],
+  rowExerciseName: ["seatedCableRow", "tBarRow", "oneArmBentOverRow", "chestSupportedDumbbellRow"],
+  pullUpExerciseName: ["pullUp", "wideGripLatPulldown", "closeGripLatPulldown"],
+  squatExerciseName: ["legPress", "gobletSquat", "barbellFrontSquat", "dumbbellSplitSquat", "barbellHackSquat"],
+  flyeExerciseName: ["dumbbellFlye", "cableCrossover", "inclineDumbbellFlye"],
+  curlExerciseName: ["dumbbellHammerCurl", "ezBarPreacherCurl"],
+  tricepsExtensionExerciseName: ["lyingEzBarTricepsExtension"],
+  shoulderPressExerciseName: ["dumbbellShoulderPress", "barbellShoulderPress", "arnoldPress"],
+  deadliftExerciseName: ["romanianDeadlift", "sumoDeadlift", "barbellDeadlift"],
+};
+
+// inferEquipment falla en tres casos y acá va el equipamiento real:
+//  1. El SDK nombra el ejercicio sin mencionar el implemento ("T Bar Row", "Arnold Press",
+//     "Leg Press", "Goblet Squat"), así que quedan etiquetados "bodyweight" e
+//     isLegitBodyweight los descartaría, aunque son ejercicios con carga.
+//  2. El ejercicio hereda el equipamiento de su categoría y no le corresponde: los jalones
+//     al pecho viven bajo pullUpExerciseName, pero se hacen en polea, no en barra fija.
+//  3. El nombre engaña a la heurística: "Dumbbell Hammer Curl" activa la regla de "hammer"
+//     (pensada para las máquinas Hammer Strength) y le agrega un "machine" que no existe,
+//     escondiéndole el curl martillo a quien solo tiene mancuernas. Al revés también pasa:
+//     las aperturas y el remo con pecho apoyado necesitan banco, pero su nombre de Garmin
+//     no dice "bench" y se le recetarían a alguien sin banco.
+// Ojo: catalogForEquipment() exige TODO lo listado, así que un implemento de más esconde
+// el ejercicio y uno de menos se lo receta a quien no puede hacerlo.
+const MUST_EQUIPMENT: Record<string, EquipmentVal[]> = {
+  tBarRow: ["barbell"],
+  oneArmBentOverRow: ["dumbbell"],
+  arnoldPress: ["dumbbell"],
+  legPress: ["machine"],
+  gobletSquat: ["dumbbell"],
+  wideGripLatPulldown: ["cable_machine"],
+  closeGripLatPulldown: ["cable_machine"],
+  chestSupportedDumbbellRow: ["dumbbell", "bench"],
+  dumbbellFlye: ["dumbbell", "bench"],
+  inclineDumbbellFlye: ["dumbbell", "bench"],
+  dumbbellHammerCurl: ["dumbbell"],
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** camelCase → "Title Case Words" */
@@ -249,11 +292,28 @@ function generate(cap: number): CatalogExercise[] {
       const garminName = humanize(camelName);
       const lower = garminName.toLowerCase();
       if (isExcluded(lower)) continue;
-      const equipment = inferEquipment(lower, cfg.sdkKey);
+      const isMust = (MUST_INCLUDE[cfg.sdkKey] ?? []).includes(camelName);
+      const equipment = [...(MUST_EQUIPMENT[camelName] ?? inferEquipment(lower, cfg.sdkKey))];
       const bucket = getBucket(equipment);
 
-      // For bodyweight bucket, filter out likely mis-tagged weighted moves
-      if (bucket === "bodyweight" && !isLegitBodyweight(lower, cfg.sdkKey)) continue;
+      // For bodyweight bucket, filter out likely mis-tagged weighted moves.
+      // La lista curada de MUST_INCLUDE no pasa por esta heurística: es exactamente
+      // el criterio mecánico que MUST_INCLUDE viene a corregir.
+      if (bucket === "bodyweight" && !isMust && !isLegitBodyweight(lower, cfg.sdkKey)) continue;
+
+      // Colgarse de una barra no es opcional aunque el nombre mencione otro implemento:
+      // "Band Assisted Pull Up" necesita la banda Y la barra donde anclarla (ver 3ef1fa4,
+      // que arregló esto a mano en el .data y por eso se perdía en cada regeneración).
+      // Va DESPUÉS de getBucket a propósito: la barra es un requisito extra, no el
+      // implemento que define el bucket — si definiera el bucket, estos ejercicios
+      // saldrían del cupo chico de resistance_band y los expulsaría la competencia.
+      if (
+        cfg.sdkKey === "pullUpExerciseName" &&
+        /\b(pull|chin)\s?ups?\b/.test(lower) &&
+        !equipment.includes("pull_up_bar")
+      ) {
+        equipment.push("pull_up_bar");
+      }
 
       candidates.push({ camelName, garminName, lower, equipment, bucket });
     }
@@ -273,20 +333,42 @@ function generate(cap: number): CatalogExercise[] {
       });
     }
 
+    // Los básicos entran primero y no consumen cupo del cap.
+    const mustCamel = new Set(MUST_INCLUDE[cfg.sdkKey] ?? []);
+    const forced = candidates.filter((c) => mustCamel.has(c.camelName));
+
+    // Guarda: si un nombre de MUST_INCLUDE no llegó a candidatos (tipeo, o lo filtró isExcluded),
+    // reventamos. Si no, un tipeo no hace nada y nadie se entera.
+    if (forced.length !== mustCamel.size) {
+      const encontrados = new Set(forced.map((c) => c.camelName));
+      const perdidos = [...mustCamel].filter((n) => !encontrados.has(n));
+      throw new Error(
+        `MUST_INCLUDE[${cfg.sdkKey}]: estos nombres no existen en el SDK o los filtró isExcluded/isLegitBodyweight: ${perdidos.join(", ")}`,
+      );
+    }
+
     // Round-robin selection across buckets in priority order
     const bucketPointers = new Map<EquipmentVal, number>();
     for (const b of BUCKET_PRIORITY) bucketPointers.set(b, 0);
 
-    const selected: Candidate[] = [];
+    const selected: Candidate[] = [...forced];
+    const target = cap + forced.length;
     let added = true;
-    while (selected.length < cap && added) {
+    while (selected.length < target && added) {
       added = false;
       for (const bucket of BUCKET_PRIORITY) {
-        if (selected.length >= cap) break;
+        if (selected.length >= target) break;
         const list = bucketMap.get(bucket);
         if (!list) continue;
-        const ptr = bucketPointers.get(bucket)!;
-        if (ptr >= list.length) continue;
+        // Saltar los que ya entraron como forzados SIN perder el turno del bucket:
+        // si el `continue` fuera afuera, el bucket que contiene un forzado aportaría
+        // uno menos por ronda y expulsaría a un elegido que antes entraba.
+        let ptr = bucketPointers.get(bucket)!;
+        while (ptr < list.length && mustCamel.has(list[ptr].camelName)) ptr++;
+        if (ptr >= list.length) {
+          bucketPointers.set(bucket, ptr);
+          continue;
+        }
         selected.push(list[ptr]);
         bucketPointers.set(bucket, ptr + 1);
         added = true;
@@ -330,7 +412,14 @@ function generate(cap: number): CatalogExercise[] {
 
 // ── Find ideal CAP ───────────────────────────────────────────────────────────
 
-let cap = 8;
+// El cap NO puede bajar de 8: los ids congelados (catalogIds.frozen.ts) son los que
+// eligió el algoritmo con cap = 8, y los programas guardados de los usuarios los
+// referencian. Bajarlo expulsa el 8º de cada categoría y rompe esos programas.
+// Por eso la cota superior contempla los MUST_INCLUDE, que suman por encima del cap.
+const MIN_CAP = 8;
+const MAX_TOTAL = 300;
+
+let cap = MIN_CAP;
 let catalog = generate(cap);
 
 if (catalog.length < 150) {
@@ -338,11 +427,22 @@ if (catalog.length < 150) {
     cap++;
     catalog = generate(cap);
   }
-} else if (catalog.length > 250) {
-  while (catalog.length > 250 && cap > 1) {
+} else if (catalog.length > MAX_TOTAL) {
+  while (catalog.length > MAX_TOTAL && cap > MIN_CAP) {
     cap--;
     catalog = generate(cap);
   }
+}
+
+// Si el catálogo excede el máximo estando ya en MIN_CAP, el bucle de arriba no tiene margen
+// para bajar el cap y escribiría un archivo sobredimensionado en silencio. Preferimos reventar
+// acá que descubrirlo en CI, igual que hace la guarda de MUST_INCLUDE.
+if (catalog.length > MAX_TOTAL) {
+  throw new Error(
+    `El catálogo generado tiene ${catalog.length} ejercicios y el máximo es ${MAX_TOTAL}. ` +
+      `El cap ya está en el piso (${MIN_CAP}), que no se puede bajar sin expulsar ids congelados. ` +
+      `Revisá MUST_INCLUDE o subí MAX_TOTAL a conciencia (y la cota del test en exercises.test.ts).`,
+  );
 }
 
 console.log(`\nFinal CAP = ${cap}, TOTAL = ${catalog.length} exercises`);

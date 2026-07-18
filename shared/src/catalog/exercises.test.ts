@@ -1,6 +1,7 @@
 import { test, expect } from "bun:test";
 import { CatalogExerciseSchema } from "../schemas/catalog";
 import { EXERCISE_CATALOG, getExerciseById, catalogForEquipment, alternativesFor } from "./exercises";
+import { FROZEN_CATALOG_IDS } from "./catalogIds.frozen";
 
 test("todas las entradas son válidas según el schema", () => {
   for (const ex of EXERCISE_CATALOG) {
@@ -30,9 +31,12 @@ test("catalogForEquipment filtra por equipamiento disponible", () => {
   expect(home.length).toBeGreaterThan(0);
 });
 
-test("el catálogo tiene un tamaño razonable (150-250)", () => {
+test("el catálogo tiene un tamaño razonable (150-300)", () => {
+  // La cota alta subió de 250 a 300 al sumar los básicos de MUST_INCLUDE (2026-07-18).
+  // Coincide con MAX_TOTAL en generate-catalog.ts: si cambia una, cambiá la otra.
+  // Sigue existiendo para atajar una explosión accidental del generador.
   expect(EXERCISE_CATALOG.length).toBeGreaterThanOrEqual(150);
-  expect(EXERCISE_CATALOG.length).toBeLessThanOrEqual(250);
+  expect(EXERCISE_CATALOG.length).toBeLessThanOrEqual(300);
 });
 
 test("las dominadas asistidas con banda requieren también barra (pull_up_bar)", () => {
@@ -55,4 +59,28 @@ test("alternativesFor: mismo músculo primario, equipo disponible, excluye el ac
 
 test("alternativesFor: catalogId inexistente → []", () => {
   expect(alternativesFor("no_existe", ["dumbbell"])).toEqual([]);
+});
+
+test("no-regresión: ningún id congelado desapareció del catálogo", () => {
+  const actuales = new Set(EXERCISE_CATALOG.map((e) => e.id));
+  const perdidos = FROZEN_CATALOG_IDS.filter((id) => !actuales.has(id));
+  expect(perdidos).toEqual([]);
+});
+
+test("el catálogo incluye los ejercicios básicos de gimnasio", () => {
+  const nombres = EXERCISE_CATALOG.map((e) => e.garminName.toLowerCase());
+  const basicos = [
+    "leg press",
+    "seated cable row",
+    "goblet squat",
+    "barbell front squat",
+    "dumbbell flye",
+    "cable crossover",
+    "t bar row",
+    "wide grip lat pulldown",
+    "dumbbell shoulder press",
+    "dumbbell hammer curl",
+  ];
+  const faltantes = basicos.filter((b) => !nombres.includes(b));
+  expect(faltantes).toEqual([]);
 });
