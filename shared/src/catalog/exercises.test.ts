@@ -1,6 +1,7 @@
 import { test, expect } from "bun:test";
 import { CatalogExerciseSchema } from "../schemas/catalog";
 import { EXERCISE_CATALOG, getExerciseById, catalogForEquipment, alternativesFor } from "./exercises";
+import { FROZEN_CATALOG_IDS } from "./catalogIds.frozen";
 
 test("todas las entradas son válidas según el schema", () => {
   for (const ex of EXERCISE_CATALOG) {
@@ -55,4 +56,10 @@ test("alternativesFor: mismo músculo primario, equipo disponible, excluye el ac
 
 test("alternativesFor: catalogId inexistente → []", () => {
   expect(alternativesFor("no_existe", ["dumbbell"])).toEqual([]);
+});
+
+test("no-regresión: ningún id congelado desapareció del catálogo", () => {
+  const actuales = new Set(EXERCISE_CATALOG.map((e) => e.id));
+  const perdidos = FROZEN_CATALOG_IDS.filter((id) => !actuales.has(id));
+  expect(perdidos).toEqual([]);
 });
