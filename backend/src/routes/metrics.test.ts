@@ -5,7 +5,7 @@ const baseConfig = { encryptionKey: "a".repeat(64), defaultModel: "claude-sonnet
 const aiClient = { generateProgram: async () => ({ name: "x", weeks: [] }) };
 
 test("POST /metrics inserta y responde 200 con las filas", async () => {
-  const db: any = { insert: () => ({ values: (v: any[]) => ({ returning: async () => v.map((r, i) => ({ id: `id-${i}`, ...r })) }) }) };
+  const db: any = { insert: () => ({ values: (v: any[]) => ({ onConflictDoUpdate: () => ({ returning: async () => v.map((r, i) => ({ id: `id-${i}`, ...r })) }) }) }) };
   const app = createApp({ db, config: baseConfig, aiClient } as any);
   const res = await app.request("/metrics", {
     method: "POST", headers: { "content-type": "application/json" },

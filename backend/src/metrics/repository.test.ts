@@ -1,9 +1,28 @@
 import { expect, test } from "bun:test";
 import { insertReading, getMetrics, deleteMetric, pickLatestPerType, insertReadingsDedup } from "./repository";
 
+// Fake db para el upsert: `returning` devuelve lo que la DB dejó en la tabla (insertado o pisado).
+function fakeUpsertDb(returned?: (rows: any[]) => any[]) {
+  const captured: any[] = [];
+  let conflict: any = null;
+  const db: any = {
+    insert: () => ({
+      values: (v: any[]) => {
+        captured.push(...v);
+        return {
+          onConflictDoUpdate: (arg: any) => {
+            conflict = arg;
+            return { returning: async () => (returned ?? ((r) => r.map((x, i) => ({ id: `id-${i}`, ...x }))))(v) };
+          },
+        };
+      },
+    }),
+  };
+  return { db, captured, getConflict: () => conflict };
+}
+
 test("insertReading arma una fila por entry con measuredAt común y mapea al shape compartido", async () => {
-  let captured: any[] = [];
-  const db: any = { insert: () => ({ values: (v: any[]) => { captured = v; return { returning: async () => v.map((r, i) => ({ id: `id-${i}`, ...r })) }; } }) };
+  const { db, captured } = fakeUpsertDb();
   const rows = await insertReading(db, "u1", {
     measuredAt: 1000,
     entries: [{ metricType: "weight_kg", value: 80 }, { metricType: "waist_cm", value: 85 }],
@@ -11,6 +30,18 @@ test("insertReading arma una fila por entry con measuredAt común y mapea al sha
   expect(captured.length).toBe(2);
   expect(captured.every((r) => r.measuredAt === 1000 && r.userId === "u1")).toBe(true);
   expect(rows[0]).toEqual({ id: "id-0", metricType: "weight_kg", value: 80, measuredAt: 1000 });
+});
+
+test("insertReading pisa el valor al reguardar el mismo (user, tipo, measuredAt)", async () => {
+  // La DB ya tenía steps=11652 para ese mediodía; el upsert devuelve la fila con el valor corregido.
+  const { db, getConflict } = fakeUpsertDb(() => [
+    { id: "existente", userId: "u1", metricType: "steps", value: 19000, measuredAt: 1000 },
+  ]);
+  const rows = await insertReading(db, "u1", { measuredAt: 1000, entries: [{ metricType: "steps", value: 19000 }] });
+  const conflict = getConflict();
+  expect(conflict.target.map((c: any) => c.name)).toEqual(["user_id", "metric_type", "measured_at"]);
+  expect(conflict.set.value).toBeDefined();
+  expect(rows).toEqual([{ id: "existente", metricType: "steps", value: 19000, measuredAt: 1000 }]);
 });
 
 test("getMetrics mapea filas de la DB al shape BodyMetric", async () => {

@@ -1,4 +1,4 @@
-import { and, eq, gte, lte, asc, desc } from "drizzle-orm";
+import { and, eq, gte, lte, asc, desc, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { bodyMetric } from "../db/schema";
 import type { BodyMetric, MetricReading, MetricType } from "@pulsia/shared";
@@ -7,11 +7,23 @@ function toBodyMetric(row: typeof bodyMetric.$inferSelect): BodyMetric {
   return { id: row.id, metricType: row.metricType as MetricType, value: row.value, measuredAt: row.measuredAt };
 }
 
+// Upsert por (userId, metricType, measuredAt): el formulario de actividad diaria guarda con
+// `measured_at` = mediodía local, o sea un instante fijo por día, así que volver a guardar el mismo
+// día es una corrección — pisa el valor en vez de duplicar la fila (y en vez de reventar contra el
+// índice único). Esto además saca una indeterminación: hasta ahora las filas duplicadas compartían
+// `measured_at` y el desempate de `getLatestMetrics` (`orderBy(desc(measuredAt))`) y de
+// `valuesForDay` (`.at(-1)`) era arbitrario, con lo que podía ganar el valor viejo.
+// Nota: las entries de un mismo MetricReading vienen de un Record indexado por tipo, así que nunca
+// hay dos con el mismo metricType y no puede darse el "cannot affect row a second time" de Postgres.
 export async function insertReading(db: Db, userId: string, reading: MetricReading): Promise<BodyMetric[]> {
   const measuredAt = reading.measuredAt ?? Date.now();
   const rows = await db
     .insert(bodyMetric)
     .values(reading.entries.map((e) => ({ userId, metricType: e.metricType, value: e.value, measuredAt })))
+    .onConflictDoUpdate({
+      target: [bodyMetric.userId, bodyMetric.metricType, bodyMetric.measuredAt],
+      set: { value: sql`excluded.value` },
+    })
     .returning();
   return rows.map(toBodyMetric);
 }
