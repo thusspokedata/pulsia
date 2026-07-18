@@ -275,7 +275,7 @@ function generate(cap: number): CatalogExercise[] {
       const lower = garminName.toLowerCase();
       if (isExcluded(lower)) continue;
       const isMust = (MUST_INCLUDE[cfg.sdkKey] ?? []).includes(camelName);
-      const equipment = MUST_EQUIPMENT[camelName] ?? inferEquipment(lower, cfg.sdkKey);
+      const equipment = [...(MUST_EQUIPMENT[camelName] ?? inferEquipment(lower, cfg.sdkKey))];
       const bucket = getBucket(equipment);
 
       // For bodyweight bucket, filter out likely mis-tagged weighted moves.
