@@ -119,8 +119,14 @@ test("POST /metrics/import/sleep/parse con base64 basura → 400 legible", async
 test("POST /metrics/import/sleep inserta y devuelve conteos", async () => {
   const values: any[] = [];
   const db: any = {
-    select: () => ({ from: () => ({ where: async () => [] }) }),
-    insert: () => ({ values: async (v: any[]) => { values.push(...v); } }),
+    insert: () => ({
+      values: (v: any[]) => {
+        values.push(...v);
+        return {
+          onConflictDoNothing: () => ({ returning: async () => v.map((_, i) => ({ id: `id-${i}` })) }),
+        };
+      },
+    }),
   };
   const app = createApp({ db, config: baseConfig, aiClient } as any);
   const res = await app.request("/metrics/import/sleep", {

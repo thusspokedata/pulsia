@@ -38,33 +38,53 @@ test("deleteMetric devuelve true/false según haya borrado", async () => {
   expect(await deleteMetric(dbMiss, "u1", "x")).toBe(false);
 });
 
-test("insertReadingsDedup inserta solo las métricas que no existían", async () => {
-  const inserted: any[] = [];
+// Fake db para el insert conflict-aware: `returning` devuelve solo las primeras `insertedCount`
+// filas, simulando las que el índice único dejó pasar.
+function fakeDedupDb(insertedCount: (rows: any[]) => number) {
+  const captured: any[] = [];
   const db: any = {
-    select: () => ({ from: () => ({ where: async () => [
-      { metricType: "sleep_score", measuredAt: 100 },
-    ] }) }),
-    insert: () => ({ values: async (v: any[]) => { inserted.push(...v); } }),
+    insert: () => ({
+      values: (v: any[]) => {
+        captured.push(...v);
+        return {
+          onConflictDoNothing: () => ({
+            returning: async () => v.slice(0, insertedCount(v)).map((_, i) => ({ id: `id-${i}` })),
+          }),
+        };
+      },
+    }),
   };
+  return { db, captured };
+}
+
+test("insertReadingsDedup cuenta como duplicadas las filas que el índice único rechazó", async () => {
+  const { db, captured } = fakeDedupDb(() => 2); // de 3 enviadas, la DB acepta 2
   const rows = [
     { measuredAt: 100, entries: [{ metricType: "sleep_score", value: 85 }, { metricType: "hrv", value: 45 }] },
     { measuredAt: 200, entries: [{ metricType: "sleep_score", value: 60 }] },
   ];
   const res = await insertReadingsDedup(db, "u1", rows);
+  expect(captured).toHaveLength(3);
+  expect(captured.every((r) => r.userId === "u1")).toBe(true);
   expect(res.imported).toBe(2);
   expect(res.duplicates).toBe(1);
-  expect(inserted).toHaveLength(2);
-  expect(inserted.every((r) => r.userId === "u1")).toBe(true);
 });
 
-test("insertReadingsDedup no inserta si no hay filas nuevas", async () => {
-  let insertCalled = false;
-  const db: any = {
-    select: () => ({ from: () => ({ where: async () => [{ metricType: "sleep_score", measuredAt: 100 }] }) }),
-    insert: () => ({ values: async () => { insertCalled = true; } }),
-  };
-  const res = await insertReadingsDedup(db, "u1", [{ measuredAt: 100, entries: [{ metricType: "sleep_score", value: 85 }] }]);
-  expect(res.imported).toBe(0);
-  expect(res.duplicates).toBe(1);
-  expect(insertCalled).toBe(false);
+test("insertReadingsDedup colapsa los duplicados dentro del mismo batch antes de tocar la DB", async () => {
+  const { db, captured } = fakeDedupDb((v) => v.length); // la DB acepta todo lo que le llega
+  const rows = [
+    { measuredAt: 100, entries: [{ metricType: "sleep_score", value: 85 }] },
+    { measuredAt: 100, entries: [{ metricType: "sleep_score", value: 85 }] },
+    { measuredAt: 200, entries: [{ metricType: "sleep_score", value: 60 }] },
+  ];
+  const res = await insertReadingsDedup(db, "u1", rows);
+  expect(captured).toHaveLength(2);
+  expect(res.imported).toBe(2);
+  expect(res.duplicates).toBe(0);
+});
+
+test("insertReadingsDedup no toca la DB si no hay filas", async () => {
+  const db: any = { insert: () => { throw new Error("no debería insertar"); } };
+  const res = await insertReadingsDedup(db, "u1", [{ measuredAt: 100, entries: [] }]);
+  expect(res).toEqual({ imported: 0, duplicates: 0 });
 });

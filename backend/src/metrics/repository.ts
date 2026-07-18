@@ -61,8 +61,10 @@ export async function deleteMetric(db: Db, userId: string, id: string): Promise<
   return rows.length > 0;
 }
 
-// Inserta las lecturas de un import deduplicando por (metricType, measuredAt) contra lo que ya
-// existe en el rango — así reimportar ventanas de 7 días superpuestas es idempotente.
+// Inserta las lecturas de un import: el índice único (userId, metricType, measuredAt) garantiza
+// la idempotencia, así reimportar ventanas de 7 días superpuestas no duplica nada. ON CONFLICT DO
+// NOTHING además cierra la carrera entre reintentos concurrentes (el cliente móvil corta a los 15s)
+// y `returning` cuenta lo que realmente se insertó.
 export async function insertReadingsDedup(
   db: Db,
   userId: string,
@@ -80,21 +82,10 @@ export async function insertReadingsDedup(
   }
   if (all.length === 0) return { imported: 0, duplicates: 0 };
 
-  const times = all.map((x) => x.measuredAt);
-  const min = Math.min(...times);
-  const max = Math.max(...times);
-  const existing = await db
-    .select({ metricType: bodyMetric.metricType, measuredAt: bodyMetric.measuredAt })
-    .from(bodyMetric)
-    .where(and(eq(bodyMetric.userId, userId), gte(bodyMetric.measuredAt, min), lte(bodyMetric.measuredAt, max)));
-  const seen = new Set(existing.map((r) => `${r.metricType}@${r.measuredAt}`));
-
-  const toInsert = all.filter((x) => !seen.has(`${x.metricType}@${x.measuredAt}`));
-  const duplicates = all.length - toInsert.length;
-  if (toInsert.length > 0) {
-    await db.insert(bodyMetric).values(
-      toInsert.map((x) => ({ userId, metricType: x.metricType, value: x.value, measuredAt: x.measuredAt })),
-    );
-  }
-  return { imported: toInsert.length, duplicates };
+  const inserted = await db
+    .insert(bodyMetric)
+    .values(all.map((x) => ({ userId, metricType: x.metricType, value: x.value, measuredAt: x.measuredAt })))
+    .onConflictDoNothing({ target: [bodyMetric.userId, bodyMetric.metricType, bodyMetric.measuredAt] })
+    .returning({ id: bodyMetric.id });
+  return { imported: inserted.length, duplicates: all.length - inserted.length };
 }

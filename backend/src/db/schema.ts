@@ -50,7 +50,8 @@ export const bodyMetric = pgTable("body_metric", {
   measuredAt: bigint("measured_at", { mode: "number" }).notNull(), // epoch ms
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
-  byUserTypeTime: index("body_metric_user_type_time_idx").on(t.userId, t.metricType, t.measuredAt),
+  // Único: garantiza la idempotencia de los imports (dedup por usuario + tipo + instante).
+  byUserTypeTime: uniqueIndex("body_metric_user_type_time_unique_idx").on(t.userId, t.metricType, t.measuredAt),
 }));
 
 export const programs = pgTable("programs", {
