@@ -283,6 +283,20 @@ function generate(cap: number): CatalogExercise[] {
       // el criterio mecánico que MUST_INCLUDE viene a corregir.
       if (bucket === "bodyweight" && !isMust && !isLegitBodyweight(lower, cfg.sdkKey)) continue;
 
+      // Colgarse de una barra no es opcional aunque el nombre mencione otro implemento:
+      // "Band Assisted Pull Up" necesita la banda Y la barra donde anclarla (ver 3ef1fa4,
+      // que arregló esto a mano en el .data y por eso se perdía en cada regeneración).
+      // Va DESPUÉS de getBucket a propósito: la barra es un requisito extra, no el
+      // implemento que define el bucket — si definiera el bucket, estos ejercicios
+      // saldrían del cupo chico de resistance_band y los expulsaría la competencia.
+      if (
+        cfg.sdkKey === "pullUpExerciseName" &&
+        /\b(pull|chin)\s?ups?\b/.test(lower) &&
+        !equipment.includes("pull_up_bar")
+      ) {
+        equipment.push("pull_up_bar");
+      }
+
       candidates.push({ camelName, garminName, lower, equipment, bucket });
     }
 
@@ -328,13 +342,18 @@ function generate(cap: number): CatalogExercise[] {
         if (selected.length >= target) break;
         const list = bucketMap.get(bucket);
         if (!list) continue;
-        const ptr = bucketPointers.get(bucket)!;
-        if (ptr >= list.length) continue;
-        const cand = list[ptr];
+        // Saltar los que ya entraron como forzados SIN perder el turno del bucket:
+        // si el `continue` fuera afuera, el bucket que contiene un forzado aportaría
+        // uno menos por ronda y expulsaría a un elegido que antes entraba.
+        let ptr = bucketPointers.get(bucket)!;
+        while (ptr < list.length && mustCamel.has(list[ptr].camelName)) ptr++;
+        if (ptr >= list.length) {
+          bucketPointers.set(bucket, ptr);
+          continue;
+        }
+        selected.push(list[ptr]);
         bucketPointers.set(bucket, ptr + 1);
         added = true;
-        if (mustCamel.has(cand.camelName)) continue; // ya entró como forzado
-        selected.push(cand);
       }
     }
 
@@ -375,7 +394,14 @@ function generate(cap: number): CatalogExercise[] {
 
 // ── Find ideal CAP ───────────────────────────────────────────────────────────
 
-let cap = 8;
+// El cap NO puede bajar de 8: los ids congelados (catalogIds.frozen.ts) son los que
+// eligió el algoritmo con cap = 8, y los programas guardados de los usuarios los
+// referencian. Bajarlo expulsa el 8º de cada categoría y rompe esos programas.
+// Por eso la cota superior contempla los MUST_INCLUDE, que suman por encima del cap.
+const MIN_CAP = 8;
+const MAX_TOTAL = 300;
+
+let cap = MIN_CAP;
 let catalog = generate(cap);
 
 if (catalog.length < 150) {
@@ -383,8 +409,8 @@ if (catalog.length < 150) {
     cap++;
     catalog = generate(cap);
   }
-} else if (catalog.length > 250) {
-  while (catalog.length > 250 && cap > 1) {
+} else if (catalog.length > MAX_TOTAL) {
+  while (catalog.length > MAX_TOTAL && cap > MIN_CAP) {
     cap--;
     catalog = generate(cap);
   }
