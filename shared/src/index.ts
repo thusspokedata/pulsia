@@ -24,7 +24,7 @@ export * from "./schemas/session";
 export * from "./schemas/cardio";
 export * from "./session/completion";
 export * from "./schemas/metrics";
-export * from "./schemas/sleepImport";
+export * from "./schemas/metricImport";
 export * from "./schemas/ecg";
 export * from "./progress/trends";
 export * from "./schemas/nutrition";

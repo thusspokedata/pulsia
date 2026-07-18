@@ -1,8 +1,8 @@
 import {
   METRIC_RANGES,
-  SleepCsvPreviewSchema,
+  MetricCsvPreviewSchema,
   type MetricType,
-  type SleepCsvPreview,
+  type MetricCsvPreview,
   type BodyMetricEntry,
 } from "@pulsia/shared";
 
@@ -39,7 +39,7 @@ function splitCsvLine(line: string): string[] {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-export function parseSleepCsv(csv: string): SleepCsvPreview {
+export function parseSleepCsv(csv: string): MetricCsvPreview {
   const lines = csv.split(/\r?\n/).filter((l) => l.trim() !== "");
   if (lines.length < 2) throw new Error("El CSV no tiene filas de datos");
 
@@ -47,8 +47,8 @@ export function parseSleepCsv(csv: string): SleepCsvPreview {
   // La col 0 es la fecha; el resto se mapea por nombre de header.
   const colMetric: (MetricType | null)[] = header.map((h, i) => (i === 0 ? null : HEADER_TO_METRIC[h] ?? null));
 
-  const rows: SleepCsvPreview["rows"] = [];
-  const skipped: SleepCsvPreview["skipped"] = [];
+  const rows: MetricCsvPreview["rows"] = [];
+  const skipped: MetricCsvPreview["skipped"] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const cells = splitCsvLine(lines[i]);
@@ -88,5 +88,5 @@ export function parseSleepCsv(csv: string): SleepCsvPreview {
 
   if (rows.length === 0) throw new Error("No se pudo leer ninguna noche del CSV");
   // Valida la forma de salida antes de devolver (mismo patrón que parseFit → Schema.parse).
-  return SleepCsvPreviewSchema.parse({ rows, skipped });
+  return MetricCsvPreviewSchema.parse({ rows, skipped });
 }

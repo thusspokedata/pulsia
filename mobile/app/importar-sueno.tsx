@@ -3,7 +3,7 @@ import { ScrollView, View, Text, Pressable, ActivityIndicator } from "react-nati
 import { useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
-import type { SleepCsvPreview, SleepImportResult } from "@pulsia/shared";
+import type { MetricCsvPreview, MetricImportResult } from "@pulsia/shared";
 import { parseSleepCsv, importSleepCsv } from "../src/api/metrics";
 import { getBackendUrl } from "../src/storage/config";
 import { colors, radius, spacing } from "../src/theme/tokens";
@@ -14,8 +14,8 @@ export default function ImportarSueno() {
   const baseUrl = useRef<string | null>(null);
   const screenPad = useScreenPadding(spacing.xl);
   const [csvB64, setCsvB64] = useState<string | null>(null);
-  const [preview, setPreview] = useState<SleepCsvPreview | null>(null);
-  const [result, setResult] = useState<SleepImportResult | null>(null);
+  const [preview, setPreview] = useState<MetricCsvPreview | null>(null);
+  const [result, setResult] = useState<MetricImportResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
