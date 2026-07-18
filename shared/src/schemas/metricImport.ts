@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { BodyMetricEntrySchema } from "./metrics";
 
-// Una fila del CSV: fecha ISO + timestamp derivado (mediodía UTC) + sus métricas válidas.
+// Una fila del CSV: fecha ISO + timestamp + sus métricas válidas. El timestamp se deriva del
+// offset que manda el cliente: mediodía LOCAL para los diarios (sueño, pasos) e instante real
+// para peso (hay varias pesadas por día). `label` es para display (peso muestra la hora).
 export const MetricCsvRowSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   measuredAt: z.number().int(),

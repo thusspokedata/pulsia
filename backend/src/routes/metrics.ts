@@ -44,7 +44,8 @@ export function metricsRoutes(deps: AppDeps) {
 
   const ImportCsvSchema = z.object({
     csvBase64: z.string().min(1),
-    tzOffsetMinutes: z.number().int().min(-840).max(840).optional(),
+    // Rango real de Date#getTimezoneOffset(): -840 (UTC+14, islas Line) a +720 (UTC-12).
+    tzOffsetMinutes: z.number().int().min(-840).max(720).optional(),
   });
   // Tope: ~2.2 MB de CSV → base64 ~3 MB. Un export de sueño/peso/pasos típico son unos pocos KB.
   const MAX_CSV_B64 = 3_000_000;
