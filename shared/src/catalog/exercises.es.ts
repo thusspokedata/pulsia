@@ -12,6 +12,8 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   barbell_bench_press: "Press de banca con barra",
   dumbbell_floor_press: "Press de piso con mancuernas",
   incline_smith_machine_bench_press: "Press de banca inclinado en multipower (Smith)",
+  incline_dumbbell_bench_press: "Press inclinado con mancuernas",
+  close_grip_barbell_bench_press: "Press de banca agarre cerrado",
 
   // CALF_RAISE
   standing_barbell_calf_raise: "Elevación de gemelos de pie con barra",
@@ -72,6 +74,8 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   barbell_wrist_curl: "Curl de muñeca con barra",
   dumbbell_hammer_curl: "Curl martillo con mancuernas",
   cable_hammer_curl: "Curl martillo en polea",
+  ez_bar_preacher_curl: "Curl predicador con barra Z",
+  dumbbell_wrist_curl: "Curl de muñeca con mancuernas",
 
   // DEADLIFT
   barbell_deadlift: "Peso muerto con barra",
@@ -82,6 +86,9 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   kettlebell_sumo_deadlift: "Peso muerto sumo con kettlebell",
   romanian_deadlift: "Peso muerto rumano",
   rotational_dumbbell_straight_leg_deadlift: "Peso muerto rotacional con piernas rígidas con mancuernas",
+  sumo_deadlift: "Peso muerto sumo",
+  single_arm_deadlift: "Peso muerto a una mano",
+  straight_leg_deadlift: "Peso muerto con piernas rígidas",
 
   // FLYE
   dumbbell_flye: "Aperturas con mancuernas",
@@ -202,6 +209,9 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   band_assisted_chin_up: "Dominada supina asistida con banda",
   lat_pulldown: "Jalón al pecho",
   band_assisted_pull_up: "Dominada asistida con banda",
+  pull_up: "Dominadas",
+  wide_grip_lat_pulldown: "Jalón al pecho agarre ancho",
+  close_grip_lat_pulldown: "Jalón al pecho agarre cerrado",
 
   // PUSH_UP
   pilates_pushup: "Flexión de pilates",
@@ -222,6 +232,10 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   trx_inverted_row: "Remo invertido en TRX",
   reverse_grip_barbell_row: "Remo con barra agarre supino",
   alternating_dumbbell_row: "Remo alterno con mancuernas",
+  seated_cable_row: "Remo bajo sentado en polea",
+  t_bar_row: "Remo en barra T",
+  one_arm_bent_over_row: "Remo a una mano inclinado",
+  chest_supported_dumbbell_row: "Remo con mancuernas con pecho apoyado",
 
   // SHOULDER_PRESS
   barbell_push_press: "Push press con barra",
@@ -232,6 +246,9 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   dumbbell_push_press: "Push press con mancuernas",
   split_stance_hammer_curl_to_press: "Curl martillo a press en posición split",
   single_arm_step_up_and_press: "Subida al cajón con press a una mano",
+  dumbbell_shoulder_press: "Press de hombros con mancuernas",
+  arnold_press: "Press Arnold",
+  overhead_barbell_press: "Press militar con barra",
 
   // SHOULDER_STABILITY
   seated_dumbbell_external_rotation: "Rotación externa sentado con mancuerna",
@@ -272,6 +289,11 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   barbell_back_squat: "Sentadilla trasera con barra",
   dumbbell_stepover: "Paso por encima con mancuernas (stepover)",
   kettlebell_swing_overhead: "Swing sobre la cabeza con kettlebell",
+  leg_press: "Prensa de piernas",
+  goblet_squat: "Sentadilla goblet",
+  barbell_front_squat: "Sentadilla frontal con barra",
+  dumbbell_split_squat: "Zancada estática con mancuernas",
+  barbell_hack_squat: "Sentadilla hack con barra",
 
   // TOTAL_BODY
   barbell_burpee: "Burpee con barra",
@@ -292,4 +314,5 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   dumbbell_lying_triceps_extension: "Extensión de tríceps tumbado con mancuernas",
   cable_lying_triceps_extension: "Extensión de tríceps tumbado en polea",
   incline_dip: "Fondos inclinados",
+  seated_barbell_overhead_triceps_extension: "Extensión de tríceps sobre la cabeza sentado con barra",
 };
