@@ -27,6 +27,33 @@ const looksLikeFit = (buf: Buffer): boolean =>
 export function cardioRoutes(deps: AppDeps) {
   const r = new Hono<{ Variables: { userId: string } }>();
 
+  // Guarda el .FIT crudo si vino y corresponde. Es un BONUS: nunca debe tumbar el alta, así que
+  // todo error se loguea y se sigue. Idempotente (onConflictDoNothing), por eso se puede llamar
+  // también en el camino del retry para auto-repararse si el primer intento falló.
+  // `raw` (no el parseado) porque fitBase64 no es parte de CardioActivitySchema.
+  async function maybeSaveFitFile(a: { id: string; source: string }, raw: unknown): Promise<void> {
+    if (a.source !== "fit") return; // la carga manual nunca guarda archivo
+    const fitBase64 = (raw as { fitBase64?: unknown })?.fitBase64;
+    if (typeof fitBase64 !== "string" || fitBase64.length === 0) return;
+    if (fitBase64.length > MAX_FIT_B64) {
+      console.warn(`POST /cardio: .FIT de ${a.id} demasiado grande (${fitBase64.length} chars), no se guarda`);
+      return;
+    }
+    try {
+      const bytes = Buffer.from(fitBase64, "base64");
+      // Mismo chequeo que /parse: guardar basura en la tabla del archivo crudo arruinaría el
+      // reprocesamiento futuro.
+      if (!looksLikeFit(bytes)) {
+        console.warn(`POST /cardio: el fitBase64 de ${a.id} no es un .FIT, no se guarda`);
+        return;
+      }
+      const sha256 = createHash("sha256").update(bytes).digest("hex");
+      await insertCardioFitFile(deps.db, a.id, bytes, bytes.length, sha256);
+    } catch (e) {
+      console.error(`no se pudo guardar el .FIT crudo de ${a.id}:`, (e as Error).message);
+    }
+  }
+
   r.post("/", async (c) => {
     let raw: unknown;
     try { raw = await c.req.json(); } catch { return c.json({ error: "JSON inválido" }, 400); }
@@ -46,7 +73,13 @@ export function cardioRoutes(deps: AppDeps) {
     const owner = await getCardioOwnerId(deps.db, a.id);
     if (owner && owner !== userId) return c.json({ error: "esa actividad pertenece a otro usuario" }, 409);
     // owner === userId: re-POST del mismo id por el mismo usuario (retry) → idempotente, sin reinsertar.
-    if (owner === userId) return c.json({ id: a.id }, 200);
+    // Pero SÍ se reintenta guardar el archivo crudo: si falló en el primer POST (se loguea y sigue),
+    // sin esto no habría forma de recuperarlo nunca, y la Fase 3 (reprocesar el histórico) depende
+    // de que el binario esté. `insertCardioFitFile` es onConflictDoNothing, así que repetir es seguro.
+    if (owner === userId) {
+      await maybeSaveFitFile(a, raw);
+      return c.json({ id: a.id }, 200);
+    }
 
     // El dedupe aplica solo al import: reimportar el mismo .FIT (con id NUEVO) no debe crear dos
     // caminatas. La carga manual no lo chequea (dos actividades cortas seguidas son asunto del usuario).
@@ -56,32 +89,7 @@ export function cardioRoutes(deps: AppDeps) {
     }
     await insertCardio(deps.db, userId, { ...a, kcalSource });
 
-    // El .FIT crudo es opcional y solo aplica a imports (nunca a carga manual). Es un bonus: si
-    // falla guardarlo, la actividad —ya insertada arriba— igual responde 200. `raw` (no `parsed.data`)
-    // porque fitBase64 no es parte de CardioActivitySchema.
-    const fitBase64 = a.source === "fit" ? (raw as { fitBase64?: unknown })?.fitBase64 : undefined;
-    if (typeof fitBase64 === "string" && fitBase64.length > 0) {
-      if (fitBase64.length > MAX_FIT_B64) {
-        console.warn(`POST /cardio: .FIT de ${a.id} demasiado grande (${fitBase64.length} chars), no se guarda`);
-      } else {
-        try {
-          const bytes = Buffer.from(fitBase64, "base64");
-          // Mismo chequeo que /parse: no persistir bytes que no son un .FIT (guardar basura en
-          // la tabla del archivo crudo arruinaría el reprocesamiento futuro). No es un error del
-          // alta: la actividad ya está insertada y responde 200 igual.
-          if (!looksLikeFit(bytes)) {
-            console.warn(`POST /cardio: el fitBase64 de ${a.id} no es un .FIT, no se guarda`);
-          } else {
-            const sha256 = createHash("sha256").update(bytes).digest("hex");
-            await insertCardioFitFile(deps.db, a.id, bytes, bytes.length, sha256);
-          }
-        } catch (e) {
-          // La actividad es lo que importa; el archivo crudo es un bonus. Nunca tumbar el 200 por esto.
-          console.error(`no se pudo guardar el .FIT crudo de ${a.id}:`, (e as Error).message);
-        }
-      }
-    }
-
+    await maybeSaveFitFile(a, raw);
     return c.json({ id: a.id }, 200);
   });
 

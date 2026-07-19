@@ -276,3 +276,20 @@ test("POST /cardio/parse no queda capturada por /:id (orden de rutas)", async ()
   });
   expect(res.status).toBe(400);
 });
+
+test("re-POST del mismo id REINTENTA guardar el .FIT si la primera vez falló (auto-reparación)", async () => {
+  // El retry idempotente devuelve 200 sin reinsertar la actividad, pero el archivo crudo SÍ se
+  // reintenta: si no, un fallo del primer insert dejaría el binario perdido para siempre y la
+  // Fase 3 (reprocesar el histórico) no tendría de dónde leer.
+  const db = fakeDb({ ownerId: SINGLE_USER_ID });
+  const app = createApp(deps(db) as any);
+  const fitBytes = fakeFitBytes();
+  const res = await app.request("/cardio", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...activity, fitBase64: fitBytes.toString("base64") }),
+  });
+  expect(res.status).toBe(200);
+  expect(db._inserts).toHaveLength(0);      // la actividad NO se reinserta
+  expect(db._fileInserts).toHaveLength(1);  // pero el archivo sí se reintenta
+  expect(db._fileInserts[0].activityId).toBe(AID);
+});

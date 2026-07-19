@@ -11,32 +11,35 @@ de FC, y **el archivo se tira** ("solo transporte"). El usuario quiere que **no 
 
 Fase 1 = **captura**, sin UI nueva. Los datos quedan guardados esperando la Fase 2 (visualización).
 
-## Hallazgos del archivo real (`23639496950_ACTIVITY.fit`, 29 KB, elíptica 30:44)
+## Hallazgos de un `.FIT` de elíptica (~29 KB, ~30 min, 440 records)
 
-Decodificado con `@garmin/fitsdk`. Verificado contra las capturas que pasó el usuario: **coinciden
-exactamente**, o sea que las imágenes son salida fiel del archivo y sirven de spec para la Fase 2.
+Decodificado con `@garmin/fitsdk` a partir de un archivo real, **inspeccionado solo localmente**.
+Los valores concretos de esa sesión son datos de salud personales y **no se transcriben acá**: lo
+que importa para el diseño es de qué mensaje sale cada cosa. Se verificó que los números del
+archivo coinciden con lo que muestra Garmin Connect, así que las capturas del usuario sirven de
+spec visual para la Fase 2.
 
-| Dato | Capturas | Archivo |
-|---|---|---|
-| Z1–Z4 | 2:44 / 14:39 / 12:59 / 0:21 | `timeInHrZone` = 164.283 / 879.164 / 779.999 / 21 s |
-| FC máx · umbral | 196 · 178 | `zonesTargetMesgs` |
-| Atleta | 73.2 kg · 1.77 m · reposo 54 | `userProfileMesgs` |
-| Carga · Efecto aeróbico | 103.9 · 3.7 | `trainingLoadPeak` 103.866 · `totalTrainingEffect` 3.7 |
+| Dato de la pantalla | De dónde sale |
+|---|---|
+| Tiempo en zonas Z1–Z5 | `timeInZoneMesgs.timeInHrZone` (segundos por zona) |
+| Fronteras de zona · FC máx · umbral | `timeInZoneMesgs.hrZoneHighBoundary` · `zonesTargetMesgs` |
+| Atleta (peso, altura, FC reposo) | `userProfileMesgs` — **incluye el NOMBRE: ver §Testing** |
+| Carga de entrenamiento · Efecto aeróbico | `trainingLoadPeak` · `totalTrainingEffect` |
 
 **Mensajes presentes:** `fileIdMesgs`, `fileCreatorMesgs`, `activityMesgs`, `sessionMesgs`,
 `timeInZoneMesgs`(2), `lapMesgs`, `timestampCorrelationMesgs`, `eventMesgs`(2),
 `deviceInfoMesgs`(14), `deviceSettingsMesgs`, `userProfileMesgs`, `sportMesgs`,
 `trainingSettingsMesgs`, `zonesTargetMesgs`, `recordMesgs`(440).
 
-**Escalares de sesión que hoy se tiran:** `totalCycles` (1680), `trainingLoadPeak` (103.87),
-`totalTrainingEffect` (3.7), `totalAnaerobicTrainingEffect` (0), `avgCadence` (44), `maxCadence` (74),
-`avgFractionalCadence` (0.68), `maxFractionalCadence` (0), `enhancedAvgRespirationRate` (34.58),
-`enhancedMaxRespirationRate` (37.94), `enhancedMinRespirationRate` (27.84), `metabolicCalories` (42),
-`sportProfileName` ("Elíptica"), `numLaps`.
+**Escalares de sesión que hoy se tiran:** `totalCycles`, `trainingLoadPeak`, `totalTrainingEffect`,
+`totalAnaerobicTrainingEffect`, `avgCadence`, `maxCadence`, `avgFractionalCadence`,
+`maxFractionalCadence`, `enhancedAvgRespirationRate`, `enhancedMaxRespirationRate`,
+`enhancedMinRespirationRate`, `metabolicCalories`, `sportProfileName`, `numLaps`.
 
-**Campos desconocidos:** con `read({ includeUnknownData: true })` el SDK **sí** los expone:
-`{"135":0,"136":130,"143":60,"144":126}`. `144` == `heartRate` exacto; `143` baja monótonamente
-60→51 durante la sesión (consistente con Body Battery); `135`/`136` sin identificar. **Se guardan
+**Campos desconocidos:** con `read({ includeUnknownData: true })` el SDK **sí** expone los campos
+que no sabe nombrar (llegan con clave numérica, p. ej. `135`, `136`, `143`, `144`). En el archivo
+inspeccionado, uno de ellos replica exacto a `heartRate` y otro decrece de forma monótona a lo largo
+de la sesión (comportamiento consistente con Body Battery); el resto sin identificar. **Se guardan
 crudos, sin interpretar** — ponerles nombre es trabajo de otra fase.
 
 **Canales dispersos:** `enhancedRespirationRate` aparece en 162/440 records y `cycleLength16` en
@@ -102,8 +105,9 @@ existente (`MAX_FIT_B64`, 7 MB) ya cubre.
   también `timeInZoneMesgs`, `userProfileMesgs`, `zonesTargetMesgs`, `deviceInfoMesgs`, `lapMesgs`,
   `eventMesgs` y campos desconocidos, con datos inventados.
 - El archivo real del usuario se usa **solo localmente** para contrastar que el parser saca los
-  valores correctos (ya verificado: 1680 ciclos, carga 103.87, efecto 3.7, cadencia 44/74,
-  respiración 34.58/37.94/27.84, zonas 164.283/879.164/779.999/21 s, offset +120 min).
+  valores correctos (ciclos, carga, efecto, cadencia, respiración, tiempos por zona y offset).
+  **Esos valores NO se transcriben a ningún archivo del repo** — ni acá, ni en comentarios, ni en
+  tests: son datos de salud y el historial de git es permanente.
 - `parseFit` (contra el fixture sintético): extrae los escalares nuevos; zonas con sus tiempos y
   fronteras; snapshot del atleta; offset derivado de `localTimestamp`; el stream columnar con
   `null` en los huecos de los canales dispersos; y los campos desconocidos presentes y **sin
