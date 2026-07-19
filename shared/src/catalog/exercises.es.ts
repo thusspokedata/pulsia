@@ -4,6 +4,9 @@
 // (el test de cobertura obliga a que estén todas).
 export const EXERCISE_NAMES_ES: Record<string, string> = {
   // BENCH_PRESS
+  decline_dumbbell_bench_press: "Press declinado con mancuernas",
+  incline_barbell_bench_press: "Press inclinado con barra",
+  wide_grip_barbell_bench_press: "Press de banca agarre ancho",
   partial_lockout: "Bloqueo parcial (lockout)",
   dumbbell_bench_press: "Press de banca con mancuernas",
   single_arm_cable_chest_press: "Press de pecho en polea a una mano",
@@ -46,6 +49,7 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   kneeling_stability_chop: "Chop de estabilidad de rodillas",
 
   // CORE
+  weighted_side_bend: "Inclinación lateral con peso",
   barbell_rollout: "Rollout con barra",
   cable_core_press: "Press de core en polea (Pallof)",
   modified_front_lever: "Front lever modificado",
@@ -56,6 +60,7 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   cable_side_bend: "Inclinación lateral en polea",
 
   // CRUNCH
+  flutter_kicks: "Tijeras (flutter kicks)",
   cable_crunch: "Crunch en polea",
   leg_levers: "Elevaciones de piernas (leg levers)",
   crunch: "Crunch (abdominal)",
@@ -66,6 +71,9 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   kneeling_oblique_cable_crunch: "Crunch oblicuo en polea de rodillas",
 
   // CURL
+  close_grip_ez_bar_biceps_curl: "Curl con barra Z agarre cerrado",
+  cross_body_dumbbell_hammer_curl: "Curl martillo cruzado con mancuerna",
+  incline_dumbbell_biceps_curl: "Curl inclinado con mancuernas",
   barbell_biceps_curl: "Curl de bíceps con barra",
   dumbbell_biceps_curl: "Curl de bíceps con mancuernas",
   cable_biceps_curl: "Curl de bíceps en polea",
@@ -135,6 +143,8 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   spine_extension: "Extensión de columna",
 
   // LATERAL_RAISE
+  bent_over_lateral_raise: "Elevación lateral inclinado (deltoides posterior)",
+  seated_rear_lateral_raise: "Elevación posterior sentado",
   dumbbell_vraise: "Elevación en V con mancuernas",
   cable_diagonal_raise: "Elevación diagonal en polea",
   front_raise: "Elevación frontal",
@@ -161,6 +171,7 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   hanging_single_leg_raise: "Elevación de una pierna colgado",
 
   // LUNGE
+  walking_lunge: "Zancadas caminando",
   barbell_lunge: "Estocada con barra",
   dumbbell_lunge: "Estocada con mancuernas",
   lunge: "Estocada",
@@ -238,6 +249,7 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   chest_supported_dumbbell_row: "Remo con mancuernas con pecho apoyado",
 
   // SHOULDER_PRESS
+  single_arm_dumbbell_shoulder_press: "Press de hombro a una mano con mancuerna",
   barbell_push_press: "Push press con barra",
   dumbbell_front_raise: "Elevación frontal con mancuernas",
   smith_machine_overhead_press: "Press militar en multipower (Smith)",
@@ -281,6 +293,10 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   x_abs: "X-abs",
 
   // SQUAT
+  barbell_step_up: "Subida al cajón con barra",
+  dumbbell_step_up: "Subida al cajón con mancuernas",
+  wide_stance_barbell_squat: "Sentadilla con barra de pies anchos",
+  overhead_barbell_squat: "Sentadilla con barra sobre la cabeza",
   barbell_stepover: "Paso por encima con barra (stepover)",
   dumbbell_squat: "Sentadilla con mancuernas",
   kettlebell_squat: "Sentadilla con kettlebell",
@@ -306,6 +322,10 @@ export const EXERCISE_NAMES_ES: Record<string, string> = {
   high_pull_burpee: "Burpee con tirón alto",
 
   // TRICEPS_EXTENSION
+  body_weight_dip: "Fondos en paralelas",
+  reverse_grip_triceps_pressdown: "Extensión de tríceps en polea agarre invertido",
+  seated_dumbbell_overhead_triceps_extension: "Extensión de tríceps sentado con mancuerna",
+  single_arm_dumbbell_overhead_triceps_extension: "Extensión de tríceps a una mano con mancuerna",
   ez_bar_overhead_triceps_extension: "Extensión de tríceps sobre la cabeza con barra EZ",
   dumbbell_kickback: "Patada de tríceps con mancuerna (kickback)",
   cable_kickback: "Patada de tríceps en polea (kickback)",

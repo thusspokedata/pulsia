@@ -84,3 +84,33 @@ test("el catálogo incluye los ejercicios básicos de gimnasio", () => {
   const faltantes = basicos.filter((b) => !nombres.includes(b));
   expect(faltantes).toEqual([]);
 });
+
+test("el catálogo incluye los ejercicios ilustrados que se agregaron", () => {
+  const ids = new Set(EXERCISE_CATALOG.map((e) => e.id));
+  // Agregados porque Everkinetic los ilustra y el SDK de Garmin los tiene (2026-07-18).
+  // Llenan huecos reales: no había ningún pushdown de tríceps, ni fondos en paralelas,
+  // ni press inclinado con barra, ni subidas al cajón.
+  const ilustrados = [
+    "decline_dumbbell_bench_press",
+    "incline_barbell_bench_press",
+    "wide_grip_barbell_bench_press",
+    "weighted_side_bend",
+    "flutter_kicks",
+    "close_grip_ez_bar_biceps_curl",
+    "cross_body_dumbbell_hammer_curl",
+    "incline_dumbbell_biceps_curl",
+    "bent_over_lateral_raise",
+    "seated_rear_lateral_raise",
+    "walking_lunge",
+    "single_arm_dumbbell_shoulder_press",
+    "barbell_step_up",
+    "dumbbell_step_up",
+    "wide_stance_barbell_squat",
+    "overhead_barbell_squat",
+    "body_weight_dip",
+    "reverse_grip_triceps_pressdown",
+    "seated_dumbbell_overhead_triceps_extension",
+    "single_arm_dumbbell_overhead_triceps_extension",
+  ];
+  expect(ilustrados.filter((id) => !ids.has(id))).toEqual([]);
+});

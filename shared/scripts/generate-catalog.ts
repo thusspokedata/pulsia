@@ -128,15 +128,19 @@ const BUCKET_PRIORITY: EquipmentVal[] = [
 // deja entrar "Barbell Stepover" y descarta el leg press. Estos entran SIEMPRE, sin competir
 // por el cap. Claves = sdkKey de CATEGORIES; valores = camelName exacto del SDK de Garmin.
 const MUST_INCLUDE: Record<string, string[]> = {
-  benchPressExerciseName: ["inclineDumbbellBenchPress", "closeGripBarbellBenchPress"],
+  benchPressExerciseName: ["inclineDumbbellBenchPress", "closeGripBarbellBenchPress", "inclineBarbellBenchPress", "wideGripBarbellBenchPress", "declineDumbbellBenchPress"],
   rowExerciseName: ["seatedCableRow", "tBarRow", "oneArmBentOverRow", "chestSupportedDumbbellRow"],
   pullUpExerciseName: ["pullUp", "wideGripLatPulldown", "closeGripLatPulldown"],
-  squatExerciseName: ["legPress", "gobletSquat", "barbellFrontSquat", "dumbbellSplitSquat", "barbellHackSquat"],
+  squatExerciseName: ["legPress", "gobletSquat", "barbellFrontSquat", "dumbbellSplitSquat", "barbellHackSquat", "wideStanceBarbellSquat", "barbellStepUp", "dumbbellStepUp", "overheadBarbellSquat"],
   flyeExerciseName: ["dumbbellFlye", "cableCrossover", "inclineDumbbellFlye"],
-  curlExerciseName: ["dumbbellHammerCurl", "ezBarPreacherCurl"],
-  tricepsExtensionExerciseName: ["lyingEzBarTricepsExtension"],
-  shoulderPressExerciseName: ["dumbbellShoulderPress", "barbellShoulderPress", "arnoldPress"],
+  curlExerciseName: ["dumbbellHammerCurl", "ezBarPreacherCurl", "closeGripEzBarBicepsCurl", "inclineDumbbellBicepsCurl", "crossBodyDumbbellHammerCurl"],
+  tricepsExtensionExerciseName: ["lyingEzBarTricepsExtension", "singleArmDumbbellOverheadTricepsExtension", "seatedDumbbellOverheadTricepsExtension", "bodyWeightDip", "reverseGripTricepsPressdown"],
+  shoulderPressExerciseName: ["dumbbellShoulderPress", "barbellShoulderPress", "arnoldPress", "singleArmDumbbellShoulderPress"],
   deadliftExerciseName: ["romanianDeadlift", "sumoDeadlift", "barbellDeadlift"],
+  lateralRaiseExerciseName: ["seatedRearLateralRaise", "bentOverLateralRaise"],
+  lungeExerciseName: ["walkingLunge"],
+  coreExerciseName: ["weightedSideBend"],
+  crunchExerciseName: ["flutterKicks"],
 };
 
 // inferEquipment falla en tres casos y acá va el equipamiento real:
@@ -164,6 +168,11 @@ const MUST_EQUIPMENT: Record<string, EquipmentVal[]> = {
   dumbbellFlye: ["dumbbell", "bench"],
   inclineDumbbellFlye: ["dumbbell", "bench"],
   dumbbellHammerCurl: ["dumbbell"],
+  weightedSideBend: ["dumbbell"],
+  bentOverLateralRaise: ["dumbbell"],
+  seatedRearLateralRaise: ["dumbbell"],
+  crossBodyDumbbellHammerCurl: ["dumbbell"],
+  reverseGripTricepsPressdown: ["cable_machine"],
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
