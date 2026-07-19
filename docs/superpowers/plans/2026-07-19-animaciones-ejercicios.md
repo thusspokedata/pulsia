@@ -264,6 +264,7 @@ async function main() {
   const lock: Record<string, string> = {};
   const sinAssets: string[] = [];
   const sinSlug: string[] = [];
+  const pendientes: Array<{ keys: [string, string]; bufs: [Buffer, Buffer] }> = [];
 
   for (const [catalogId, slug] of Object.entries(EXERCISE_MEDIA_SLUGS)) {
     const e = bySlug.get(slug);
@@ -296,15 +297,50 @@ async function main() {
     }
 
     const keys: [string, string] = [`${e.id_num}-relaxation`, `${e.id_num}-tension`];
+    // NO escribimos todavía: primero se valida la integridad de TODO lo bajado (paso 3).
+    // Escribir dentro del loop haría que la guarda llegue tarde y deje el directorio a medias.
+    pendientes.push({ keys, bufs });
+    data[catalogId] = { frames: keys, cues: e.steps ?? [] };
+  }
+
+  // 3. Guarda de integridad: comparar contra el lock commiteado.
+  //    Con la revisión fijada por SHA el upstream no puede cambiar, así que lo que esto
+  //    atrapa es (a) una descarga corrupta o truncada, y (b) que alguien bumpee REV sin
+  //    darse cuenta de que además cambiaron los dibujos. En el caso (b) el diff del lock
+  //    dice exactamente qué cambió.
+  if (existsSync(OUT_LOCK)) {
+    const previo = JSON.parse(readFileSync(OUT_LOCK, "utf-8")) as {
+      revision: string;
+      assets: Record<string, string>;
+    };
+    const difieren = Object.entries(lock).filter(
+      ([path, hash]) => previo.assets[path] && previo.assets[path] !== hash,
+    );
+    if (difieren.length > 0 && previo.revision === REV) {
+      throw new Error(
+        `${difieren.length} asset(s) bajaron con un hash distinto al del lock, con la MISMA revisión ` +
+          `(${REV.slice(0, 7)}). Eso es una descarga corrupta, no un cambio legítimo:\n  ` +
+          difieren.map(([p]) => p).join("\n  ") +
+          `\nReintentá. Si persiste, revisá la fuente antes de escribir nada.`,
+      );
+    }
+    if (previo.revision !== REV) {
+      console.log(
+        `\n⚠️  La revisión cambió (${previo.revision.slice(0, 7)} → ${REV.slice(0, 7)}). ` +
+          `${difieren.length} asset(s) cambiaron de contenido. Revisá el diff del lock antes de commitear.`,
+      );
+    }
+  }
+
+  // 4. Recién ahora, validado todo, se escriben los assets.
+  for (const { keys, bufs } of pendientes) {
     for (let i = 0; i < 2; i++) {
       const webp = await sharp(bufs[i]).resize(480, 480, { fit: "inside" }).webp({ quality: 82 }).toBuffer();
       writeFileSync(resolve(OUT_ASSETS, `${keys[i]}.webp`), webp);
     }
-
-    data[catalogId] = { frames: keys, cues: e.steps ?? [] };
   }
 
-  // 3. Escribir los datos. Los cues quedan en INGLÉS acá; los traduce la Tarea 3.
+  // 5. Escribir los datos. Los cues quedan en INGLÉS acá; los traduce la Tarea 3.
   const entries = Object.entries(data).sort(([a], [b]) => a.localeCompare(b));
   const lines = [
     "// AUTO-GENERADO por scripts/fetch-exercise-media.ts — no editar a mano.",
@@ -950,9 +986,11 @@ import { router, Stack } from "expo-router";
 import { EXERCISE_CATALOG, exerciseNameEs, hasExerciseMedia } from "@pulsia/shared";
 import { colors, spacing, radius } from "../src/theme/tokens";
 
-// Sin acentos ni mayúsculas: "prensa" tiene que encontrar "Prensa", y "biceps" a "bíceps".
+// Sin acentos ni mayúsculas: "prensa" encuentra "Prensa", y "biceps" encuentra "bíceps".
+// Los diacríticos van como \u0300-\u036f y NO como caracteres literales: un editor que
+// re-normalice el archivo a NFC rompería el rango en silencio.
 const norm = (s: string) =>
-  s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 export default function EjerciciosScreen() {
   const [q, setQ] = useState("");
@@ -1071,26 +1109,75 @@ test("hay alternativas con ilustración para ofrecer el acceso", () => {
 Run: `cd /Users/kilo/desarrollo26/pulsia/mobile && npm test -- --runInBand sesionDetalleEjercicio`
 Expected: PASS (es una verificación de datos, no de código nuevo). **Si falla, pará y reportá**: significa que el acceso no se vería nunca y hay que replantear la tarea.
 
-- [ ] **Step 3: Agregar el ícono al picker**
+- [ ] **Step 3: Agregar el ícono al picker — SIN anidar Pressables**
 
-En el `Pressable` de cada alternativa, agregá a la derecha del nombre un botón que **no** seleccione la alternativa sino que abra el detalle:
+⚠️ **No uses `stopPropagation`.** El sistema de touch responder de React Native **no hace bubbling como el DOM**: con `Pressable` anidados, `ev.stopPropagation()` no garantiza que el padre no reciba el gesto, porque eso se resuelve por negociación de responder, no por propagación. Apoyar en eso un comportamiento con consecuencia real —que mirar el dibujo **no** te cambie el ejercicio de la sesión— es frágil.
+
+**Solución estructural: que los dos `Pressable` sean hermanos, no uno dentro del otro.** El contenedor pasa a ser una `View` en fila con dos zonas táctiles independientes.
+
+Localizá el `Pressable` de cada alternativa (alrededor de la línea 782) y reestructuralo así:
 
 ```tsx
-{hasExerciseMedia(e.id) && (
+<View
+  key={e.id}
+  style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}
+>
+  {/* zona 1: elegir la alternativa (lo que ya hacía el Pressable original) */}
   <Pressable
-    testID={`alt-ver-${e.id}`}
-    hitSlop={8}
-    onPress={(ev) => {
-      ev.stopPropagation(); // no seleccionar la alternativa, solo mirarla
-      router.push(`/ejercicio/${e.id}`);
-    }}
+    testID={`alt-${e.id}`}
+    style={{ flex: 1 }}
+    onPress={() => setPickChoice({ catalogId: e.id, garminName: e.garminName })}
   >
-    <Text style={{ color: colors.accent, fontSize: 15 }}>👁</Text>
+    <Text style={{ color: pickChoice?.catalogId === e.id ? colors.accent : colors.text }}>
+      {esName(e.id, e.garminName)}
+    </Text>
   </Pressable>
-)}
+
+  {/* zona 2: mirar la demostración. Hermano, NO hijo: no hay gesto que negociar. */}
+  {hasExerciseMedia(e.id) && (
+    <Pressable
+      testID={`alt-ver-${e.id}`}
+      hitSlop={8}
+      onPress={() => router.push(`/ejercicio/${e.id}`)}
+    >
+      <Text style={{ color: colors.accent, fontSize: 15 }}>👁</Text>
+    </Pressable>
+  )}
+</View>
 ```
 
-El `stopPropagation` es lo importante: sin él, mirar el dibujo **cambiaría el ejercicio de la sesión**, que es justo lo que el usuario no quería al pedir "ver antes de decidir".
+**Ajustá los estilos** a los que ya tenía el `Pressable` original de la fila: el objetivo es no cambiar el aspecto, solo la estructura táctil.
+
+- [ ] **Step 3b: Test de COMPORTAMIENTO, no de datos**
+
+El test del Step 1 solo verifica que existan alternativas con ilustración. Hace falta uno que verifique lo que de verdad importa: que tocar el ojo **no** seleccione la alternativa.
+
+```tsx
+test("tocar el ojo NO cambia el ejercicio elegido", () => {
+  const onPick = jest.fn();
+  const { getByTestId } = render(<AlternativasPicker alternativas={alts} onPick={onPick} />);
+  fireEvent.press(getByTestId("alt-ver-dumbbell_bench_press"));
+  expect(onPick).not.toHaveBeenCalled();
+  expect(mockPush).toHaveBeenCalledWith("/ejercicio/dumbbell_bench_press");
+});
+
+test("tocar el nombre SÍ elige la alternativa", () => {
+  const onPick = jest.fn();
+  const { getByTestId } = render(<AlternativasPicker alternativas={alts} onPick={onPick} />);
+  fireEvent.press(getByTestId("alt-dumbbell_bench_press"));
+  expect(onPick).toHaveBeenCalledWith("dumbbell_bench_press");
+});
+```
+
+**Esto obliga a extraer el picker** de `sesion.tsx` a `mobile/src/components/AlternativasPicker.tsx`, porque el bloque de alternativas está enterrado en un archivo de 40 KB y no se puede montar aislado. Es una extracción acotada y justificada por el test: mové **solo** ese bloque, sin refactorizar nada más del archivo.
+
+- [ ] **Step 3c: Verificación por mutación**
+
+Volvé a anidar el `Pressable` del ojo dentro del de la fila y confirmá que **falla** el test de "no cambia el ejercicio elegido". Restaurá la estructura de hermanos. Reportá el error textual. Esto prueba que el test detecta de verdad el problema que motivó el cambio.
+
+- [ ] **Step 3d: Verificar en el dispositivo**
+
+Los tests de React Native corren sobre un mock del responder táctil, no sobre el real. Antes de dar la tarea por cerrada, **probá en el teléfono** que tocar el ojo abre el detalle y, al volver, el ejercicio de la sesión sigue siendo el mismo.
 
 - [ ] **Step 4: Correr toda la suite**
 
@@ -1188,6 +1275,7 @@ En el cuerpo del PR incluí: cobertura final (86 de 273), peso de los assets, co
 
 - **El fingerprint del OTA.** Si `sharp` termina en `dependencies` en vez de `devDependencies`, se re-basa el runtime y el update no le llega a nadie. Lo cubre el paso 3 de la Tarea 11.
 - **Peso del bundle.** ~2-3 MB esperados en WebP. Si se dispara, bajar `quality` antes que sacar ejercicios.
+- **Assets huérfanos.** Si en una corrida futura sale un `catalogId` de `EXERCISE_MEDIA_SLUGS`, su `.webp` queda suelto en `mobile/assets/exercises` y sigue pesando en el bundle. El script no los borra (borrar archivos automáticamente es más riesgoso que dejarlos): al cambiar el mapeo, comparar el listado del directorio contra `exerciseMedia.data.ts` y limpiar a mano.
 - **ShareAlike.** Los assets se usan **sin modificar** (convertir de formato no es una obra derivada). Si alguien los edita, esas imágenes heredan CC-BY-SA y hay que publicarlas. No aplicar DRM.
 - **Cues traducidos.** Es el único contenido de la app que le dice a alguien **cómo mover su cuerpo con peso encima**. Traducir fiel, nunca agregar indicaciones que el original no tenga.
 
