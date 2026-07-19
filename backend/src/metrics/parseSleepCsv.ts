@@ -24,7 +24,7 @@ const HEADER_TO_METRIC: Record<string, MetricType> = {
 // Métricas que vienen como "Xh Ymin" y se guardan en horas decimales.
 const HM_METRICS = new Set<MetricType>(["sleep_hours", "sleep_need_hours"]);
 
-// "7h 1min" → 7.0167 ; "9h 0min" → 9 ; "45min" → 0.75 ; "8h" → 8 ; null si no hay nada parseable.
+// "6h 17min" → 6.2833 ; "8h 0min" → 8 ; "50min" → 0.8333 ; "10h" → 10 ; null si no hay nada parseable.
 export function parseHmToHours(raw: string): number | null {
   const m = raw.trim().match(/^(?:(\d+)\s*h)?\s*(?:(\d+)\s*min)?$/i);
   if (!m || (m[1] == null && m[2] == null)) return null;

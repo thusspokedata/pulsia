@@ -5,10 +5,10 @@ const HEADER = "Time,Weight,Change,BMI,Body Fat,Skeletal Muscle Mass,Bone Mass,B
 const SAMPLE = [
   HEADER,
   '" Jul 18, 2026",',
-  "8:28 AM,73.2 kg,0.5 kg,23.4,22.1 %,30.5 kg,4.0 kg,56.9 %,",
+  "8:28 AM,80.0 kg,0.5 kg,25.0,18.0 %,35.0 kg,3.5 kg,61.0 %,",
   '" Jul 15, 2026",',
-  "9:46 AM,73.3 kg,0.5 kg,23.4,22.3 %,30.5 kg,4.0 kg,56.7 %,",
-  "8:40 AM,73.8 kg,0.3 kg,23.6,23.3 %,30.6 kg,4.0 kg,56.0 %,",
+  "9:46 AM,80.5 kg,0.5 kg,25.0,18.5 %,35.0 kg,3.5 kg,60.5 %,",
+  "8:40 AM,81.0 kg,0.3 kg,25.2,19.5 %,35.5 kg,3.5 kg,60.0 %,",
 ].join("\n");
 
 test("parseWeightCsv no colapsa varias pesadas del mismo día", () => {
@@ -30,11 +30,11 @@ test("parseWeightCsv mapea las 5 métricas por nombre de columna, sin bmi", () =
   const row = rows.find((r) => r.date === "2026-07-15" && r.label?.includes("09:46"));
   expect(row).toBeDefined();
   const byType = Object.fromEntries(row!.entries.map((e) => [e.metricType, e.value]));
-  expect(byType.weight_kg).toBe(73.3);
-  expect(byType.body_fat_pct).toBe(22.3);
-  expect(byType.skeletal_muscle_mass_kg).toBe(30.5);
-  expect(byType.bone_mass_kg).toBe(4.0);
-  expect(byType.body_water_pct).toBe(56.7);
+  expect(byType.weight_kg).toBe(80.5);
+  expect(byType.body_fat_pct).toBe(18.5);
+  expect(byType.skeletal_muscle_mass_kg).toBe(35.0);
+  expect(byType.bone_mass_kg).toBe(3.5);
+  expect(byType.body_water_pct).toBe(60.5);
   expect(row!.entries).toHaveLength(5);
   expect(row!.entries.some((e) => e.metricType === ("bmi" as never))).toBe(false);
 });
@@ -42,9 +42,9 @@ test("parseWeightCsv mapea las 5 métricas por nombre de columna, sin bmi", () =
 test("parseWeightCsv salta una fila de medición sin fecha previa", () => {
   const csv = [
     HEADER,
-    "8:28 AM,73.2 kg,0.5 kg,23.4,22.1 %,30.5 kg,4.0 kg,56.9 %,",
+    "8:28 AM,80.0 kg,0.5 kg,25.0,18.0 %,35.0 kg,3.5 kg,61.0 %,",
     '" Jul 18, 2026",',
-    "9:00 AM,73.0 kg,0.2 kg,23.3,22.0 %,30.4 kg,4.0 kg,56.8 %,",
+    "9:00 AM,79.8 kg,0.2 kg,25.1,17.5 %,34.8 kg,3.5 kg,60.7 %,",
   ].join("\n");
   const { rows, skipped } = parseWeightCsv(csv, -120);
   expect(skipped.length).toBeGreaterThan(0);
