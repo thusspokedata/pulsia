@@ -182,14 +182,18 @@ test("POST /cardio source=manual CON fitBase64 → el fitBase64 se ignora, no se
 test("POST /cardio: si falla el insert del .FIT crudo, la actividad igual se guarda y responde 200", async () => {
   const db = fakeDb({ failFileInsert: true });
   const app = createApp(deps(db) as any);
-  const fitBase64 = Buffer.from("archivo que va a fallar al guardarse").toString("base64");
+  // Los bytes TIENEN que ser un .FIT válido: si no, maybeSaveFitFile sale por el early-return de
+  // looksLikeFit y nunca llega a insertCardioFitFile, con lo que el throw simulado no se dispara
+  // y este test pasaría sin ejercitar el catch que dice estar probando (falso verde).
+  const fitBase64 = fakeFitBytes("archivo que va a fallar al guardarse").toString("base64");
   const res = await app.request("/cardio", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ ...activity, fitBase64 }),
   });
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({ id: AID });
-  expect(db._inserts).toHaveLength(1); // la actividad SÍ se insertó
+  expect(db._inserts).toHaveLength(1);      // la actividad SÍ se insertó
+  expect(db._fileInserts).toHaveLength(0);  // y el archivo NO (el insert explotó, se logueó y siguió)
 });
 
 test("GET /cardio/:id de otro usuario → 409 (no 404)", async () => {
