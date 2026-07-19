@@ -207,15 +207,15 @@ const HEADER =
   "Sleep Score 7 Days,Score,Resting Heart Rate,Body Battery,Pulse Ox,Respiration,HRV Status,Quality,Duration,Sleep Need,Bedtime,Wake Time";
 const SAMPLE = [
   HEADER,
-  "2026-07-17,85,52,69,95.54,13.86,45,Good,7h 1min,9h 0min,1:14 AM,8:23 AM",
-  "2026-07-16,48,57,27,95.87,14.77,45,Poor,3h 28min,8h 30min,4:23 AM,7:52 AM",
+  "2026-07-17,70,60,50,97.00,15.00,40,Good,7h 42min,8h 45min,11:52 PM,7:34 AM",
+  "2026-07-16,55,62,30,96.50,16.00,40,Poor,6h 15min,8h 0min,12:40 AM,6:50 AM",
 ].join("\n");
 
 test("parseHmToHours convierte 'Xh Ymin' a horas decimales", () => {
-  expect(parseHmToHours("9h 0min")).toBe(9);
-  expect(parseHmToHours("7h 1min")).toBeCloseTo(7 + 1 / 60, 5);
-  expect(parseHmToHours("45min")).toBeCloseTo(0.75, 5);
-  expect(parseHmToHours("8h")).toBe(8);
+  expect(parseHmToHours("8h 0min")).toBe(8);
+  expect(parseHmToHours("6h 17min")).toBeCloseTo(6 + 17 / 60, 5);
+  expect(parseHmToHours("50min")).toBeCloseTo(50 / 60, 5);
+  expect(parseHmToHours("10h")).toBe(10);
   expect(parseHmToHours("basura")).toBeNull();
 });
 
@@ -225,14 +225,14 @@ test("parseSleepCsv mapea columnas por nombre de header", () => {
   const first = rows[0];
   expect(first.date).toBe("2026-07-17");
   const byType = Object.fromEntries(first.entries.map((e) => [e.metricType, e.value]));
-  expect(byType.sleep_score).toBe(85);
-  expect(byType.resting_hr).toBe(52);
-  expect(byType.body_battery).toBe(69);
-  expect(byType.pulse_ox).toBeCloseTo(95.54, 2);
-  expect(byType.respiration).toBeCloseTo(13.86, 2);
-  expect(byType.hrv).toBe(45);
-  expect(byType.sleep_hours).toBeCloseTo(7 + 1 / 60, 5);
-  expect(byType.sleep_need_hours).toBe(9);
+  expect(byType.sleep_score).toBe(70);
+  expect(byType.resting_hr).toBe(60);
+  expect(byType.body_battery).toBe(50);
+  expect(byType.pulse_ox).toBeCloseTo(97.0, 2);
+  expect(byType.respiration).toBeCloseTo(15.0, 2);
+  expect(byType.hrv).toBe(40);
+  expect(byType.sleep_hours).toBeCloseTo(7 + 42 / 60, 5);
+  expect(byType.sleep_need_hours).toBe(8.75);
   // Quality/Bedtime/Wake Time se omiten (no numéricos / metadatos)
   expect(byType.sleep_quality).toBeUndefined();
 });
@@ -243,7 +243,7 @@ test("parseSleepCsv usa mediodía UTC como measuredAt", () => {
 });
 
 test("parseSleepCsv salta una fila cuya col 0 no es fecha", () => {
-  const csv = [HEADER, "no-fecha,85,52,69,95.5,13.8,45,Good,7h 0min,9h 0min,1:00 AM,8:00 AM"].join("\n");
+  const csv = [HEADER, "no-fecha,70,60,50,96.00,15.50,40,Good,6h 30min,8h 0min,1:00 AM,8:00 AM"].join("\n");
   const { rows, skipped } = parseSleepCsv(csv.replace(HEADER, HEADER) + "\n2026-07-10,80,50,60,96,14,44,Good,7h 0min,8h 0min,1:00 AM,8:00 AM");
   expect(skipped.some((s) => /no es una fecha/i.test(s.reason))).toBe(true);
   expect(rows.some((r) => r.date === "2026-07-10")).toBe(true);
@@ -297,7 +297,7 @@ const HEADER_TO_METRIC: Record<string, MetricType> = {
 // Métricas que vienen como "Xh Ymin" y se guardan en horas decimales.
 const HM_METRICS = new Set<MetricType>(["sleep_hours", "sleep_need_hours"]);
 
-// "7h 1min" → 7.0167 ; "9h 0min" → 9 ; "45min" → 0.75 ; "8h" → 8 ; null si no hay nada parseable.
+// "6h 17min" → 6.2833 ; "8h 0min" → 8 ; "50min" → 0.8333 ; "10h" → 10 ; null si no hay nada parseable.
 export function parseHmToHours(raw: string): number | null {
   const m = raw.trim().match(/^(?:(\d+)\s*h)?\s*(?:(\d+)\s*min)?$/i);
   if (!m || (m[1] == null && m[2] == null)) return null;
@@ -491,7 +491,7 @@ En `backend/src/routes/metrics.test.ts` agregar (mismo estilo de fake-db del arc
 ```ts
 const SLEEP_CSV =
   "Sleep Score 7 Days,Score,Resting Heart Rate,Body Battery,Pulse Ox,Respiration,HRV Status,Quality,Duration,Sleep Need,Bedtime,Wake Time\n" +
-  "2026-07-17,85,52,69,95.54,13.86,45,Good,7h 1min,9h 0min,1:14 AM,8:23 AM";
+  "2026-07-17,70,60,50,97.00,15.00,40,Good,7h 42min,8h 45min,11:52 PM,7:34 AM";
 const SLEEP_B64 = Buffer.from(SLEEP_CSV).toString("base64");
 
 test("POST /metrics/import/sleep/parse devuelve el preview sin persistir", async () => {

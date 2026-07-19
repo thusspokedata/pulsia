@@ -3,13 +3,13 @@ import { splitCsvLine, parseUnitNumber, parse12hTime, localEpoch, localNoonEpoch
 
 test("splitCsvLine respeta comillas con comas adentro", () => {
   expect(splitCsvLine('" Jul 18, 2026",')).toEqual(["Jul 18, 2026", ""]);
-  expect(splitCsvLine("8:28 AM,73.2 kg,0.5 kg,")).toEqual(["8:28 AM", "73.2 kg", "0.5 kg", ""]);
+  expect(splitCsvLine("8:28 AM,80.0 kg,0.5 kg,")).toEqual(["8:28 AM", "80.0 kg", "0.5 kg", ""]);
 });
 
 test("parseUnitNumber saca la unidad pegada", () => {
-  expect(parseUnitNumber("73.2 kg")).toBe(73.2);
-  expect(parseUnitNumber("22.1 %")).toBe(22.1);
-  expect(parseUnitNumber("23.4")).toBe(23.4);
+  expect(parseUnitNumber("80.0 kg")).toBe(80.0);
+  expect(parseUnitNumber("18.0 %")).toBe(18.0);
+  expect(parseUnitNumber("25.0")).toBe(25.0);
   expect(parseUnitNumber("")).toBeNull();
   expect(parseUnitNumber("Good")).toBeNull();
 });

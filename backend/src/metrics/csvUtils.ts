@@ -25,7 +25,7 @@ export function splitCsvLine(line: string): string[] {
   return out;
 }
 
-// "73.2 kg" → 73.2 ; "22.1 %" → 22.1 ; "23.4" → 23.4 ; null si no arranca con número.
+// "80.0 kg" → 80.0 ; "18.0 %" → 18.0 ; "25.0" → 25.0 ; null si no arranca con número.
 export function parseUnitNumber(cell: string): number | null {
   const m = cell.trim().match(/^(-?\d+(?:\.\d+)?)/);
   if (!m) return null;

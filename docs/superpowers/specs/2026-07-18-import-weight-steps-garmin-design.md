@@ -27,17 +27,17 @@ sleep_hours | 2026-07-17 12:00 UTC  ← import del CSV (mediodía UTC)
 ```
 Time,Weight,Change,BMI,Body Fat,Skeletal Muscle Mass,Bone Mass,Body Water,
 " Jul 18, 2026",
-8:28 AM,73.2 kg,0.5 kg,23.4,22.1 %,30.5 kg,4.0 kg,56.9 %,
+8:28 AM,80.0 kg,0.5 kg,25.0,18.0 %,35.0 kg,3.5 kg,61.0 %,
 " Jul 15, 2026",
-9:46 AM,73.3 kg,0.5 kg,23.4,22.3 %,30.5 kg,4.0 kg,56.7 %,
-8:40 AM,73.8 kg,0.3 kg,23.6,23.3 %,30.6 kg,4.0 kg,56.0 %,
+9:46 AM,80.5 kg,0.5 kg,25.0,18.5 %,35.0 kg,3.5 kg,60.5 %,
+8:40 AM,81.0 kg,0.3 kg,25.2,19.5 %,35.5 kg,3.5 kg,60.0 %,
 ```
 Trampas:
 - **Filas de fecha vs. filas de medición.** La fecha (`" Jul 18, 2026"`) es una fila propia; las
   siguientes son mediciones de ese día. El parser necesita **estado** (fecha actual).
 - **La fila de fecha es un campo entrecomillado CON UNA COMA ADENTRO** → el `split(",")` ingenuo
   del parser de sueño se rompe. Hace falta un splitter que respete comillas.
-- **Los valores traen unidad pegada:** `73.2 kg`, `22.1 %`.
+- **Los valores traen unidad pegada:** `80.0 kg`, `18.0 %`.
 - **Varias mediciones por día** (Jul 15 → 2, Jul 13 → 3) → `measuredAt` debe ser el **instante real**
   (fecha + hora), NO un mediodía. Con el índice único de #156, usar mediodía las colapsaría y el
   `ON CONFLICT DO NOTHING` descartaría todas menos una.
@@ -89,7 +89,7 @@ móvil siempre lo manda.
 ### Helpers compartidos (backend)
 `backend/src/metrics/csvUtils.ts`:
 - `splitCsvLine(line)` — **respeta comillas** (`" Jul 18, 2026"` es UN campo).
-- `parseUnitNumber(cell)` — `"73.2 kg"` → `73.2`; `"22.1 %"` → `22.1`; `""`/basura → `null`.
+- `parseUnitNumber(cell)` — `"80.0 kg"` → `80.0`; `"18.0 %"` → `18.0`; `""`/basura → `null`.
 - `localNoonEpoch(y, mo, d, offMin)` y `localEpoch(y, mo, d, H, M, offMin)`.
 
 ### Parsers

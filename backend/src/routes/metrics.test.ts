@@ -88,7 +88,7 @@ test("DELETE /metrics/:id responde 404 cuando no borra nada", async () => {
 
 const SLEEP_CSV =
   "Sleep Score 7 Days,Score,Resting Heart Rate,Body Battery,Pulse Ox,Respiration,HRV Status,Quality,Duration,Sleep Need,Bedtime,Wake Time\n" +
-  "2026-07-17,85,52,69,95.54,13.86,45,Good,7h 1min,9h 0min,1:14 AM,8:23 AM";
+  "2026-07-17,70,60,50,97.00,15.00,40,Good,7h 42min,8h 45min,11:52 PM,7:34 AM";
 const SLEEP_B64 = Buffer.from(SLEEP_CSV).toString("base64");
 
 test("POST /metrics/import/sleep/parse devuelve el preview sin persistir", async () => {
@@ -155,7 +155,7 @@ test("POST /metrics/import/sleep/parse con tzOffsetMinutes llega al parser (medi
 const WEIGHT_CSV =
   "Time,Weight,Change,BMI,Body Fat,Skeletal Muscle Mass,Bone Mass,Body Water,\n" +
   '" Jul 15, 2026",\n' +
-  "9:46 AM,73.3 kg,0.5 kg,23.4,22.3 %,30.5 kg,4.0 kg,56.7 %,";
+  "9:46 AM,80.5 kg,0.5 kg,25.0,18.5 %,35.0 kg,3.5 kg,60.5 %,";
 const WEIGHT_B64 = Buffer.from(WEIGHT_CSV).toString("base64");
 
 const STEPS_CSV = ",Actual,Goal\n07/17/2026,19002,11170";

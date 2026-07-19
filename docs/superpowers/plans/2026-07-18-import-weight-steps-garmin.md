@@ -46,13 +46,13 @@ import { splitCsvLine, parseUnitNumber, parse12hTime, localEpoch, localNoonEpoch
 
 test("splitCsvLine respeta comillas con comas adentro", () => {
   expect(splitCsvLine('" Jul 18, 2026",')).toEqual(["Jul 18, 2026", ""]);
-  expect(splitCsvLine("8:28 AM,73.2 kg,0.5 kg,")).toEqual(["8:28 AM", "73.2 kg", "0.5 kg", ""]);
+  expect(splitCsvLine("8:28 AM,80.0 kg,0.5 kg,")).toEqual(["8:28 AM", "80.0 kg", "0.5 kg", ""]);
 });
 
 test("parseUnitNumber saca la unidad pegada", () => {
-  expect(parseUnitNumber("73.2 kg")).toBe(73.2);
-  expect(parseUnitNumber("22.1 %")).toBe(22.1);
-  expect(parseUnitNumber("23.4")).toBe(23.4);
+  expect(parseUnitNumber("80.0 kg")).toBe(80.0);
+  expect(parseUnitNumber("18.0 %")).toBe(18.0);
+  expect(parseUnitNumber("25.0")).toBe(25.0);
   expect(parseUnitNumber("")).toBeNull();
   expect(parseUnitNumber("Good")).toBeNull();
 });
@@ -98,7 +98,7 @@ export function splitCsvLine(line: string): string[] {
   return out;
 }
 
-// "73.2 kg" → 73.2 ; "22.1 %" → 22.1 ; "23.4" → 23.4 ; null si no arranca con número.
+// "80.0 kg" → 80.0 ; "18.0 %" → 18.0 ; "25.0" → 25.0 ; null si no arranca con número.
 export function parseUnitNumber(cell: string): number | null {
   const m = cell.trim().match(/^(-?\d+(?:\.\d+)?)/);
   if (!m) return null;
@@ -139,13 +139,13 @@ export function localNoonEpoch(y: number, mo: number, d: number, offMin: number)
 const SAMPLE = [
   "Time,Weight,Change,BMI,Body Fat,Skeletal Muscle Mass,Bone Mass,Body Water,",
   '" Jul 15, 2026",',
-  "9:46 AM,73.3 kg,0.5 kg,23.4,22.3 %,30.5 kg,4.0 kg,56.7 %,",
-  "8:40 AM,73.8 kg,0.3 kg,23.6,23.3 %,30.6 kg,4.0 kg,56.0 %,",
+  "9:46 AM,80.5 kg,0.5 kg,25.0,18.5 %,35.0 kg,3.5 kg,60.5 %,",
+  "8:40 AM,81.0 kg,0.3 kg,25.2,19.5 %,35.5 kg,3.5 kg,60.0 %,",
 ].join("\n");
 ```
 Aserciones: 2 filas; `measuredAt` distintos y en orden; la de 9:46 con offset −120 =
-`Date.UTC(2026,6,15,7,46,0)`; entries incluyen `weight_kg:73.3`, `body_fat_pct:22.3`,
-`skeletal_muscle_mass_kg:30.5`, `bone_mass_kg:4.0`, `body_water_pct:56.7`; y **NO** incluyen
+`Date.UTC(2026,6,15,7,46,0)`; entries incluyen `weight_kg:80.5`, `body_fat_pct:18.5`,
+`skeletal_muscle_mass_kg:35.0`, `bone_mass_kg:3.5`, `body_water_pct:60.5`; y **NO** incluyen
 `bmi` ni nada de `Change`. Además: una fila de medición antes de cualquier fecha → `skipped`;
 CSV sin ninguna fila válida → `throw`.
 

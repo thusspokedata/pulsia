@@ -22,13 +22,13 @@ estrés / estado holístico. El usuario pidió puntualmente el **sleep score**.
 
 ```
 Sleep Score 7 Days,Score,Resting Heart Rate,Body Battery,Pulse Ox,Respiration,HRV Status,Quality,Duration,Sleep Need,Bedtime,Wake Time
-2026-07-17,85,52,69,95.54,13.86,45,Good,7h 1min,9h 0min,1:14 AM,8:23 AM
+2026-07-17,70,60,50,97.00,15.00,40,Good,7h 42min,8h 45min,11:52 PM,7:34 AM
 ```
 
 Notas del formato:
 - La **columna 0** tiene el header `Sleep Score 7 Days` pero su contenido es la **fecha ISO**
   (`YYYY-MM-DD`) de la noche/mañana. Es una rareza de Garmin: el header no describe la columna.
-- `Duration` y `Sleep Need` vienen como `"7h 1min"` / `"9h 0min"` → parsear a horas decimales.
+- `Duration` y `Sleep Need` vienen como `"7h 42min"` / `"8h 45min"` → parsear a horas decimales.
 - El resto son numéricos directos (enteros o con decimales).
 
 ## Mapeo de columnas → métrica
