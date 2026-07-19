@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import { CardioActivitySchema } from "@pulsia/shared";
-import { insertCardio, findCardioAtSecond, listCardio, getCardio, getCardioOwnerId, updateCardio, deleteCardio } from "../cardio/repository";
+import { insertCardio, insertCardioFitFile, findCardioAtSecond, listCardio, getCardio, getCardioOwnerId, updateCardio, deleteCardio } from "../cardio/repository";
 import { parseFit } from "../cardio/parseFit";
 import type { AppDeps } from "../app";
 
@@ -48,6 +49,26 @@ export function cardioRoutes(deps: AppDeps) {
       if (dup) return c.json({ error: "Ya importaste esta actividad" }, 409);
     }
     await insertCardio(deps.db, userId, { ...a, kcalSource });
+
+    // El .FIT crudo es opcional y solo aplica a imports (nunca a carga manual). Es un bonus: si
+    // falla guardarlo, la actividad —ya insertada arriba— igual responde 200. `raw` (no `parsed.data`)
+    // porque fitBase64 no es parte de CardioActivitySchema.
+    const fitBase64 = a.source === "fit" ? (raw as { fitBase64?: unknown })?.fitBase64 : undefined;
+    if (typeof fitBase64 === "string" && fitBase64.length > 0) {
+      if (fitBase64.length > MAX_FIT_B64) {
+        console.warn(`POST /cardio: .FIT de ${a.id} demasiado grande (${fitBase64.length} chars), no se guarda`);
+      } else {
+        try {
+          const bytes = Buffer.from(fitBase64, "base64");
+          const sha256 = createHash("sha256").update(bytes).digest("hex");
+          await insertCardioFitFile(deps.db, a.id, bytes, bytes.length, sha256);
+        } catch (e) {
+          // La actividad es lo que importa; el archivo crudo es un bonus. Nunca tumbar el 200 por esto.
+          console.error(`no se pudo guardar el .FIT crudo de ${a.id}:`, (e as Error).message);
+        }
+      }
+    }
+
     return c.json({ id: a.id }, 200);
   });
 
