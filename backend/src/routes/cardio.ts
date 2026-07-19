@@ -18,6 +18,12 @@ const ParseFitSchema = z.object({ fitBase64: z.string().min(1) });
 // Techo de 5 MB de archivo → ~6.9 MB de base64. Los .FIT típicos son 50-500 KB.
 const MAX_FIT_B64 = 7_000_000;
 
+// Magic bytes: el header FIT tiene ".FIT" en los bytes 8-11 (equivalente al %PDF del ECG).
+// Compartido por /parse y por el guardado en POST /cardio: los dos reciben el MISMO campo
+// `fitBase64`, así que el criterio de "esto es un .FIT" tiene que ser uno solo o se separan.
+const looksLikeFit = (buf: Buffer): boolean =>
+  buf.length >= 12 && buf.subarray(8, 12).toString("latin1") === ".FIT";
+
 export function cardioRoutes(deps: AppDeps) {
   const r = new Hono<{ Variables: { userId: string } }>();
 
@@ -60,8 +66,15 @@ export function cardioRoutes(deps: AppDeps) {
       } else {
         try {
           const bytes = Buffer.from(fitBase64, "base64");
-          const sha256 = createHash("sha256").update(bytes).digest("hex");
-          await insertCardioFitFile(deps.db, a.id, bytes, bytes.length, sha256);
+          // Mismo chequeo que /parse: no persistir bytes que no son un .FIT (guardar basura en
+          // la tabla del archivo crudo arruinaría el reprocesamiento futuro). No es un error del
+          // alta: la actividad ya está insertada y responde 200 igual.
+          if (!looksLikeFit(bytes)) {
+            console.warn(`POST /cardio: el fitBase64 de ${a.id} no es un .FIT, no se guarda`);
+          } else {
+            const sha256 = createHash("sha256").update(bytes).digest("hex");
+            await insertCardioFitFile(deps.db, a.id, bytes, bytes.length, sha256);
+          }
         } catch (e) {
           // La actividad es lo que importa; el archivo crudo es un bonus. Nunca tumbar el 200 por esto.
           console.error(`no se pudo guardar el .FIT crudo de ${a.id}:`, (e as Error).message);
@@ -87,10 +100,7 @@ export function cardioRoutes(deps: AppDeps) {
     if (!parsed.success) return c.json({ error: "Falta el archivo .FIT" }, 400);
     if (parsed.data.fitBase64.length > MAX_FIT_B64) return c.json({ error: "El archivo es demasiado grande (máx 5 MB)" }, 400);
     const buf = Buffer.from(parsed.data.fitBase64, "base64");
-    // Magic bytes: el header FIT tiene ".FIT" en los bytes 8-11 (equivalente al %PDF del ECG).
-    if (buf.length < 12 || buf.subarray(8, 12).toString("latin1") !== ".FIT") {
-      return c.json({ error: "No parece un archivo .FIT" }, 400);
-    }
+    if (!looksLikeFit(buf)) return c.json({ error: "No parece un archivo .FIT" }, 400);
     try {
       return c.json(parseFit(buf));
     } catch (e) {

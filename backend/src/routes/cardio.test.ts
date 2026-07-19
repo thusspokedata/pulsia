@@ -44,11 +44,14 @@ function fakeDb(opts: { rows?: any[]; ownerId?: string | null; failFileInsert?: 
       }
       return { values: async (v: any) => { inserts.push(v); } };
     },
-    // select() sin args = fila completa (getCardio/listCardio/findCardioAtSecond);
-    // select({userId}) = getCardioOwnerId.
+    // select() sin args = fila completa (getCardio/findCardioAtSecond).
+    // select({...}) con `id` = listCardio (proyecta las columnas del listado, sin las pesadas).
+    // select({userId}) SIN `id` = getCardioOwnerId.
+    // Ojo: no alcanza con "¿hay proyección?" — desde que listCardio proyecta, ese criterio la
+    // confundía con getCardioOwnerId y devolvía algo sin .orderBy (500).
     select: (proj?: any) => ({
       from: () => ({
-        where: (cond: any) => proj
+        where: (cond: any) => proj && !proj.id
           ? Promise.resolve(opts.ownerId != null ? [{ userId: opts.ownerId }] : [])
           : thenableRows(rows),
       }),
@@ -117,10 +120,16 @@ test("re-POST del mismo id por el mismo usuario → 200 idempotente, SIN reinser
   expect(db._fileInserts.length).toBe(0);
 });
 
+// Bytes sintéticos con el magic ".FIT" en 8-11, que es lo único que mira el guardado.
+// Nunca el archivo real del usuario: trae su nombre, peso, altura y FC, y el repo es público.
+function fakeFitBytes(payload = "contenido de prueba, no el archivo real"): Buffer {
+  return Buffer.concat([Buffer.alloc(8), Buffer.from(".FIT", "latin1"), Buffer.from(payload)]);
+}
+
 test("POST /cardio con fitBase64 y source=fit → guarda el .FIT crudo en cardio_fit_file", async () => {
   const db = fakeDb();
   const app = createApp(deps(db) as any);
-  const fitBytes = Buffer.from("contenido de prueba de un .fit, no el archivo real");
+  const fitBytes = fakeFitBytes();
   const fitBase64 = fitBytes.toString("base64");
   const res = await app.request("/cardio", {
     method: "POST", headers: { "content-type": "application/json" },
@@ -134,6 +143,20 @@ test("POST /cardio con fitBase64 y source=fit → guarda el .FIT crudo en cardio
   expect(fileInsert.sha256).toHaveLength(64);
   expect(fileInsert.sha256).toBe(createHash("sha256").update(fitBytes).digest("hex"));
   expect(fileInsert.bytes.equals(fitBytes)).toBe(true);
+});
+
+test("POST /cardio con fitBase64 que NO es un .FIT → no guarda el archivo, pero la actividad entra igual", async () => {
+  const db = fakeDb();
+  const app = createApp(deps(db) as any);
+  // Mismo criterio de magic bytes que /parse: guardar basura arruinaría el reprocesamiento futuro.
+  const noEsFit = Buffer.from("esto no es un archivo .FIT ni de casualidad").toString("base64");
+  const res = await app.request("/cardio", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...activity, fitBase64: noEsFit }),
+  });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ id: AID });
+  expect(db._fileInserts).toHaveLength(0);
 });
 
 test("POST /cardio sin fitBase64 → no inserta archivo, sigue devolviendo 200", async () => {

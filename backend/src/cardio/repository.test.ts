@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { secondWindow, insertCardio, getCardio, insertCardioFitFile } from "./repository";
+import { secondWindow, insertCardio, getCardio, listCardio, insertCardioFitFile } from "./repository";
 import type { CardioActivity } from "@pulsia/shared";
 
 test("secondWindow: dos timestamps del mismo segundo comparten from", () => {
@@ -77,6 +77,41 @@ test("insertCardio de una actividad manual (sin métricas extendidas) inserta nu
 function fakeSelectDb(row: any) {
   return { select: () => ({ from: () => ({ where: async () => [row] }) }) } as any;
 }
+
+// Captura las columnas que pide el select, para poder afirmar QUÉ trae el listado.
+function fakeListDb(rows: any[], onSelect: (cols: any) => void) {
+  return {
+    select: (cols: any) => {
+      onSelect(cols);
+      return { from: () => ({ where: () => ({ orderBy: async () => rows }) }) };
+    },
+  } as any;
+}
+
+test("listCardio NO trae hrSeries/samples/fitExtras: las columnas pesadas son solo del detalle", async () => {
+  let cols: any;
+  const row = {
+    id: AID, type: "run", startedAt: 1784000000000, durationMs: 1800000,
+    distanceM: null, avgHr: null, maxHr: null, elevationGainM: null, kcal: null,
+    kcalSource: "estimate", source: "fit", notes: "",
+    totalCycles: 4200, trainingLoad: null, trainingEffectAerobic: null, trainingEffectAnaerobic: null,
+    avgCadence: null, maxCadence: null, avgFractionalCadence: null, avgRespiration: null,
+    maxRespiration: null, minRespiration: null, metabolicKcal: null,
+    sportProfileName: null, tzOffsetMinutes: null,
+  };
+  const out = await listCardio(fakeListDb([row], (c) => { cols = c; }), UID);
+
+  // El select pide columnas explícitas y ninguna de las pesadas.
+  expect(cols).toBeDefined();
+  expect(Object.keys(cols)).not.toContain("hrSeries");
+  expect(Object.keys(cols)).not.toContain("samples");
+  expect(Object.keys(cols)).not.toContain("fitExtras");
+  // Y el resultado tampoco las inventa, pero sí conserva los escalares del listado.
+  expect(out[0]).not.toHaveProperty("hrSeries");
+  expect(out[0]).not.toHaveProperty("samples");
+  expect(out[0]).not.toHaveProperty("fitExtras");
+  expect(out[0].totalCycles).toBe(4200);
+});
 
 test("getCardio devuelve las métricas extendidas + samples + fitExtras de una fila del .FIT", async () => {
   const row = {
