@@ -136,9 +136,15 @@ de un cambio de licencia por un hash que no matchea es mucho mejor que no entera
 lógica que la guarda dura de `MUST_INCLUDE` en el generador del catálogo: preferimos reventar a
 fallar en silencio.
 
-**Cues:** se generan **una vez** con Opus contra el catálogo final, se revisan a mano y quedan
-commiteados como **datos estáticos**. No hay llamada a la IA en runtime. Un ejercicio sin cues
-muestra solo la animación.
+**Cues: NO se generan con IA.** (Corrección del 2026-07-19, tras inspeccionar la fuente real.)
+Everkinetic trae un campo **`steps`** por ejercicio con la técnica paso a paso, bajo la misma
+licencia CC-BY-SA, y **los 93 ejercicios mapeados lo tienen**. Se **traducen al español** una vez y
+quedan commiteados como datos estáticos; no hay llamada a la IA en runtime.
+
+Traducir es sustancialmente más seguro que generar: una indicación técnica inventada puede hacer
+que alguien se lesione, y un cue traducido conserva la responsabilidad editorial de la fuente. La
+traducción sí puede hacerla la IA, porque el error posible ahí es de redacción, no de contenido.
+Un ejercicio sin cues muestra solo la animación.
 
 ### Pieza 2 — Detalle del ejercicio (mobile)
 
@@ -179,8 +185,26 @@ con enlace a la licencia. Es la condición de uso de la fuente.
 placeholders, sin pantallas rotas. Decisión del usuario: cubrir lo que se pueda y completar con el
 tiempo, sin podar el catálogo ni bloquear el lanzamiento.
 
-Estimación previa: ~67 % de los nombres son mapeables con tabla de alias; los huecos se concentran
-en carries, chops, rotaciones de rodillas y TRX.
+**Números MEDIDOS (2026-07-19), no estimados.** La estimación previa de ~67 % era optimista:
+
+- **93** ejercicios del catálogo tienen mapeo curado a mano (`exerciseMedia.slugs.ts`).
+- De esos, **86 tienen los dos cuadros disponibles** en el repo de Everkinetic: 79 en `dist/png/`
+  y **7 que hay que sacar de `src/images-ai/`**, donde el naming es `-F`/`-S` en vez de
+  `-relaxation`/`-tension`. Verificado visualmente que `-F`/`-S` son **los mismos dos cuadros del
+  movimiento** (no dos ángulos de cámara), solo en mayor resolución.
+- **7 mapeos apuntan a ejercicios sin assets** en ninguna carpeta del repo: `bent-over-row-with-barbell`,
+  `push-up-feet-elevated-2`, `incline-inner-biceps-curl-with-dumbbell`,
+  `standing-one-arm-triceps-extension-with-dumbbell`, `standing-calf-raise-with-dumbbell` (usado por
+  dos ejercicios nuestros) y `wide-grip-lat-pull-down`. La ingesta los debe **detectar y reportar**,
+  no fallar en silencio.
+
+→ **Cobertura final: 86 de 273 (32 %).** Los huecos se concentran en abdominales, glúteos, cuerpo
+completo, kettlebell, TRX y todo lo colgado de barra.
+
+**Peso:** 7,7 MB en PNG original para los 86 (~40 KB por cuadro); a WebP se espera 2-3 MB.
+
+**Revisión a fijar:** `6f3ce86eb79b17e7bbaf588b7960149725bc8fc7` (último commit del repo, de
+**febrero de 2022** — la fuente está quieta, lo que juega a favor de la estabilidad).
 
 ## Testing
 
