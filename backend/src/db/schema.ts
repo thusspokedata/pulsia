@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, jsonb, timestamp, integer, bigint, boolean, doublePrecision, real, index, uniqueIndex, customType } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
-import type { TrainingProfile, Program, PlannedExercise, SupplementComponent, Frequency, AdjustmentItem } from "@pulsia/shared";
+import type { TrainingProfile, Program, PlannedExercise, SupplementComponent, Frequency, AdjustmentItem, CardioSamples, CardioFitExtras } from "@pulsia/shared";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() { return "bytea"; },
@@ -321,12 +321,40 @@ export const cardioActivity = pgTable("cardio_activity", {
   source: text("source").notNull(),          // 'manual' | 'fit'
   hrSeries: jsonb("hr_series").$type<{ t: number; bpm: number }[]>(),
   notes: text("notes").default("").notNull(),
+  // Métricas extendidas del .FIT (Fase 1 de captura total): todas nullable, las actividades
+  // manuales y las persistidas antes de esta feature no las traen.
+  totalCycles: integer("total_cycles"),
+  trainingLoad: doublePrecision("training_load"),
+  trainingEffectAerobic: doublePrecision("training_effect_aerobic"),
+  trainingEffectAnaerobic: doublePrecision("training_effect_anaerobic"),
+  avgCadence: doublePrecision("avg_cadence"),
+  maxCadence: doublePrecision("max_cadence"),
+  avgFractionalCadence: doublePrecision("avg_fractional_cadence"),
+  avgRespiration: doublePrecision("avg_respiration"),
+  maxRespiration: doublePrecision("max_respiration"),
+  minRespiration: doublePrecision("min_respiration"),
+  metabolicKcal: integer("metabolic_kcal"),
+  sportProfileName: text("sport_profile_name"),
+  tzOffsetMinutes: integer("tz_offset_minutes"),
+  // Stream columnar (reemplaza a hrSeries hacia adelante) y metadata cruda del .FIT.
+  samples: jsonb("samples").$type<CardioSamples>(),
+  fitExtras: jsonb("fit_extras").$type<CardioFitExtras>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (t) => ({
   // Toda lectura es "las actividades de este usuario en este rango".
   byUserStarted: index("cardio_activity_user_started_idx").on(t.userId, t.startedAt),
 }));
+
+// Bytes crudos del .FIT, separado de cardio_activity a propósito: el listado de actividades no
+// debe arrastrar el binario. 1:1 con cardio_activity, borrado en cascada.
+export const cardioFitFile = pgTable("cardio_fit_file", {
+  activityId: uuid("activity_id").primaryKey().references(() => cardioActivity.id, { onDelete: "cascade" }),
+  bytes: bytea("bytes").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  sha256: text("sha256").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
 
 export const appRelease = pgTable("app_release", {
   id: text("id").primaryKey(), // siempre "latest" (fila única)

@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import { CardioActivitySchema } from "@pulsia/shared";
-import { insertCardio, findCardioAtSecond, listCardio, getCardio, getCardioOwnerId, updateCardio, deleteCardio } from "../cardio/repository";
+import { insertCardio, insertCardioFitFile, findCardioAtSecond, listCardio, getCardio, getCardioOwnerId, updateCardio, deleteCardio } from "../cardio/repository";
 import { parseFit } from "../cardio/parseFit";
 import type { AppDeps } from "../app";
 
@@ -17,8 +18,41 @@ const ParseFitSchema = z.object({ fitBase64: z.string().min(1) });
 // Techo de 5 MB de archivo → ~6.9 MB de base64. Los .FIT típicos son 50-500 KB.
 const MAX_FIT_B64 = 7_000_000;
 
+// Magic bytes: el header FIT tiene ".FIT" en los bytes 8-11 (equivalente al %PDF del ECG).
+// Compartido por /parse y por el guardado en POST /cardio: los dos reciben el MISMO campo
+// `fitBase64`, así que el criterio de "esto es un .FIT" tiene que ser uno solo o se separan.
+const looksLikeFit = (buf: Buffer): boolean =>
+  buf.length >= 12 && buf.subarray(8, 12).toString("latin1") === ".FIT";
+
 export function cardioRoutes(deps: AppDeps) {
   const r = new Hono<{ Variables: { userId: string } }>();
+
+  // Guarda el .FIT crudo si vino y corresponde. Es un BONUS: nunca debe tumbar el alta, así que
+  // todo error se loguea y se sigue. Idempotente (onConflictDoNothing), por eso se puede llamar
+  // también en el camino del retry para auto-repararse si el primer intento falló.
+  // `raw` (no el parseado) porque fitBase64 no es parte de CardioActivitySchema.
+  async function maybeSaveFitFile(a: { id: string; source: string }, raw: unknown): Promise<void> {
+    if (a.source !== "fit") return; // la carga manual nunca guarda archivo
+    const fitBase64 = (raw as { fitBase64?: unknown })?.fitBase64;
+    if (typeof fitBase64 !== "string" || fitBase64.length === 0) return;
+    if (fitBase64.length > MAX_FIT_B64) {
+      console.warn(`POST /cardio: .FIT de ${a.id} demasiado grande (${fitBase64.length} chars), no se guarda`);
+      return;
+    }
+    try {
+      const bytes = Buffer.from(fitBase64, "base64");
+      // Mismo chequeo que /parse: guardar basura en la tabla del archivo crudo arruinaría el
+      // reprocesamiento futuro.
+      if (!looksLikeFit(bytes)) {
+        console.warn(`POST /cardio: el fitBase64 de ${a.id} no es un .FIT, no se guarda`);
+        return;
+      }
+      const sha256 = createHash("sha256").update(bytes).digest("hex");
+      await insertCardioFitFile(deps.db, a.id, bytes, bytes.length, sha256);
+    } catch (e) {
+      console.error(`no se pudo guardar el .FIT crudo de ${a.id}:`, (e as Error).message);
+    }
+  }
 
   r.post("/", async (c) => {
     let raw: unknown;
@@ -39,7 +73,13 @@ export function cardioRoutes(deps: AppDeps) {
     const owner = await getCardioOwnerId(deps.db, a.id);
     if (owner && owner !== userId) return c.json({ error: "esa actividad pertenece a otro usuario" }, 409);
     // owner === userId: re-POST del mismo id por el mismo usuario (retry) → idempotente, sin reinsertar.
-    if (owner === userId) return c.json({ id: a.id }, 200);
+    // Pero SÍ se reintenta guardar el archivo crudo: si falló en el primer POST (se loguea y sigue),
+    // sin esto no habría forma de recuperarlo nunca, y la Fase 3 (reprocesar el histórico) depende
+    // de que el binario esté. `insertCardioFitFile` es onConflictDoNothing, así que repetir es seguro.
+    if (owner === userId) {
+      await maybeSaveFitFile(a, raw);
+      return c.json({ id: a.id }, 200);
+    }
 
     // El dedupe aplica solo al import: reimportar el mismo .FIT (con id NUEVO) no debe crear dos
     // caminatas. La carga manual no lo chequea (dos actividades cortas seguidas son asunto del usuario).
@@ -48,6 +88,8 @@ export function cardioRoutes(deps: AppDeps) {
       if (dup) return c.json({ error: "Ya importaste esta actividad" }, 409);
     }
     await insertCardio(deps.db, userId, { ...a, kcalSource });
+
+    await maybeSaveFitFile(a, raw);
     return c.json({ id: a.id }, 200);
   });
 
@@ -66,10 +108,7 @@ export function cardioRoutes(deps: AppDeps) {
     if (!parsed.success) return c.json({ error: "Falta el archivo .FIT" }, 400);
     if (parsed.data.fitBase64.length > MAX_FIT_B64) return c.json({ error: "El archivo es demasiado grande (máx 5 MB)" }, 400);
     const buf = Buffer.from(parsed.data.fitBase64, "base64");
-    // Magic bytes: el header FIT tiene ".FIT" en los bytes 8-11 (equivalente al %PDF del ECG).
-    if (buf.length < 12 || buf.subarray(8, 12).toString("latin1") !== ".FIT") {
-      return c.json({ error: "No parece un archivo .FIT" }, 400);
-    }
+    if (!looksLikeFit(buf)) return c.json({ error: "No parece un archivo .FIT" }, 400);
     try {
       return c.json(parseFit(buf));
     } catch (e) {

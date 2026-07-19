@@ -32,6 +32,39 @@ export type CardioSource = z.infer<typeof CardioSourceSchema>;
 export const CardioHrPointSchema = HrSeriesPointSchema;
 export type CardioHrPoint = z.infer<typeof CardioHrPointSchema>;
 
+// Stream columnar: un array por canal, alineado por índice con `t`. Los huecos son null porque
+// los canales son dispersos (la respiración aparece en ~1 de cada 3 records).
+export const CardioSamplesSchema = z.object({
+  t: z.array(z.number().int().min(0)),
+  hr: z.array(z.number().nullable()).optional(),
+  cad: z.array(z.number().nullable()).optional(),
+  fracCad: z.array(z.number().nullable()).optional(),
+  resp: z.array(z.number().nullable()).optional(),
+  cycleLen: z.array(z.number().nullable()).optional(),
+  // Campos que el SDK no sabe nombrar, guardados crudos y SIN interpretar (clave = nº de campo FIT).
+  unknown: z.record(z.string(), z.array(z.number().nullable())).optional(),
+});
+export type CardioSamples = z.infer<typeof CardioSamplesSchema>;
+
+export const CardioHrZonesSchema = z.object({
+  secondsPerZone: z.array(z.number()),
+  highBoundary: z.array(z.number()),
+  maxHr: z.number().nullable(),
+  restingHr: z.number().nullable(),
+  thresholdHr: z.number().nullable(),
+  calcType: z.string().nullable(),
+});
+export type CardioHrZones = z.infer<typeof CardioHrZonesSchema>;
+
+export const CardioFitExtrasSchema = z.object({
+  zones: CardioHrZonesSchema.optional(),
+  athlete: z.record(z.string(), z.unknown()).optional(),
+  devices: z.array(z.record(z.string(), z.unknown())).optional(),
+  laps: z.array(z.record(z.string(), z.unknown())).optional(),
+  events: z.array(z.record(z.string(), z.unknown())).optional(),
+});
+export type CardioFitExtras = z.infer<typeof CardioFitExtrasSchema>;
+
 // Tiempos en epoch ms (números), igual que WorkoutSessionSchema.
 export const CardioActivitySchema = z.object({
   id: z.string().uuid(),
@@ -44,9 +77,29 @@ export const CardioActivitySchema = z.object({
   // Ascenso acumulado, no desnivel neto: es no-negativo por definición.
   elevationGainM: z.number().int().min(0).nullable(),
   kcal: z.number().int().min(0).nullable(),
+  // Métricas extendidas del .FIT (Fase 1): todas optional+nullable — optional porque las
+  // actividades manuales y las ya persistidas antes de esta feature no traen la clave; nullable
+  // porque, igual que avgHr/maxHr, el reloj puede no reportar el dato aunque el resto del record sí.
+  totalCycles: z.number().int().min(0).nullable().optional(),
+  trainingLoad: z.number().min(0).nullable().optional(),
+  trainingEffectAerobic: z.number().min(0).max(5).nullable().optional(),
+  trainingEffectAnaerobic: z.number().min(0).max(5).nullable().optional(),
+  avgCadence: z.number().min(0).nullable().optional(),
+  maxCadence: z.number().min(0).nullable().optional(),
+  avgFractionalCadence: z.number().min(0).nullable().optional(),
+  avgRespiration: z.number().min(0).nullable().optional(),
+  maxRespiration: z.number().min(0).nullable().optional(),
+  minRespiration: z.number().min(0).nullable().optional(),
+  metabolicKcal: z.number().int().min(0).nullable().optional(),
+  // Metadata derivada del archivo, no una medición: o el parser la conoce (string/número) o
+  // directamente omite la clave. Sin caso intermedio "se midió pero no hay dato" → sin nullable.
+  sportProfileName: z.string().optional(),
+  tzOffsetMinutes: z.number().int().optional(),
   kcalSource: CardioKcalSourceSchema,
   source: CardioSourceSchema,
   hrSeries: z.array(CardioHrPointSchema).optional(),
+  samples: CardioSamplesSchema.optional(),
+  fitExtras: CardioFitExtrasSchema.optional(),
   notes: z.string().default(""),
 });
 export type CardioActivity = z.infer<typeof CardioActivitySchema>;
@@ -63,6 +116,21 @@ export const CardioFitPreviewSchema = z.object({
   maxHr: z.number().int().min(0).nullable(),
   elevationGainM: z.number().int().min(0).nullable(),
   kcal: z.number().int().min(0).nullable(),
+  totalCycles: z.number().int().min(0).nullable().optional(),
+  trainingLoad: z.number().min(0).nullable().optional(),
+  trainingEffectAerobic: z.number().min(0).max(5).nullable().optional(),
+  trainingEffectAnaerobic: z.number().min(0).max(5).nullable().optional(),
+  avgCadence: z.number().min(0).nullable().optional(),
+  maxCadence: z.number().min(0).nullable().optional(),
+  avgFractionalCadence: z.number().min(0).nullable().optional(),
+  avgRespiration: z.number().min(0).nullable().optional(),
+  maxRespiration: z.number().min(0).nullable().optional(),
+  minRespiration: z.number().min(0).nullable().optional(),
+  metabolicKcal: z.number().int().min(0).nullable().optional(),
+  sportProfileName: z.string().optional(),
+  tzOffsetMinutes: z.number().int().optional(),
   hrSeries: z.array(CardioHrPointSchema).optional(),
+  samples: CardioSamplesSchema.optional(),
+  fitExtras: CardioFitExtrasSchema.optional(),
 });
 export type CardioFitPreview = z.infer<typeof CardioFitPreviewSchema>;

@@ -1,7 +1,9 @@
 import { test, expect } from "bun:test";
+import { createHash } from "node:crypto";
 import { createApp } from "../app";
 import { SINGLE_USER_ID } from "../constants";
 import { buildFitFixture } from "../cardio/fitFixture";
+import { cardioFitFile } from "../db/schema";
 
 const KEY = "a".repeat(64);
 const AID = "11111111-1111-4111-8111-111111111111";
@@ -13,9 +15,11 @@ const activity = {
 };
 
 // fakeDb configurable: `rows` es lo que devuelven los SELECT de fila completa;
-// `ownerId` lo que devuelve el select({userId}) de getCardioOwnerId.
-function fakeDb(opts: { rows?: any[]; ownerId?: string | null } = {}) {
+// `ownerId` lo que devuelve el select({userId}) de getCardioOwnerId;
+// `failFileInsert` simula que el insert de cardio_fit_file explota (para probar que no rompe el 200).
+function fakeDb(opts: { rows?: any[]; ownerId?: string | null; failFileInsert?: boolean } = {}) {
   const inserts: any[] = [];
+  const fileInserts: any[] = [];
   const updates: any[] = [];
   const rows = opts.rows ?? [];
   const thenableRows = (data: any[]) => {
@@ -24,13 +28,30 @@ function fakeDb(opts: { rows?: any[]; ownerId?: string | null } = {}) {
     return p;
   };
   const db: any = {
-    _inserts: inserts, _updates: updates,
-    insert: () => ({ values: async (v: any) => { inserts.push(v); } }),
-    // select() sin args = fila completa (getCardio/listCardio/findCardioAtSecond);
-    // select({userId}) = getCardioOwnerId.
+    _inserts: inserts, _fileInserts: fileInserts, _updates: updates,
+    // Distingue la tabla por identidad de referencia (import real de cardioFitFile), no por forma
+    // de los valores: así el fake no depende de qué claves manda insertCardio/insertCardioFitFile.
+    insert: (table: any) => {
+      if (table === cardioFitFile) {
+        return {
+          values: (v: any) => ({
+            onConflictDoNothing: async () => {
+              if (opts.failFileInsert) throw new Error("boom: no se pudo escribir cardio_fit_file");
+              fileInserts.push(v);
+            },
+          }),
+        };
+      }
+      return { values: async (v: any) => { inserts.push(v); } };
+    },
+    // select() sin args = fila completa (getCardio/findCardioAtSecond).
+    // select({...}) con `id` = listCardio (proyecta las columnas del listado, sin las pesadas).
+    // select({userId}) SIN `id` = getCardioOwnerId.
+    // Ojo: no alcanza con "¿hay proyección?" — desde que listCardio proyecta, ese criterio la
+    // confundía con getCardioOwnerId y devolvía algo sin .orderBy (500).
     select: (proj?: any) => ({
       from: () => ({
-        where: (cond: any) => proj
+        where: (cond: any) => proj && !proj.id
           ? Promise.resolve(opts.ownerId != null ? [{ userId: opts.ownerId }] : [])
           : thenableRows(rows),
       }),
@@ -96,6 +117,83 @@ test("re-POST del mismo id por el mismo usuario → 200 idempotente, SIN reinser
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({ id: AID });
   expect(db._inserts.length).toBe(0);
+  expect(db._fileInserts.length).toBe(0);
+});
+
+// Bytes sintéticos con el magic ".FIT" en 8-11, que es lo único que mira el guardado.
+// Nunca el archivo real del usuario: trae su nombre, peso, altura y FC, y el repo es público.
+function fakeFitBytes(payload = "contenido de prueba, no el archivo real"): Buffer {
+  return Buffer.concat([Buffer.alloc(8), Buffer.from(".FIT", "latin1"), Buffer.from(payload)]);
+}
+
+test("POST /cardio con fitBase64 y source=fit → guarda el .FIT crudo en cardio_fit_file", async () => {
+  const db = fakeDb();
+  const app = createApp(deps(db) as any);
+  const fitBytes = fakeFitBytes();
+  const fitBase64 = fitBytes.toString("base64");
+  const res = await app.request("/cardio", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...activity, fitBase64 }),
+  });
+  expect(res.status).toBe(200);
+  expect(db._fileInserts).toHaveLength(1);
+  const fileInsert = db._fileInserts[0];
+  expect(fileInsert.activityId).toBe(AID);
+  expect(fileInsert.sizeBytes).toBe(fitBytes.length);
+  expect(fileInsert.sha256).toHaveLength(64);
+  expect(fileInsert.sha256).toBe(createHash("sha256").update(fitBytes).digest("hex"));
+  expect(fileInsert.bytes.equals(fitBytes)).toBe(true);
+});
+
+test("POST /cardio con fitBase64 que NO es un .FIT → no guarda el archivo, pero la actividad entra igual", async () => {
+  const db = fakeDb();
+  const app = createApp(deps(db) as any);
+  // Mismo criterio de magic bytes que /parse: guardar basura arruinaría el reprocesamiento futuro.
+  const noEsFit = Buffer.from("esto no es un archivo .FIT ni de casualidad").toString("base64");
+  const res = await app.request("/cardio", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...activity, fitBase64: noEsFit }),
+  });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ id: AID });
+  expect(db._fileInserts).toHaveLength(0);
+});
+
+test("POST /cardio sin fitBase64 → no inserta archivo, sigue devolviendo 200", async () => {
+  const db = fakeDb();
+  const app = createApp(deps(db) as any);
+  const res = await app.request("/cardio", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(activity) });
+  expect(res.status).toBe(200);
+  expect(db._fileInserts).toHaveLength(0);
+});
+
+test("POST /cardio source=manual CON fitBase64 → el fitBase64 se ignora, no se guarda archivo", async () => {
+  const db = fakeDb();
+  const app = createApp(deps(db) as any);
+  const fitBase64 = Buffer.from("no debería guardarse").toString("base64");
+  const res = await app.request("/cardio", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...activity, source: "manual", kcal: null, kcalSource: "estimate", fitBase64 }),
+  });
+  expect(res.status).toBe(200);
+  expect(db._fileInserts).toHaveLength(0);
+});
+
+test("POST /cardio: si falla el insert del .FIT crudo, la actividad igual se guarda y responde 200", async () => {
+  const db = fakeDb({ failFileInsert: true });
+  const app = createApp(deps(db) as any);
+  // Los bytes TIENEN que ser un .FIT válido: si no, maybeSaveFitFile sale por el early-return de
+  // looksLikeFit y nunca llega a insertCardioFitFile, con lo que el throw simulado no se dispara
+  // y este test pasaría sin ejercitar el catch que dice estar probando (falso verde).
+  const fitBase64 = fakeFitBytes("archivo que va a fallar al guardarse").toString("base64");
+  const res = await app.request("/cardio", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...activity, fitBase64 }),
+  });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ id: AID });
+  expect(db._inserts).toHaveLength(1);      // la actividad SÍ se insertó
+  expect(db._fileInserts).toHaveLength(0);  // y el archivo NO (el insert explotó, se logueó y siguió)
 });
 
 test("GET /cardio/:id de otro usuario → 409 (no 404)", async () => {
@@ -181,4 +279,21 @@ test("POST /cardio/parse no queda capturada por /:id (orden de rutas)", async ()
     body: JSON.stringify({ fitBase64: "" }),
   });
   expect(res.status).toBe(400);
+});
+
+test("re-POST del mismo id REINTENTA guardar el .FIT si la primera vez falló (auto-reparación)", async () => {
+  // El retry idempotente devuelve 200 sin reinsertar la actividad, pero el archivo crudo SÍ se
+  // reintenta: si no, un fallo del primer insert dejaría el binario perdido para siempre y la
+  // Fase 3 (reprocesar el histórico) no tendría de dónde leer.
+  const db = fakeDb({ ownerId: SINGLE_USER_ID });
+  const app = createApp(deps(db) as any);
+  const fitBytes = fakeFitBytes();
+  const res = await app.request("/cardio", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...activity, fitBase64: fitBytes.toString("base64") }),
+  });
+  expect(res.status).toBe(200);
+  expect(db._inserts).toHaveLength(0);      // la actividad NO se reinserta
+  expect(db._fileInserts).toHaveLength(1);  // pero el archivo sí se reintenta
+  expect(db._fileInserts[0].activityId).toBe(AID);
 });

@@ -36,6 +36,20 @@ test("createCardio lanza en 409 (duplicado)", async () => {
   await expect(createCardio("http://x", activity)).rejects.toThrow();
 });
 
+test("createCardio manda fitBase64 en el body cuando se lo pasan (confirmación de un import .FIT)", async () => {
+  const fn = mockFetch({ id: AID });
+  await createCardio("http://x", activity, "QUJD");
+  const [, init] = fn.mock.calls[0];
+  expect(JSON.parse(init.body)).toEqual({ ...activity, fitBase64: "QUJD" });
+});
+
+test("createCardio sin fitBase64 no agrega la clave al body (alta manual)", async () => {
+  const fn = mockFetch({ id: AID });
+  await createCardio("http://x", activity);
+  const [, init] = fn.mock.calls[0];
+  expect(JSON.parse(init.body)).not.toHaveProperty("fitBase64");
+});
+
 test("getCardioById hace GET /cardio/:id y devuelve la actividad", async () => {
   const fn = mockFetch(activity);
   const res = await getCardioById("http://x", AID);
