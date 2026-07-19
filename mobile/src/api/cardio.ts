@@ -12,8 +12,12 @@ export async function listCardio(baseUrl: string, from?: number, to?: number): P
 
 // Crea una actividad de cardio. El backend devuelve 409 si ya existe una en ese momento
 // (dedupe por solape temporal), que traducimos a un mensaje específico.
-export async function createCardio(baseUrl: string, activity: CardioActivity): Promise<{ id: string }> {
-  const res = await apiFetch(baseUrl, "/cardio", { method: "POST", body: JSON.stringify(activity) });
+// `fitBase64` es opcional: al confirmar un import .FIT, la pantalla ya tiene el archivo en
+// memoria (no lo relee) y lo manda junto al POST para que el server guarde el binario crudo
+// (ver POST /cardio en el backend). En alta manual no se pasa, y la clave no viaja en el body.
+export async function createCardio(baseUrl: string, activity: CardioActivity, fitBase64?: string): Promise<{ id: string }> {
+  const body = fitBase64 ? { ...activity, fitBase64 } : activity;
+  const res = await apiFetch(baseUrl, "/cardio", { method: "POST", body: JSON.stringify(body) });
   if (!res.ok) {
     if (res.status === 409) throw new Error("Ya existe una actividad en ese momento");
     throw new Error("No se pudo guardar la actividad");

@@ -53,6 +53,8 @@ export default function CardioScreen() {
   // Import de .FIT (solo en alta): el preview parseado del reloj y el flag de carga del picker/parseo.
   const [fitPreview, setFitPreview] = useState<CardioFitPreview | null>(null);
   const [importing, setImporting] = useState(false);
+  // El base64 del archivo elegido, para mandarlo al confirmar (POST /cardio) SIN releerlo del disco.
+  const [fitBase64, setFitBase64] = useState<string | null>(null);
 
   // En modo edición guardamos la actividad cargada para mostrar los campos NO
   // editables (fecha, FC media) como solo-lectura: updateCardio solo parchea
@@ -133,6 +135,7 @@ export default function CardioScreen() {
       const base64 = await FileSystem.readAsStringAsync(picked.assets[0].uri, { encoding: "base64" });
       const preview = await parseFitCardio(url, base64);
       setFitPreview(preview);
+      setFitBase64(base64);
       // Prefill de los campos editables con lo que midió el reloj.
       setType(preview.type);
       setDurationText(numText(Math.round(preview.durationMs / 60000)));
@@ -168,7 +171,7 @@ export default function CardioScreen() {
       }
       setSaving(true);
       try {
-        await createCardio(url, parsed.data);
+        await createCardio(url, parsed.data, fitBase64 ?? undefined);
         router.back();
       } catch (e) {
         setError((e as Error).message || "No se pudo guardar la actividad");
