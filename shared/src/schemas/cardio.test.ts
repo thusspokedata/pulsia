@@ -1,5 +1,13 @@
 import { test, expect } from "bun:test";
-import { CardioActivitySchema, CardioHrPointSchema, CARDIO_TYPES, CARDIO_LABELS, CardioFitPreviewSchema } from "./cardio";
+import {
+  CardioActivitySchema,
+  CardioHrPointSchema,
+  CARDIO_TYPES,
+  CARDIO_LABELS,
+  CardioFitPreviewSchema,
+  CardioSamplesSchema,
+  CardioFitExtrasSchema,
+} from "./cardio";
 import { HrSeriesPointSchema } from "./session";
 
 const valid = {
@@ -112,4 +120,59 @@ test("CardioFitPreviewSchema acepta campos device nulos y hrSeries ausente", () 
   });
   expect(parsed.hrSeries).toBeUndefined();
   expect(parsed.kcal).toBeNull();
+});
+
+// Compatibilidad hacia atrás: una actividad mínima sin ninguno de los campos nuevos (samples,
+// fitExtras, cadencia, respiración, etc.) debe seguir parseando igual que antes de esta feature.
+test("una actividad mínima sin los campos nuevos del .FIT sigue parseando", () => {
+  const r = CardioActivitySchema.safeParse(valid);
+  expect(r.success).toBe(true);
+  if (r.success) {
+    expect(r.data.samples).toBeUndefined();
+    expect(r.data.fitExtras).toBeUndefined();
+    expect(r.data.totalCycles).toBeUndefined();
+  }
+});
+
+test("samples acepta canales dispersos con huecos null", () => {
+  const r = CardioActivitySchema.safeParse({
+    ...valid,
+    samples: {
+      t: [0, 1, 2, 3],
+      hr: [100, 101, null, 103],
+      resp: [null, 15, null, 16],
+      unknown: { "90": [1, null, 2, null] },
+    },
+  });
+  expect(r.success).toBe(true);
+});
+
+test("samples.t rechaza un valor negativo", () => {
+  const r = CardioActivitySchema.safeParse({
+    ...valid,
+    samples: { t: [0, -1, 2] },
+  });
+  expect(r.success).toBe(false);
+});
+
+test("fitExtras.zones acepta secondsPerZone y highBoundary", () => {
+  const r = CardioActivitySchema.safeParse({
+    ...valid,
+    fitExtras: {
+      zones: {
+        secondsPerZone: [120, 300, 600, 400, 100],
+        highBoundary: [100, 120, 140, 160, 180],
+        maxHr: 190,
+        restingHr: 50,
+        thresholdHr: 165,
+        calcType: "percent_hrr",
+      },
+    },
+  });
+  expect(r.success).toBe(true);
+});
+
+test("CardioSamplesSchema y CardioFitExtrasSchema quedan exportados para el parser", () => {
+  expect(CardioSamplesSchema.safeParse({ t: [0, 1] }).success).toBe(true);
+  expect(CardioFitExtrasSchema.safeParse({}).success).toBe(true);
 });
