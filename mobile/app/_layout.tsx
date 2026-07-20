@@ -52,6 +52,7 @@ function Guarded() {
       <Stack.Screen name="registro" options={{ headerShown: true, title: "Crear cuenta" }} />
       <Stack.Screen name="configuracion" options={{ headerShown: true, title: "Configuración", presentation: "modal" }} />
       <Stack.Screen name="sesion" options={{ headerShown: true, title: "Entrenamiento" }} />
+      <Stack.Screen name="ejercicios" options={{ headerShown: true, title: "Ejercicios" }} />
       {/*
        * Modal a propósito, no por estética: con `presentation: "modal"` la pantalla de sesión
        * queda montada abajo en el stack y NO se desmonta. Esta app arrastra dos bugs caros de

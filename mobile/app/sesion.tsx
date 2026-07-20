@@ -699,22 +699,25 @@ export default function SesionScreen() {
         <>
           {/* Acceso CONDICIONAL al detalle. El chevron va como HERMANO del Text del nombre y
               no adentro: así `active-exercise-name` conserva un único hijo de texto. */}
-          {hasExerciseMedia(current.catalogId) ? (
-            <Pressable
-              testID="ver-ejercicio-activo"
-              onPress={() => router.push(`/ejercicio/${current.catalogId}`)}
-              style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}
-            >
+          {(() => {
+            const nombre = (
               <Text testID="active-exercise-name" style={{ color: colors.text, fontSize: 18, fontWeight: "600" }}>
                 {esName(current.catalogId, current.garminName)}
               </Text>
-              <Text style={{ color: colors.accent, fontSize: 16 }}>›</Text>
-            </Pressable>
-          ) : (
-            <Text testID="active-exercise-name" style={{ color: colors.text, fontSize: 18, fontWeight: "600" }}>
-              {esName(current.catalogId, current.garminName)}
-            </Text>
-          )}
+            );
+            return hasExerciseMedia(current.catalogId) ? (
+              <Pressable
+                testID="ver-ejercicio-activo"
+                onPress={() => router.push(`/ejercicio/${current.catalogId}`)}
+                style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}
+              >
+                {nombre}
+                <Text style={{ color: colors.accent, fontSize: 16 }}>›</Text>
+              </Pressable>
+            ) : (
+              nombre
+            );
+          })()}
           {esName(current.catalogId, current.garminName) !== current.garminName && (
             <Text testID="active-exercise-name-en" style={{ color: colors.textMuted, fontSize: 12 }}>{current.garminName}</Text>
           )}

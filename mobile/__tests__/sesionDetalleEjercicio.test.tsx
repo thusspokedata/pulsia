@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react-native";
 import { alternativesFor, hasExerciseMedia } from "@pulsia/shared";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getRestState, setRestState } from "../src/storage/restState";
 import { AlternativasPicker } from "../src/components/AlternativasPicker";
 
@@ -10,13 +11,22 @@ beforeEach(() => mockPush.mockClear());
 
 const alts = alternativesFor("barbell_bench_press", ["dumbbell", "bench"] as never);
 
-test("abrir el detalle no altera el timing persistido de la sesión", async () => {
+test("abrir el detalle no toca el timing persistido de la sesión", async () => {
+  // Antes este test hacía set y get sin nada en el medio: pasaba igual con el código roto,
+  // y habría pasado también antes de que esta feature existiera. Ahora sí ejerce el camino
+  // real (montar el picker y tocar el ojo) y espía la escritura, que es lo que importa:
+  // mirar una demostración no debe reescribir el estado de la sesión en curso.
   const antes = { sessionId: "s1", setStart: 1000, restUntil: 5000, restRemaining: null };
   await setRestState(antes);
-  // Abrir el detalle es navegación pura: no toca restState. Si alguien mete lógica de sesión
-  // en ese camino, este test se cae.
-  const despues = await getRestState();
-  expect(despues).toEqual(antes);
+  const escrituras = jest.spyOn(AsyncStorage, "setItem");
+  escrituras.mockClear(); // AsyncStorage ya es un mock: el espía hereda la escritura del setup
+
+  await render(<AlternativasPicker alternativas={alts} elegido={null} onPick={jest.fn()} />);
+  fireEvent.press(screen.getByTestId("alt-ver-dumbbell_bench_press"));
+
+  expect(escrituras).not.toHaveBeenCalled();
+  expect(await getRestState()).toEqual(antes);
+  escrituras.mockRestore();
 });
 
 test("hay alternativas con ilustración para ofrecer el acceso", () => {

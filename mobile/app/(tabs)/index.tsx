@@ -52,13 +52,22 @@ export default function ProgramaScreen() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
       <Text style={{ fontSize: 20, fontWeight: "500", color: colors.text }}>{program.name}</Text>
-      <Pressable
-        testID="entreno-puntual-link"
-        onPress={() => router.push("/entreno-puntual")}
-        style={{ borderWidth: 1, borderColor: colors.accent, borderRadius: radius.sm, padding: spacing.sm, alignItems: "center" }}
-      >
-        <Text style={{ color: colors.accent, fontSize: 13 }}>Entreno puntual (viaje)</Text>
-      </Pressable>
+      <View style={{ flexDirection: "row", gap: spacing.sm }}>
+        <Pressable
+          testID="entreno-puntual-link"
+          onPress={() => router.push("/entreno-puntual")}
+          style={{ flex: 1, borderWidth: 1, borderColor: colors.accent, borderRadius: radius.sm, padding: spacing.sm, alignItems: "center" }}
+        >
+          <Text style={{ color: colors.accent, fontSize: 13 }}>Entreno puntual (viaje)</Text>
+        </Pressable>
+        <Pressable
+          testID="ejercicios-link"
+          onPress={() => router.push("/ejercicios")}
+          style={{ flex: 1, borderWidth: 1, borderColor: colors.accent, borderRadius: radius.sm, padding: spacing.sm, alignItems: "center" }}
+        >
+          <Text style={{ color: colors.accent, fontSize: 13 }}>Ver ejercicios</Text>
+        </Pressable>
+      </View>
       <WeekTabs weeks={program.weeks.map((w) => w.weekNumber)} selected={week} onSelect={setWeek} />
       <SegmentToggle options={[{ value: "gym", label: "Gimnasio" }, { value: "home", label: "Casa" }]} value={location} onChange={setLocation} />
       {days.length === 0 ? (
