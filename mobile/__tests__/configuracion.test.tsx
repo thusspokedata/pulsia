@@ -1,8 +1,9 @@
 import { StyleSheet } from "react-native";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { saveSettings, getSettings } from "../src/api/settings";
+import { reprocessAllCardio } from "../src/api/cardio";
 import ConfiguracionScreen from "../app/configuracion";
 
 jest.mock("expo-router", () => ({ router: { replace: jest.fn(), push: jest.fn() } }));
@@ -11,6 +12,7 @@ jest.mock("../src/api/settings", () => ({
   saveSettings: jest.fn(async () => {}),
   getSettings: jest.fn(async () => ({ hasApiKey: false, aiModel: "claude-sonnet-4-6", ecgEnabled: false, hasKardiaPw: false })),
 }));
+jest.mock("../src/api/cardio", () => ({ reprocessAllCardio: jest.fn() }));
 
 beforeEach(async () => {
   await AsyncStorage.clear();
@@ -69,6 +71,34 @@ test("la pantalla scrollea y deja aire abajo (secciones del fondo alcanzables)",
   // Las secciones del fondo (las que quedaban fuera de pantalla) están renderizadas.
   expect(screen.getByTestId("reports-toggle")).toBeTruthy();
   expect(screen.getByTestId("logout")).toBeTruthy();
+});
+
+test("reprocesar actividades de Garmin: muestra el resumen al terminar", async () => {
+  (reprocessAllCardio as jest.Mock).mockResolvedValue({ reprocesadas: 2, sinArchivo: 1, fallidas: 0 });
+  await render(<ConfiguracionScreen />);
+  await fireEvent.press(await screen.findByTestId("reprocess-garmin"));
+  await waitFor(() => expect(screen.getByText("2 reprocesadas · 1 sin archivo · 0 fallidas")).toBeTruthy());
+});
+
+test("reprocesar actividades de Garmin: muestra un spinner mientras corre y lo saca al terminar", async () => {
+  let resolvePromise: (v: { reprocesadas: number; sinArchivo: number; fallidas: number }) => void;
+  (reprocessAllCardio as jest.Mock).mockReturnValue(
+    new Promise((resolve) => { resolvePromise = resolve; }),
+  );
+  await render(<ConfiguracionScreen />);
+  fireEvent.press(await screen.findByTestId("reprocess-garmin"));
+  await waitFor(() => expect(screen.getByTestId("reprocess-garmin-spinner")).toBeTruthy());
+  await act(async () => {
+    resolvePromise({ reprocesadas: 0, sinArchivo: 0, fallidas: 0 });
+  });
+  await waitFor(() => expect(screen.queryByTestId("reprocess-garmin-spinner")).toBeNull());
+});
+
+test("reprocesar actividades de Garmin: muestra un error legible si falla", async () => {
+  (reprocessAllCardio as jest.Mock).mockRejectedValue(new Error("No se pudieron reprocesar las actividades"));
+  await render(<ConfiguracionScreen />);
+  await fireEvent.press(await screen.findByTestId("reprocess-garmin"));
+  await waitFor(() => expect(screen.getByText("No se pudieron reprocesar las actividades")).toBeTruthy());
 });
 
 test("con ECG habilitado en el backend, guarda la contraseña de Kardia al confirmar", async () => {

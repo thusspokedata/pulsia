@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, Linking } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, Linking, ActivityIndicator } from "react-native";
 import { router } from "expo-router";
 import { getBackendUrl, setBackendUrl } from "../src/storage/config";
 import { logout } from "../src/api/auth";
 import { useAuth } from "../src/auth/AuthContext";
 import { testConnection } from "../src/api/health";
 import { saveSettings, getSettings } from "../src/api/settings";
+import { reprocessAllCardio } from "../src/api/cardio";
 import { scheduleDailyReport, cancelDailyReport, getReminderTime, DEFAULT_TIME } from "../src/reports/reminder";
 import { getPairedBand, setPairedBand, clearPairedBand } from "../src/storage/pairedBand";
 import { getSoundsEnabled, setSoundsEnabled } from "../src/storage/sounds";
@@ -29,6 +30,9 @@ export default function ConfiguracionScreen() {
   const [kardiaPw, setKardiaPw] = useState("");
   const [reportsEnabled, setReportsEnabled] = useState(false);
   const [reminderTime, setReminderTime] = useState(DEFAULT_TIME);
+  const [reprocessing, setReprocessing] = useState(false);
+  const [reprocessSummary, setReprocessSummary] = useState<string | null>(null);
+  const [reprocessError, setReprocessError] = useState<string | null>(null);
   const bandMgr = useRef<BandManagerHandle | null>(null);
   const scanTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const foundRef = useRef<FoundDevice[]>([]);
@@ -211,6 +215,23 @@ export default function ConfiguracionScreen() {
     }
   }
 
+  // Reproceso masivo del histórico: relee el .FIT ya guardado de cada actividad reprocesable
+  // (ver POST /cardio/reprocess-all). Herramienta de mantenimiento, no crítica: un fallo se
+  // muestra como texto legible, no rompe el resto de la pantalla.
+  async function onReprocessGarmin() {
+    setReprocessing(true);
+    setReprocessError(null);
+    setReprocessSummary(null);
+    try {
+      const res = await reprocessAllCardio(url);
+      setReprocessSummary(`${res.reprocesadas} reprocesadas · ${res.sinArchivo} sin archivo · ${res.fallidas} fallidas`);
+    } catch (e) {
+      setReprocessError((e as Error).message || "No se pudieron reprocesar las actividades");
+    } finally {
+      setReprocessing(false);
+    }
+  }
+
   const input = {
     borderWidth: 1,
     borderColor: colors.border,
@@ -364,6 +385,28 @@ export default function ConfiguracionScreen() {
             />
           </>
         )}
+      </View>
+
+      <View style={{ gap: spacing.sm }}>
+        <Text style={{ color: colors.textMuted }}>Actividades de Garmin</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+          Relee el .FIT ya guardado de cada actividad para completar datos que quedaron sin
+          procesar, sin tener que reimportar nada.
+        </Text>
+        <Pressable
+          testID="reprocess-garmin"
+          onPress={onReprocessGarmin}
+          disabled={reprocessing}
+          style={{ ...button, opacity: reprocessing ? 0.6 : 1 }}
+        >
+          {reprocessing ? (
+            <ActivityIndicator testID="reprocess-garmin-spinner" color="#fff" />
+          ) : (
+            <Text style={{ color: "#fff" }}>Reprocesar actividades de Garmin</Text>
+          )}
+        </Pressable>
+        {reprocessSummary && <Text style={{ color: colors.accentText }}>{reprocessSummary}</Text>}
+        {reprocessError && <Text style={{ color: colors.danger }}>{reprocessError}</Text>}
       </View>
 
       {status && <Text style={{ color: colors.accentText }}>{status}</Text>}
