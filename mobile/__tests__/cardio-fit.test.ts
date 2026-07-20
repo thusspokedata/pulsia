@@ -64,8 +64,8 @@ test("buildFitActivity marca estimate cuando el .FIT no trae kcal", () => {
 // pieza estaban en verde; faltaba justamente éste, el del camino preview → actividad.
 // Es estructural a propósito: si el preview gana un campo y nadie lo propaga, este test falla solo.
 test("buildFitActivity propaga TODOS los campos del preview (ninguno se pierde)", () => {
-  const preview = {
-    type: "elliptical" as const,
+  const preview: CardioFitPreview = {
+    type: "elliptical",
     startedAt: 1784000000000,
     durationMs: 1800000,
     distanceM: 0,
@@ -91,7 +91,7 @@ test("buildFitActivity propaga TODOS los campos del preview (ninguno se pierde)"
     fitExtras: { zones: { secondsPerZone: [0, 100], highBoundary: [120, 140], maxHr: 190, restingHr: 50, thresholdHr: 170, calcType: "percent" } },
   };
   const form = { type: "elliptical" as const, durationMs: 1800000, distanceM: 0, avgHr: 150, notes: "" };
-  const a: Record<string, unknown> = buildFitActivity(preview as any, form, "11111111-1111-4111-8111-111111111111") as any;
+  const a: Record<string, unknown> = buildFitActivity(preview, form, "11111111-1111-4111-8111-111111111111") as unknown as Record<string, unknown>;
 
   // El form pisa estos a propósito; el resto del preview debe sobrevivir intacto.
   const pisadosPorElForm = new Set(["type", "durationMs", "distanceM", "avgHr"]);
