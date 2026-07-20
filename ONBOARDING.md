@@ -424,6 +424,12 @@ banda hace falta un dev client:
 - **Commits firmados `git commit -S`.** NUNCA atribución a Claude/Anthropic ni Co-Authored-By.
 - **TDD** siempre, con **verificación por mutación de cada test nuevo** (romper el código a propósito
   y confirmar que el test se queja). Specs en `docs/superpowers/specs/`, planes en `docs/superpowers/plans/`.
+- **Los nombres en inglés NO son un bug.** La app mezcla español e inglés **a propósito** según la
+  pantalla: la sesión muestra español (principal) + inglés (secundario), y la card del Programa
+  muestra el nombre **en inglés**, porque el nombre estándar de Garmin es el que sirve para buscar
+  el ejercicio **en el reloj**. Si ves `garminName` sin pasar por `exerciseNameEs`, **no lo
+  "arregles"**: está así queriendo (confirmado por el owner el 2026-07-19, después de que un plan
+  lo propusiera como fix).
 - **El catálogo de ejercicios es AUTO-GENERADO.** `shared/src/catalog/exercises.data.ts` se regenera
   con `bun run shared/scripts/generate-catalog.ts`. **Nunca editarlo a mano**: un fix a mano se pierde
   en la próxima regeneración, y eso ya pasó (§0-AHORA). Para forzar un ejercicio usar `MUST_INCLUDE`;
