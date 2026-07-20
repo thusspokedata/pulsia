@@ -20,6 +20,7 @@ export * from "./schemas/catalog";
 export * from "./schemas/oneoff";
 export * from "./schemas/program";
 export * from "./catalog/exercises";
+export { exerciseMediaFor, hasExerciseMedia, type ExerciseMedia } from "./catalog/exerciseMedia";
 export * from "./schemas/session";
 export * from "./schemas/cardio";
 export * from "./session/completion";
