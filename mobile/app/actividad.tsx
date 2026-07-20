@@ -22,14 +22,23 @@ function hhmm(ms: number): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-// Zona i abarca (highBoundary[i-1] ?? 0, highBoundary[i]] ppm. El 0 (implícito, "por debajo de la
-// zona 1") no tiene entrada previa, así que el borde bajo cae a 0.
-function buildZoneRows(secondsPerZone: number[], highBoundary: number[]) {
-  return secondsPerZone.map((seconds, i) => ({
-    name: `Z${i}`,
-    range: `${highBoundary[i - 1] ?? 0}–${highBoundary[i] ?? "?"} ppm`,
-    seconds,
-  }));
+// Los dos arrays del .FIT NO están alineados índice a índice, y confundirlos corre todos los
+// rangos un escalón:
+//   secondsPerZone = [<por debajo de Z1>, Z1, Z2, Z3, Z4, Z5, <por encima>]   (zonas + 2)
+//   highBoundary   = [techo de Z1, …, techo de Z5, FC máx]                    (zonas + 1)
+// Entonces la zona n (1-based) usa secondsPerZone[n], y va de highBoundary[n-2] (o 0 para Z1)
+// hasta highBoundary[n-1].
+export function buildZoneRows(secondsPerZone: number[], highBoundary: number[]) {
+  const zoneCount = Math.min(highBoundary.length - 1, secondsPerZone.length - 1);
+  const rows = [];
+  for (let n = 1; n <= zoneCount; n++) {
+    rows.push({
+      name: `Z${n}`,
+      range: `${highBoundary[n - 2] ?? 0}–${highBoundary[n - 1]} ppm`,
+      seconds: secondsPerZone[n] ?? 0,
+    });
+  }
+  return rows;
 }
 
 export default function ActividadScreen() {
@@ -99,8 +108,8 @@ export default function ActividadScreen() {
         : String(strap.batteryLevel)
       : null;
   const lines = athleteLines(a.fitExtras?.athlete);
-  const sampleCount = a.samples?.t.length;
-  const hasTechnical = watch != null || strap != null || lines.length > 0 || sampleCount != null || a.distanceM != null;
+  const sampleCount = a.samples?.t.length ?? 0;
+  const hasTechnical = watch != null || strap != null || lines.length > 0 || sampleCount > 0 || a.distanceM != null;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.lg }}>
@@ -165,7 +174,7 @@ export default function ActividadScreen() {
               {l.label}: {l.value}
             </Text>
           ))}
-          {sampleCount != null ? (
+          {sampleCount > 0 ? (
             <Text style={{ color: colors.textMuted, fontSize: 13 }}>Muestras: {sampleCount}</Text>
           ) : null}
           {a.distanceM != null ? (

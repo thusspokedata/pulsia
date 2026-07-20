@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react-native";
-import ActividadScreen from "../app/actividad";
+import ActividadScreen, { buildZoneRows } from "../app/actividad";
 import { getCardioById } from "../src/api/cardio";
 import type { CardioActivity } from "@pulsia/shared";
 
@@ -94,4 +94,34 @@ test("actividad .FIT: muestra tiles de FC y cadencia, tiempo en zonas y la nota 
   expect(screen.getByTestId("tile-Cadencia media")).toBeTruthy();
   expect(screen.getByText(/Tiempo en zonas/)).toBeTruthy();
   expect(screen.getByText(/coincide con Body Battery/)).toBeTruthy();
+});
+
+describe("buildZoneRows", () => {
+  // Forma REAL de un .FIT: secondsPerZone tiene 2 entradas más que zonas (la 0 es "por debajo de
+  // Z1" y la última "por encima"), y highBoundary tiene 1 más (la última es la FC máx).
+  // Valores inventados. Confundir los índices corría todos los rangos un escalón e inventaba
+  // una Z0 y una Z6 — que es exactamente lo que este test previene.
+  const seconds = [0, 100, 200, 300, 40, 0, 0];
+  const boundary = [120, 140, 160, 170, 180, 200];
+
+  test("empieza en Z1 y termina en Z5 (sin Z0 ni Z6 espurias)", () => {
+    expect(buildZoneRows(seconds, boundary).map((z) => z.name)).toEqual(["Z1", "Z2", "Z3", "Z4", "Z5"]);
+  });
+
+  test("Z1 arranca en 0 y cada zona toma su propio techo", () => {
+    const rows = buildZoneRows(seconds, boundary);
+    expect(rows[0].range).toBe("0–120 ppm");
+    expect(rows[1].range).toBe("120–140 ppm");
+    expect(rows[4].range).toBe("170–180 ppm");
+  });
+
+  test("cada zona toma su tiempo, salteando la entrada 0", () => {
+    const rows = buildZoneRows(seconds, boundary);
+    expect(rows.map((z) => z.seconds)).toEqual([100, 200, 300, 40, 0]);
+  });
+
+  test("arrays cortos o vacíos no rompen", () => {
+    expect(buildZoneRows([], [])).toEqual([]);
+    expect(buildZoneRows([0, 50], [120, 140])).toHaveLength(1);
+  });
 });

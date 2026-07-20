@@ -40,7 +40,8 @@ export function athleteLines(athlete: Record<string, unknown> | undefined): Line
   const num = (k: string) => (typeof athlete[k] === "number" ? (athlete[k] as number) : null);
   const w = num("weight"), h = num("height"), rhr = num("restingHeartRate");
   if (w != null) out.push({ label: "Peso", value: `${n1(w)} kg` });
-  if (h != null) out.push({ label: "Altura", value: `${h} m` });
+  // 2 decimales: el reloj guarda la altura en metros y un float crudo se vería como "1.7500000001 m".
+  if (h != null) out.push({ label: "Altura", value: `${h.toFixed(2)} m` });
   if (rhr != null) out.push({ label: "FC en reposo", value: `${rhr} ppm` });
   return out;
 }
