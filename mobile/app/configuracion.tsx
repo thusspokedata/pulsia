@@ -374,7 +374,11 @@ export default function ConfiguracionScreen() {
           Ilustraciones de ejercicios por Everkinetic (Greg Priday), bajo licencia Creative Commons
           Attribution-ShareAlike 4.0 International (CC BY-SA 4.0). Se usan sin modificar.
         </Text>
-        <Pressable onPress={() => Linking.openURL("https://creativecommons.org/licenses/by-sa/4.0/")}>
+        <Pressable onPress={() =>
+              // .catch como el resto del archivo: openURL rechaza si no hay app que maneje el
+              // esquema, y una promise rejection sin manejar por un link secundario no vale la pena.
+              Linking.openURL("https://creativecommons.org/licenses/by-sa/4.0/").catch(() => {})
+            }>
           <Text style={{ color: colors.accent, fontSize: 12 }}>Ver la licencia</Text>
         </Pressable>
       </View>
