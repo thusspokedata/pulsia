@@ -85,7 +85,7 @@ export default function HistorialScreen() {
   }
 
   function onOpenCardio(activity: CardioActivity) {
-    router.push(`/cardio?id=${activity.id}`);
+    router.push(`/actividad?id=${activity.id}`);
   }
 
   async function saveDetailNotes() {
