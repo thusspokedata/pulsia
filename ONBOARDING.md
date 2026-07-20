@@ -1,14 +1,49 @@
 # Pulsia — Onboarding / Handoff
 
-> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: **2026-07-19** (sesión **CATÁLOGO ILUSTRADO**: se descubrió que el generador descartaba ejercicios básicos —no había leg press, remo bajo sentado ni **ningún** pushdown de tríceps— y se arregló con una lista curada; el catálogo pasó de **230 → 273**. Además quedó el **spec de las demostraciones animadas** con la fuente decidida (Everkinetic, CC-BY-SA) y **93 ejercicios ya mapeados a su ilustración**. Detalle en **§0-AHORA**. ⚠️ Ese mismo trabajo destapó que **`inferEquipment` del generador es poco fiable** y que un fix viejo vivía solo en el archivo auto-generado.) Entre esta sesión y la anterior entraron 8 PRs de **otras sesiones** (imports de Garmin, captura total del `.FIT`, AGPL, privacidad) — resumen factual en **§0-INTERMEDIAS**.
+> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: **2026-07-20** (sesión **DEMOSTRACIONES ANIMADAS**: la feature está **COMPLETA y en prod** — tocás un ejercicio y ves cómo se hace, con animación y cues de técnica en español, desde cuatro lugares de la app. **86 de 273 ejercicios** cubiertos. Cuatro PRs (#166, #168, #169, #170), cada uno con review, merge y OTA; fingerprint `784872cb` verificado en los cuatro. Detalle en **§0-AHORA**, incluida la lección de los **tres tests falsos** que salieron de mis propios planes.) Antes, mismo ciclo: el catálogo pasó de 230 a 273 ejercicios (**§0-ANTES-HOY**), y hay 8 PRs de otras sesiones en **§0-INTERMEDIAS**.
 >
 > Actualización previa: **2026-07-17** (sesión **CARDIO fase 1 + fix tiempo de trabajo + research Garmin**: arrancó el **DOMINIO cardio/actividades** — hoy la app NO registraba caminata/running/elíptica, solo fuerza. Fase 1 (modelo + backend) mergeada en [#141](https://github.com/thusspokedata/pulsia/pull/141): tabla `cardio_activity` (migración **0017**), MET por tipo, gasto `dayExerciseBurn`, CRUD bajo auth — **nadie lo consume aún** (móvil/import/balance son fases 2-4). Además fix del bug **Trabajo 0:14** ([#140](https://github.com/thusspokedata/pulsia/pull/140), regresión del #101) entregado por **OTA a vc10**. Detalle en §0-HOY). Sesión previa (mismo día): DOMINIO 2 — NUTRICIÓN COMPLETO — §0-HOY-PREVIA. Todo en `main`, backend deployado, **APK vc10** activado, todo lo nuevo por **OTA a vc10**. **Fingerprint vc10 = `784872cb…`** confirmado de nuevo en el OTA de esta sesión (ver [[ota-fingerprint-gotcha]]). **#140 y #141 mergeados**; queda **#116** (bump Dependabot, sin tocar). **Prod sano.** **Update (misma fecha): [#147](https://github.com/thusspokedata/pulsia/pull/147) (pausa MID-SERIE) y [#145](https://github.com/thusspokedata/pulsia/pull/145) (tiempo al REANUDAR / resume-remount) — ambos mergeados; también aterrizó [#149](https://github.com/thusspokedata/pulsia/pull/149) (cardio fase 2 móvil). **OTA a vc10 publicado** (runtime android `784872cb` confirmado en la salida del `eas update`) → los tres cambios ya están en los teléfonos. Ver §0-HOY-2, §0-HOY-3, [[session-pause-attribution-status]] y [[resume-remount-status]].**
 
 ## 0. Estado en una línea
 
-**Pulsia está EN INTERNET, multi-usuario, con login.** Backend en **`https://pulsia.lahuelladelcaminante.de`** (VPS nginx → Wireguard → Pi:3011, HTTPS por certbot, rate-limit en `/auth/`). La app (Android, **APK vc10**; todo lo nuevo llega por **OTA** a vc10) tiene 3 dominios grandes: **(1) Entrenamiento** — genera programas async, registra/resume/revisa sesiones, HR por banda BLE, resumen con mapa corporal + FC, español+inglés, memoria del atleta, entreno puntual, **cardio/actividades** (manual o import `.FIT`, ya entra al balance de nutrición), y un **catálogo de 273 ejercicios** (auto-generado del SDK de Garmin; 93 con ilustración mapeada, la UI todavía no está); **(2) Nutrición** (tab "Nutrición", **COMPLETO** — ver §0-HOY-PREVIA): alta de alimentos por **foto + IA** (Opus visión) **o escribiendo el nombre** ("almendra") → catálogo personal (con chip **etiqueta/estimado**) → registrar en gramos/ml/unidad con snapshot de macros/micros/colesterol/agua, **metas calóricas + de macros** desde el perfil (BMR Mifflin-St Jeor + objetivo + gasto de entrenamiento = **net calories**), **dashboard del día con 4 pestañas** (Resumen / Calorías con torta por comida / Nutrientes vs referencias OMS / Macros con dona), **qué alimentos aportan cada nutriente** + **su evolución en el tiempo**, **suplementos** (catálogo por foto + plan IA semanal + checklist + ajuste dinámico), tracker de líquido, y un **agente de informes** (diario/semanal/quincenal/mensual con consejos, opt-in); **(3) Progreso/Salud** — seguimiento cuantitativo (composición/presión/actividad/bienestar con backfill) + tendencias + heatmap, y **ECG (KardiaMobile)** (interpretación IA no-diagnóstica). **La IA observa** (progreso, ECG, y ahora los informes de nutrición → memoria del atleta). Owner: la cuenta principal. La familia baja el APK **vc10** desde **`pulsia.lahuelladelcaminante.de/download`** (QR) + se registra con el **`INVITE_CODE`** (valor real solo en `/home/kilo/pulsia/deploy/app.env` de la Pi). Un merge a `main` **auto-deploya el backend a la Pi**.
+**Pulsia está EN INTERNET, multi-usuario, con login.** Backend en **`https://pulsia.lahuelladelcaminante.de`** (VPS nginx → Wireguard → Pi:3011, HTTPS por certbot, rate-limit en `/auth/`). La app (Android, **APK vc10**; todo lo nuevo llega por **OTA** a vc10) tiene 3 dominios grandes: **(1) Entrenamiento** — genera programas async, registra/resume/revisa sesiones, HR por banda BLE, resumen con mapa corporal + FC, español+inglés, memoria del atleta, entreno puntual, **cardio/actividades** (manual o import `.FIT`, ya entra al balance de nutrición), y un **catálogo de 273 ejercicios** (auto-generado del SDK de Garmin) con **demostraciones animadas + cues de técnica** en 86 de ellos, accesibles desde el Programa, la sesión, un buscador y el selector de alternativas; **(2) Nutrición** (tab "Nutrición", **COMPLETO** — ver §0-HOY-PREVIA): alta de alimentos por **foto + IA** (Opus visión) **o escribiendo el nombre** ("almendra") → catálogo personal (con chip **etiqueta/estimado**) → registrar en gramos/ml/unidad con snapshot de macros/micros/colesterol/agua, **metas calóricas + de macros** desde el perfil (BMR Mifflin-St Jeor + objetivo + gasto de entrenamiento = **net calories**), **dashboard del día con 4 pestañas** (Resumen / Calorías con torta por comida / Nutrientes vs referencias OMS / Macros con dona), **qué alimentos aportan cada nutriente** + **su evolución en el tiempo**, **suplementos** (catálogo por foto + plan IA semanal + checklist + ajuste dinámico), tracker de líquido, y un **agente de informes** (diario/semanal/quincenal/mensual con consejos, opt-in); **(3) Progreso/Salud** — seguimiento cuantitativo (composición/presión/actividad/bienestar con backfill) + tendencias + heatmap, y **ECG (KardiaMobile)** (interpretación IA no-diagnóstica). **La IA observa** (progreso, ECG, y ahora los informes de nutrición → memoria del atleta). Owner: la cuenta principal. La familia baja el APK **vc10** desde **`pulsia.lahuelladelcaminante.de/download`** (QR) + se registra con el **`INVITE_CODE`** (valor real solo en `/home/kilo/pulsia/deploy/app.env` de la Pi). Un merge a `main` **auto-deploya el backend a la Pi**.
 
-## 0-AHORA. ✅ HECHO (2026-07-18/19): CATÁLOGO ILUSTRADO — ejercicios básicos recuperados + spec de las animaciones
+## 0-AHORA. ✅ HECHO (2026-07-20): DEMOSTRACIONES ANIMADAS DE EJERCICIOS — COMPLETO
+
+**Tocás un ejercicio y ves cómo se hace.** Animación de dos cuadros (cross-fade, toque para pausar) más los cues de técnica en español, alcanzable desde **cuatro lugares**: card del Programa, ejercicio activo de la sesión, buscador nuevo del catálogo (`app/ejercicios.tsx`) y selector de alternativas.
+
+**Cuatro PRs, cada uno con review, merge y OTA** (runtime android `784872cb` verificado en los cuatro): [#166](https://github.com/thusspokedata/pulsia/pull/166) capa de datos · [#168](https://github.com/thusspokedata/pulsia/pull/168) pantalla de detalle · [#169](https://github.com/thusspokedata/pulsia/pull/169) los cuatro accesos · [#170](https://github.com/thusspokedata/pulsia/pull/170) créditos. Plan: `docs/superpowers/plans/2026-07-19-animaciones-ejercicios.md`.
+
+**Cobertura: 86 de 273 ejercicios (32%).** El acceso es **condicional**: el afford solo aparece donde hay animación, así que nunca hay un toque que no lleva a nada. La excepción es el buscador, donde la fila navega siempre porque ahí explorar el catálogo es el objetivo. 164 assets WebP, **2,4 MB**.
+
+### Cómo funciona, y qué NO tocar
+
+- **`shared/src/catalog/exerciseMedia.ts` es la COSTURA.** `exerciseMediaFor(id)` / `hasExerciseMedia(id)`. Si algún día se compra un pack pago de animaciones, se reemplaza `exerciseMedia.data.ts` y **ningún consumidor se entera**.
+- **`shared/scripts/fetch-exercise-media.ts`** baja de Everkinetic con la revisión **fijada** a `6f3ce86`, **valida licencia e integridad ANTES de escribir un solo archivo**, y convierte a WebP. Si el `LICENSE.md` del upstream deja de decir Attribution-ShareAlike, **aborta**: estamos redistribuyendo contenido ajeno en un repo público.
+- **`sharp` es devDependency de `shared`.** Si termina en `dependencies` se re-basa el fingerprint y **el OTA deja de llegarle a nadie**. Verificado en las cuatro entregas.
+- **`exerciseAssets.ts` se regenera A MANO** tras la ingesta. Hay un test que exige que todo frame de los datos exista en el mapa: sin él, un olvido daba `<Image source={undefined}>` **en el teléfono** en vez de fallar en CI.
+- **Los cues se TRADUCEN, no se generan.** Everkinetic trae el campo `steps` bajo la misma licencia. Es el único contenido de la app que le dice a alguien **cómo mover su cuerpo con peso encima**: una indicación inventada puede lesionar. Están en `exerciseCues.es.ts`, curado a mano y separado del archivo generado.
+- **La ruta del detalle es MODAL a propósito.** `presentation: "modal"` mantiene `sesion.tsx` montada abajo en el stack. Esta app pagó dos veces ese error (#145 y #147). **No lo cambies a `push`.**
+- **En el selector de alternativas los `Pressable` son HERMANOS, no anidados.** React Native resuelve el toque por negociación de responder, no por bubbling: `stopPropagation()` **no** garantizaría que mirar el dibujo no te cambie el ejercicio.
+- **Los créditos de Configuración son obligatorios.** CC-BY-SA exige atribución: sin esa sección no tenemos derecho a usar los assets. Tiene test propio para que un refactor no la borre en silencio.
+
+### ⚠️ Lección: tres tests falsos, todos salidos de MIS planes
+
+La verificación por mutación volvió a pagar, y esta vez contra mi propio trabajo:
+
+1. **El test de "no altera el timing" hacía `set` y `get` sin nada en el medio.** Pasaba con el código roto y habría pasado antes de que la feature existiera.
+2. **La mutación del anidamiento no discriminaba.** `fireEvent.press` despacha sobre el elemento que se le pasa y **no simula la negociación de responder de RN**: al anidar los `Pressable` a propósito, los **cinco** tests de comportamiento siguieron en verde. Hizo falta un test **estructural** (recorrer los ancestros del ojo) para cubrirlo.
+3. **El buscador no tenía puerta de entrada.** Escribí la tarea sin incluir el punto de navegación: la pantalla existía y era **inalcanzable**, o sea código muerto anunciado como uno de los "cuatro accesos".
+
+Los tres los encontró el review, no yo. Moraleja: un plan detallado da confianza pero **no garantiza que los tests prueben lo que dicen**.
+
+### Pendiente del owner (no lo puede cerrar un agente)
+
+1. **Probar en el teléfono el ojo 👁 del selector de alternativas**: tocarlo debe abrir el detalle y, al volver, el ejercicio de la sesión NO debe haber cambiado. La negociación táctil real solo se ve en device.
+2. **Decidir los chips de músculo en inglés** (`chest`, `quads`) del detalle. Acá el inglés **no** tiene la justificación que sí tiene el Programa.
+3. **Evaluar si el 32% alcanza.** Los huecos están en abdominales, glúteos y cuerpo completo. Si queda corto, el camino es un pack pago (~200-600 USD, pago único) y la costura está puesta para que el cambio no toque nada más.
+
+## 0-ANTES-HOY. ✅ HECHO (2026-07-18/19): CATÁLOGO ILUSTRADO — ejercicios básicos recuperados + spec de las animaciones
 
 Disparador: el usuario pidió **GIFs que enseñen cómo se hace cada ejercicio** y, de paso, preguntó si faltaba el "low row". Faltaba. Y al tirar de ese hilo apareció un problema bastante más grande.
 
@@ -159,9 +194,9 @@ Todo mergeado en `main`, backend deployado, entregado por **OTA a vc10** (runtim
 **Piezas con tamaño propio (merecen spec):**
 - **Demostraciones animadas de ejercicios — Piezas 1-4.** El spec está escrito y aprobado
   (`2026-07-18-gifs-ejercicios-design.md`), el catálogo ya está firme y hay 93 ejercicios mapeados a
-  su ilustración. **Falta el plan de implementación.** Ver §0-AHORA.
+  su ilustración. **Falta el plan de implementación.** Ver §0-ANTES-HOY.
 - **Revisar `inferEquipment` de raíz.** Ya van 9 correcciones vía `MUST_EQUIPMENT` por tres patrones
-  distintos de fallo (§0-AHORA). La heurística por nombre es más excepción que regla; en algún
+  distintos de fallo (§0-ANTES-HOY). La heurística por nombre es más excepción que regla; en algún
   momento conviene rehacerla en vez de seguir parchando caso por caso.
 - **`CURL` clasifica los wrist curl como `biceps`.** `barbell_wrist_curl` y `dumbbell_wrist_curl`
   trabajan antebrazo, y el modelo tiene el grupo `forearms`. Lo detectó de paso la curación del
@@ -432,7 +467,7 @@ banda hace falta un dev client:
   lo propusiera como fix).
 - **El catálogo de ejercicios es AUTO-GENERADO.** `shared/src/catalog/exercises.data.ts` se regenera
   con `bun run shared/scripts/generate-catalog.ts`. **Nunca editarlo a mano**: un fix a mano se pierde
-  en la próxima regeneración, y eso ya pasó (§0-AHORA). Para forzar un ejercicio usar `MUST_INCLUDE`;
+  en la próxima regeneración, y eso ya pasó (§0-ANTES-HOY). Para forzar un ejercicio usar `MUST_INCLUDE`;
   para corregir su equipamiento, `MUST_EQUIPMENT`. Las traducciones (`exercises.es.ts`) SÍ son a mano
   y están separadas a propósito. Tras regenerar: revisar el equipamiento de los nuevos y que no se
   haya perdido ningún id congelado (`catalogIds.frozen.ts`).
@@ -519,7 +554,7 @@ banda hace falta un dev client:
 - **[UX] Feedback al guardar perfil** ("Perfil guardado ✓"). **[Cosmético] Ícono/logo** (hoy
   placeholder de Expo).
 - ~~**[Fase 4] Detalle de ejercicio** (imágenes free-exercise-db + cues)~~ → **REEMPLAZADO**. La
-  feature sigue viva (spec `2026-07-18-gifs-ejercicios-design.md`, §0-AHORA) pero **`free-exercise-db`
+  feature sigue viva (spec `2026-07-18-gifs-ejercicios-design.md`, §0-ANTES-HOY) pero **`free-exercise-db`
   quedó DESCARTADA**: sus imágenes son scrapeadas y su licencia no es válida. No usarla.
 - **[Datos ambientales]** temp/humedad/presión/luna por sesión → estudio de rendimiento (merece spec).
 - **[Historial visual — heatmap anual]** Grilla estilo "contribuciones de GitHub": todos los
