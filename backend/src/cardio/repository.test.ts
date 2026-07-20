@@ -239,7 +239,7 @@ test("listReprocessableIds devuelve [] cuando el usuario no tiene ninguna activi
 });
 
 const fitDerived: FitDerived = {
-  maxHr: 165, elevationGainM: 40, kcal: 300, totalCycles: 4200, trainingLoad: 55.5,
+  maxHr: 165, elevationGainM: 40, kcal: 300, kcalSource: "device", totalCycles: 4200, trainingLoad: 55.5,
   trainingEffectAerobic: 3.2, trainingEffectAnaerobic: 1.1, avgCadence: 82, maxCadence: 95,
   avgFractionalCadence: 0.5, avgRespiration: 28, maxRespiration: 40, minRespiration: 12,
   metabolicKcal: 280, sportProfileName: "Running", tzOffsetMinutes: -180,
@@ -283,4 +283,11 @@ test("updateCardioFromFit NUNCA toca type/durationMs/distanceM/avgHr/notes: la e
   expect(patch).not.toHaveProperty("distanceM");
   expect(patch).not.toHaveProperty("avgHr");
   expect(patch).not.toHaveProperty("notes");
+});
+
+test("updateCardioFromFit persiste kcalSource junto con kcal (no puede quedar desincronizado)", async () => {
+  const { db, patches } = fakeUpdateDb();
+  await updateCardioFromFit(db, AID, UID, fitDerived);
+  expect(patches[0].kcal).toBe(300);
+  expect(patches[0].kcalSource).toBe("device");
 });

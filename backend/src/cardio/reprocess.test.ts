@@ -66,3 +66,21 @@ test("reprocessActivity con bytes que no parsean devuelve parse-error con mensaj
   expect((result as { status: "parse-error"; message: string }).message).toBeTruthy();
   expect(patches).toHaveLength(0);
 });
+
+test("reprocessActivity re-deriva kcalSource: si el archivo tiene kcal, pasa a 'device'", async () => {
+  // Caso del review: una actividad importada con kcal null quedó en kcalSource "estimate". Al
+  // reprocesar aparece el kcal del reloj, así que la fuente TIENE que pasar a "device" — si no,
+  // queda un valor medido marcado como estimado, contradiciendo la regla que el server aplica en
+  // POST /cardio y el móvil en buildFitActivity.
+  const { db, patches } = fakeDb(validFitBytes());
+  await reprocessActivity(db, AID, UID);
+  expect(patches[0].kcal).toBe(321);
+  expect(patches[0].kcalSource).toBe("device");
+});
+
+test("reprocessActivity deja kcalSource en 'estimate' si el archivo no trae kcal", async () => {
+  const { db, patches } = fakeDb(Buffer.from(buildFitFixture({ totalCalories: null })));
+  await reprocessActivity(db, AID, UID);
+  expect(patches[0].kcal ?? null).toBeNull();
+  expect(patches[0].kcalSource).toBe("estimate");
+});

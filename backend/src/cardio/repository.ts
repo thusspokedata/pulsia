@@ -190,11 +190,15 @@ export type FitDerived = Pick<CardioActivity,
   "maxHr" | "elevationGainM" | "kcal" | "totalCycles" | "trainingLoad"
   | "trainingEffectAerobic" | "trainingEffectAnaerobic" | "avgCadence" | "maxCadence"
   | "avgFractionalCadence" | "avgRespiration" | "maxRespiration" | "minRespiration"
-  | "metabolicKcal" | "sportProfileName" | "tzOffsetMinutes" | "samples" | "fitExtras">;
+  | "metabolicKcal" | "sportProfileName" | "tzOffsetMinutes" | "samples" | "fitExtras"
+  // kcalSource va junto a kcal: el server DERIVA de dónde salieron las calorías, y refrescar
+  // una sin la otra dejaría un valor medido por el reloj marcado como estimado.
+  | "kcalSource">;
 
 export async function updateCardioFromFit(db: Db, id: string, userId: string, d: FitDerived): Promise<void> {
   await db.update(cardioActivity).set({
     maxHr: d.maxHr ?? null, elevationGainM: d.elevationGainM ?? null, kcal: d.kcal ?? null,
+    kcalSource: d.kcalSource,
     totalCycles: d.totalCycles ?? null, trainingLoad: d.trainingLoad ?? null,
     trainingEffectAerobic: d.trainingEffectAerobic ?? null,
     trainingEffectAnaerobic: d.trainingEffectAnaerobic ?? null,

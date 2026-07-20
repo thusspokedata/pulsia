@@ -22,7 +22,12 @@ export async function reprocessActivity(db: Db, id: string, userId: string): Pro
     // INTACTA. Un reproceso fallido nunca debe empeorar lo que ya había.
     return { status: "parse-error", message: (e as Error).message || "no se pudo leer el .FIT guardado" };
   }
+  // Misma regla que aplica el server en POST /cardio y el móvil en buildFitActivity: sin kcal no
+  // hubo medición del reloj. Solo las actividades source:"fit" tienen archivo guardado (lo
+  // garantiza maybeSaveFitFile), así que acá la parte del `source` de la regla siempre se cumple.
+  const kcalSource = preview.kcal != null ? "device" : "estimate";
   await updateCardioFromFit(db, id, userId, {
+    kcalSource,
     maxHr: preview.maxHr, elevationGainM: preview.elevationGainM, kcal: preview.kcal,
     totalCycles: preview.totalCycles, trainingLoad: preview.trainingLoad,
     trainingEffectAerobic: preview.trainingEffectAerobic,
