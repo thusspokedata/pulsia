@@ -5,7 +5,8 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "media:fetch": "bun scripts/fetch-exercise-media.ts"
   },
   "dependencies": {
     "zod": "^4.4.3"
@@ -14,6 +15,7 @@
     "@garmin/fitsdk": "^21.208.0",
     "@types/bun": "^1.3.14",
     "bun-types": "^1.3.14",
+    "sharp": "^0.35.3",
     "typescript": "^6.0.3"
   }
 }
