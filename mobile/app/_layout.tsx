@@ -52,6 +52,16 @@ function Guarded() {
       <Stack.Screen name="registro" options={{ headerShown: true, title: "Crear cuenta" }} />
       <Stack.Screen name="configuracion" options={{ headerShown: true, title: "Configuración", presentation: "modal" }} />
       <Stack.Screen name="sesion" options={{ headerShown: true, title: "Entrenamiento" }} />
+      {/*
+       * Modal a propósito, no por estética: con `presentation: "modal"` la pantalla de sesión
+       * queda montada abajo en el stack y NO se desmonta. Esta app arrastra dos bugs caros de
+       * atribución de tiempo al remontar la sesión (#145) y con las pausas mid-serie (#147);
+       * sacar al usuario de `sesion.tsx` con una serie abierta los reabriría.
+       */}
+      <Stack.Screen
+        name="ejercicio/[catalogId]"
+        options={{ headerShown: true, presentation: "modal" }}
+      />
     </Stack>
   );
 }
