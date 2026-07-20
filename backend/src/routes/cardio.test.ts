@@ -46,14 +46,19 @@ function fakeDb(opts: { rows?: any[]; ownerId?: string | null; failFileInsert?: 
     },
     // select() sin args = fila completa (getCardio/findCardioAtSecond).
     // select({...}) con `id` = listCardio (proyecta las columnas del listado, sin las pesadas).
-    // select({userId}) SIN `id` = getCardioOwnerId.
+    // select({activityId}) = la query de existencia de cardio_fit_file que hace getCardio — sin
+    // archivo por default en estos fakes (ningún test de GET /cardio/:id exitoso depende de él hoy).
+    // select({userId}) SIN `id`/`activityId` = getCardioOwnerId.
     // Ojo: no alcanza con "¿hay proyección?" — desde que listCardio proyecta, ese criterio la
     // confundía con getCardioOwnerId y devolvía algo sin .orderBy (500).
     select: (proj?: any) => ({
       from: () => ({
-        where: (cond: any) => proj && !proj.id
-          ? Promise.resolve(opts.ownerId != null ? [{ userId: opts.ownerId }] : [])
-          : thenableRows(rows),
+        where: (cond: any) => {
+          if (proj && "activityId" in proj) return Promise.resolve([]);
+          return proj && !proj.id
+            ? Promise.resolve(opts.ownerId != null ? [{ userId: opts.ownerId }] : [])
+            : thenableRows(rows);
+        },
       }),
     }),
     update: () => ({ set: (s: any) => ({ where: () => ({ returning: async () => { updates.push(s); return rows.length ? [{ id: AID }] : []; } }) }) }),

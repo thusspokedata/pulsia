@@ -74,8 +74,16 @@ test("insertCardio de una actividad manual (sin métricas extendidas) inserta nu
   expect(v.fitExtras).toBeNull();
 });
 
-function fakeSelectDb(row: any) {
-  return { select: () => ({ from: () => ({ where: async () => [row] }) }) } as any;
+// Distingue la fila completa de la actividad (select() sin proyección, o con proyección sin
+// `activityId`) del select({ activityId }) que getCardio hace contra cardio_fit_file para saber
+// si hay archivo guardado. Sin archivo por default: los tests de getCardio que no lo mencionan no
+// deben verse afectados por la nueva query.
+function fakeSelectDb(row: any, fileRows: any[] = []) {
+  return {
+    select: (proj?: any) => ({
+      from: () => ({ where: async () => (proj && "activityId" in proj ? fileRows : [row]) }),
+    }),
+  } as any;
 }
 
 // Captura las columnas que pide el select, para poder afirmar QUÉ trae el listado.
@@ -151,6 +159,34 @@ test("getCardio de una actividad manual vieja (columnas null, sin clave) omite s
     // Las nullable+optional sí quedan presentes, en null (son mediciones que pueden faltar).
     expect(result?.totalCycles).toBeNull();
   });
+});
+
+test("getCardio devuelve hasFitFile: true cuando hay un .FIT guardado", async () => {
+  const row = {
+    id: AID, userId: UID, type: "run", startedAt: 1784000000000, durationMs: 1800000,
+    distanceM: 5000, avgHr: 140, maxHr: 165, elevationGainM: 40, kcal: 300,
+    kcalSource: "device", source: "fit", hrSeries: null, notes: "",
+    totalCycles: null, trainingLoad: null, trainingEffectAerobic: null, trainingEffectAnaerobic: null,
+    avgCadence: null, maxCadence: null, avgFractionalCadence: null, avgRespiration: null, maxRespiration: null,
+    minRespiration: null, metabolicKcal: null, sportProfileName: null, tzOffsetMinutes: null,
+    samples: null, fitExtras: null,
+  };
+  const result = await getCardio(fakeSelectDb(row, [{ activityId: AID }]), AID, UID);
+  expect(result?.hasFitFile).toBe(true);
+});
+
+test("getCardio devuelve hasFitFile: false cuando no hay .FIT guardado", async () => {
+  const row = {
+    id: AID, userId: UID, type: "run", startedAt: 1784000000000, durationMs: 1800000,
+    distanceM: 5000, avgHr: 140, maxHr: 165, elevationGainM: 40, kcal: 300,
+    kcalSource: "device", source: "fit", hrSeries: null, notes: "",
+    totalCycles: null, trainingLoad: null, trainingEffectAerobic: null, trainingEffectAnaerobic: null,
+    avgCadence: null, maxCadence: null, avgFractionalCadence: null, avgRespiration: null, maxRespiration: null,
+    minRespiration: null, metabolicKcal: null, sportProfileName: null, tzOffsetMinutes: null,
+    samples: null, fitExtras: null,
+  };
+  const result = await getCardio(fakeSelectDb(row, []), AID, UID);
+  expect(result?.hasFitFile).toBe(false);
 });
 
 test("insertCardioFitFile inserta el binario con onConflictDoNothing (no explota en re-POST)", async () => {

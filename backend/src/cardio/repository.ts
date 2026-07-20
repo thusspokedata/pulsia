@@ -135,7 +135,11 @@ export async function listCardio(db: Db, userId: string, from?: number, to?: num
 export async function getCardio(db: Db, id: string, userId: string): Promise<CardioActivity | null> {
   const rows = await db.select().from(cardioActivity)
     .where(and(eq(cardioActivity.id, id), eq(cardioActivity.userId, userId)));
-  return rows[0] ? toActivity(rows[0]) : null;
+  if (!rows[0]) return null;
+  // Solo el id: saber SI hay archivo no debe arrastrar los bytes (pueden ser cientos de KB).
+  const files = await db.select({ activityId: cardioFitFile.activityId }).from(cardioFitFile)
+    .where(eq(cardioFitFile.activityId, id));
+  return { ...toActivity(rows[0]), hasFitFile: files.length > 0 };
 }
 
 export async function getCardioOwnerId(db: Db, id: string): Promise<string | null> {
