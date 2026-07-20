@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ScrollView, View, Text, Pressable, ActivityIndicator } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { CARDIO_LABELS, type CardioActivity } from "@pulsia/shared";
-import { getCardioById } from "../src/api/cardio";
+import { getCardioById, reprocessCardio } from "../src/api/cardio";
 import { getBackendUrl } from "../src/storage/config";
 import { CHANNELS, channelPoints } from "../src/cardio/cardioSeries";
 import { buildTiles, athleteLines } from "../src/cardio/activityFormat";
@@ -48,6 +48,11 @@ export default function ActividadScreen() {
   const [activity, setActivity] = useState<CardioActivity | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reproc, setReproc] = useState(false);
+  // Error PROPIO del reproceso, separado del `error` de carga: ese otro dispara el early-return
+  // que reemplaza toda la pantalla, y un reproceso fallido no debe hacerte perder el detalle
+  // que ya estabas viendo.
+  const [reprocError, setReprocError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -74,6 +79,22 @@ export default function ActividadScreen() {
       active = false;
     };
   }, [id]);
+
+  async function onReprocess() {
+    const url = baseUrl.current;
+    if (!url) return;
+    setReproc(true);
+    setReprocError(null);
+    try {
+      await reprocessCardio(url, id);
+      // Recargar para que aparezcan tiles, gráficos y zonas.
+      setActivity(await getCardioById(url, id));
+    } catch (e) {
+      setReprocError((e as Error).message || "No se pudo reprocesar");
+    } finally {
+      setReproc(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -180,6 +201,25 @@ export default function ActividadScreen() {
           {a.distanceM != null ? (
             <Text style={{ color: colors.textMuted, fontSize: 13 }}>Distancia: {(a.distanceM / 1000).toFixed(2)} km</Text>
           ) : null}
+        </View>
+      ) : null}
+
+      {a.source === "fit" && a.hasFitFile && !a.samples ? (
+        <View style={{ gap: spacing.xs }}>
+          <Pressable testID="reprocesar" onPress={onReprocess} disabled={reproc}
+            style={{ borderWidth: 1, borderColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: reproc ? 0.6 : 1 }}>
+            {reproc ? <ActivityIndicator color={colors.accent} /> : (
+              <Text style={{ color: colors.accentText, fontWeight: "600" }}>Reprocesar desde el archivo</Text>
+            )}
+          </Pressable>
+          {reprocError ? (
+            <Text testID="reprocesar-error" style={{ color: colors.danger, fontSize: 12 }}>{reprocError}</Text>
+          ) : (
+            <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+              Esta actividad se importó antes de que se guardara todo el detalle. El archivo original está
+              guardado, así que se puede completar sin reimportar.
+            </Text>
+          )}
         </View>
       ) : null}
 

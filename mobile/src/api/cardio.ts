@@ -57,3 +57,19 @@ export async function parseFitCardio(baseUrl: string, fitBase64: string): Promis
   }
   return (await res.json()) as CardioFitPreview;
 }
+
+// Rellena los datos de una actividad releyendo el .FIT guardado en el server. Propaga el mensaje
+// del backend (404 "no tiene archivo guardado" / 400 archivo ilegible) para mostrarlo tal cual.
+export async function reprocessCardio(baseUrl: string, id: string): Promise<void> {
+  const res = await apiFetch(baseUrl, `/cardio/${id}/reprocess`, { method: "POST" });
+  if (!res.ok) {
+    const msg = await res.json().then((b: { error?: string }) => b.error).catch(() => undefined);
+    throw new Error(msg || "No se pudo reprocesar la actividad");
+  }
+}
+
+export async function reprocessAllCardio(baseUrl: string): Promise<{ reprocesadas: number; sinArchivo: number; fallidas: number }> {
+  const res = await apiFetch(baseUrl, "/cardio/reprocess-all", { method: "POST" });
+  if (!res.ok) throw new Error("No se pudieron reprocesar las actividades");
+  return await res.json();
+}

@@ -101,6 +101,9 @@ export const CardioActivitySchema = z.object({
   samples: CardioSamplesSchema.optional(),
   fitExtras: CardioFitExtrasSchema.optional(),
   notes: z.string().default(""),
+  // Solo lo llena el DETALLE (getCardio): dice si hay un .FIT crudo guardado que se pueda
+  // reprocesar. El listado no lo trae (sigue liviano).
+  hasFitFile: z.boolean().optional(),
 });
 export type CardioActivity = z.infer<typeof CardioActivitySchema>;
 

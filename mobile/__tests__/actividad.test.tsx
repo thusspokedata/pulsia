@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react-native";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react-native";
 import ActividadScreen, { buildZoneRows } from "../app/actividad";
-import { getCardioById } from "../src/api/cardio";
+import { getCardioById, reprocessCardio } from "../src/api/cardio";
 import type { CardioActivity } from "@pulsia/shared";
 
 let mockId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -8,7 +8,7 @@ jest.mock("expo-router", () => ({
   router: { push: jest.fn(), back: jest.fn() },
   useLocalSearchParams: () => ({ id: mockId }),
 }));
-jest.mock("../src/api/cardio", () => ({ getCardioById: jest.fn() }));
+jest.mock("../src/api/cardio", () => ({ getCardioById: jest.fn(), reprocessCardio: jest.fn() }));
 jest.mock("../src/storage/config", () => ({
   getBackendUrl: jest.fn(async () => "http://backend.test"),
 }));
@@ -96,6 +96,45 @@ test("actividad .FIT: muestra tiles de FC y cadencia, tiempo en zonas y la nota 
   expect(screen.getByText(/coincide con Body Battery/)).toBeTruthy();
 });
 
+// Actividad .FIT con archivo guardado pero sin samples (importada antes de que se guardara el
+// detalle rico): candidata a reprocesar. Dato inventado.
+const reprocessableActivity: CardioActivity = {
+  ...fitActivity,
+  id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+  hasFitFile: true,
+  samples: undefined,
+  fitExtras: undefined,
+};
+
+test("botón de reprocesar aparece con source=fit + hasFitFile + sin samples", async () => {
+  mockId = reprocessableActivity.id;
+  (getCardioById as jest.Mock).mockResolvedValue(reprocessableActivity);
+
+  await render(<ActividadScreen />);
+
+  await waitFor(() => expect(screen.getByTestId("reprocesar")).toBeTruthy());
+});
+
+test("botón de reprocesar NO aparece cuando la actividad ya tiene samples", async () => {
+  mockId = fitActivity.id;
+  (getCardioById as jest.Mock).mockResolvedValue({ ...fitActivity, hasFitFile: true });
+
+  await render(<ActividadScreen />);
+
+  await waitFor(() => expect(screen.getByTestId("tile-FC media")).toBeTruthy());
+  expect(screen.queryByTestId("reprocesar")).toBeNull();
+});
+
+test("botón de reprocesar NO aparece para actividades manuales", async () => {
+  mockId = manualActivity.id;
+  (getCardioById as jest.Mock).mockResolvedValue(manualActivity);
+
+  await render(<ActividadScreen />);
+
+  await waitFor(() => expect(screen.getByTestId("tile-Duración")).toBeTruthy());
+  expect(screen.queryByTestId("reprocesar")).toBeNull();
+});
+
 describe("buildZoneRows", () => {
   // Forma REAL de un .FIT: secondsPerZone tiene 2 entradas más que zonas (la 0 es "por debajo de
   // Z1" y la última "por encima"), y highBoundary tiene 1 más (la última es la FC máx).
@@ -124,4 +163,22 @@ describe("buildZoneRows", () => {
     expect(buildZoneRows([], [])).toEqual([]);
     expect(buildZoneRows([0, 50], [120, 140])).toHaveLength(1);
   });
+});
+
+test("si el reproceso FALLA, muestra el error pero NO borra el detalle ya cargado", async () => {
+  // El error del reproceso tiene su propio estado: el `error` de carga dispara un early-return que
+  // reemplaza toda la pantalla, y perder el detalle por un reproceso fallido sería peor que el fallo.
+  mockId = reprocessableActivity.id;
+  (getCardioById as jest.Mock).mockResolvedValue(reprocessableActivity);
+  (reprocessCardio as jest.Mock).mockRejectedValue(new Error("esta actividad no tiene archivo guardado"));
+
+  await render(<ActividadScreen />);
+  await waitFor(() => expect(screen.getByTestId("reprocesar")).toBeTruthy());
+
+  fireEvent.press(screen.getByTestId("reprocesar"));
+
+  await waitFor(() => expect(screen.getByTestId("reprocesar-error")).toBeTruthy());
+  expect(screen.getByText(/no tiene archivo guardado/)).toBeTruthy();
+  // El detalle sigue en pantalla.
+  expect(screen.getByTestId("tile-Duración")).toBeTruthy();
 });

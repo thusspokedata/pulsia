@@ -46,14 +46,19 @@ function fakeDb(opts: { rows?: any[]; ownerId?: string | null; failFileInsert?: 
     },
     // select() sin args = fila completa (getCardio/findCardioAtSecond).
     // select({...}) con `id` = listCardio (proyecta las columnas del listado, sin las pesadas).
-    // select({userId}) SIN `id` = getCardioOwnerId.
+    // select({activityId}) = la query de existencia de cardio_fit_file que hace getCardio — sin
+    // archivo por default en estos fakes (ningún test de GET /cardio/:id exitoso depende de él hoy).
+    // select({userId}) SIN `id`/`activityId` = getCardioOwnerId.
     // Ojo: no alcanza con "¿hay proyección?" — desde que listCardio proyecta, ese criterio la
     // confundía con getCardioOwnerId y devolvía algo sin .orderBy (500).
     select: (proj?: any) => ({
       from: () => ({
-        where: (cond: any) => proj && !proj.id
-          ? Promise.resolve(opts.ownerId != null ? [{ userId: opts.ownerId }] : [])
-          : thenableRows(rows),
+        where: (cond: any) => {
+          if (proj && "activityId" in proj) return Promise.resolve([]);
+          return proj && !proj.id
+            ? Promise.resolve(opts.ownerId != null ? [{ userId: opts.ownerId }] : [])
+            : thenableRows(rows);
+        },
       }),
     }),
     update: () => ({ set: (s: any) => ({ where: () => ({ returning: async () => { updates.push(s); return rows.length ? [{ id: AID }] : []; } }) }) }),
@@ -279,6 +284,77 @@ test("POST /cardio/parse no queda capturada por /:id (orden de rutas)", async ()
     body: JSON.stringify({ fitBase64: "" }),
   });
   expect(res.status).toBe(400);
+});
+
+// fakeDb para las rutas de reproceso: getCardioFitFileBytes y listReprocessableIds hacen
+// select({...}).from().innerJoin().where(), forma distinta del fakeDb de arriba (que solo
+// encadena .from().where()). `fitBytes` es lo que "hay guardado" para la actividad (o null =
+// sin archivo); `ids` es lo que devuelve listReprocessableIds. updateCardioFromFit no usa
+// .returning(), así que .where() resuelve directo.
+function fakeReprocessDb(opts: { fitBytes?: Buffer | null; ids?: string[] } = {}) {
+  const updates: any[] = [];
+  const db: any = {
+    _updates: updates,
+    select: (proj?: any) => ({
+      from: () => ({
+        innerJoin: () => ({
+          where: async () => {
+            if (proj && "bytes" in proj) return opts.fitBytes ? [{ bytes: opts.fitBytes }] : [];
+            if (proj && "id" in proj) return (opts.ids ?? []).map((id) => ({ id }));
+            return [];
+          },
+        }),
+      }),
+    }),
+    update: () => ({ set: (s: any) => ({ where: async () => { updates.push(s); } }) }),
+  };
+  return db;
+}
+
+test("POST /cardio/:id/reprocess con un .FIT guardado válido → 200 status ok", async () => {
+  const fitBytes = Buffer.from(buildFitFixture({ sport: "walking", totalCalories: 150 }));
+  const db = fakeReprocessDb({ fitBytes });
+  const app = createApp(deps(db) as any);
+  const res = await app.request(`/cardio/${AID}/reprocess`, { method: "POST" });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ status: "ok" });
+  expect(db._updates).toHaveLength(1);
+});
+
+test("POST /cardio/:id/reprocess sin archivo guardado → 404", async () => {
+  const db = fakeReprocessDb({ fitBytes: null });
+  const app = createApp(deps(db) as any);
+  const res = await app.request(`/cardio/${AID}/reprocess`, { method: "POST" });
+  expect(res.status).toBe(404);
+  expect((await res.json()).error).toMatch(/no tiene archivo guardado/);
+});
+
+test("POST /cardio/:id/reprocess con bytes ilegibles → 400", async () => {
+  const db = fakeReprocessDb({ fitBytes: Buffer.from("esto no es un .FIT") });
+  const app = createApp(deps(db) as any);
+  const res = await app.request(`/cardio/${AID}/reprocess`, { method: "POST" });
+  expect(res.status).toBe(400);
+  expect((await res.json()).error).toBeTruthy();
+});
+
+test("POST /cardio/reprocess-all reprocesa los ids reprocesables y devuelve los contadores", async () => {
+  const fitBytes = Buffer.from(buildFitFixture({ sport: "walking", totalCalories: 150 }));
+  const db = fakeReprocessDb({ ids: [AID], fitBytes });
+  const app = createApp(deps(db) as any);
+  const res = await app.request("/cardio/reprocess-all", { method: "POST" });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ reprocesadas: 1, sinArchivo: 0, fallidas: 0 });
+});
+
+// Garantía de orden: si /:id/reprocess (o /:id sin más) capturara "reprocess-all" como :id, esta
+// ruta literal nunca respondería con la forma de los contadores. Con ids vacío el resultado es
+// {reprocesadas:0,...} — la forma del handler masivo, no un 404/400 del handler por-actividad.
+test("POST /cardio/reprocess-all no queda capturada por /:id (ruta literal, no un :id)", async () => {
+  const db = fakeReprocessDb({ ids: [] });
+  const app = createApp(deps(db) as any);
+  const res = await app.request("/cardio/reprocess-all", { method: "POST" });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ reprocesadas: 0, sinArchivo: 0, fallidas: 0 });
 });
 
 test("re-POST del mismo id REINTENTA guardar el .FIT si la primera vez falló (auto-reparación)", async () => {

@@ -2,8 +2,9 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import { CardioActivitySchema } from "@pulsia/shared";
-import { insertCardio, insertCardioFitFile, findCardioAtSecond, listCardio, getCardio, getCardioOwnerId, updateCardio, deleteCardio } from "../cardio/repository";
+import { insertCardio, insertCardioFitFile, findCardioAtSecond, listCardio, getCardio, getCardioOwnerId, updateCardio, deleteCardio, listReprocessableIds } from "../cardio/repository";
 import { parseFit } from "../cardio/parseFit";
+import { reprocessActivity } from "../cardio/reprocess";
 import type { AppDeps } from "../app";
 
 // Parsea un query param a número finito, o undefined si falta / no parsea. Sin este guard,
@@ -115,6 +116,28 @@ export function cardioRoutes(deps: AppDeps) {
       // Nunca un 500 con stack: cualquier fallo del parser es culpa del archivo → 400 legible.
       return c.json({ error: (e as Error).message || "No se pudo leer el archivo .FIT" }, 400);
     }
+  });
+
+  // Reproceso masivo: la herramienta para después de mejorar el parser. Acotado al usuario del
+  // token. Una actividad que falla NO aborta el lote: se cuenta y se sigue.
+  r.post("/reprocess-all", async (c) => {
+    const userId = c.get("userId");
+    const ids = await listReprocessableIds(deps.db, userId);
+    let reprocesadas = 0, sinArchivo = 0, fallidas = 0;
+    for (const id of ids) {
+      const res = await reprocessActivity(deps.db, id, userId);
+      if (res.status === "ok") reprocesadas++;
+      else if (res.status === "no-file") sinArchivo++;
+      else fallidas++;
+    }
+    return c.json({ reprocesadas, sinArchivo, fallidas });
+  });
+
+  r.post("/:id/reprocess", async (c) => {
+    const res = await reprocessActivity(deps.db, c.req.param("id"), c.get("userId"));
+    if (res.status === "no-file") return c.json({ error: "esta actividad no tiene archivo guardado" }, 404);
+    if (res.status === "parse-error") return c.json({ error: res.message }, 400);
+    return c.json({ status: "ok" });
   });
 
   r.get("/:id", async (c) => {
