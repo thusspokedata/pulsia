@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react-native";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react-native";
 import ActividadScreen, { buildZoneRows } from "../app/actividad";
-import { getCardioById } from "../src/api/cardio";
+import { getCardioById, reprocessCardio } from "../src/api/cardio";
 import type { CardioActivity } from "@pulsia/shared";
 
 let mockId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -8,7 +8,7 @@ jest.mock("expo-router", () => ({
   router: { push: jest.fn(), back: jest.fn() },
   useLocalSearchParams: () => ({ id: mockId }),
 }));
-jest.mock("../src/api/cardio", () => ({ getCardioById: jest.fn() }));
+jest.mock("../src/api/cardio", () => ({ getCardioById: jest.fn(), reprocessCardio: jest.fn() }));
 jest.mock("../src/storage/config", () => ({
   getBackendUrl: jest.fn(async () => "http://backend.test"),
 }));
@@ -163,4 +163,22 @@ describe("buildZoneRows", () => {
     expect(buildZoneRows([], [])).toEqual([]);
     expect(buildZoneRows([0, 50], [120, 140])).toHaveLength(1);
   });
+});
+
+test("si el reproceso FALLA, muestra el error pero NO borra el detalle ya cargado", async () => {
+  // El error del reproceso tiene su propio estado: el `error` de carga dispara un early-return que
+  // reemplaza toda la pantalla, y perder el detalle por un reproceso fallido sería peor que el fallo.
+  mockId = reprocessableActivity.id;
+  (getCardioById as jest.Mock).mockResolvedValue(reprocessableActivity);
+  (reprocessCardio as jest.Mock).mockRejectedValue(new Error("esta actividad no tiene archivo guardado"));
+
+  await render(<ActividadScreen />);
+  await waitFor(() => expect(screen.getByTestId("reprocesar")).toBeTruthy());
+
+  fireEvent.press(screen.getByTestId("reprocesar"));
+
+  await waitFor(() => expect(screen.getByTestId("reprocesar-error")).toBeTruthy());
+  expect(screen.getByText(/no tiene archivo guardado/)).toBeTruthy();
+  // El detalle sigue en pantalla.
+  expect(screen.getByTestId("tile-Duración")).toBeTruthy();
 });

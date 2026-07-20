@@ -49,6 +49,10 @@ export default function ActividadScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reproc, setReproc] = useState(false);
+  // Error PROPIO del reproceso, separado del `error` de carga: ese otro dispara el early-return
+  // que reemplaza toda la pantalla, y un reproceso fallido no debe hacerte perder el detalle
+  // que ya estabas viendo.
+  const [reprocError, setReprocError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -80,13 +84,13 @@ export default function ActividadScreen() {
     const url = baseUrl.current;
     if (!url) return;
     setReproc(true);
-    setError(null);
+    setReprocError(null);
     try {
       await reprocessCardio(url, id);
       // Recargar para que aparezcan tiles, gráficos y zonas.
       setActivity(await getCardioById(url, id));
     } catch (e) {
-      setError((e as Error).message || "No se pudo reprocesar");
+      setReprocError((e as Error).message || "No se pudo reprocesar");
     } finally {
       setReproc(false);
     }
@@ -208,10 +212,14 @@ export default function ActividadScreen() {
               <Text style={{ color: colors.accentText, fontWeight: "600" }}>Reprocesar desde el archivo</Text>
             )}
           </Pressable>
-          <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-            Esta actividad se importó antes de que se guardara todo el detalle. El archivo original está
-            guardado, así que se puede completar sin reimportar.
-          </Text>
+          {reprocError ? (
+            <Text testID="reprocesar-error" style={{ color: colors.danger, fontSize: 12 }}>{reprocError}</Text>
+          ) : (
+            <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+              Esta actividad se importó antes de que se guardara todo el detalle. El archivo original está
+              guardado, así que se puede completar sin reimportar.
+            </Text>
+          )}
         </View>
       ) : null}
 
