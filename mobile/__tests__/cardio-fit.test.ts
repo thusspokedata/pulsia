@@ -58,3 +58,51 @@ test("buildFitActivity marca estimate cuando el .FIT no trae kcal", () => {
   expect(a.kcal).toBeNull();
   expect(a.kcalSource).toBe("estimate");
 });
+
+// Regresión: la Fase 1 capturaba samples/fitExtras/escalares y buildFitActivity los descartaba en
+// silencio, así que llegaban NULL a la base aunque el backend los parseara bien. Los tests de cada
+// pieza estaban en verde; faltaba justamente éste, el del camino preview → actividad.
+// Es estructural a propósito: si el preview gana un campo y nadie lo propaga, este test falla solo.
+test("buildFitActivity propaga TODOS los campos del preview (ninguno se pierde)", () => {
+  const preview: CardioFitPreview = {
+    type: "elliptical",
+    startedAt: 1784000000000,
+    durationMs: 1800000,
+    distanceM: 0,
+    avgHr: 150,
+    maxHr: 170,
+    elevationGainM: 0,
+    kcal: 300,
+    hrSeries: [{ t: 0, bpm: 120 }],
+    totalCycles: 1500,
+    trainingLoad: 90.5,
+    trainingEffectAerobic: 3.5,
+    trainingEffectAnaerobic: 0.5,
+    avgCadence: 50,
+    maxCadence: 70,
+    avgFractionalCadence: 0.5,
+    avgRespiration: 30,
+    maxRespiration: 35,
+    minRespiration: 25,
+    metabolicKcal: 40,
+    sportProfileName: "Elíptica",
+    tzOffsetMinutes: -120,
+    samples: { t: [0, 1000], hr: [120, 125], cad: [50, 51] },
+    fitExtras: { zones: { secondsPerZone: [0, 100], highBoundary: [120, 140], maxHr: 190, restingHr: 50, thresholdHr: 170, calcType: "percent" } },
+  };
+  const form = { type: "elliptical" as const, durationMs: 1800000, distanceM: 0, avgHr: 150, notes: "" };
+  const a: Record<string, unknown> = buildFitActivity(preview, form, "11111111-1111-4111-8111-111111111111") as unknown as Record<string, unknown>;
+
+  // El form pisa estos a propósito; el resto del preview debe sobrevivir intacto.
+  const pisadosPorElForm = new Set(["type", "durationMs", "distanceM", "avgHr"]);
+  const perdidos = Object.keys(preview).filter(
+    (k) => !pisadosPorElForm.has(k) && a[k] === undefined,
+  );
+  expect(perdidos).toEqual([]);
+
+  // Y un par de valores concretos, para que no alcance con setear la clave en undefined.
+  expect(a.samples).toEqual(preview.samples);
+  expect(a.fitExtras).toEqual(preview.fitExtras);
+  expect(a.totalCycles).toBe(1500);
+  expect(a.tzOffsetMinutes).toBe(-120);
+});
