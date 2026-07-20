@@ -1,4 +1,4 @@
-import { listCardio, createCardio, getCardioById, updateCardio, deleteCardio } from "../src/api/cardio";
+import { listCardio, createCardio, getCardioById, updateCardio, deleteCardio, reprocessCardio, reprocessAllCardio } from "../src/api/cardio";
 
 const AID = "11111111-1111-4111-8111-111111111111";
 const activity = {
@@ -75,4 +75,26 @@ test("deleteCardio hace DELETE /cardio/:id", async () => {
   const [url, init] = fn.mock.calls[0];
   expect(url).toBe(`http://x/cardio/${AID}`);
   expect(init.method).toBe("DELETE");
+});
+
+test("reprocessCardio hace POST /cardio/:id/reprocess", async () => {
+  const fn = mockFetch({ status: "ok" });
+  await reprocessCardio("http://x", AID);
+  const [url, init] = fn.mock.calls[0];
+  expect(url).toBe(`http://x/cardio/${AID}/reprocess`);
+  expect(init.method).toBe("POST");
+});
+
+test("reprocessCardio propaga el mensaje de error del backend (404/400)", async () => {
+  mockFetch({ error: "esta actividad no tiene archivo guardado" }, false, 404);
+  await expect(reprocessCardio("http://x", AID)).rejects.toThrow("esta actividad no tiene archivo guardado");
+});
+
+test("reprocessAllCardio hace POST /cardio/reprocess-all y devuelve los contadores", async () => {
+  const fn = mockFetch({ reprocesadas: 2, sinArchivo: 1, fallidas: 0 });
+  const res = await reprocessAllCardio("http://x");
+  const [url, init] = fn.mock.calls[0];
+  expect(url).toBe("http://x/cardio/reprocess-all");
+  expect(init.method).toBe("POST");
+  expect(res).toEqual({ reprocesadas: 2, sinArchivo: 1, fallidas: 0 });
 });
