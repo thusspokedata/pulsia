@@ -21,7 +21,14 @@ export function ExerciseDetail({ catalogId }: { catalogId: string }) {
       ]),
     );
     loop.start();
-    return () => loop.stop();
+    return () => {
+      loop.stop();
+      // Al pausar, `stop()` congela la opacidad donde haya quedado: el usuario vería una
+      // mezcla a medio camino entre las dos poses, que se lee como un dibujo borroso en vez
+      // de una posición del ejercicio. Volvemos al cuadro de inicio para que la pausa
+      // siempre muestre una pose nítida.
+      fade.setValue(0);
+    };
   }, [media, animando, fade]);
 
   if (!ex) {
@@ -42,6 +49,9 @@ export function ExerciseDetail({ catalogId }: { catalogId: string }) {
       {media && (
         <Pressable
           testID="exercise-animation"
+          accessibilityRole="button"
+          accessibilityLabel={animando ? "Pausar la animación" : "Reanudar la animación"}
+          accessibilityHint="Muestra el movimiento del ejercicio alternando entre las dos posiciones"
           onPress={() => setAnimando((v) => !v)}
           style={{
             backgroundColor: colors.surface,
@@ -82,7 +92,7 @@ export function ExerciseDetail({ catalogId }: { catalogId: string }) {
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
         {[...ex.primaryMuscles, ...ex.secondaryMuscles].map((m, i) => (
           <View
-            key={m}
+            key={`${m}-${i}`}
             style={{
               backgroundColor: i < ex.primaryMuscles.length ? colors.accentSoft : colors.surfaceMuted,
               borderRadius: radius.sm,
