@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, Linking } from "react-native";
 import { router } from "expo-router";
 import { getBackendUrl, setBackendUrl } from "../src/storage/config";
 import { logout } from "../src/api/auth";
@@ -367,6 +367,21 @@ export default function ConfiguracionScreen() {
       </View>
 
       {status && <Text style={{ color: colors.accentText }}>{status}</Text>}
+
+      <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md, gap: spacing.xs }}>
+        <Text style={{ color: colors.text, fontWeight: "500" }}>Créditos</Text>
+        <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+          Ilustraciones de ejercicios por Everkinetic (Greg Priday), bajo licencia Creative Commons
+          Attribution-ShareAlike 4.0 International (CC BY-SA 4.0). Se usan sin modificar.
+        </Text>
+        <Pressable onPress={() =>
+              // .catch como el resto del archivo: openURL rechaza si no hay app que maneje el
+              // esquema, y una promise rejection sin manejar por un link secundario no vale la pena.
+              Linking.openURL("https://creativecommons.org/licenses/by-sa/4.0/").catch(() => {})
+            }>
+          <Text style={{ color: colors.accent, fontSize: 12 }}>Ver la licencia</Text>
+        </Pressable>
+      </View>
 
       <Pressable testID="logout" onPress={onLogout} style={{ alignItems: "center", paddingVertical: spacing.md, marginTop: spacing.lg }}>
         <Text style={{ color: colors.danger, fontWeight: "600" }}>Cerrar sesión</Text>
