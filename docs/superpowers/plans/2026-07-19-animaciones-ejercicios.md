@@ -769,7 +769,12 @@ git commit -S -m "feat(ejercicios): ruta de detalle, modal desde la sesión"
 - Modify: `mobile/src/components/WorkoutDayCard.tsx`
 - Create: `mobile/__tests__/workoutDayCard.test.tsx`
 
-Hoy la card es una `View` sin `Pressable` y muestra `e.garminName` **en inglés crudo**, sin pasar por `exerciseNameEs` (a diferencia de la sesión). Se arregla de paso.
+Hoy la card es una `View` sin `Pressable`. **Solo se agrega el acceso al detalle.**
+
+⚠️ **NO cambies el nombre que muestra la card.** Muestra `e.garminName` en inglés y eso es
+**deliberado**: el nombre estándar en inglés es el que sirve para buscar el ejercicio en el reloj
+Garmin. La app usa español e inglés a propósito según la pantalla. Un plan anterior proponía
+"arreglarlo" pasándolo por `exerciseNameEs`; el owner lo corrigió el 2026-07-19. No lo toques.
 
 - [ ] **Step 1: Escribir el test que falla**
 
@@ -790,9 +795,9 @@ const workout = {
   ],
 } as never;
 
-test("muestra el nombre en español, no el inglés crudo", () => {
+test("mantiene el nombre en inglés (deliberado: sirve para buscarlo en el reloj)", () => {
   const { getByText } = render(<WorkoutDayCard workout={workout} />);
-  expect(getByText("Press de banca con barra")).toBeTruthy();
+  expect(getByText("Barbell Bench Press")).toBeTruthy();
 });
 
 test("el ejercicio CON ilustración navega al detalle", () => {
@@ -819,14 +824,13 @@ Reemplazá el cuerpo del `.map()` en `mobile/src/components/WorkoutDayCard.tsx`.
 ```tsx
       {workout.exercises.map((e, i) => {
         const conMedia = hasExerciseMedia(e.catalogId);
-        const nombre = exerciseNameEs(e.catalogId) ?? e.garminName;
         const fila = (
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.xs }}>
             <View style={{ backgroundColor: colors.accentSoft, borderRadius: radius.sm, paddingVertical: 4, paddingHorizontal: spacing.sm, minWidth: 56, alignItems: "center" }}>
               <Text style={{ color: colors.accentText, fontSize: 12, fontWeight: "500" }}>{e.sets} × {e.reps}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.text, fontSize: 13 }}>{nombre}</Text>
+              <Text style={{ color: colors.text, fontSize: 13 }}>{e.garminName}</Text>
               <Text style={{ color: colors.textMuted, fontSize: 11 }}>{e.targetLoad} · descanso {e.restSeconds}s</Text>
             </View>
             {conMedia && <Text style={{ color: colors.accent, fontSize: 16 }}>›</Text>}
@@ -849,7 +853,7 @@ Y actualizá los imports del archivo:
 ```tsx
 import { View, Text, Pressable } from "react-native";
 import { router } from "expo-router";
-import { exerciseNameEs, hasExerciseMedia } from "@pulsia/shared";
+import { hasExerciseMedia } from "@pulsia/shared";
 ```
 
 - [ ] **Step 4: Correr hasta verde**
@@ -865,7 +869,7 @@ Cambiá `conMedia ?` por `true ?` (o sea, siempre `Pressable`) y confirmá que *
 
 ```bash
 git add mobile/src/components/WorkoutDayCard.tsx mobile/__tests__/workoutDayCard.test.tsx
-git commit -S -m "feat(ejercicios): acceso al detalle desde el Programa + nombre en español"
+git commit -S -m "feat(ejercicios): acceso al detalle desde el Programa"
 ```
 
 ---

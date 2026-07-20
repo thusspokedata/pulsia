@@ -169,7 +169,7 @@ dependencia nativa → el **fingerprint `784872cb` no cambia y sigue siendo OTA-
 
 | Dónde | Cambio |
 |---|---|
-| **Programa** | `WorkoutDayCard` pasa a `Pressable` → navega al detalle. **Fix de paso:** hoy muestra `garminName` crudo en inglés; pasa por `exerciseNameEs` como ya hace la sesión |
+| **Programa** | `WorkoutDayCard` pasa a `Pressable` → navega al detalle. **El nombre sigue en inglés**: es deliberado, sirve para buscar el ejercicio en el reloj (corregido por el owner el 2026-07-19) |
 | **Sesión** | Tocar el nombre del ejercicio activo abre el modal. Cambio mínimo en `sesion.tsx` (ya tiene 40 KB; no es el momento de refactorizarlo) |
 | **Alternativas** | Cada opción del picker gana acceso al detalle, sin abandonar la elección |
 | **Buscador** | Pantalla nueva `mobile/app/ejercicios.tsx`: los ~230 con búsqueda por texto y filtro por músculo/equipo |
