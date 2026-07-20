@@ -48,3 +48,10 @@ test("el botón 'Entreno puntual' navega a /entreno-puntual", async () => {
   await fireEvent.press(screen.getByTestId("entreno-puntual-link"));
   expect(mockPush).toHaveBeenCalledWith("/entreno-puntual");
 });
+
+test("el botón 'Ver ejercicios' navega al buscador del catálogo", async () => {
+  await render(<ProgramaScreen />);
+  await waitFor(() => screen.getByTestId("ejercicios-link"));
+  await fireEvent.press(screen.getByTestId("ejercicios-link"));
+  expect(mockPush).toHaveBeenCalledWith("/ejercicios");
+});

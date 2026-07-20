@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput, ScrollView, Alert } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import type { WorkoutSession, SessionExercise, Equipment } from "@pulsia/shared";
-import { alternativesFor, exerciseNameEs } from "@pulsia/shared";
+import { alternativesFor, exerciseNameEs, hasExerciseMedia } from "@pulsia/shared";
 import { getStoredProgram, setStoredProgram } from "../src/storage/program";
 import { getStoredProgramId } from "../src/storage/programId";
 import { getStoredOneOffProgram, getStoredOneOffProgramId, clearOneOff } from "../src/storage/oneOffProgram";
@@ -27,6 +27,7 @@ import { colors, radius, spacing } from "../src/theme/tokens";
 import { summarize } from "../src/session/summary";
 import { SessionSummary } from "../src/components/SessionSummary";
 import { NotesEditor } from "../src/components/NotesEditor";
+import { AlternativasPicker } from "../src/components/AlternativasPicker";
 
 function fmt(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -696,9 +697,27 @@ export default function SesionScreen() {
 
       {current ? (
         <>
-          <Text testID="active-exercise-name" style={{ color: colors.text, fontSize: 18, fontWeight: "600" }}>
-            {esName(current.catalogId, current.garminName)}
-          </Text>
+          {/* Acceso CONDICIONAL al detalle. El chevron va como HERMANO del Text del nombre y
+              no adentro: así `active-exercise-name` conserva un único hijo de texto. */}
+          {(() => {
+            const nombre = (
+              <Text testID="active-exercise-name" style={{ color: colors.text, fontSize: 18, fontWeight: "600" }}>
+                {esName(current.catalogId, current.garminName)}
+              </Text>
+            );
+            return hasExerciseMedia(current.catalogId) ? (
+              <Pressable
+                testID="ver-ejercicio-activo"
+                onPress={() => router.push(`/ejercicio/${current.catalogId}`)}
+                style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}
+              >
+                {nombre}
+                <Text style={{ color: colors.accent, fontSize: 16 }}>›</Text>
+              </Pressable>
+            ) : (
+              nombre
+            );
+          })()}
           {esName(current.catalogId, current.garminName) !== current.garminName && (
             <Text testID="active-exercise-name-en" style={{ color: colors.textMuted, fontSize: 12 }}>{current.garminName}</Text>
           )}
@@ -770,24 +789,11 @@ export default function SesionScreen() {
           </Pressable>
           {showPicker && (
             <View style={{ gap: spacing.xs, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.sm }}>
-              {(() => {
-                const alts = alternativesFor(current.catalogId, equipment);
-                if (alts.length === 0) {
-                  return <Text style={{ color: colors.textMuted, fontSize: 12 }}>No hay alternativas con tu equipo — podés saltar el ejercicio.</Text>;
-                }
-                return alts.map((e) => (
-                  <Pressable
-                    key={e.id}
-                    testID={`alt-${e.id}`}
-                    onPress={() => setPickChoice({ catalogId: e.id, garminName: e.garminName })}
-                    style={{ paddingVertical: spacing.xs }}
-                  >
-                    <Text style={{ color: pickChoice?.catalogId === e.id ? colors.accent : colors.text, fontSize: 14 }}>
-                      {esName(e.id, e.garminName)}
-                    </Text>
-                  </Pressable>
-                ));
-              })()}
+              <AlternativasPicker
+                alternativas={alternativesFor(current.catalogId, equipment)}
+                elegido={pickChoice?.catalogId ?? null}
+                onPick={(catalogId, garminName) => setPickChoice({ catalogId, garminName })}
+              />
               <TextInput
                 testID="cambio-nota"
                 value={changeNote}
