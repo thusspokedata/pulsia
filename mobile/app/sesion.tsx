@@ -27,6 +27,7 @@ import { colors, radius, spacing } from "../src/theme/tokens";
 import { summarize } from "../src/session/summary";
 import { SessionSummary } from "../src/components/SessionSummary";
 import { NotesEditor } from "../src/components/NotesEditor";
+import { AlternativasPicker } from "../src/components/AlternativasPicker";
 
 function fmt(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -785,24 +786,11 @@ export default function SesionScreen() {
           </Pressable>
           {showPicker && (
             <View style={{ gap: spacing.xs, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.sm }}>
-              {(() => {
-                const alts = alternativesFor(current.catalogId, equipment);
-                if (alts.length === 0) {
-                  return <Text style={{ color: colors.textMuted, fontSize: 12 }}>No hay alternativas con tu equipo — podés saltar el ejercicio.</Text>;
-                }
-                return alts.map((e) => (
-                  <Pressable
-                    key={e.id}
-                    testID={`alt-${e.id}`}
-                    onPress={() => setPickChoice({ catalogId: e.id, garminName: e.garminName })}
-                    style={{ paddingVertical: spacing.xs }}
-                  >
-                    <Text style={{ color: pickChoice?.catalogId === e.id ? colors.accent : colors.text, fontSize: 14 }}>
-                      {esName(e.id, e.garminName)}
-                    </Text>
-                  </Pressable>
-                ));
-              })()}
+              <AlternativasPicker
+                alternativas={alternativesFor(current.catalogId, equipment)}
+                elegido={pickChoice?.catalogId ?? null}
+                onPick={(catalogId, garminName) => setPickChoice({ catalogId, garminName })}
+              />
               <TextInput
                 testID="cambio-nota"
                 value={changeNote}
