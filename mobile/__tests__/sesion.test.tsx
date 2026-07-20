@@ -3,9 +3,10 @@ import { Alert } from "react-native";
 import { summarize } from "../src/session/summary";
 
 const mockReplace = jest.fn();
+const mockPush = jest.fn();
 let mockParams: any = { week: "1", dayLabel: "Día 1", location: "gym" };
 jest.mock("expo-router", () => ({
-  router: { replace: (...a: any[]) => mockReplace(...a) },
+  router: { replace: (...a: any[]) => mockReplace(...a), push: (...a: any[]) => mockPush(...a) },
   useLocalSearchParams: () => mockParams,
 }));
 
@@ -189,6 +190,27 @@ test("el ejercicio activo muestra el nombre en español + el inglés como secund
   // así el test falla si el título del activo regresa al inglés.
   await waitFor(() => expect(screen.getByTestId("active-exercise-name").props.children).toBe("Press de banca con barra"));
   expect(screen.getByTestId("active-exercise-name-en").props.children).toBe("Barbell Bench Press");
+});
+
+test("el ejercicio activo CON ilustración abre el detalle", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("ver-ejercicio-activo"));
+  await fireEvent.press(screen.getByTestId("ver-ejercicio-activo"));
+  expect(mockPush).toHaveBeenCalledWith("/ejercicio/barbell_bench_press");
+});
+
+test("el ejercicio activo SIN ilustración no ofrece el acceso", async () => {
+  // kettlebell_squat existe en el catálogo pero Everkinetic no cubre kettlebell.
+  mockProgram = {
+    name: "Sin media",
+    weeks: [{ weekNumber: 1, workouts: [{
+      dayLabel: "Día 1", location: "gym", focus: "legs",
+      exercises: [{ catalogId: "kettlebell_squat", garminName: "Kettlebell Squat", sets: 2, reps: "10", targetLoad: "20kg", restSeconds: 90, notes: "" }],
+    }] }],
+  } as any;
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("active-exercise-name"));
+  expect(screen.queryByTestId("ver-ejercicio-activo")).toBeNull();
 });
 
 test("tap incrementa las reps de la serie (arrancando desde las reps planificadas)", async () => {
