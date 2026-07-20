@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import { exerciseMediaFor, hasExerciseMedia } from "./exerciseMedia";
+import { EXERCISE_MEDIA_DATA } from "./exerciseMedia.data";
 
 test("devuelve la media de un ejercicio que la tiene", () => {
   const m = exerciseMediaFor("barbell_bench_press");
@@ -25,4 +26,18 @@ test("no devuelve miembros heredados del prototipo", () => {
 test("hasExerciseMedia coincide con exerciseMediaFor", () => {
   expect(hasExerciseMedia("barbell_bench_press")).toBe(true);
   expect(hasExerciseMedia("kettlebell_squat")).toBe(false);
+});
+
+test("los cues salen en español cuando hay traducción", () => {
+  const m = exerciseMediaFor("barbell_bench_press");
+  expect(m!.cues.length).toBeGreaterThan(0);
+  // Sin traducir diría "Lie on a flat bench..."; nunca debe filtrarse inglés a la UI.
+  expect(m!.cues.join(" ")).not.toMatch(/\b(the|your|with|and)\b/i);
+});
+
+test("cobertura: todos los ejercicios con media tienen cues en español", () => {
+  const sinCues = Object.keys(EXERCISE_MEDIA_DATA).filter(
+    (id) => (exerciseMediaFor(id)?.cues.length ?? 0) === 0,
+  );
+  expect(sinCues).toEqual([]);
 });

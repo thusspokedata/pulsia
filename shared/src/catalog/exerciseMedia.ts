@@ -1,4 +1,5 @@
 import { EXERCISE_MEDIA_DATA } from "./exerciseMedia.data";
+import { EXERCISE_CUES_ES } from "./exerciseCues.es";
 
 export interface ExerciseMedia {
   /** Claves de asset de los dos cuadros: [inicio, tensión]. */
@@ -16,9 +17,13 @@ export interface ExerciseMedia {
 export function exerciseMediaFor(catalogId: string): ExerciseMedia | undefined {
   // Own-property check: evita devolver miembros heredados del prototipo (p.ej. "toString"),
   // mismo guard que exerciseNameEs.
-  return Object.prototype.hasOwnProperty.call(EXERCISE_MEDIA_DATA, catalogId)
-    ? EXERCISE_MEDIA_DATA[catalogId]
+  if (!Object.prototype.hasOwnProperty.call(EXERCISE_MEDIA_DATA, catalogId)) return undefined;
+  const base = EXERCISE_MEDIA_DATA[catalogId];
+  const es = Object.prototype.hasOwnProperty.call(EXERCISE_CUES_ES, catalogId)
+    ? EXERCISE_CUES_ES[catalogId]
     : undefined;
+  // Sin traducción preferimos NO mostrar cues antes que mostrarlos en inglés.
+  return { frames: base.frames, cues: es ?? [] };
 }
 
 /** Atajo para decidir si mostrar el acceso a "ver cómo se hace". */
