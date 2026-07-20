@@ -23,7 +23,10 @@ export function exerciseMediaFor(catalogId: string): ExerciseMedia | undefined {
     ? EXERCISE_CUES_ES[catalogId]
     : undefined;
   // Sin traducción preferimos NO mostrar cues antes que mostrarlos en inglés.
-  return { frames: base.frames, cues: es ?? [] };
+  // Se descartan los vacíos: unos pocos "steps" del upstream son basura de maquetado
+  // (`<h3></h3>`, `&nbsp;`) y traducirlos da cadena vacía. Filtrar acá y no en la UI mantiene
+  // los datos generados fieles a la fuente y evita que cada consumidor tenga que acordarse.
+  return { frames: base.frames, cues: (es ?? []).filter((c) => c.trim() !== "") };
 }
 
 /** Atajo para decidir si mostrar el acceso a "ver cómo se hace". */

@@ -41,3 +41,12 @@ test("cobertura: todos los ejercicios con media tienen cues en español", () => 
   );
   expect(sinCues).toEqual([]);
 });
+
+test("no devuelve cues vacíos (el upstream trae basura de maquetado)", () => {
+  const vacios: string[] = [];
+  for (const id of Object.keys(EXERCISE_MEDIA_DATA)) {
+    const m = exerciseMediaFor(id);
+    if (m?.cues.some((c) => c.trim() === "")) vacios.push(id);
+  }
+  expect(vacios).toEqual([]);
+});
