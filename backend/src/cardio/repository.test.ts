@@ -1,6 +1,10 @@
 import { test, expect } from "bun:test";
-import { secondWindow, insertCardio, getCardio, listCardio, insertCardioFitFile } from "./repository";
+import {
+  secondWindow, insertCardio, getCardio, listCardio, insertCardioFitFile,
+  getCardioFitFileBytes, listReprocessableIds, updateCardioFromFit,
+} from "./repository";
 import type { CardioActivity } from "@pulsia/shared";
+import type { FitDerived } from "./repository";
 
 test("secondWindow: dos timestamps del mismo segundo comparten from", () => {
   expect(secondWindow(1784000000000).from).toBe(secondWindow(1784000000999).from);
@@ -194,4 +198,89 @@ test("insertCardioFitFile inserta el binario con onConflictDoNothing (no explota
   const bytes = Buffer.from("fake fit bytes");
   await insertCardioFitFile(db, AID, bytes, bytes.length, "a".repeat(64));
   expect(inserts[0]).toEqual({ activityId: AID, bytes, sizeBytes: bytes.length, sha256: "a".repeat(64) });
+});
+
+// Fake para queries con innerJoin: encadena from().innerJoin().where().
+function fakeJoinDb(rows: any[]) {
+  return {
+    select: () => ({
+      from: () => ({
+        innerJoin: () => ({
+          where: async () => rows,
+        }),
+      }),
+    }),
+  } as any;
+}
+
+test("getCardioFitFileBytes devuelve los bytes cuando la actividad es del usuario", async () => {
+  const bytes = Buffer.from("fit bytes");
+  const db = fakeJoinDb([{ bytes }]);
+  const result = await getCardioFitFileBytes(db, AID, UID);
+  expect(result).toEqual(bytes);
+});
+
+test("getCardioFitFileBytes devuelve null si no hay archivo (join no matchea)", async () => {
+  const db = fakeJoinDb([]);
+  const result = await getCardioFitFileBytes(db, AID, "otro-user");
+  expect(result).toBeNull();
+});
+
+test("listReprocessableIds devuelve solo los ids con .FIT guardado", async () => {
+  const db = fakeJoinDb([{ id: AID }, { id: "44444444-4444-4444-8444-444444444444" }]);
+  const result = await listReprocessableIds(db, UID);
+  expect(result).toEqual([AID, "44444444-4444-4444-8444-444444444444"]);
+});
+
+test("listReprocessableIds devuelve [] cuando el usuario no tiene ninguna actividad con archivo", async () => {
+  const db = fakeJoinDb([]);
+  const result = await listReprocessableIds(db, UID);
+  expect(result).toEqual([]);
+});
+
+const fitDerived: FitDerived = {
+  maxHr: 165, elevationGainM: 40, kcal: 300, totalCycles: 4200, trainingLoad: 55.5,
+  trainingEffectAerobic: 3.2, trainingEffectAnaerobic: 1.1, avgCadence: 82, maxCadence: 95,
+  avgFractionalCadence: 0.5, avgRespiration: 28, maxRespiration: 40, minRespiration: 12,
+  metabolicKcal: 280, sportProfileName: "Running", tzOffsetMinutes: -180,
+  samples: { t: [0, 1000], hr: [120, 125] },
+  fitExtras: { zones: { secondsPerZone: [1, 2], highBoundary: [100, 120], maxHr: 190, restingHr: 50, thresholdHr: 160, calcType: "percent_hrr" } },
+};
+
+function fakeUpdateDb() {
+  const patches: any[] = [];
+  const db: any = {
+    update: () => ({
+      set: (s: any) => {
+        patches.push(s);
+        return { where: async () => {} };
+      },
+    }),
+  };
+  return { db, patches };
+}
+
+test("updateCardioFromFit escribe los campos derivados del .FIT", async () => {
+  const { db, patches } = fakeUpdateDb();
+  await updateCardioFromFit(db, AID, UID, fitDerived);
+  const patch = patches[0];
+  expect(patch.maxHr).toBe(165);
+  expect(patch.kcal).toBe(300);
+  expect(patch.trainingLoad).toBe(55.5);
+  expect(patch.avgCadence).toBe(82);
+  expect(patch.sportProfileName).toBe("Running");
+  expect(patch.tzOffsetMinutes).toBe(-180);
+  expect(patch.samples).toEqual(fitDerived.samples);
+  expect(patch.fitExtras).toEqual(fitDerived.fitExtras);
+});
+
+test("updateCardioFromFit NUNCA toca type/durationMs/distanceM/avgHr/notes: la edición manual del usuario sobrevive al reproceso", async () => {
+  const { db, patches } = fakeUpdateDb();
+  await updateCardioFromFit(db, AID, UID, fitDerived);
+  const patch = patches[0];
+  expect(patch).not.toHaveProperty("type");
+  expect(patch).not.toHaveProperty("durationMs");
+  expect(patch).not.toHaveProperty("distanceM");
+  expect(patch).not.toHaveProperty("avgHr");
+  expect(patch).not.toHaveProperty("notes");
 });

@@ -162,3 +162,48 @@ export async function deleteCardio(db: Db, id: string, userId: string): Promise<
     .where(and(eq(cardioActivity.id, id), eq(cardioActivity.userId, userId))).returning({ id: cardioActivity.id });
   return res.length > 0;
 }
+
+// Bytes del .FIT de una actividad, validando dueño con un join: una actividad de otro usuario
+// se comporta como inexistente (no filtramos su existencia).
+export async function getCardioFitFileBytes(db: Db, activityId: string, userId: string): Promise<Buffer | null> {
+  const rows = await db.select({ bytes: cardioFitFile.bytes })
+    .from(cardioFitFile)
+    .innerJoin(cardioActivity, eq(cardioActivity.id, cardioFitFile.activityId))
+    .where(and(eq(cardioFitFile.activityId, activityId), eq(cardioActivity.userId, userId)));
+  return rows[0]?.bytes ?? null;
+}
+
+// Ids del usuario que TIENEN archivo guardado — los únicos reprocesables. Sin traer binarios.
+export async function listReprocessableIds(db: Db, userId: string): Promise<string[]> {
+  const rows = await db.select({ id: cardioActivity.id })
+    .from(cardioActivity)
+    .innerJoin(cardioFitFile, eq(cardioFitFile.activityId, cardioActivity.id))
+    .where(eq(cardioActivity.userId, userId));
+  return rows.map((r) => r.id);
+}
+
+// Campos que el reproceso REFRESCA desde el archivo. Deliberadamente NO incluye los que el
+// formulario de edición puede tocar (type, durationMs, distanceM, avgHr, notes): una corrección
+// manual del usuario no debe perderse al reprocesar. Es la misma costura que sobreescribe
+// buildFitActivity en el móvil.
+export type FitDerived = Pick<CardioActivity,
+  "maxHr" | "elevationGainM" | "kcal" | "totalCycles" | "trainingLoad"
+  | "trainingEffectAerobic" | "trainingEffectAnaerobic" | "avgCadence" | "maxCadence"
+  | "avgFractionalCadence" | "avgRespiration" | "maxRespiration" | "minRespiration"
+  | "metabolicKcal" | "sportProfileName" | "tzOffsetMinutes" | "samples" | "fitExtras">;
+
+export async function updateCardioFromFit(db: Db, id: string, userId: string, d: FitDerived): Promise<void> {
+  await db.update(cardioActivity).set({
+    maxHr: d.maxHr ?? null, elevationGainM: d.elevationGainM ?? null, kcal: d.kcal ?? null,
+    totalCycles: d.totalCycles ?? null, trainingLoad: d.trainingLoad ?? null,
+    trainingEffectAerobic: d.trainingEffectAerobic ?? null,
+    trainingEffectAnaerobic: d.trainingEffectAnaerobic ?? null,
+    avgCadence: d.avgCadence ?? null, maxCadence: d.maxCadence ?? null,
+    avgFractionalCadence: d.avgFractionalCadence ?? null,
+    avgRespiration: d.avgRespiration ?? null, maxRespiration: d.maxRespiration ?? null,
+    minRespiration: d.minRespiration ?? null, metabolicKcal: d.metabolicKcal ?? null,
+    sportProfileName: d.sportProfileName ?? null, tzOffsetMinutes: d.tzOffsetMinutes ?? null,
+    samples: d.samples ?? null, fitExtras: d.fitExtras ?? null,
+    updatedAt: new Date(),
+  }).where(and(eq(cardioActivity.id, id), eq(cardioActivity.userId, userId)));
+}
