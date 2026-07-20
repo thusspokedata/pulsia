@@ -53,3 +53,20 @@ test("sin alternativas muestra el aviso en vez de una lista vacía", async () =>
   await render(<AlternativasPicker alternativas={[]} elegido={null} onPick={jest.fn()} />);
   expect(screen.getByText(/No hay alternativas con tu equipo/)).toBeTruthy();
 });
+
+test("el ojo NO es descendiente del Pressable de la fila (estructura, no handler)", async () => {
+  await render(
+    <AlternativasPicker alternativas={alts} elegido={null} onPick={jest.fn()} />,
+  );
+
+  // Por qué un test estructural y no de comportamiento: fireEvent.press despacha sobre el
+  // elemento que se le pasa y NO simula la negociación de responder de React Native, así que
+  // no puede distinguir un Pressable anidado de uno hermano. Verificado: volver a anidarlos
+  // deja los tests de comportamiento en verde. Esto sí lo detecta.
+  const ojo = screen.getByTestId("alt-ver-dumbbell_bench_press");
+  const fila = screen.getByTestId("alt-dumbbell_bench_press");
+
+  const ancestros: unknown[] = [];
+  for (let n = ojo.parent; n; n = n.parent) ancestros.push(n);
+  expect(ancestros).not.toContain(fila);
+});
