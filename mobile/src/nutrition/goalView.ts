@@ -31,12 +31,12 @@ export function buildGoalView(
     const restante = Math.round(t.total - c) || 0;
     return { key, label, comido: Math.round(c), meta: t.base, bonus: t.bonus, metaTotal: t.total, restante, over: restante < 0 };
   };
-  const kcalRestante = Math.round(goal.kcal - comido.kcal + exercise) || 0;
+  const kcalRestante = Math.round(targets.kcal.total - comido.kcal) || 0;
   return {
     status: "ok",
     // `meta` es la BASE a propósito: NutrientesTab la usa para el techo de saturadas, que no
     // escala con el ejercicio. El presupuesto real es meta + exercise.
-    kcal: { meta: goal.kcal, comido: Math.round(comido.kcal), exercise: Math.round(exercise), restante: kcalRestante, over: kcalRestante < 0 },
+    kcal: { meta: goal.kcal, comido: Math.round(comido.kcal), exercise: targets.kcal.bonus, restante: kcalRestante, over: kcalRestante < 0 },
     macros: [
       bar("protein", "Proteína", comido.protein_g, targets.protein_g),
       bar("carbs", "Carbohidratos", comido.carbs_g, targets.carbs_g),

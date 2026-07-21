@@ -108,14 +108,7 @@ test("la fibra es un PISO: llegar a la referencia no avisa", async () => {
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
   expect(screen.getByText("22 / 30 g")).toBeTruthy();
-  expect(screen.getByTestId("nutr-fiber_g-bar").props.style.backgroundColor).not.toBe(colors.warning);
-});
-
-test("fibra POR ENCIMA del piso: sigue sin avisar (pasarse de fibra es bueno)", async () => {
-  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, fiber_g: 45 } } });
-  await render(<DetalleDiaScreen />);
-  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
-  expect(screen.getByTestId("nutr-fiber_g-bar").props.style.backgroundColor).not.toBe(colors.warning);
+  expect(screen.queryByTestId("nutr-fiber_g-bar-over")).toBeNull();
 });
 
 test("fibra por encima del piso: llena de turquesa, sin segmento ámbar", async () => {
@@ -144,7 +137,7 @@ test("valor exactamente igual al límite NO avisa (tocar el límite no es pasars
   mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, salt_g: 5 } } }); // ref de sal = 5
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
-  expect(screen.getByTestId("nutr-salt_g-bar").props.style.backgroundColor).not.toBe(colors.warning);
+  expect(screen.queryByTestId("nutr-salt_g-bar-over")).toBeNull();
 });
 
 test("un valor por encima de la referencia no desborda la barra (clamp al 100%)", async () => {

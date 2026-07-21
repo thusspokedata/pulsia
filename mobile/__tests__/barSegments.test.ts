@@ -27,6 +27,12 @@ test("kind floor: pasarse del piso NO pinta naranja", () => {
   expect(barSegments(45, 30, "limit").overPct).toBeGreaterThan(0);
 });
 
+test("un excedente mínimo igual se ve: nunca 100% turquesa si te pasaste", () => {
+  const s = barSegments(5.02, 5); // 0.4% de exceso
+  expect(s.fillPct).toBe(99);
+  expect(s.overPct).toBe(1);
+});
+
 test("target inválido no divide por cero", () => {
   for (const bad of [0, -10, NaN]) {
     expect(barSegments(50, bad)).toEqual({ fillPct: 0, overPct: 0 });

@@ -155,6 +155,5 @@ test("no devuelve ningún límite de salud: solo metas de energía", () => {
 test("el techo de saturadas se deriva de la meta BASE, no del total ajustado", () => {
   const t = exerciseAdjustedTargets(okGoal, 1667);
   expect(t.kcal.base).toBe(okGoal.kcal); // la base NO absorbe el ejercicio
-  expect(saturatedFatRefG(t.kcal.base)).toBe(saturatedFatRefG(okGoal.kcal));
   expect(saturatedFatRefG(t.kcal.base)).toBeLessThan(saturatedFatRefG(t.kcal.total));
 });

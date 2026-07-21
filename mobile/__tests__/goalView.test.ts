@@ -47,11 +47,22 @@ test("remainingLabel: faltan / cumplida / de más", () => {
   expect(remainingLabel(-36)).toBe("36 de más");
 });
 
-test("exercise suma al restante de kcal y no toca los macros", () => {
+test("exercise suma al restante de kcal y no toca la proteína", () => {
   const goal = { status: "ok", source: "auto", kcal: 2000, protein_g: 150, carbs_g: 200, fat_g: 60, bmr: 1600, tdee: 2000 } as const;
   const v = bgv(goal, { kcal: 2100, protein_g: 90, carbs_g: 120, fat_g: 40 }, 300);
   expect(v.kcal).toEqual({ meta: 2000, comido: 2100, exercise: 300, restante: 200, over: false }); // 2000-2100+300
   expect(v.macros!.find((m) => m.key === "protein")!.restante).toBe(60); // sin cambio
+  expect(v.macros!.find((m) => m.key === "carbs")!.bonus).toBeGreaterThan(0); // los carbos SÍ
+});
+
+test("un gasto de ejercicio basura no corrompe el restante de kcal", () => {
+  const goal = { status: "ok", source: "auto", kcal: 2000, protein_g: 150, carbs_g: 200, fat_g: 60, bmr: 1600, tdee: 2000 } as const;
+  for (const bad of [NaN, -500, Infinity]) {
+    const v = bgv(goal, { kcal: 1000, protein_g: 0, carbs_g: 0, fat_g: 0 }, bad);
+    expect(v.kcal!.restante).toBe(1000); // como si no hubiera ejercicio
+    expect(v.kcal!.exercise).toBe(0);
+    expect(v.kcal!.over).toBe(false);
+  }
 });
 
 test("sin exercise (default 0) el comportamiento no cambia y over sigue el criterio del restante", () => {
