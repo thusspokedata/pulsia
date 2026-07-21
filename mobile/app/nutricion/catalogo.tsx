@@ -3,16 +3,50 @@ import { ScrollView, View, Text, TextInput, Pressable, Alert } from "react-nativ
 import { router, useFocusEffect } from "expo-router";
 import { getBackendUrl } from "../../src/storage/config";
 import { listFoods, deleteFood } from "../../src/api/nutrition";
-import type { Food } from "@pulsia/shared";
+import { filterFoodsByNutrient, FLAGGED_NUTRIENTS, type Food, type FlaggedNutrient } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 import { SourceChip } from "../../src/nutrition/SourceChip";
+import { NutrientFlags } from "../../src/nutrition/NutrientFlags";
+import { NUTRIENT_LABELS } from "../../src/nutrition/nutrientText";
+
+// Explica por qué la lista quedó vacía nombrando TODO lo que la achicó: si solo culpara al
+// buscador de texto, "No se encontraron alimentos para ''" es una mentira cuando en realidad fue
+// el chip de nutriente el que descartó todo.
+function emptyResultsMessage(q: string, nutrient: FlaggedNutrient | null): string {
+  const causes: string[] = [];
+  if (q.trim() !== "") causes.push(`para "${q}"`);
+  if (nutrient) causes.push(`con el filtro de ${NUTRIENT_LABELS[nutrient]}`);
+  return causes.length > 0 ? `No se encontraron alimentos ${causes.join(" ")}.` : "No se encontraron alimentos.";
+}
+
+function FoodRow({ food, onDelete }: { food: Food; onDelete: (f: Food) => void }) {
+  return (
+    <View style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+      <Pressable style={{ flex: 1 }} onPress={() => router.push(`/nutricion/agregar-alimento?foodId=${food.id}`)}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+          <Text style={{ color: colors.text, fontWeight: "600", flexShrink: 1 }}>{food.name}</Text>
+          <SourceChip source={food.source} />
+        </View>
+        <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+          {food.kcal} kcal · P{food.protein_g} C{food.carbs_g} G{food.fat_g} /100{food.basis === "per_100ml" ? "ml" : "g"}
+          {food.unitWeightG != null ? ` · 1 u ≈ ${food.unitWeightG}${food.basis === "per_100ml" ? "ml" : "g"}` : ""}
+        </Text>
+        <NutrientFlags food={food} />
+      </Pressable>
+      <Pressable onPress={() => onDelete(food)} style={{ padding: spacing.sm }}>
+        <Text style={{ color: colors.danger }}>Borrar</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 export default function CatalogoScreen() {
   const screenPad = useScreenPadding(spacing.lg);
   const baseUrl = useRef<string | null>(null);
   const [foods, setFoods] = useState<Food[]>([]);
   const [q, setQ] = useState("");
+  const [nutrient, setNutrient] = useState<FlaggedNutrient | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -34,7 +68,12 @@ export default function CatalogoScreen() {
     ]);
   }
 
-  const filtered = foods.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase()));
+  // El texto se aplica primero y el nutriente después, para que el filtro por nutriente opere
+  // sobre lo que el usuario ya acotó con el buscador.
+  const byText = foods.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase()));
+  const result = nutrient ? filterFoodsByNutrient(byText, nutrient) : null;
+  const filtered = result ? result.matches : byText;
+  const missing = result ? result.unknown : [];
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.md }}>
@@ -44,30 +83,48 @@ export default function CatalogoScreen() {
       </Pressable>
       <TextInput value={q} onChangeText={setQ} placeholder="Buscar…" placeholderTextColor={colors.icon}
         style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.md, color: colors.text }} />
+      {/* Filtrar por nutriente sin alimentos en el catálogo no tiene sentido — abajo va directo
+          el estado vacío "Todavía no hay alimentos". */}
+      {foods.length > 0 && (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
+          {FLAGGED_NUTRIENTS.map((n) => {
+            const on = nutrient === n;
+            return (
+              <Pressable
+                key={n}
+                onPress={() => setNutrient(on ? null : n)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={`Filtrar por ${NUTRIENT_LABELS[n]}`}
+                style={{
+                  backgroundColor: on ? colors.accent : colors.surfaceMuted,
+                  borderRadius: radius.pill,
+                  paddingHorizontal: spacing.md,
+                  paddingVertical: spacing.xs,
+                }}
+              >
+                <Text style={{ color: on ? "#fff" : colors.textMuted, fontSize: 12 }}>
+                  {NUTRIENT_LABELS[n]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
       {foods.length === 0 && <Text style={{ color: colors.textMuted }}>Todavía no hay alimentos. Agregá el primero con una foto.</Text>}
-      {foods.length > 0 && filtered.length === 0 && <Text style={{ color: colors.textMuted }}>No se encontraron alimentos para "{q}".</Text>}
-      {filtered.map((f) => (
-        <View key={f.id} style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Pressable style={{ flex: 1 }} onPress={() => router.push(`/nutricion/agregar-alimento?foodId=${f.id}`)}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-              <Text style={{ color: colors.text, fontWeight: "600", flexShrink: 1 }}>{f.name}</Text>
-              <SourceChip source={f.source} />
-            </View>
-            <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-              {f.kcal} kcal · P{f.protein_g} C{f.carbs_g} G{f.fat_g} /100{f.basis === "per_100ml" ? "ml" : "g"}
-              {f.sugars_g != null ? ` · azúc ${f.sugars_g}` : ""}
-              {f.fiber_g != null ? ` · fibra ${f.fiber_g}` : ""}
-              {f.saturated_fat_g != null ? ` · sat ${f.saturated_fat_g}` : ""}
-              {f.salt_g != null ? ` · sal ${f.salt_g}` : ""}
-              {f.unitWeightG != null ? ` · 1 u ≈ ${f.unitWeightG}${f.basis === "per_100ml" ? "ml" : "g"}` : ""}
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => remove(f)} style={{ padding: spacing.sm }}>
-            <Text style={{ color: colors.danger }}>Borrar</Text>
-          </Pressable>
-        </View>
-      ))}
+      {foods.length > 0 && filtered.length === 0 && missing.length === 0 && (
+        <Text style={{ color: colors.textMuted }}>{emptyResultsMessage(q, nutrient)}</Text>
+      )}
+      {filtered.map((f) => <FoodRow key={f.id} food={f} onDelete={remove} />)}
+      {missing.length > 0 && nutrient && (
+        <>
+          <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: spacing.md }}>
+            Sin datos de {NUTRIENT_LABELS[nutrient]} ({missing.length})
+          </Text>
+          {missing.map((f) => <FoodRow key={f.id} food={f} onDelete={remove} />)}
+        </>
+      )}
     </ScrollView>
   );
 }
