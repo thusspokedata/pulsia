@@ -23,6 +23,29 @@ export function SectionTitle({ children }: { children: ReactNode }) {
   return <Text style={{ color: colors.textMuted, fontSize: 13 }}>{children}</Text>;
 }
 
+export type BarKind = "limit" | "floor";
+
+export interface BarSegments {
+  fillPct: number; // turquesa
+  overPct: number; // naranja (el excedente)
+}
+
+/**
+ * Parte la barra en la línea de la meta. La barra representa SIEMPRE lo consumido: al pasarse,
+ * el turquesa es la porción que entra en la meta y el naranja el excedente, así que se sigue
+ * viendo cuánto llevabas (antes se pintaba entera de ámbar y esa información se perdía).
+ *
+ * `kind: "floor"` es para los pisos como la fibra, donde pasarse es BUENO y nunca se avisa.
+ */
+export function barSegments(value: number, target: number, kind: BarKind = "limit"): BarSegments {
+  if (!Number.isFinite(value) || !Number.isFinite(target) || target <= 0) return { fillPct: 0, overPct: 0 };
+  if (value <= target || kind === "floor") {
+    return { fillPct: Math.min(100, Math.round((value / target) * 100)), overPct: 0 };
+  }
+  const fillPct = Math.round((target / value) * 100);
+  return { fillPct, overPct: 100 - fillPct }; // se derivan uno del otro: siempre suman 100
+}
+
 // Barra de progreso. `over` = se pasó de un LÍMITE (ámbar y llena); nunca se usa para un piso
 // como la fibra, donde pasarse es bueno.
 export function Bar({ pct, over, testID }: { pct: number; over: boolean; testID?: string }) {
