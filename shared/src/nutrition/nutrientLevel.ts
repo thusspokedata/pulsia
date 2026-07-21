@@ -134,10 +134,21 @@ const SENTIMENT_RANK: Record<NutrientSentiment, number> = {
   unknown: 4,
 };
 
+/**
+ * El valor de un nutriente en `food`, o `null` si no está cargado. Centraliza el chequeo de
+ * `typeof`: los micros son `number | null | undefined` en el schema, y un dato corrupto que
+ * llegara como string (por ejemplo desde un JSON externo mal tipado) tampoco debe colarse
+ * como si fuera un número real. Se usa acá y en nutrientFilter.ts — sin este helper, los dos
+ * archivos repetían la misma línea con el mismo riesgo de que se desincronicen.
+ */
+export function nutrientValue(food: FoodFlagsInput, nutrient: FlaggedNutrient): number | null {
+  const raw = food[nutrient];
+  return typeof raw === "number" ? raw : null;
+}
+
 export function foodFlags(food: FoodFlagsInput): FoodFlags {
   const all: NutrientFlag[] = FLAGGED_NUTRIENTS.map((nutrient) => {
-    const raw = food[nutrient];
-    const value = typeof raw === "number" ? raw : null;
+    const value = nutrientValue(food, nutrient);
     const level = nutrientLevel(nutrient, value, food.basis);
     return { nutrient, level, sentiment: nutrientSentiment(nutrient, level), value };
   });
@@ -146,7 +157,11 @@ export function foodFlags(food: FoodFlagsInput): FoodFlags {
   const notable = all
     .filter((f) => f.sentiment === "bad" || f.sentiment === "warn" || f.sentiment === "good")
     // Orden determinista: primero por severidad, y los empates por el orden de la tabla.
-    // Sin el desempate explícito quedaría a merced de cómo el motor ordena empates.
+    // `Array.prototype.sort` ya es estable (ES2019+), así que hoy los empates salen en el
+    // orden de FLAGGED_NUTRIENTS aunque este segundo criterio no estuviera: `all` se
+    // construye iterando FLAGGED_NUTRIENTS y `filter` preserva ese orden. El desempate
+    // explícito no depende de esa estabilidad del motor: mantiene el contrato aun si el día
+    // de mañana alguien reordena o filtra distinto la construcción de `all`.
     .sort(
       (a, b) =>
         SENTIMENT_RANK[a.sentiment] - SENTIMENT_RANK[b.sentiment] ||

@@ -1,6 +1,7 @@
 import {
   nutrientLevel,
   nutrientSentiment,
+  nutrientValue,
   type FlaggedNutrient,
   type FoodFlagsInput,
 } from "./nutrientLevel";
@@ -27,13 +28,14 @@ export function filterFoodsByNutrient<T extends FoodFlagsInput>(
   const unknown: T[] = [];
 
   for (const food of foods) {
-    const raw = food[nutrient];
-    const value = typeof raw === "number" ? raw : null;
+    const value = nutrientValue(food, nutrient);
     const level = nutrientLevel(nutrient, value, food.basis);
     if (level === "unknown") {
       unknown.push(food);
       continue;
     }
+    // level ya descartó "unknown" arriba, y nutrientLevel solo devuelve "unknown" cuando
+    // value es null (o no finito): acá value es necesariamente un number.
     if (nutrientSentiment(nutrient, level) === wanted) {
       scored.push({ food, value: value as number });
     }
