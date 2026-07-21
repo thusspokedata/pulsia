@@ -58,3 +58,9 @@ export function restanteLabel(restante: number, positiveWord: string): string {
 export function remainingLabel(restante: number): string {
   return restanteLabel(restante, "faltan");
 }
+
+// La meta se muestra como base + bonus etiquetado, nunca como un total pelado: un "671 g" sin
+// explicación parece un error, y además esconde la meta real de un día de descanso.
+export function macroTargetLabel(m: Pick<MacroBar, "meta" | "bonus">): string {
+  return m.bonus > 0 ? `${m.meta} g +${m.bonus} ejercicio` : `${m.meta} g`;
+}

@@ -1,4 +1,4 @@
-import { buildGoalView } from "../src/nutrition/goalView";
+import { buildGoalView, macroTargetLabel } from "../src/nutrition/goalView";
 import type { NutritionGoalResult } from "@pulsia/shared";
 
 const comido = { kcal: 1200, protein_g: 90, carbs_g: 120, fat_g: 40 };
@@ -109,4 +109,9 @@ test("sin ejercicio, bonus 0 y metaTotal igual a meta en los tres macros", () =>
     expect(m.bonus).toBe(0);
     expect(m.metaTotal).toBe(m.meta);
   }
+});
+
+test("macroTargetLabel muestra el bonus solo cuando hay ejercicio", () => {
+  expect(macroTargetLabel({ meta: 254, bonus: 417 })).toBe("254 g +417 ejercicio");
+  expect(macroTargetLabel({ meta: 254, bonus: 0 })).toBe("254 g");
 });

@@ -264,3 +264,24 @@ test("un nutriente SIN dato no navega (no hay nada que desglosar)", async () => 
   await fireEvent.press(screen.getByTestId("nutr-fiber_g-row"));
   expect(router.push).not.toHaveBeenCalled();
 });
+
+test("con ejercicio, la fila de carbos muestra el bonus etiquetado", async () => {
+  mockDay({
+    goalView: {
+      ...goalView,
+      macros: goalView.macros.map((m) =>
+        m.key === "carbs" ? { ...m, bonus: 417, metaTotal: 637, restante: 457 } : m,
+      ),
+    },
+  });
+  await render(<DetalleDiaScreen />);
+  expect(screen.getByText(/220 g \+417 ejercicio/)).toBeTruthy();
+});
+
+test("sin ejercicio, ninguna fila muestra el sufijo", async () => {
+  await render(<DetalleDiaScreen />); // el fixture base tiene bonus 0 en los tres
+  // No usamos /ejercicio/ a secas: la leyenda fija de la pantalla ("Restante = Meta − Comido +
+  // Ejercicio. El gasto del ejercicio sale de tus sesiones...") también contiene la palabra, así
+  // que ese regex daría un falso positivo. Acotamos a la forma que el sufijo realmente produce.
+  expect(screen.queryByText(/\+\d+ ejercicio/)).toBeNull();
+});

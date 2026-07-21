@@ -1,6 +1,6 @@
 import { View, Text, Pressable } from "react-native";
 import { router } from "expo-router";
-import { remainingLabel, restanteLabel } from "../goalView";
+import { macroTargetLabel, remainingLabel, restanteLabel } from "../goalView";
 import type { GoalView } from "../goalView";
 import type { NutritionDaySummary } from "../daySummary";
 import { colors } from "../../theme/tokens";
@@ -53,7 +53,7 @@ export function ResumenTab({ summary, goalView }: Props) {
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
                 <Text style={{ color: colors.text, fontSize: 14 }}>{m.label}</Text>
                 <Text style={{ color: m.over ? colors.warning : colors.textMuted, fontSize: 13 }}>
-                  {m.comido} / {m.meta} g · {remainingLabel(m.restante)}
+                  {m.comido} / {macroTargetLabel(m)} · {remainingLabel(m.restante)}
                 </Text>
               </View>
               <Bar value={m.comido} target={m.metaTotal} />

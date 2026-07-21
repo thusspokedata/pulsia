@@ -8,7 +8,7 @@ import { dayLabel, dayAtNoon } from "../../src/session/metricDate";
 import { dateKey } from "../../src/session/dateKey";
 import { dayBounds } from "../../src/nutrition/dayBounds";
 import { useNutritionDay } from "../../src/nutrition/useNutritionDay";
-import { remainingLabel } from "../../src/nutrition/goalView";
+import { macroTargetLabel, remainingLabel } from "../../src/nutrition/goalView";
 import { SupplementChecklist } from "../../src/components/SupplementChecklist";
 import { Bar } from "../../src/nutrition/tabs/ui";
 import type { Meal, DayChecklistEntry, TakeStatus } from "@pulsia/shared";
@@ -111,7 +111,7 @@ export default function NutricionScreen() {
             {goalView.macros!.map((m) => (
               <View key={m.key} style={{ gap: 2 }}>
                 <Text style={{ color: m.over ? colors.warning : colors.textMuted, fontSize: 12 }}>
-                  {SHORT[m.key]} {m.comido} / {m.meta} g · {remainingLabel(m.restante)}
+                  {SHORT[m.key]} {m.comido} / {macroTargetLabel(m)} · {remainingLabel(m.restante)}
                 </Text>
                 <Bar value={m.comido} target={m.metaTotal} height={6} />
               </View>
