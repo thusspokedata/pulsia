@@ -35,6 +35,8 @@ export * from "./nutrition/goal";
 export * from "./nutrition/exerciseBurn";
 export * from "./nutrition/references";
 export * from "./nutrition/breakdown";
+export * from "./nutrition/nutrientLevel";
+export * from "./nutrition/nutrientFilter";
 export * from "./schemas/report";
 export * from "./supplements/checklist";
 export * from "./supplements/overlap";
