@@ -113,7 +113,7 @@ export default function NutricionScreen() {
                 <Text style={{ color: m.over ? colors.warning : colors.textMuted, fontSize: 12 }}>
                   {SHORT[m.key]} {m.comido} / {m.meta} g · {remainingLabel(m.restante)}
                 </Text>
-                <Bar value={m.comido} target={m.meta} height={6} />
+                <Bar value={m.comido} target={m.metaTotal} height={6} />
               </View>
             ))}
           </View>

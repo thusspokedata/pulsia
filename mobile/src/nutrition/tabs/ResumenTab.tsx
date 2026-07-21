@@ -56,7 +56,7 @@ export function ResumenTab({ summary, goalView }: Props) {
                   {m.comido} / {m.meta} g · {remainingLabel(m.restante)}
                 </Text>
               </View>
-              <Bar value={m.comido} target={m.meta} />
+              <Bar value={m.comido} target={m.metaTotal} />
             </View>
           ))}
         </Card>

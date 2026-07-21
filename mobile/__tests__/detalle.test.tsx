@@ -20,9 +20,9 @@ const goalView = {
   status: "ok",
   kcal: { meta: 2200, comido: 1800, exercise: 300, restante: 700, over: false },
   macros: [
-    { key: "protein", label: "Proteína", comido: 120, meta: 150, restante: 30, pct: 80, over: false },
-    { key: "carbs", label: "Carbohidratos", comido: 180, meta: 220, restante: 40, pct: 82, over: false },
-    { key: "fat", label: "Grasa", comido: 60, meta: 70, restante: 10, pct: 86, over: false },
+    { key: "protein", label: "Proteína", comido: 120, meta: 150, bonus: 0, metaTotal: 150, restante: 30, over: false },
+    { key: "carbs", label: "Carbohidratos", comido: 180, meta: 220, bonus: 0, metaTotal: 220, restante: 40, over: false },
+    { key: "fat", label: "Grasa", comido: 60, meta: 70, bonus: 0, metaTotal: 70, restante: 10, over: false },
   ],
 };
 
