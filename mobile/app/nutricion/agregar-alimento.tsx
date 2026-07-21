@@ -8,6 +8,10 @@ import type { FoodBasis, FoodExtraction, FoodSource } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 import { SourceChip } from "../../src/nutrition/SourceChip";
+import { NutrientFlags } from "../../src/nutrition/NutrientFlags";
+
+const num = (s: string) => Number(s.replace(",", "."));
+const optNum = (s: string) => (s.trim() === "" ? null : num(s));
 
 type Form = {
   name: string; basis: FoodBasis; kcal: string; protein_g: string; carbs_g: string; fat_g: string;
@@ -107,8 +111,6 @@ export default function AgregarAlimentoScreen() {
 
   async function save() {
     setError(null);
-    const num = (s: string) => Number(s.replace(",", "."));
-    const optNum = (s: string) => (s.trim() === "" ? null : num(s));
     const input = {
       name: form.name.trim(), basis: form.basis, kcal: num(form.kcal), protein_g: num(form.protein_g),
       carbs_g: num(form.carbs_g), fat_g: num(form.fat_g),
@@ -225,6 +227,22 @@ export default function AgregarAlimentoScreen() {
       {field(`Colesterol (mg, opcional)`, "cholesterol_mg", "numeric")}
       {field(`Agua (ml por 100${form.basis === "per_100ml" ? "ml" : "g"}, opcional)`, "water_ml", "numeric")}
       {field("Peso por unidad (opcional)", "unitWeightG", "numeric")}
+
+      <View style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.sm }}>
+        <Text style={{ color: colors.text, fontWeight: "600", fontSize: 13 }}>Semáforo nutricional</Text>
+        <NutrientFlags
+          variant="full"
+          food={{
+            basis: form.basis,
+            fat_g: num(form.fat_g),
+            saturated_fat_g: optNum(form.saturated_fat_g),
+            sugars_g: optNum(form.sugars_g),
+            salt_g: optNum(form.salt_g),
+            cholesterol_mg: optNum(form.cholesterol_mg),
+            fiber_g: optNum(form.fiber_g),
+          }}
+        />
+      </View>
 
       <Pressable onPress={save} disabled={saving} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
         <Text style={{ color: "#fff", fontWeight: "700" }}>{saving ? "Guardando…" : foodId ? "Guardar cambios" : "Guardar en el catálogo"}</Text>
