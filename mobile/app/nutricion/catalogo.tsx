@@ -7,6 +7,7 @@ import type { Food } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 import { SourceChip } from "../../src/nutrition/SourceChip";
+import { NutrientFlags } from "../../src/nutrition/NutrientFlags";
 
 export default function CatalogoScreen() {
   const screenPad = useScreenPadding(spacing.lg);
@@ -56,12 +57,9 @@ export default function CatalogoScreen() {
             </View>
             <Text style={{ color: colors.textMuted, fontSize: 12 }}>
               {f.kcal} kcal · P{f.protein_g} C{f.carbs_g} G{f.fat_g} /100{f.basis === "per_100ml" ? "ml" : "g"}
-              {f.sugars_g != null ? ` · azúc ${f.sugars_g}` : ""}
-              {f.fiber_g != null ? ` · fibra ${f.fiber_g}` : ""}
-              {f.saturated_fat_g != null ? ` · sat ${f.saturated_fat_g}` : ""}
-              {f.salt_g != null ? ` · sal ${f.salt_g}` : ""}
               {f.unitWeightG != null ? ` · 1 u ≈ ${f.unitWeightG}${f.basis === "per_100ml" ? "ml" : "g"}` : ""}
             </Text>
+            <NutrientFlags food={f} />
           </Pressable>
           <Pressable onPress={() => remove(f)} style={{ padding: spacing.sm }}>
             <Text style={{ color: colors.danger }}>Borrar</Text>
