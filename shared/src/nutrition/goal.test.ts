@@ -1,5 +1,7 @@
 import { test, expect } from "bun:test";
 import { computeNutritionGoal } from "./goal";
+import { exerciseAdjustedTargets } from "./goal";
+import { saturatedFatRefG } from "./references";
 
 const base = { sex: "male" as const, age: 40, heightCm: 178, weightKg: 80, activityLevel: "light" as const };
 
@@ -109,4 +111,47 @@ test("manual SIN datos antropométricos sigue con bmr/tdee null", () => {
   if (r.status !== "ok") throw new Error("esperaba ok");
   expect(r.bmr).toBeNull();
   expect(r.tdee).toBeNull();
+});
+
+const okGoal = {
+  status: "ok" as const, source: "auto" as const,
+  kcal: 2112, protein_g: 132, carbs_g: 254, fat_g: 63, bmr: 1700, tdee: 2100,
+};
+
+test("el bonus del ejercicio va entero a carbos", () => {
+  const t = exerciseAdjustedTargets(okGoal, 1667);
+  expect(t.carbs_g).toEqual({ base: 254, bonus: 417, total: 671 }); // 1667/4 = 416.75 → 417
+  expect(t.kcal).toEqual({ base: 2112, bonus: 1667, total: 3779 });
+});
+
+test("proteína y grasa NO escalan con el ejercicio", () => {
+  const t = exerciseAdjustedTargets(okGoal, 1667);
+  expect(t.protein_g).toEqual({ base: 132, bonus: 0, total: 132 });
+  expect(t.fat_g).toEqual({ base: 63, bonus: 0, total: 63 });
+});
+
+test("sin ejercicio todos los total son iguales a los base", () => {
+  const t = exerciseAdjustedTargets(okGoal, 0);
+  expect(t.kcal).toEqual({ base: 2112, bonus: 0, total: 2112 });
+  expect(t.carbs_g).toEqual({ base: 254, bonus: 0, total: 254 });
+});
+
+test("ejercicio negativo o no finito se trata como 0, nunca resta meta", () => {
+  for (const bad of [-500, NaN, Infinity]) {
+    const t = exerciseAdjustedTargets(okGoal, bad);
+    expect(t.carbs_g.bonus).toBe(0);
+    expect(t.carbs_g.total).toBe(254);
+    expect(t.kcal.bonus).toBe(0);
+  }
+});
+
+// INVARIANTE DEL DISEÑO: los límites de salud no escalan con el gasto. Si alguien "arregla"
+// exerciseAdjustedTargets para que infle goal.kcal, este test es el que se pone en rojo.
+test("el techo de saturadas NO cambia por haber entrenado", () => {
+  const sinEjercicio = saturatedFatRefG(okGoal.kcal);
+  const t = exerciseAdjustedTargets(okGoal, 1667);
+  expect(saturatedFatRefG(okGoal.kcal)).toBe(sinEjercicio);
+  // el total ajustado existe y es mucho mayor, pero NO es lo que alimenta la referencia
+  expect(t.kcal.total).toBeGreaterThan(okGoal.kcal);
+  expect(saturatedFatRefG(okGoal.kcal)).not.toBe(saturatedFatRefG(t.kcal.total));
 });
