@@ -161,10 +161,8 @@ export default function NuevaComidaScreen() {
         style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.md, color: colors.text }} />
       {matches.map((f) => (
         <Pressable key={f.id} onPress={() => addFood(f)} style={{ padding: spacing.sm, backgroundColor: colors.accentSoft, borderRadius: radius.sm }}>
-          <View>
-            <Text style={{ color: colors.accentText }}>+ {f.name}</Text>
-            <NutrientFlags food={f} />
-          </View>
+          <Text style={{ color: colors.accentText }}>+ {f.name}</Text>
+          <NutrientFlags food={f} />
         </Pressable>
       ))}
       {q.trim() !== "" && matches.length === 0 && (
