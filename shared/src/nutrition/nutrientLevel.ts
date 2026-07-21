@@ -79,3 +79,81 @@ export function nutrientLevel(
   const isHigh = band.highInclusive ? value >= band.high : value > band.high;
   return isHigh ? "high" : "medium";
 }
+
+export type NutrientSentiment = "bad" | "warn" | "good" | "neutral" | "unknown";
+
+/**
+ * Si el nivel medido es bueno o malo. Acá —y solo acá— vive la dirección de cada nutriente,
+ * espejando el NUTRIENT_REFERENCE_KIND de references.ts: la fibra es piso, los otros cinco son
+ * techos. Sin esta separación, la UI tendría que saber que la fibra va al revés.
+ */
+export function nutrientSentiment(
+  nutrient: FlaggedNutrient,
+  level: NutrientLevel,
+): NutrientSentiment {
+  if (level === "unknown") return "unknown";
+  if (nutrient === "fiber_g") return level === "high" ? "good" : "neutral";
+  if (level === "high") return "bad";
+  if (level === "medium") return "warn";
+  return "neutral";
+}
+
+export type NutrientFlag = {
+  nutrient: FlaggedNutrient;
+  level: NutrientLevel;
+  sentiment: NutrientSentiment;
+  value: number | null;
+};
+
+export type FoodFlags = {
+  /** bad | warn | good, ordenados por severidad. Lo que la UI pinta como chips. */
+  notable: NutrientFlag[];
+  /** Los que no tienen dato. Se muestran aparte: "no sé" no es "está bajo". */
+  unknown: FlaggedNutrient[];
+  /** Los seis, en orden fijo. Para la vista de detalle. */
+  all: NutrientFlag[];
+};
+
+// Lo mínimo que hace falta para juzgar un alimento. Un Food lo satisface, pero pedir solo esto
+// permite testear sin construir un Food entero con id, userId y timestamps.
+export type FoodFlagsInput = {
+  basis: FoodBasis;
+  fat_g: number;
+  saturated_fat_g?: number | null;
+  sugars_g?: number | null;
+  salt_g?: number | null;
+  cholesterol_mg?: number | null;
+  fiber_g?: number | null;
+};
+
+const SENTIMENT_RANK: Record<NutrientSentiment, number> = {
+  bad: 0,
+  warn: 1,
+  good: 2,
+  neutral: 3,
+  unknown: 4,
+};
+
+export function foodFlags(food: FoodFlagsInput): FoodFlags {
+  const all: NutrientFlag[] = FLAGGED_NUTRIENTS.map((nutrient) => {
+    const raw = food[nutrient];
+    const value = typeof raw === "number" ? raw : null;
+    const level = nutrientLevel(nutrient, value, food.basis);
+    return { nutrient, level, sentiment: nutrientSentiment(nutrient, level), value };
+  });
+
+  const rankOf = (n: FlaggedNutrient) => FLAGGED_NUTRIENTS.indexOf(n);
+  const notable = all
+    .filter((f) => f.sentiment === "bad" || f.sentiment === "warn" || f.sentiment === "good")
+    // Orden determinista: primero por severidad, y los empates por el orden de la tabla.
+    // Sin el desempate explícito quedaría a merced de cómo el motor ordena empates.
+    .sort(
+      (a, b) =>
+        SENTIMENT_RANK[a.sentiment] - SENTIMENT_RANK[b.sentiment] ||
+        rankOf(a.nutrient) - rankOf(b.nutrient),
+    );
+
+  const unknown = all.filter((f) => f.level === "unknown").map((f) => f.nutrient);
+
+  return { notable, unknown, all };
+}

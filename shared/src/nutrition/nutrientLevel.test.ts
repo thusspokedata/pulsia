@@ -63,3 +63,64 @@ test("un número basura no se cuela como nivel real", () => {
   expect(nutrientLevel("sugars_g", NaN, "per_100g")).toBe("unknown");
   expect(nutrientLevel("sugars_g", Infinity, "per_100g")).toBe("unknown");
 });
+
+import { nutrientSentiment, foodFlags } from "./nutrientLevel";
+
+test("la fibra va al REVÉS que el resto: mucha es buena", () => {
+  expect(nutrientSentiment("fiber_g", "high")).toBe("good");
+  expect(nutrientSentiment("fiber_g", "medium")).toBe("neutral");
+  expect(nutrientSentiment("fiber_g", "low")).toBe("neutral");
+  // el mismo nivel, en un nutriente techo, es lo contrario
+  expect(nutrientSentiment("sugars_g", "high")).toBe("bad");
+  expect(nutrientSentiment("sugars_g", "medium")).toBe("warn");
+  expect(nutrientSentiment("sugars_g", "low")).toBe("neutral");
+});
+
+test("unknown se propaga como sentiment propio, no como neutral", () => {
+  expect(nutrientSentiment("sugars_g", "unknown")).toBe("unknown");
+  expect(nutrientSentiment("fiber_g", "unknown")).toBe("unknown");
+});
+
+const quesoCrema = {
+  basis: "per_100g" as const,
+  fat_g: 34, saturated_fat_g: 20, sugars_g: 3.2,
+  salt_g: 0.8, cholesterol_mg: 101, fiber_g: 0,
+};
+
+test("foodFlags ordena por severidad y desempata por el orden de FLAGGED_NUTRIENTS", () => {
+  const { notable } = foodFlags(quesoCrema);
+  // grasa/saturadas/colesterol son bad; sal es warn; fibra 0 es neutral y no aparece
+  expect(notable.map((f) => f.nutrient)).toEqual([
+    "fat_g", "saturated_fat_g", "cholesterol_mg", "salt_g",
+  ]);
+  expect(notable.map((f) => f.sentiment)).toEqual(["bad", "bad", "bad", "warn"]);
+});
+
+test("foodFlags separa los sin-dato y NO los mete en notable", () => {
+  const almendra = {
+    basis: "per_100g" as const,
+    fat_g: 50, saturated_fat_g: 3.8, sugars_g: null,
+    salt_g: null, cholesterol_mg: 0, fiber_g: 12.5,
+  };
+  const { notable, unknown } = foodFlags(almendra);
+  expect(unknown).toEqual(["sugars_g", "salt_g"]);
+  expect(notable.some((f) => f.nutrient === "sugars_g")).toBe(false);
+  expect(notable.some((f) => f.nutrient === "salt_g")).toBe(false);
+  // la fibra alta sí es notable, y es lo único bueno
+  expect(notable.find((f) => f.nutrient === "fiber_g")?.sentiment).toBe("good");
+});
+
+test("foodFlags.all trae siempre los seis, en orden fijo", () => {
+  const { all } = foodFlags(quesoCrema);
+  expect(all.map((f) => f.nutrient)).toEqual([...FLAGGED_NUTRIENTS]);
+});
+
+test("un alimento sin nada destacable no genera ningún chip", () => {
+  const lechuga = {
+    basis: "per_100g" as const,
+    fat_g: 0.2, saturated_fat_g: 0, sugars_g: 0.8,
+    salt_g: 0.01, cholesterol_mg: 0, fiber_g: 1.3,
+  };
+  expect(foodFlags(lechuga).notable).toEqual([]);
+  expect(foodFlags(lechuga).unknown).toEqual([]);
+});
