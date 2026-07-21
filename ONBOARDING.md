@@ -192,9 +192,11 @@ Todo mergeado en `main`, backend deployado, entregado por **OTA a vc10** (runtim
 - **Verificar en device el `SegmentToggle` de 4 pestañas**: estimado que "Nutrientes" entra con ~17% de margen en 320px, pero **nunca se midió de verdad**, y ya hubo un bug de texto cortándose en esta app.
 
 **Piezas con tamaño propio (merecen spec):**
-- **Demostraciones animadas de ejercicios — Piezas 1-4.** El spec está escrito y aprobado
-  (`2026-07-18-gifs-ejercicios-design.md`), el catálogo ya está firme y hay 93 ejercicios mapeados a
-  su ilustración. **Falta el plan de implementación.** Ver §0-ANTES-HOY.
+- ~~**Demostraciones animadas de ejercicios — Piezas 1-4.** Falta el plan de implementación.~~ →
+  **HECHO y en prod** (2026-07-20, cuatro PRs). Ver **§0-AHORA**. Lo que sigue vivo de este tema es
+  ampliar la cobertura más allá del 32%: se forkeó `everkinetic/data` a
+  [thusspokedata/everkinetic-data](https://github.com/thusspokedata/everkinetic-data) para dibujar
+  los que faltan (los SVG son vectores editables, así que se puede derivar de los existentes).
 - **Revisar `inferEquipment` de raíz.** Ya van 9 correcciones vía `MUST_EQUIPMENT` por tres patrones
   distintos de fallo (§0-ANTES-HOY). La heurística por nombre es más excepción que regla; en algún
   momento conviene rehacerla en vez de seguir parchando caso por caso.
