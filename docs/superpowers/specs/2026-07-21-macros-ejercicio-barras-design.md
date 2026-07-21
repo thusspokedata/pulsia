@@ -100,13 +100,27 @@ Helper puro nuevo, `barSegments(value, target) → { fillPct, overPct }`:
 |---|---|---|
 | `value ≤ target` | `value / target` | `0` |
 | `value > target` | `target / value` | `(value − target) / value` |
+| `value > target`, `kind = "floor"` | `100` | `0` |
 | `target ≤ 0` o no finito | `0` | `0` |
 
 La barra representa siempre **lo consumido**, partida en la línea de la meta. Grasa 119/63 →
 turquesa 53%, naranja 47%. Al doble de la meta, mitad y mitad. Los dos porcentajes suman 100 cuando
 hay exceso, así que no queda track vacío.
 
-`Bar` pasa de `{ pct, over }` a `{ value, target }` y deriva los segmentos sola. Hoy cada call-site
+**La fibra obliga a un tercer prop.** Es un piso (`NUTRIENT_REFERENCE_KIND.fiber_g === "min"`):
+pasarse es bueno y nunca se pinta ámbar. Un `Bar` que solo mire `value` y `target` no puede saberlo
+y le pintaría el exceso en naranja. Hoy no pasa porque el `over` se lo calcula `NutrientesTab`, que
+sí conoce el `kind`. Entonces:
+
+```ts
+Bar({ value, target, kind = "limit" })   // kind: "limit" | "floor"
+```
+
+Con `kind="floor"` el exceso se absorbe en el segmento turquesa (`fillPct` clampeado a 100,
+`overPct` siempre 0). `NutrientesTab` lo deriva de `NUTRIENT_REFERENCE_KIND`. El default es
+`"limit"` porque es el caso mayoritario.
+
+`Bar` pasa de `{ pct, over }` a `{ value, target, kind }` y deriva los segmentos sola. Hoy cada call-site
 calcula su `pct` y su `over` por separado y los pasa como dos props independientes: es la forma que
 permite que el color y el texto se contradigan, y esta app ya pagó ese tipo de bug. Con una sola
 fuente el estado inconsistente deja de ser representable.
@@ -169,7 +183,15 @@ la necesita):
 - Bajo la meta: `overPct === 0` y `fillPct` proporcional.
 - En la meta exacta: `fillPct === 100`, `overPct === 0` (no se pinta naranja al llegar justo).
 - Pasado: los dos segmentos suman 100; grasa 119/63 → 53/47.
+- `kind = "floor"` pasado de largo (fibra 45/30) → `fillPct 100`, `overPct 0`. Con `kind = "limit"`
+  los mismos números dan dos segmentos: es la aserción que fija que el prop hace algo.
 - `target = 0` y `target` negativo → ambos en 0, sin división por cero.
+
+**Tests existentes cuyo significado cambia** (actualizarlos es parte del trabajo, no daño colateral):
+`detalle.test.tsx:125` afirma hoy que la barra de sal excedida tiene `backgroundColor === warning`.
+Con el diseño nuevo el segmento con ese `testID` es el **turquesa**, y el ámbar es el segmento
+hermano. El test pasa a asertar sobre los dos. `nutriente.test.tsx:87-96` (barras de ranking) y
+`detalle.test.tsx:139` (fibra al 100%) sobreviven sin cambios, y por eso son buenos canarios.
 
 **`mobile/` — render:**
 - Un macro excedido dibuja **dos** segmentos, y el turquesa **no** ocupa el 100%. La mutación a
