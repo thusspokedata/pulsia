@@ -65,3 +65,43 @@ export function computeNutritionGoal(args: NutritionGoalArgs): NutritionGoalResu
   const kcal = Math.max(KCAL_FLOOR, round(raw));
   return { status: "ok", source: "auto", kcal, ...macros(kcal, weightKg, objective), bmr: round(bmrRaw as number), tdee: round(tdeeRaw as number) };
 }
+
+export interface AdjustedTarget {
+  base: number;
+  bonus: number;
+  total: number;
+}
+
+export interface ExerciseAdjustedTargets {
+  kcal: AdjustedTarget;
+  protein_g: AdjustedTarget;
+  carbs_g: AdjustedTarget;
+  fat_g: AdjustedTarget;
+}
+
+const fixed = (base: number): AdjustedTarget => ({ base, bonus: 0, total: base });
+
+/**
+ * Ajusta las metas de ENERGÍA por el gasto de ejercicio del día. El bonus va entero a carbos:
+ * el glucógeno es el combustible del entrenamiento, mientras que la proteína se fija por peso
+ * corporal y la grasa no la "pide" el ejercicio.
+ *
+ * NO devuelve ni ajusta ningún límite de salud (colesterol, saturadas, sal, azúcares): esos no
+ * escalan con el gasto. Tampoco muta `goal` — saturatedFatRefG deriva su techo de `goal.kcal`,
+ * así que inflarlo subiría un límite de salud por haber entrenado.
+ */
+export function exerciseAdjustedTargets(
+  goal: Extract<NutritionGoalResult, { status: "ok" }>,
+  exerciseKcal: number,
+): ExerciseAdjustedTargets {
+  // Un gasto negativo o no finito se trata como 0: nunca un bonus negativo, que le restaría
+  // meta a quien no entrenó.
+  const kcalBonus = Number.isFinite(exerciseKcal) && exerciseKcal > 0 ? Math.round(exerciseKcal) : 0;
+  const carbsBonus = Math.round(kcalBonus / 4); // 4 kcal por gramo de carbohidrato
+  return {
+    kcal: { base: goal.kcal, bonus: kcalBonus, total: goal.kcal + kcalBonus },
+    protein_g: fixed(goal.protein_g),
+    carbs_g: { base: goal.carbs_g, bonus: carbsBonus, total: goal.carbs_g + carbsBonus },
+    fat_g: fixed(goal.fat_g),
+  };
+}

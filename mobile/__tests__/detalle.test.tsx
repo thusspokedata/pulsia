@@ -20,9 +20,9 @@ const goalView = {
   status: "ok",
   kcal: { meta: 2200, comido: 1800, exercise: 300, restante: 700, over: false },
   macros: [
-    { key: "protein", label: "Proteína", comido: 120, meta: 150, restante: 30, pct: 80, over: false },
-    { key: "carbs", label: "Carbohidratos", comido: 180, meta: 220, restante: 40, pct: 82, over: false },
-    { key: "fat", label: "Grasa", comido: 60, meta: 70, restante: 10, pct: 86, over: false },
+    { key: "protein", label: "Proteína", comido: 120, meta: 150, bonus: 0, metaTotal: 150, restante: 30, over: false },
+    { key: "carbs", label: "Carbohidratos", comido: 180, meta: 220, bonus: 0, metaTotal: 220, restante: 40, over: false },
+    { key: "fat", label: "Grasa", comido: 60, meta: 70, bonus: 0, metaTotal: 70, restante: 10, over: false },
   ],
 };
 
@@ -108,28 +108,36 @@ test("la fibra es un PISO: llegar a la referencia no avisa", async () => {
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
   expect(screen.getByText("22 / 30 g")).toBeTruthy();
-  expect(screen.getByTestId("nutr-fiber_g-bar").props.style.backgroundColor).not.toBe(colors.warning);
+  expect(screen.queryByTestId("nutr-fiber_g-bar-over")).toBeNull();
 });
 
-test("fibra POR ENCIMA del piso: sigue sin avisar (pasarse de fibra es bueno)", async () => {
-  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, fiber_g: 45 } } });
+test("fibra por encima del piso: llena de turquesa, sin segmento ámbar", async () => {
+  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, fiber_g: 45 } } }); // piso = 30
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
-  expect(screen.getByTestId("nutr-fiber_g-bar").props.style.backgroundColor).not.toBe(colors.warning);
+  expect(screen.getByTestId("nutr-fiber_g-bar").props.style.width).toBe("100%");
+  expect(screen.queryByTestId("nutr-fiber_g-bar-over")).toBeNull();
 });
 
-test("sal por encima del límite: la barra pinta ámbar", async () => {
-  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, salt_g: 9 } } });
+test("sal por encima del límite: turquesa hasta la meta + ámbar el excedente", async () => {
+  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, salt_g: 9 } } }); // ref = 5
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
-  expect(screen.getByTestId("nutr-salt_g-bar").props.style.backgroundColor).toBe(colors.warning);
+  const fill = screen.getByTestId("nutr-salt_g-bar");
+  const over = screen.getByTestId("nutr-salt_g-bar-over");
+  expect(fill.props.style.backgroundColor).toBe(colors.accent);
+  expect(over.props.style.backgroundColor).toBe(colors.warning);
+  // 5/9 = 56% turquesa, 44% ámbar. Asertar los DOS anchos no es redundante: si el turquesa
+  // ocupara el 100%, el ámbar quedaría invisible detrás y un test que solo lo busque pasaría igual.
+  expect(fill.props.style.width).toBe("56%");
+  expect(over.props.style.width).toBe("44%");
 });
 
 test("valor exactamente igual al límite NO avisa (tocar el límite no es pasarse)", async () => {
   mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, salt_g: 5 } } }); // ref de sal = 5
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
-  expect(screen.getByTestId("nutr-salt_g-bar").props.style.backgroundColor).not.toBe(colors.warning);
+  expect(screen.queryByTestId("nutr-salt_g-bar-over")).toBeNull();
 });
 
 test("un valor por encima de la referencia no desborda la barra (clamp al 100%)", async () => {
@@ -248,4 +256,25 @@ test("un nutriente SIN dato no navega (no hay nada que desglosar)", async () => 
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
   await fireEvent.press(screen.getByTestId("nutr-fiber_g-row"));
   expect(router.push).not.toHaveBeenCalled();
+});
+
+test("con ejercicio, la fila de carbos muestra el bonus etiquetado", async () => {
+  mockDay({
+    goalView: {
+      ...goalView,
+      macros: goalView.macros.map((m) =>
+        m.key === "carbs" ? { ...m, bonus: 417, metaTotal: 637, restante: 457 } : m,
+      ),
+    },
+  });
+  await render(<DetalleDiaScreen />);
+  expect(screen.getByText(/220 g \+417 ejercicio/)).toBeTruthy();
+});
+
+test("sin ejercicio, ninguna fila muestra el sufijo", async () => {
+  await render(<DetalleDiaScreen />); // el fixture base tiene bonus 0 en los tres
+  // No usamos /ejercicio/ a secas: la leyenda fija de la pantalla ("Restante = Meta − Comido +
+  // Ejercicio. El gasto del ejercicio sale de tus sesiones...") también contiene la palabra, así
+  // que ese regex daría un falso positivo. Acotamos a la forma que el sufijo realmente produce.
+  expect(screen.queryByText(/\+\d+ ejercicio/)).toBeNull();
 });

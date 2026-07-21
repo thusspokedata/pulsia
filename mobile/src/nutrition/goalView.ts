@@ -1,12 +1,13 @@
-import type { NutritionGoalResult } from "@pulsia/shared";
+import { exerciseAdjustedTargets, type NutritionGoalResult, type AdjustedTarget } from "@pulsia/shared";
 
 export interface MacroBar {
   key: "protein" | "carbs" | "fat";
   label: string;
   comido: number;
-  meta: number;
+  meta: number;      // BASE — es lo que se muestra como referencia del día de descanso
+  bonus: number;     // añadido por el ejercicio (solo carbos)
+  metaTotal: number; // meta + bonus — contra esto miden la barra y el restante
   restante: number;
-  pct: number; // 0–100, clamp
   over: boolean;
 }
 export interface GoalView {
@@ -16,29 +17,30 @@ export interface GoalView {
   macros?: MacroBar[];
 }
 
-const clampPct = (comido: number, meta: number): number =>
-  meta <= 0 ? 0 : Math.max(0, Math.min(100, Math.round((comido / meta) * 100)));
-
 export function buildGoalView(
   goal: NutritionGoalResult,
   comido: { kcal: number; protein_g: number; carbs_g: number; fat_g: number },
   exercise = 0,
 ): GoalView {
   if (goal.status === "incomplete") return { status: "incomplete", missing: goal.missing };
+  const targets = exerciseAdjustedTargets(goal, exercise);
+
   // `over` se deriva SIEMPRE del restante redondeado (mismo criterio para macros y kcal): así
   // el color/texto no se contradicen en el borde .5. El `|| 0` normaliza el -0 de Math.round(-0.5).
-  const bar = (key: MacroBar["key"], label: string, c: number, meta: number): MacroBar => {
-    const restante = Math.round(meta - c) || 0;
-    return { key, label, comido: Math.round(c), meta, restante, pct: clampPct(c, meta), over: restante < 0 };
+  const bar = (key: MacroBar["key"], label: string, c: number, t: AdjustedTarget): MacroBar => {
+    const restante = Math.round(t.total - c) || 0;
+    return { key, label, comido: Math.round(c), meta: t.base, bonus: t.bonus, metaTotal: t.total, restante, over: restante < 0 };
   };
-  const kcalRestante = Math.round(goal.kcal - comido.kcal + exercise) || 0;
+  const kcalRestante = Math.round(targets.kcal.total - comido.kcal) || 0;
   return {
     status: "ok",
-    kcal: { meta: goal.kcal, comido: Math.round(comido.kcal), exercise: Math.round(exercise), restante: kcalRestante, over: kcalRestante < 0 },
+    // `meta` es la BASE a propósito: NutrientesTab la usa para el techo de saturadas, que no
+    // escala con el ejercicio. El presupuesto real es meta + exercise.
+    kcal: { meta: goal.kcal, comido: Math.round(comido.kcal), exercise: targets.kcal.bonus, restante: kcalRestante, over: kcalRestante < 0 },
     macros: [
-      bar("protein", "Proteína", comido.protein_g, goal.protein_g),
-      bar("carbs", "Carbohidratos", comido.carbs_g, goal.carbs_g),
-      bar("fat", "Grasa", comido.fat_g, goal.fat_g),
+      bar("protein", "Proteína", comido.protein_g, targets.protein_g),
+      bar("carbs", "Carbohidratos", comido.carbs_g, targets.carbs_g),
+      bar("fat", "Grasa", comido.fat_g, targets.fat_g),
     ],
   };
 }
@@ -55,4 +57,10 @@ export function restanteLabel(restante: number, positiveWord: string): string {
 // Wording de los macros (compartido por la card y el detalle).
 export function remainingLabel(restante: number): string {
   return restanteLabel(restante, "faltan");
+}
+
+// La meta se muestra como base + bonus etiquetado, nunca como un total pelado: un "671 g" sin
+// explicación parece un error, y además esconde la meta real de un día de descanso.
+export function macroTargetLabel(m: Pick<MacroBar, "meta" | "bonus">): string {
+  return m.bonus > 0 ? `${m.meta} g +${m.bonus} ejercicio` : `${m.meta} g`;
 }

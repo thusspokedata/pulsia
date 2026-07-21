@@ -60,7 +60,6 @@ export function NutrientesTab({ summary, goalView, offset }: Props) {
       {rows.map((r) => {
         // `over` solo aplica a los límites: pasarse del piso de fibra es BUENO, no se avisa.
         const over = r.value != null && r.ref != null && NUTRIENT_REFERENCE_KIND[r.key] === "max" && r.value > r.ref;
-        const pct = r.value != null && r.ref != null && r.ref > 0 ? Math.min(100, Math.round((r.value / r.ref) * 100)) : 0;
         return (
           <Pressable
             key={r.key}
@@ -77,7 +76,14 @@ export function NutrientesTab({ summary, goalView, offset }: Props) {
                 {r.value == null ? "—" : r.ref == null ? `${Math.round(r.value)} ${r.unit}` : `${Math.round(r.value)} / ${r.ref} ${r.unit}`}
               </Text>
             </View>
-            {r.value != null && r.ref != null && <Bar pct={pct} over={over} testID={`nutr-${r.key}-bar`} />}
+            {r.value != null && r.ref != null && (
+              <Bar
+                value={r.value}
+                target={r.ref}
+                kind={NUTRIENT_REFERENCE_KIND[r.key] === "min" ? "floor" : "limit"}
+                testID={`nutr-${r.key}-bar`}
+              />
+            )}
           </Pressable>
         );
       })}
