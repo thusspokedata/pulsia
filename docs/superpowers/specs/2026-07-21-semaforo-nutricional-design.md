@@ -81,8 +81,9 @@ citables vía %DV (21 CFR 101.54 y 101.62):
 
 Colesterol: "low cholesterol" = ≤20 mg; "alto en" = ≥20% del DV de 300 mg = 60 mg.
 Fibra: DV de 28 g; ≥20% (5,6 g) es "excellent source" y 10% (2,8 g) es el piso de "good source".
-Los dos umbrales de fibra usan `≥` porque acá pasarse es lo bueno — es la asimetría inversa a la de
-los nutrientes `max`.
+El umbral alto usa `≥` (5,6 g ya es buena fuente) y el bajo usa `<` (2,8 g **no** es bajo, es el
+primer valor que cuenta como aporte). Es la asimetría inversa a la de los nutrientes `max`, donde el
+bajo es inclusivo y el alto exclusivo.
 
 **La fibra es un piso, no un techo** — coherente con `NUTRIENT_REFERENCE_KIND`, donde la fibra ya es
 el único `"min"` del set. Mucha fibra es bueno y se pinta verde.
