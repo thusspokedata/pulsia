@@ -61,6 +61,22 @@ El plan traía código completo paso por paso y aun así tenía seis errores, qu
 
 Refuerza [[testear-la-costura]] y la lección de las animaciones: **un plan detallado da confianza pero no garantiza que los tests prueben lo que dicen.** Lo que los sacó a la luz fue, en todos los casos, la verificación por mutación y ejecutar el código de verdad.
 
+### ⚠️ Dónde NO están los chips, y por qué NO es un bug
+
+En **`nueva-comida.tsx` los chips aparecen solo en los resultados del buscador**, mientras tipeás. Apenas agregás el alimento, la tarjeta del ítem (con la cantidad y las kcal) y la tarjeta de **Total** no los muestran. Si mirás esa pantalla con una comida ya armada, parece que faltan. **Está así a propósito, revisado con el owner el 2026-07-21.**
+
+La tarjeta del **ítem** sí podría llevarlos sin problema conceptual: sigue siendo el mismo alimento y la densidad por 100 g aplica igual. Es trabajo chico si alguna vez se decide hacerlo.
+
+El **Total NO puede llevar los mismos chips**, y esta es la parte que importa entender antes de "arreglarlo":
+
+> `azúc 12.2g` en el total **no es una densidad por 100 g**: es la cantidad real que la persona se va a comer. Los umbrales del FSA miden concentración ("¿qué tan cargado está este alimento?"), y aplicarlos a un total contestaría una pregunta que nadie hizo. Diría "azúcar medio" sobre un número que no es comparable con esos umbrales, y el mismo color significaría dos cosas distintas en dos tarjetas de la misma pantalla.
+
+La comparación que **sí** significa algo para un total es contra las **referencias diarias** que ya existen en `NUTRIENT_REFERENCES` (50 g de azúcar, 300 mg de colesterol, sal <5 g, fibra ≥30 g): *"azúcar 12,2 g · 24% del día"*. Se evaluó, el owner decidió **no hacerlo por ahora** y dejar la pantalla como está.
+
+Si algún día se hace, **el patrón ya existe y no hay que inventarlo**: `mobile/src/nutrition/tabs/NutrientesTab.tsx` compara `dayTotals` contra `NUTRIENT_REFERENCES` nutriente por nutriente. Sería reusar eso a escala de comida, no escribir algo nuevo.
+
+**Regla general que se desprende:** el semáforo responde *"¿qué tan concentrado está?"* y vive en el **alimento**. El *"¿cuánto me suma hoy?"* vive en el **dashboard del día** y se mide contra referencias diarias. No mezclar los dos vocabularios en la misma tarjeta.
+
 ### Pendiente del owner
 
 1. **Decidir si el orden del filtro está bien.** Hoy ordena por valor crudo de mayor a menor, que mezcla `per_100g` con `per_100ml` en una misma lista. Es coherente y es lo que el spec promete, pero ordenar por severidad relativa al umbral sería otra opción. **Es una decisión de producto, por eso no la tomé.**
