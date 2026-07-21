@@ -46,12 +46,19 @@ export function barSegments(value: number, target: number, kind: BarKind = "limi
   return { fillPct, overPct: 100 - fillPct }; // se derivan uno del otro: siempre suman 100
 }
 
-// Barra de progreso. `over` = se pasó de un LÍMITE (ámbar y llena); nunca se usa para un piso
-// como la fibra, donde pasarse es bueno.
-export function Bar({ pct, over, testID }: { pct: number; over: boolean; testID?: string }) {
+// Barra de progreso de dos segmentos: turquesa hasta la meta, ámbar el excedente. Recibe los
+// números crudos en vez de un `pct`/`over` ya calculados, para que el color no pueda contradecir
+// al texto de la fila.
+export function Bar({
+  value, target, kind = "limit", height = 8, testID,
+}: { value: number; target: number; kind?: BarKind; height?: number; testID?: string }) {
+  const { fillPct, overPct } = barSegments(value, target, kind);
   return (
-    <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.surfaceMuted, overflow: "hidden" }}>
-      <View testID={testID} style={{ width: over ? "100%" : `${pct}%`, height: 8, backgroundColor: over ? colors.warning : colors.accent }} />
+    <View style={{ height, borderRadius: height / 2, backgroundColor: colors.surfaceMuted, overflow: "hidden", flexDirection: "row" }}>
+      <View testID={testID} style={{ width: `${fillPct}%`, height, backgroundColor: colors.accent }} />
+      {overPct > 0 && (
+        <View testID={testID ? `${testID}-over` : undefined} style={{ width: `${overPct}%`, height, backgroundColor: colors.warning }} />
+      )}
     </View>
   );
 }

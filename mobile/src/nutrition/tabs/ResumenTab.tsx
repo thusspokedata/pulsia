@@ -28,10 +28,7 @@ export function ResumenTab({ summary, goalView }: Props) {
               </Text>
             </View>
             {/* La barra mide contra el presupuesto real del día (meta + ejercicio), igual que el restante. */}
-            <Bar
-              pct={Math.min(100, Math.round((goalView.kcal!.comido / (goalView.kcal!.meta + goalView.kcal!.exercise)) * 100))}
-              over={goalView.kcal!.over}
-            />
+            <Bar value={goalView.kcal!.comido} target={goalView.kcal!.meta + goalView.kcal!.exercise} />
             {goalView.kcal!.exercise > 0 && (
               <Text style={{ color: colors.textMuted, fontSize: 12 }}>
                 Ejercicio +{goalView.kcal!.exercise} kcal (ya sumado al restante)
@@ -59,7 +56,7 @@ export function ResumenTab({ summary, goalView }: Props) {
                   {m.comido} / {m.meta} g · {remainingLabel(m.restante)}
                 </Text>
               </View>
-              <Bar pct={m.pct} over={m.over} />
+              <Bar value={m.comido} target={m.meta} />
             </View>
           ))}
         </Card>

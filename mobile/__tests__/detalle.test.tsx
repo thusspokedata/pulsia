@@ -118,11 +118,26 @@ test("fibra POR ENCIMA del piso: sigue sin avisar (pasarse de fibra es bueno)", 
   expect(screen.getByTestId("nutr-fiber_g-bar").props.style.backgroundColor).not.toBe(colors.warning);
 });
 
-test("sal por encima del límite: la barra pinta ámbar", async () => {
-  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, salt_g: 9 } } });
+test("fibra por encima del piso: llena de turquesa, sin segmento ámbar", async () => {
+  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, fiber_g: 45 } } }); // piso = 30
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
-  expect(screen.getByTestId("nutr-salt_g-bar").props.style.backgroundColor).toBe(colors.warning);
+  expect(screen.getByTestId("nutr-fiber_g-bar").props.style.width).toBe("100%");
+  expect(screen.queryByTestId("nutr-fiber_g-bar-over")).toBeNull();
+});
+
+test("sal por encima del límite: turquesa hasta la meta + ámbar el excedente", async () => {
+  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, salt_g: 9 } } }); // ref = 5
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  const fill = screen.getByTestId("nutr-salt_g-bar");
+  const over = screen.getByTestId("nutr-salt_g-bar-over");
+  expect(fill.props.style.backgroundColor).toBe(colors.accent);
+  expect(over.props.style.backgroundColor).toBe(colors.warning);
+  // 5/9 = 56% turquesa, 44% ámbar. Asertar los DOS anchos no es redundante: si el turquesa
+  // ocupara el 100%, el ámbar quedaría invisible detrás y un test que solo lo busque pasaría igual.
+  expect(fill.props.style.width).toBe("56%");
+  expect(over.props.style.width).toBe("44%");
 });
 
 test("valor exactamente igual al límite NO avisa (tocar el límite no es pasarse)", async () => {
