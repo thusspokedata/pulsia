@@ -145,13 +145,16 @@ test("ejercicio negativo o no finito se trata como 0, nunca resta meta", () => {
   }
 });
 
+test("no devuelve ningún límite de salud: solo metas de energía", () => {
+  const t = exerciseAdjustedTargets(okGoal, 1667);
+  expect(Object.keys(t).sort()).toEqual(["carbs_g", "fat_g", "kcal", "protein_g"]);
+});
+
 // INVARIANTE DEL DISEÑO: los límites de salud no escalan con el gasto. Si alguien "arregla"
 // exerciseAdjustedTargets para que infle goal.kcal, este test es el que se pone en rojo.
-test("el techo de saturadas NO cambia por haber entrenado", () => {
-  const sinEjercicio = saturatedFatRefG(okGoal.kcal);
+test("el techo de saturadas se deriva de la meta BASE, no del total ajustado", () => {
   const t = exerciseAdjustedTargets(okGoal, 1667);
-  expect(saturatedFatRefG(okGoal.kcal)).toBe(sinEjercicio);
-  // el total ajustado existe y es mucho mayor, pero NO es lo que alimenta la referencia
-  expect(t.kcal.total).toBeGreaterThan(okGoal.kcal);
-  expect(saturatedFatRefG(okGoal.kcal)).not.toBe(saturatedFatRefG(t.kcal.total));
+  expect(t.kcal.base).toBe(okGoal.kcal); // la base NO absorbe el ejercicio
+  expect(saturatedFatRefG(t.kcal.base)).toBe(saturatedFatRefG(okGoal.kcal));
+  expect(saturatedFatRefG(t.kcal.base)).toBeLessThan(saturatedFatRefG(t.kcal.total));
 });
