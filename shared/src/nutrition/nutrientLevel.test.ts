@@ -163,6 +163,21 @@ test("nutrientValue extrae el número o da null; un string o undefined nunca se 
   expect(nutrientValue(food, "salt_g")).toBeNull();
 });
 
+test("nutrientValue normaliza NaN a null: no es un string, pero tampoco es un número real", () => {
+  // `typeof NaN === "number"`, así que sin un chequeo explícito NaN pasaría el filtro de
+  // nutrientValue como si fuera un valor cargado, y foodFlags.all lo mostraría como
+  // `${NaN} mg` en vez de "sin dato" (el bug que este test cubre).
+  const food = { basis: "per_100g" as const, fat_g: NaN, saturated_fat_g: NaN } as FoodFlagsInput;
+  expect(nutrientValue(food, "fat_g")).toBeNull();
+  expect(nutrientValue(food, "saturated_fat_g")).toBeNull();
+
+  const { all } = foodFlags(food);
+  const fat = all.find((f) => f.nutrient === "fat_g")!;
+  expect(fat.value).toBeNull();
+  expect(fat.level).toBe("unknown");
+  expect(fat.sentiment).toBe("unknown");
+});
+
 test("un alimento sin nada destacable no genera ningún chip", () => {
   const lechuga = {
     basis: "per_100g" as const,

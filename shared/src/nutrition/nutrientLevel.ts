@@ -140,10 +140,17 @@ const SENTIMENT_RANK: Record<NutrientSentiment, number> = {
  * llegara como string (por ejemplo desde un JSON externo mal tipado) tampoco debe colarse
  * como si fuera un número real. Se usa acá y en nutrientFilter.ts — sin este helper, los dos
  * archivos repetían la misma línea con el mismo riesgo de que se desincronicen.
+ *
+ * `NaN` también se normaliza a `null`: `typeof NaN === "number"`, así que sin este chequeo un
+ * campo a medio tipear (la UI puede producir NaN mientras el usuario todavía está escribiendo,
+ * o un `fat_g` vacío convertido a NaN a propósito) pasaría como un valor real. `nutrientLevel`
+ * ya trataba NaN como "unknown" por su propio chequeo de `Number.isFinite`, pero el `value` que
+ * devuelve `foodFlags` quedaba como NaN — y la UI que lo imprime literal (`${value} mg`) no
+ * distingue NaN de un número real sin este helper.
  */
 export function nutrientValue(food: FoodFlagsInput, nutrient: FlaggedNutrient): number | null {
   const raw = food[nutrient];
-  return typeof raw === "number" ? raw : null;
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
 }
 
 export function foodFlags(food: FoodFlagsInput): FoodFlags {
