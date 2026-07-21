@@ -76,8 +76,31 @@ test("el filtro se combina con el buscador de texto", async () => {
   (listFoods as jest.Mock).mockResolvedValue([PASAS, QUESO_CREMA, ALMENDRA]);
   await render(<CatalogoScreen />);
   await waitFor(() => expect(screen.getByText("Pasas de uva")).toBeTruthy());
+
   await fireEvent.press(screen.getByText("colesterol"));
-  await fireEvent.changeText(screen.getByPlaceholderText("Buscar…"), "queso");
-  expect(screen.getByText("Queso crema")).toBeTruthy();
-  expect(screen.queryByText("Almendra")).toBeNull();
+  // "a" matchea los tres nombres (Pasas de uva, Queso crema, Almendra): el buscador de texto
+  // solo NO descarta a ninguno. Si el AND con el filtro de colesterol no se ejerciera de
+  // verdad, las pasas (colesterol 0 mg → conocido y bajo, ni "alto" ni "sin dato") seguirían
+  // en pantalla igual que con el buscador solo.
+  await fireEvent.changeText(screen.getByPlaceholderText("Buscar…"), "a");
+
+  expect(screen.getByText("Queso crema")).toBeTruthy(); // alto → pasa los dos filtros
+  expect(screen.queryByText("Pasas de uva")).toBeNull(); // sobreviviría al texto solo; el filtro de colesterol la saca
+  expect(screen.getByText("Almendra")).toBeTruthy(); // sin dato → aparte, no descartada
+});
+
+test("el estado vacío culpa al filtro de nutriente, no al buscador de texto vacío", async () => {
+  // Las tres tienen sal cargada (no null) y ninguna es "alta": con el buscador vacío, filtrar
+  // por sal no deja NADA — ni matches ni sin-dato. Antes de este arreglo, el mensaje decía
+  // `No se encontraron alimentos para ""` (mintiendo: la búsqueda de texto está vacía y no tuvo
+  // nada que ver, fue el chip de sal el que vació la lista).
+  (listFoods as jest.Mock).mockResolvedValue([PASAS, QUESO_CREMA, ALMENDRA]);
+  await render(<CatalogoScreen />);
+  await waitFor(() => expect(screen.getByText("Pasas de uva")).toBeTruthy());
+
+  await fireEvent.press(screen.getByText("sal"));
+
+  await waitFor(() => expect(screen.queryByText("Pasas de uva")).toBeNull());
+  expect(screen.queryByText(/para ""/)).toBeNull();
+  expect(screen.getByText(/con el filtro de sal/)).toBeTruthy();
 });
