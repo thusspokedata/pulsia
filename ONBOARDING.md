@@ -1,6 +1,8 @@
 # Pulsia — Onboarding / Handoff
 
-> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: **2026-07-21** (sesión **TRILOGÍA DEL `.FIT`**: cerraron las fases **2 (visualización)** y **3 (reprocesamiento)** de la captura total — [#167](https://github.com/thusspokedata/pulsia/pull/167) y [#173](https://github.com/thusspokedata/pulsia/pull/173) —, más el fix [#172](https://github.com/thusspokedata/pulsia/pull/172) de un bug **que ningún test veía**: `buildFitActivity` descartaba en silencio los 15 campos del parser. Todo LIVE y **verificado por el usuario en prod**. Detalle en **§0-ULTIMO**. ⚠️ Lección transversal: **unidades en verde ≠ sistema sano** — el cliente que arma el payload también se testea ([[testear-la-costura]]).) 
+> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: **2026-07-21** (sesión **SEMÁFORO NUTRICIONAL**: el catálogo de alimentos ahora dice de un vistazo qué alimento es alto en grasa, saturadas, azúcar, sal o colesterol, y cuál es buena fuente de fibra — con umbrales de la **FSA** británica y la **FDA**, más un filtro "mostrame los altos en colesterol". [#176](https://github.com/thusspokedata/pulsia/pull/176), mergeado + **OTA a vc10 publicado** (runtime `784872cb` verificado). Detalle en **§0-SEMAFORO**, incluida la tanda de **3 bugs que pasaban CI y fallaban en el teléfono** y los **6 errores del plan** que encontró el proceso.)
+>
+> Actualización previa (mismo día): sesión **TRILOGÍA DEL `.FIT`**: cerraron las fases **2 (visualización)** y **3 (reprocesamiento)** de la captura total — [#167](https://github.com/thusspokedata/pulsia/pull/167) y [#173](https://github.com/thusspokedata/pulsia/pull/173) —, más el fix [#172](https://github.com/thusspokedata/pulsia/pull/172) de un bug **que ningún test veía**: `buildFitActivity` descartaba en silencio los 15 campos del parser. Todo LIVE y **verificado por el usuario en prod**. Detalle en **§0-ULTIMO**. ⚠️ Lección transversal: **unidades en verde ≠ sistema sano** — el cliente que arma el payload también se testea ([[testear-la-costura]]).) 
 >
 > Actualización previa: **2026-07-20** (sesión **DEMOSTRACIONES ANIMADAS**: la feature está **COMPLETA y en prod** — tocás un ejercicio y ves cómo se hace, con animación y cues de técnica en español, desde cuatro lugares de la app. **86 de 273 ejercicios** cubiertos. Cuatro PRs (#166, #168, #169, #170), cada uno con review, merge y OTA; fingerprint `784872cb` verificado en los cuatro. Detalle en **§0-AHORA**, incluida la lección de los **tres tests falsos** que salieron de mis propios planes.) Antes, mismo ciclo: el catálogo pasó de 230 a 273 ejercicios (**§0-ANTES-HOY**), y hay 8 PRs de otras sesiones en **§0-INTERMEDIAS**.
 >
@@ -8,7 +10,62 @@
 
 ## 0. Estado en una línea
 
-**Pulsia está EN INTERNET, multi-usuario, con login.** Backend en **`https://pulsia.lahuelladelcaminante.de`** (VPS nginx → Wireguard → Pi:3011, HTTPS por certbot, rate-limit en `/auth/`). La app (Android, **APK vc10**; todo lo nuevo llega por **OTA** a vc10) tiene 3 dominios grandes: **(1) Entrenamiento** — genera programas async, registra/resume/revisa sesiones, HR por banda BLE, resumen con mapa corporal + FC, español+inglés, memoria del atleta, entreno puntual, **cardio/actividades** (manual o import `.FIT`, ya entra al balance de nutrición, con **pantalla de detalle** —tiles, gráficos de FC/cadencia/respiración/Body Battery y tiempo en zonas— y **reprocesamiento** del `.FIT` guardado), y un **catálogo de 273 ejercicios** (auto-generado del SDK de Garmin) con **demostraciones animadas + cues de técnica** en 86 de ellos, accesibles desde el Programa, la sesión, un buscador y el selector de alternativas; **(2) Nutrición** (tab "Nutrición", **COMPLETO** — ver §0-HOY-PREVIA): alta de alimentos por **foto + IA** (Opus visión) **o escribiendo el nombre** ("almendra") → catálogo personal (con chip **etiqueta/estimado**) → registrar en gramos/ml/unidad con snapshot de macros/micros/colesterol/agua, **metas calóricas + de macros** desde el perfil (BMR Mifflin-St Jeor + objetivo + gasto de entrenamiento = **net calories**), **dashboard del día con 4 pestañas** (Resumen / Calorías con torta por comida / Nutrientes vs referencias OMS / Macros con dona), **qué alimentos aportan cada nutriente** + **su evolución en el tiempo**, **suplementos** (catálogo por foto + plan IA semanal + checklist + ajuste dinámico), tracker de líquido, y un **agente de informes** (diario/semanal/quincenal/mensual con consejos, opt-in); **(3) Progreso/Salud** — seguimiento cuantitativo (composición/presión/actividad/bienestar con backfill) + tendencias + heatmap, y **ECG (KardiaMobile)** (interpretación IA no-diagnóstica). **La IA observa** (progreso, ECG, y ahora los informes de nutrición → memoria del atleta). Owner: la cuenta principal. La familia baja el APK **vc10** desde **`pulsia.lahuelladelcaminante.de/download`** (QR) + se registra con el **`INVITE_CODE`** (valor real solo en `/home/kilo/pulsia/deploy/app.env` de la Pi). Un merge a `main` **auto-deploya el backend a la Pi**.
+**Pulsia está EN INTERNET, multi-usuario, con login.** Backend en **`https://pulsia.lahuelladelcaminante.de`** (VPS nginx → Wireguard → Pi:3011, HTTPS por certbot, rate-limit en `/auth/`). La app (Android, **APK vc10**; todo lo nuevo llega por **OTA** a vc10) tiene 3 dominios grandes: **(1) Entrenamiento** — genera programas async, registra/resume/revisa sesiones, HR por banda BLE, resumen con mapa corporal + FC, español+inglés, memoria del atleta, entreno puntual, **cardio/actividades** (manual o import `.FIT`, ya entra al balance de nutrición, con **pantalla de detalle** —tiles, gráficos de FC/cadencia/respiración/Body Battery y tiempo en zonas— y **reprocesamiento** del `.FIT` guardado), y un **catálogo de 273 ejercicios** (auto-generado del SDK de Garmin) con **demostraciones animadas + cues de técnica** en 86 de ellos, accesibles desde el Programa, la sesión, un buscador y el selector de alternativas; **(2) Nutrición** (tab "Nutrición", **COMPLETO** — ver §0-HOY-PREVIA): alta de alimentos por **foto + IA** (Opus visión) **o escribiendo el nombre** ("almendra") → catálogo personal (con chip **etiqueta/estimado** y **semáforo nutricional** por alimento: chips de alto/medio en grasa, saturadas, azúcar, sal y colesterol, fibra como positivo, con filtro "mostrame los altos en X" — ver §0-SEMAFORO) → registrar en gramos/ml/unidad con snapshot de macros/micros/colesterol/agua, **metas calóricas + de macros** desde el perfil (BMR Mifflin-St Jeor + objetivo + gasto de entrenamiento = **net calories**), **dashboard del día con 4 pestañas** (Resumen / Calorías con torta por comida / Nutrientes vs referencias OMS / Macros con dona), **qué alimentos aportan cada nutriente** + **su evolución en el tiempo**, **suplementos** (catálogo por foto + plan IA semanal + checklist + ajuste dinámico), tracker de líquido, y un **agente de informes** (diario/semanal/quincenal/mensual con consejos, opt-in); **(3) Progreso/Salud** — seguimiento cuantitativo (composición/presión/actividad/bienestar con backfill) + tendencias + heatmap, y **ECG (KardiaMobile)** (interpretación IA no-diagnóstica). **La IA observa** (progreso, ECG, y ahora los informes de nutrición → memoria del atleta). Owner: la cuenta principal. La familia baja el APK **vc10** desde **`pulsia.lahuelladelcaminante.de/download`** (QR) + se registra con el **`INVITE_CODE`** (valor real solo en `/home/kilo/pulsia/deploy/app.env` de la Pi). Un merge a `main` **auto-deploya el backend a la Pi**.
+
+## 0-SEMAFORO. ✅ HECHO (2026-07-21): SEMÁFORO NUTRICIONAL EN EL CATÁLOGO
+
+Disparador del usuario: *"el catálogo debería mostrar cuáles alimentos tienen mucho colesterol, o muchas grasas o mucha azúcar, pero de una manera más gráfica — la persona al pensar qué va a comer, por ejemplo pasas de uva, ya sabe que tienen mucha azúcar"*.
+
+**LIVE**: [#176](https://github.com/thusspokedata/pulsia/pull/176) mergeado (`caf07967`), deploy verde, **OTA a vc10 publicado** con runtime android `784872cb…` verificado en la salida del `eas update`. Spec y plan en `docs/superpowers/{specs,plans}/2026-07-21-semaforo-nutricional*`.
+
+Chips en la fila del alimento (`azúcar alto`, `buena fibra`, `sin datos de azúcar y sal`) en **tres pantallas**: catálogo, buscador de nueva comida y detalle del alimento. Más un **filtro por nutriente** en el catálogo.
+
+### La decisión que define la feature: por 100 g, no por porción
+
+Las referencias de `references.ts` son **diarias** (50 g de azúcar, 300 mg de colesterol). Compararlas contra el valor por 100 g pinta casi todo de rojo: las pasas tienen 59 g de azúcar por 100 g = 118% de la referencia diaria, pero nadie come 100 g de pasas de una sentada.
+
+Los umbrales son **por 100 g / 100 ml** — densidad intrínseca, que es lo que uno quiere saber al elegir. **Limitación aceptada:** por densidad las pasas (59 g/100 g) quedan peor que la Coca-Cola (10,6 g/100 ml), aunque un vaso de 330 ml aporte más azúcar que un puñado de pasas. El semáforo responde "¿qué tan concentrado está?"; el "¿cuánto me suma hoy?" ya lo responde el dashboard del día. **Un color por porción es un v2 posible y necesitaría un campo de porción típica que hoy no existe.**
+
+### Dos esquemas oficiales mezclados, y por qué
+
+- **FSA (Reino Unido)** para grasa, saturadas, azúcares y sal, con escala aparte para bebidas → el campo `basis` dejó de ser cosmético y ahora decide el color.
+- **FDA (%DV)** para colesterol (≤20 bajo, ≥60 alto) y fibra (≥5,6 g buena fuente), porque **el FSA no cubre el colesterol**, que es el dato prioritario del usuario.
+
+**No usan los mismos operadores**: FSA define "alto" como `>` (22,5 g de azúcar es medio), FDA como `>=` (60 mg ya es alto), y la fibra usa `<` para el bajo. Por eso cada umbral lleva `lowInclusive`/`highInclusive` explícitos en vez de depender de recordarlo en cada comparación.
+
+### Qué NO tocar
+
+- **`nutrientLevel()` mide, `nutrientSentiment()` juzga.** El segundo es el único lugar que sabe que la fibra es piso y los otros cinco son techos, espejando `NUTRIENT_REFERENCE_KIND`. Sin esa separación, "fibra alta" sería un caso especial dentro del componente de UI.
+- **`null` da `unknown`, jamás `low`.** Los cinco micros son nullable. Un alimento sin dato de azúcar no puede verse igual que uno con azúcar bajo. La misma regla vale en el filtro: los sin-dato van a un grupo aparte, nunca desaparecen — si desaparecieran, el filtro afirmaría "no es alto en colesterol" sin tener con qué saberlo.
+- **El nivel va ESCRITO en el chip, no solo en el color.** Y las frases están escritas enteras, no compuestas: el español concuerda en género y componer daría "grasa alto".
+- El rojo reusa `colors.danger`, que en `tokens.ts` significa "error". Que un alimento tenga azúcar no es un error; se reusó igual para no tocar la identidad visual. **Si algún día se agrega un rojo propio menos agresivo, es una línea en `CHIP_STYLE`.**
+
+### ⚠️ Tres bugs que pasaban CI y fallaban en el teléfono
+
+Los encontró una revisión que **ejecutó** la cadena real. `@claude review` los leyó estáticamente y no los vio (su sandbox no le dio permisos de Bash), así que aprobó un PR con los tres adentro.
+
+1. **`num("")` es `0`, no `NaN`.** El panel afirmaba "grasa 0 g · ok" en un formulario vacío — la falsedad exacta que el spec quería evitar, colándose porque `fat_g` es el único macro no-nullable. Arreglado gateando por `foodId` (el spec ya decía "modo edición").
+2. **`NaN` se renderizaba como "NaN mg"** mientras se tipeaba. `"-"`, `"."`, `"1e"` son alcanzables con teclado numérico, y `typeof NaN === "number"` pasaba el filtro. Arreglado en las dos capas.
+3. **Un test falso más**: "el filtro se combina con el buscador" no ejercía el AND, porque el texto `"queso"` ya eliminaba al otro alimento por sí solo. **Con el filtro desactivado por completo seguía en verde.**
+
+### ⚠️ Lección: seis errores en un plan detallado, cuatro de ellos en los tests
+
+El plan traía código completo paso por paso y aun así tenía seis errores, que fueron encontrando los implementadores al ejecutarlo:
+
+1. Un test afirmaba que 10 g de azúcar por 100 ml es `"low"` cuando es `"medium"` — y el comentario del mismo test decía "alto".
+2. `render()` de RNTL devuelve Promise en este repo; sin `await`, `getByText` queda `undefined`.
+3. `queryByText(/azúcar/)` se contradecía con la línea siguiente, porque `"sin datos de azúcar y sal"` matchea el regex sin anclar. **Test falso.**
+4. `FSA_DRINK.saturated_fat_g` sin ninguna cobertura: se podía tipear mal un umbral de salud y los 91 tests seguían verdes.
+5. Un paso pedía implementar antes de escribir el test, invirtiendo TDD.
+6. `fireEvent` también necesita `await`; sin él los tests fallaban de forma engañosa (parecía que el filtro no andaba).
+
+Refuerza [[testear-la-costura]] y la lección de las animaciones: **un plan detallado da confianza pero no garantiza que los tests prueben lo que dicen.** Lo que los sacó a la luz fue, en todos los casos, la verificación por mutación y ejecutar el código de verdad.
+
+### Pendiente del owner
+
+1. **Decidir si el orden del filtro está bien.** Hoy ordena por valor crudo de mayor a menor, que mezcla `per_100g` con `per_100ml` en una misma lista. Es coherente y es lo que el spec promete, pero ordenar por severidad relativa al umbral sería otra opción. **Es una decisión de producto, por eso no la tomé.**
+2. **Ver en el teléfono si los chips saturan la fila.** Están capados en 3 + `+N`, pero el queso crema dispara cuatro y nunca se midió en device.
+3. **El detalle muestra "según FSA/FDA" genérico** en vez de los umbrales numéricos concretos de cada nutriente.
 
 ## 0-ULTIMO. ✅ HECHO (2026-07-20/21): TRILOGÍA DEL `.FIT` COMPLETA — visualización + reprocesamiento
 
