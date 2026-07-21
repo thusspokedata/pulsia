@@ -73,6 +73,8 @@ El **Total NO puede llevar los mismos chips**, y esta es la parte que importa en
 
 La comparación que **sí** significa algo para un total es contra las **referencias diarias** que ya existen en `NUTRIENT_REFERENCES` (50 g de azúcar, 300 mg de colesterol, sal <5 g, fibra ≥30 g): *"azúcar 12,2 g · 24% del día"*. Se evaluó, el owner decidió **no hacerlo por ahora** y dejar la pantalla como está.
 
+Si algún día se hace, **el patrón ya existe y no hay que inventarlo**: `mobile/src/nutrition/tabs/NutrientesTab.tsx` compara `dayTotals` contra `NUTRIENT_REFERENCES` nutriente por nutriente. Sería reusar eso a escala de comida, no escribir algo nuevo.
+
 **Regla general que se desprende:** el semáforo responde *"¿qué tan concentrado está?"* y vive en el **alimento**. El *"¿cuánto me suma hoy?"* vive en el **dashboard del día** y se mide contra referencias diarias. No mezclar los dos vocabularios en la misma tarjeta.
 
 ### Pendiente del owner
