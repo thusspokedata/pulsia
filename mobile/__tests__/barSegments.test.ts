@@ -38,3 +38,14 @@ test("target inválido no divide por cero", () => {
     expect(barSegments(50, bad)).toEqual({ fillPct: 0, overPct: 0 });
   }
 });
+
+test("un value negativo no dibuja una barra negativa", () => {
+  expect(barSegments(-5, 200)).toEqual({ fillPct: 0, overPct: 0 });
+});
+
+test("un excedente extremo igual deja ver el turquesa", () => {
+  // 13000 contra una meta de 63 (>200x): sin el clamp el turquesa redondea a 0%
+  const s = barSegments(13000, 63);
+  expect(s.fillPct).toBe(1);
+  expect(s.overPct).toBe(99);
+});

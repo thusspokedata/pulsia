@@ -39,13 +39,14 @@ export interface BarSegments {
  */
 export function barSegments(value: number, target: number, kind: BarKind = "limit"): BarSegments {
   if (!Number.isFinite(value) || !Number.isFinite(target) || target <= 0) return { fillPct: 0, overPct: 0 };
-  if (value <= target || kind === "floor") {
-    return { fillPct: Math.min(100, Math.round((value / target) * 100)), overPct: 0 };
+  const v = Math.max(0, value); // un consumo negativo no dibuja barra negativa
+  if (v <= target || kind === "floor") {
+    return { fillPct: Math.min(100, Math.round((v / target) * 100)), overPct: 0 };
   }
-  // Al pasarse SIEMPRE se ve ámbar: un excedente de 0.4% redondearía a 0 y dejaría la barra
-  // entera en turquesa mientras el texto de la fila avisa en ámbar — la contradicción que este
-  // diseño vino a eliminar. El techo de 99 reserva la franja mínima.
-  const fillPct = Math.min(99, Math.round((target / value) * 100));
+  // Los dos segmentos se ven SIEMPRE que te pasaste: sin los clamps, un excedente de 0.4%
+  // redondea a 0% de ámbar, y uno de 200x redondea a 0% de turquesa. En ambos casos la barra
+  // vuelve a ser de un solo color y se pierde la información que este diseño vino a mostrar.
+  const fillPct = Math.max(1, Math.min(99, Math.round((target / v) * 100)));
   return { fillPct, overPct: 100 - fillPct }; // se derivan uno del otro: siempre suman 100
 }
 

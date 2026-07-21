@@ -150,6 +150,13 @@ test("no devuelve ningún límite de salud: solo metas de energía", () => {
   expect(Object.keys(t).sort()).toEqual(["carbs_g", "fat_g", "kcal", "protein_g"]);
 });
 
+test("no muta el goal que recibe", () => {
+  const goal = { ...okGoal };
+  const antes = { ...goal };
+  exerciseAdjustedTargets(goal, 1667);
+  expect(goal).toEqual(antes);
+});
+
 // INVARIANTE DEL DISEÑO: los límites de salud no escalan con el gasto. Si alguien "arregla"
 // exerciseAdjustedTargets para que infle goal.kcal, este test es el que se pone en rojo.
 test("el techo de saturadas se deriva de la meta BASE, no del total ajustado", () => {

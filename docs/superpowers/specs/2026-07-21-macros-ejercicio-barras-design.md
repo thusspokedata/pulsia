@@ -16,7 +16,7 @@ Dos problemas de la card de Nutrición, que resultan ser el mismo problema visto
 
 El (2) hace que la card se contradiga a sí misma por construcción. Con 1667 kcal de ejercicio:
 
-```
+```text
 2087 / 2112 kcal
 te quedan 1692 kcal          ← hay margen de sobra
 Gras 119 / 63 g · 56 de más  ← pero el macro ya está en rojo
@@ -98,14 +98,22 @@ Helper puro nuevo, `barSegments(value, target) → { fillPct, overPct }`:
 
 | caso | turquesa (`fillPct`) | naranja (`overPct`) |
 |---|---|---|
+| `value < 0` | `0` (se clampea a `value = 0` antes de dividir) | `0` |
 | `value ≤ target` | `value / target` | `0` |
-| `value > target` | `target / value` | `(value − target) / value` |
+| `value > target` | `clamp(target / value, [1, 99])` | `100 − fillPct` |
 | `value > target`, `kind = "floor"` | `100` | `0` |
 | `target ≤ 0` o no finito | `0` | `0` |
 
 La barra representa siempre **lo consumido**, partida en la línea de la meta. Grasa 119/63 →
 turquesa 53%, naranja 47%. Al doble de la meta, mitad y mitad. Los dos porcentajes suman 100 cuando
 hay exceso, así que no queda track vacío.
+
+El turquesa queda acotado a `[1, 99]` cuando te pasaste, en vez de solo acotar el naranja. Sin el
+piso de 1, un excedente extremo (13000 contra una meta de 63, >200x) redondea `target / value` a 0%
+y la barra se ve **entera de ámbar** — el mismo bug que el clamp de 99 ya resolvía del otro lado,
+donde un excedente mínimo (0.4%) redondeaba el naranja a 0% y la barra se veía entera de turquesa.
+Ninguno de los dos segmentos puede desaparecer por redondeo: siempre hay algo del color contrario
+visible para indicar que hubo exceso (o que hubo consumo, del lado turquesa).
 
 **La fibra obliga a un tercer prop.** Es un piso (`NUTRIENT_REFERENCE_KIND.fiber_g === "min"`):
 pasarse es bueno y nunca se pinta ámbar. Un `Bar` que solo mire `value` y `target` no puede saberlo
@@ -138,7 +146,7 @@ Call-sites a migrar: `ResumenTab.tsx` (×2), `NutrientesTab.tsx`, `nutriente.tsx
 
 Con los números reales del reporte:
 
-```
+```text
 2087 / 2112 kcal          +1667 por ejercicio
 te quedan 1692 kcal
 Prot 65 / 132 g · faltan 67
