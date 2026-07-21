@@ -46,8 +46,10 @@ function Chip({ text, style, testID }: { text: string; style: ChipStyle; testID:
   );
 }
 
-// neutral no tiene estilo propio en CHIP_STYLE (nunca se renderiza como chip), así que cae al
-// gris de "unknown" por el `??`.
+// neutral no tiene estilo propio en CHIP_STYLE y cae al gris de "unknown" por el `??`. NO es que
+// nunca se renderice: la variante `full` dibuja los seis nutrientes, así que un neutral aparece
+// como chip "ok". Comparte el gris con "sin dato" a propósito —ninguno de los dos es una alarma—
+// y lo que los distingue es el TEXTO, que es lo que sostiene la accesibilidad de esta feature.
 function sentimentChipStyle(sentiment: NutrientSentiment): ChipStyle {
   return CHIP_STYLE[sentiment] ?? CHIP_STYLE.unknown!;
 }

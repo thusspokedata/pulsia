@@ -93,6 +93,9 @@ export default function CatalogoScreen() {
               <Pressable
                 key={n}
                 onPress={() => setNutrient(on ? null : n)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={`Filtrar por ${NUTRIENT_LABELS[n]}`}
                 style={{
                   backgroundColor: on ? colors.accent : colors.surfaceMuted,
                   borderRadius: radius.pill,
