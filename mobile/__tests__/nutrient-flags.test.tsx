@@ -1,5 +1,7 @@
+import { render } from "@testing-library/react-native";
 import { flagText, unknownLabel, NUTRIENT_LABELS } from "../src/nutrition/nutrientText";
 import { FLAGGED_NUTRIENTS, foodFlags } from "@pulsia/shared";
+import { NutrientFlags } from "../src/nutrition/NutrientFlags";
 
 test("cada flag destacable tiene una frase, ninguna queda vacía", () => {
   // Un alimento que dispara bad en los cinco techos y good en la fibra
@@ -48,9 +50,6 @@ test("el aviso de faltantes nombra hasta dos y después resume", () => {
 test("hay etiqueta para los seis nutrientes", () => {
   for (const n of FLAGGED_NUTRIENTS) expect(NUTRIENT_LABELS[n]).toBeTruthy();
 });
-
-import { render } from "@testing-library/react-native";
-import { NutrientFlags } from "../src/nutrition/NutrientFlags";
 
 const quesoCrema = {
   basis: "per_100g" as const,
@@ -106,10 +105,53 @@ test("un alimento sin nada destacable no renderiza chips", async () => {
   expect(queryByTestId("nutrient-flags")).toBeNull();
 });
 
-test("full muestra los seis con su valor, incluidos los que están bien", async () => {
-  const { getByText } = await render(<NutrientFlags food={quesoCrema} variant="full" />);
-  getByText("grasa");
-  getByText("azúcar");
-  getByText("fibra");
-  getByText(/101/); // el valor del colesterol
+test("full muestra los seis nutrientes, con su etiqueta, su valor y el chip correcto en cada estado", async () => {
+  // quesoCrema pasa por los cuatro sentiments que puede tener una fila en "full": bad (grasa,
+  // saturadas, colesterol), warn (sal), y neutral (azúcar, fibra — bajo pero sin chip de texto
+  // propio, cae al fallback "ok"). El quinto estado, unknown, lo cubre el test de abajo.
+  const { getByText, getAllByText } = await render(<NutrientFlags food={quesoCrema} variant="full" />);
+  for (const n of FLAGGED_NUTRIENTS) getByText(NUTRIENT_LABELS[n]);
+  getByText("34 g"); // grasa
+  getByText("20 g"); // saturadas
+  getByText("3.2 g"); // azúcar
+  getByText("0.8 g"); // sal
+  getByText("101 mg"); // colesterol
+  getByText("0 g"); // fibra
+  getByText("grasa alta");
+  getByText("saturadas altas");
+  getByText("sal media");
+  getByText("colesterol alto");
+  // Los dos que quedaron "bajo" (azúcar 3.2 g, fibra 0 g) no tienen frase propia en FLAG_TEXT
+  // (sentiment neutral): NutrientFlags.tsx cae al fallback "ok" para las dos. Sin este test, ese
+  // fallback no lo ejercía ningún test de la suite.
+  expect(getAllByText("ok").length).toBe(2);
+});
+
+test("full: el fallback de un valor sin dato es 'sin dato', tanto en el chip como en el número", async () => {
+  const conFaltantes = {
+    basis: "per_100g" as const,
+    fat_g: 34, saturated_fat_g: null, sugars_g: 3.2,
+    salt_g: 0.8, cholesterol_mg: null, fiber_g: 0,
+  };
+  const { getAllByText, getAllByTestId } = await render(<NutrientFlags food={conFaltantes} variant="full" />);
+  // saturadas y colesterol están sin dato: dos filas, cada una con "sin dato" en el valor Y en
+  // el chip (cuatro apariciones en total).
+  expect(getAllByText("sin dato").length).toBe(4);
+  expect(getAllByTestId("nutrient-chip-unknown").length).toBe(2);
+});
+
+test("full: un valor NaN se muestra como 'sin dato', nunca como 'NaN g'", async () => {
+  // Alcanzable desde agregar-alimento.tsx cuando el campo de grasa está vacío en modo edición
+  // (fat_g no es nullable en el schema, así que la pantalla manda NaN en vez de null). Este test
+  // ejercita el componente directo, sin pasar por la pantalla, para blindar el fallback de
+  // Number.isFinite en NutrientFlags.tsx aunque cambie quién produce el NaN.
+  const conNaN = {
+    basis: "per_100g" as const,
+    fat_g: NaN, saturated_fat_g: 3.8, sugars_g: 4.4,
+    salt_g: 0.001, cholesterol_mg: 0, fiber_g: 12.5,
+  };
+  const { getAllByText, queryByText } = await render(<NutrientFlags food={conNaN} variant="full" />);
+  expect(queryByText(/NaN/)).toBeNull();
+  // "sin dato" en el valor Y en el chip de esa fila.
+  expect(getAllByText("sin dato").length).toBe(2);
 });

@@ -6,33 +6,50 @@ import { NUTRIENT_LABELS, flagText, unknownLabel } from "./nutrientText";
 // Máximo de chips en una fila de lista. Más que esto y la fila se convierte en un párrafo.
 const MAX_CHIPS = 3;
 
+type ChipStyle = { bg: string; fg: string };
+
 // Reusa los tokens semánticos existentes. `danger` está documentado como "rojo semántico
 // (errores)" y que un alimento tenga azúcar no es un error, pero es la lectura universal de un
 // semáforo y evita tocar la identidad visual, que el owner se reservó decidir. Si algún día se
 // agrega un rojo propio menos agresivo, se cambia acá y en ningún otro lado.
-const CHIP_STYLE: Record<string, { bg: string; fg: string }> = {
-  bad: { bg: "#FBEAE7", fg: colors.danger },
-  warn: { bg: "#FBF0E2", fg: colors.warning },
+//
+// `Partial<Record<NutrientSentiment, …>>` en vez de `Record<string, …>`: así solo se pueden usar
+// claves que son de verdad un NutrientSentiment (un typo no compila), y el `Partial` documenta
+// que `neutral` no tiene entrada a propósito — nunca se renderiza como chip, así que inventarle
+// un color sería identidad visual sin uso.
+const CHIP_STYLE: Partial<Record<NutrientSentiment, ChipStyle>> = {
+  bad: { bg: colors.dangerSoft, fg: colors.danger },
+  warn: { bg: colors.warningSoft, fg: colors.warning },
   good: { bg: colors.successSoft, fg: colors.successText },
   unknown: { bg: colors.surfaceMuted, fg: colors.textMuted },
 };
 
-function Chip({ text, sentiment }: { text: string; sentiment: NutrientSentiment }) {
-  // neutral no tiene estilo propio porque nunca se renderiza como chip; cae al gris por el ??
-  const s = CHIP_STYLE[sentiment] ?? CHIP_STYLE.unknown!;
+// Mismo gris que "unknown" — no hay una nueva identidad visual que inventar —, pero con una
+// clave propia: el chip "+N" (cuántos quedaron afuera del cap de 3) no significa "sin dato",
+// significa "hay más chips de los que entran acá". Si el día de mañana "unknown" suma un ícono
+// de "?" para remarcar la ausencia de dato, el "+N" no tiene que heredarlo — no le corresponde.
+const OVERFLOW_CHIP_STYLE: ChipStyle = { bg: colors.surfaceMuted, fg: colors.textMuted };
+
+function Chip({ text, style, testID }: { text: string; style: ChipStyle; testID: string }) {
   return (
     <View
-      testID={`nutrient-chip-${sentiment}`}
+      testID={testID}
       style={{
-        backgroundColor: s.bg,
+        backgroundColor: style.bg,
         borderRadius: radius.pill,
         paddingHorizontal: spacing.sm,
         paddingVertical: 2,
       }}
     >
-      <Text style={{ color: s.fg, fontSize: 11, fontWeight: "600" }}>{text}</Text>
+      <Text style={{ color: style.fg, fontSize: 11, fontWeight: "600" }}>{text}</Text>
     </View>
   );
+}
+
+// neutral no tiene estilo propio en CHIP_STYLE (nunca se renderiza como chip), así que cae al
+// gris de "unknown" por el `??`.
+function sentimentChipStyle(sentiment: NutrientSentiment): ChipStyle {
+  return CHIP_STYLE[sentiment] ?? CHIP_STYLE.unknown!;
 }
 
 export function NutrientFlags({
@@ -57,11 +74,16 @@ export function NutrientFlags({
             </Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
               <Text style={{ color: colors.text, fontSize: 12 }}>
-                {f.value == null ? "sin dato" : `${f.value}${f.nutrient === "cholesterol_mg" ? " mg" : " g"}`}
+                {/* !Number.isFinite cubre null/undefined Y NaN: nutrientValue en shared ya
+                    normaliza NaN a null, pero ese valor puede llegar acá desde datos que no
+                    pasaron por ese helper (ver NutrientFlags.test para el caso "1e" a medio
+                    tipear), y `f.value == null` dejaba pasar "NaN mg" a la pantalla. */}
+                {!Number.isFinite(f.value) ? "sin dato" : `${f.value}${f.nutrient === "cholesterol_mg" ? " mg" : " g"}`}
               </Text>
               <Chip
                 text={flagText(f.nutrient, f.sentiment) ?? (f.level === "unknown" ? "sin dato" : "ok")}
-                sentiment={f.sentiment}
+                style={sentimentChipStyle(f.sentiment)}
+                testID={`nutrient-chip-${f.sentiment}`}
               />
             </View>
           </View>
@@ -86,12 +108,19 @@ export function NutrientFlags({
     >
       {shown.map((f) => {
         const text = flagText(f.nutrient, f.sentiment);
-        return text ? <Chip key={f.nutrient} text={text} sentiment={f.sentiment} /> : null;
+        return text ? (
+          <Chip
+            key={f.nutrient}
+            text={text}
+            style={sentimentChipStyle(f.sentiment)}
+            testID={`nutrient-chip-${f.sentiment}`}
+          />
+        ) : null;
       })}
-      {extra > 0 && <Chip text={`+${extra}`} sentiment="unknown" />}
+      {extra > 0 && <Chip text={`+${extra}`} style={OVERFLOW_CHIP_STYLE} testID="nutrient-chip-overflow" />}
       {/* El aviso de faltantes va aparte del cap: el cap ordena por severidad, así que si
           compitiera, un alimento con tres alarmas escondería que además hay datos que no tenemos. */}
-      {missing && <Chip text={missing} sentiment="unknown" />}
+      {missing && <Chip text={missing} style={CHIP_STYLE.unknown!} testID="nutrient-chip-unknown" />}
     </View>
   );
 }

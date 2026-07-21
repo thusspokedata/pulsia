@@ -10,7 +10,9 @@ export const colors = {
   text: "#16202A", // slate casi negro
   textMuted: "#64748B", // slate atenuado
   danger: "#C0392B", // rojo semántico (errores)
+  dangerSoft: "#FBEAE7", // fondo de chips/badges sobre danger (mismo patrón que successSoft)
   warning: "#B45309", // ámbar — sobre un límite recomendado (no es un error)
+  warningSoft: "#FBF0E2", // fondo de chips/badges sobre warning (mismo patrón que successSoft)
 
   // Nuevos (los usa la Fase 2 de pulido de componentes):
   success: "#2FA98C", // verde salud — buenas tendencias (peso ↓, ECG normal)

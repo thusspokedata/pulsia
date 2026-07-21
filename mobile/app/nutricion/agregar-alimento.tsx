@@ -228,21 +228,30 @@ export default function AgregarAlimentoScreen() {
       {field(`Agua (ml por 100${form.basis === "per_100ml" ? "ml" : "g"}, opcional)`, "water_ml", "numeric")}
       {field("Peso por unidad (opcional)", "unitWeightG", "numeric")}
 
-      <View style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.sm }}>
-        <Text style={{ color: colors.text, fontWeight: "600", fontSize: 13 }}>Semáforo nutricional</Text>
-        <NutrientFlags
-          variant="full"
-          food={{
-            basis: form.basis,
-            fat_g: num(form.fat_g),
-            saturated_fat_g: optNum(form.saturated_fat_g),
-            sugars_g: optNum(form.sugars_g),
-            salt_g: optNum(form.salt_g),
-            cholesterol_mg: optNum(form.cholesterol_mg),
-            fiber_g: optNum(form.fiber_g),
-          }}
-        />
-      </View>
+      {/* Spec: la vista "full" del semáforo vive solo en modo edición. En alta, `fat_g` recién
+          escrito puede ser "" — y `num("")` da 0, no NaN — así que mostrarla acá pintaría
+          "grasa 0 g · ok" en un formulario vacío. En edición el valor arrancó cargado desde el
+          alimento guardado, pero si el usuario lo borra a mano volvemos a tener "" → 0: por eso
+          acá (y solo acá, `fat_g` sigue siendo obligatorio para guardar) mandamos NaN en vez de
+          0 cuando está vacío. `FoodFlagsInput.fat_g` pide `number` — NaN lo satisface — y
+          nutrientLevel/NutrientFlags ya tratan NaN como "sin dato", nunca como "bajo". */}
+      {foodId && (
+        <View style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.sm }}>
+          <Text style={{ color: colors.text, fontWeight: "600", fontSize: 13 }}>Semáforo nutricional</Text>
+          <NutrientFlags
+            variant="full"
+            food={{
+              basis: form.basis,
+              fat_g: form.fat_g.trim() === "" ? NaN : num(form.fat_g),
+              saturated_fat_g: optNum(form.saturated_fat_g),
+              sugars_g: optNum(form.sugars_g),
+              salt_g: optNum(form.salt_g),
+              cholesterol_mg: optNum(form.cholesterol_mg),
+              fiber_g: optNum(form.fiber_g),
+            }}
+          />
+        </View>
+      )}
 
       <Pressable onPress={save} disabled={saving} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving ? 0.6 : 1 }}>
         <Text style={{ color: "#fff", fontWeight: "700" }}>{saving ? "Guardando…" : foodId ? "Guardar cambios" : "Guardar en el catálogo"}</Text>
