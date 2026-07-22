@@ -1,6 +1,8 @@
 # Pulsia — Onboarding / Handoff
 
-> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: **2026-07-22** (sesión **BARRAS EN DOS COLORES + EL EJERCICIO SUBE LA META DE CARBOS**: pasarte de un macro ya no borra cuánto llevabas —la barra se parte en la línea de la meta, turquesa hasta ahí y ámbar el excedente—, y las kcal quemadas entrenando ahora suben la meta de **carbos**, no solo el restante de kcal. El principio que ordena todo: **las metas de energía escalan con el gasto, los límites de salud no** — el colesterol sigue en 300 mg entrenes o no. [#179](https://github.com/thusspokedata/pulsia/pull/179), mergeado + backend deployado + **OTA a vc10 publicado** (runtime `784872cb` verificado). Detalle en **§0-BARRAS**, incluidos **tres bugs que ninguna lectura del diff encontró** y un **test falso que vino del propio plan**.)
+> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: **2026-07-22** (sesión **EL CARDIO ENTRA A PROGRESO**: "Días entrenados" y "Tiempo por día" ignoraban las caminatas y los `.FIT` —la misma actividad existía en el Historial y no en Progreso—; ahora el color mide **gasto calórico** (fuerza + cardio) con escala por cuartiles del historial. De yapa se corrigió un **doble conteo del BMR**: las kcal del reloj son brutas y se contaban contra una meta que ya incluye el basal. [#181](https://github.com/thusspokedata/pulsia/pull/181), mergeado + backend deployado + **OTA a vc10 publicado** (runtime `784872cb` verificado). Detalle en **§0-CARDIO-PROGRESO**, incluidos **seis defectos del plan que ninguna lectura encontró** y una **verificación empírica que no servía**.)
+>
+> Actualización previa: **2026-07-22** (sesión **BARRAS EN DOS COLORES + EL EJERCICIO SUBE LA META DE CARBOS**: pasarte de un macro ya no borra cuánto llevabas —la barra se parte en la línea de la meta, turquesa hasta ahí y ámbar el excedente—, y las kcal quemadas entrenando ahora suben la meta de **carbos**, no solo el restante de kcal. El principio que ordena todo: **las metas de energía escalan con el gasto, los límites de salud no** — el colesterol sigue en 300 mg entrenes o no. [#179](https://github.com/thusspokedata/pulsia/pull/179), mergeado + backend deployado + **OTA a vc10 publicado** (runtime `784872cb` verificado). Detalle en **§0-BARRAS**, incluidos **tres bugs que ninguna lectura del diff encontró** y un **test falso que vino del propio plan**.)
 >
 > Actualización previa: **2026-07-21** (sesión **SEMÁFORO NUTRICIONAL**: el catálogo de alimentos ahora dice de un vistazo qué alimento es alto en grasa, saturadas, azúcar, sal o colesterol, y cuál es buena fuente de fibra — con umbrales de la **FSA** británica y la **FDA**, más un filtro "mostrame los altos en colesterol". [#176](https://github.com/thusspokedata/pulsia/pull/176), mergeado + **OTA a vc10 publicado** (runtime `784872cb` verificado). Detalle en **§0-SEMAFORO**, incluida la tanda de **3 bugs que pasaban CI y fallaban en el teléfono** y los **6 errores del plan** que encontró el proceso.)
 >
@@ -13,6 +15,102 @@
 ## 0. Estado en una línea
 
 **Pulsia está EN INTERNET, multi-usuario, con login.** Backend en **`https://pulsia.lahuelladelcaminante.de`** (VPS nginx → Wireguard → Pi:3011, HTTPS por certbot, rate-limit en `/auth/`). La app (Android, **APK vc10**; todo lo nuevo llega por **OTA** a vc10) tiene 3 dominios grandes: **(1) Entrenamiento** — genera programas async, registra/resume/revisa sesiones, HR por banda BLE, resumen con mapa corporal + FC, español+inglés, memoria del atleta, entreno puntual, **cardio/actividades** (manual o import `.FIT`, ya entra al balance de nutrición, con **pantalla de detalle** —tiles, gráficos de FC/cadencia/respiración/Body Battery y tiempo en zonas— y **reprocesamiento** del `.FIT` guardado), y un **catálogo de 273 ejercicios** (auto-generado del SDK de Garmin) con **demostraciones animadas + cues de técnica** en 86 de ellos, accesibles desde el Programa, la sesión, un buscador y el selector de alternativas; **(2) Nutrición** (tab "Nutrición", **COMPLETO** — ver §0-HOY-PREVIA): alta de alimentos por **foto + IA** (Opus visión) **o escribiendo el nombre** ("almendra") → catálogo personal (con chip **etiqueta/estimado** y **semáforo nutricional** por alimento: chips de alto/medio en grasa, saturadas, azúcar, sal y colesterol, fibra como positivo, con filtro "mostrame los altos en X" — ver §0-SEMAFORO) → registrar en gramos/ml/unidad con snapshot de macros/micros/colesterol/agua, **metas calóricas + de macros** desde el perfil (BMR Mifflin-St Jeor + objetivo + gasto de entrenamiento = **net calories**; el gasto además **sube la meta de carbos**, nunca la de proteína/grasa ni ningún límite de salud — ver §0-BARRAS), **barras que al pasarte muestran turquesa hasta la meta y ámbar solo el excedente**, **dashboard del día con 4 pestañas** (Resumen / Calorías con torta por comida / Nutrientes vs referencias OMS / Macros con dona), **qué alimentos aportan cada nutriente** + **su evolución en el tiempo**, **suplementos** (catálogo por foto + plan IA semanal + checklist + ajuste dinámico), tracker de líquido, y un **agente de informes** (diario/semanal/quincenal/mensual con consejos, opt-in); **(3) Progreso/Salud** — seguimiento cuantitativo (composición/presión/actividad/bienestar con backfill) + tendencias + heatmap, y **ECG (KardiaMobile)** (interpretación IA no-diagnóstica). **La IA observa** (progreso, ECG, y ahora los informes de nutrición → memoria del atleta). Owner: la cuenta principal. La familia baja el APK **vc10** desde **`pulsia.lahuelladelcaminante.de/download`** (QR) + se registra con el **`INVITE_CODE`** (valor real solo en `/home/kilo/pulsia/deploy/app.env` de la Pi). Un merge a `main` **auto-deploya el backend a la Pi**.
+
+## 0-CARDIO-PROGRESO. ✅ HECHO (2026-07-22): EL CARDIO ENTRA A PROGRESO + kcal del reloj NETAS
+
+Disparador del usuario: *"creo q la app en la parte de 'días entrenados' y 'tiempo por día (últimas
+4 semanas)' no está contemplando el tiempo entrenado q es subido a través de los archivos .fit"*.
+
+Tenía razón, y el hueco era más ancho. **LIVE**: [#181](https://github.com/thusspokedata/pulsia/pull/181)
+mergeado (`13d9c93`), backend deployado (`/health` OK), **OTA a vc10 publicado** con runtime android
+`784872cb…` verificado. Spec y plan en `docs/superpowers/{specs,plans}/2026-07-22-gasto-por-dia-progreso*`.
+
+### El bug: la app se contradecía a sí misma
+
+Las dos secciones se alimentaban **solo** de `getSessions` (tabla `workout_session`, 100% fuerza).
+El cardio vive en `cardio_activity` y se trae con `listCardio`, que esa pantalla nunca llamaba. Pero
+el **Historial sí unía las dos fuentes** (`buildTimeline`), así que la misma caminata aparecía en una
+pantalla y no existía en la otra. Residuo histórico: el heatmap es del 2026-07-10 (#93) y el dominio
+cardio llegó una semana después.
+
+### 🧭 Por qué el color pasó de minutos a kcal
+
+Sumar cardio a la escala de minutos rompe el significado: `levelFor` pintaba el máximo a los **90
+min**, así que una caminata tranquila de 2 h se vería **más intensa** que una sesión de pesas de 50
+min. Decisión del owner: el color mide **gasto calórico**, justificada en que entrena siempre con
+banda o transmitiendo FC desde el Garmin.
+
+Los niveles salen de **cuartiles de TODO el historial**, con fallback fijo (200/400/600) bajo 20
+días registrados. **Nunca por año mostrado**: con cuartiles por año el mismo día cambia de color al
+cambiar de año en el selector y dos años dejan de ser comparables — que es para lo que existe un
+heatmap anual.
+
+### ⚠️ El doble conteo del BMR (cambia los números de Nutrición)
+
+`estimateSessionBurn` restaba el BMR (**neto**) pero `estimateCardioBurn` devolvía las kcal del reloj
+**verbatim** (**bruto**). La meta diaria ya incluye el BMR de las 24 h, así que el basal de la
+actividad se contaba **dos veces** — y desde #179 eso además subía la meta de carbos.
+
+**Confirmado que Garmin reporta bruto:** define `Total Calories = Active + Resting`, y las calorías
+de una actividad incluyen el basal del intervalo. Cronometer, que importa de Garmin, lo resta
+explícitamente (*"imports active calories only. Which are activity − BMR"*; en su ejemplo, Garmin 638
+→ Cronometer 517). Ahora `estimateCardioBurn` resta `bmr/1440 × minutos` con clamp a 0.
+
+**Aproximación aceptada:** Garmin usa **RMR**, no BMR, y el RMR es algo mayor → restar Mifflin-St
+Jeor sub-resta levemente. Corregirlo exigiría inventar una constante para un sesgo de segundo orden.
+
+### ⚠️ La verificación empírica que yo mismo diseñé NO servía
+
+El spec proponía validar "¿el reloj manda bruto?" comparando las kcal contra Keytel/MET. **Da
+resultados contradictorios**: contra Keytel el reloj queda siempre por debajo (parece neto), contra
+MET queda muy por encima en elíptica (parece bruto). Las dos referencias son demasiado ruidosas —
+Keytel sobreestima a FC alta y `MET_BY_CARDIO.elliptical = 5.0` es bajo para FC 150+.
+
+**Lección:** no se valida una hipótesis contra una fórmula que no es lo bastante confiable para ser
+referencia. Lo resolvió la documentación del proveedor y el comportamiento de terceros que importan
+sus datos, no la aritmética sobre datos propios.
+
+### Qué NO tocar
+
+- **`buildDailyBurn` usa los mismos primitivos que `dayExerciseBurn`**, con un **test de invariante**
+  que exige que el total por día coincida exactamente. Es lo que impide que Progreso y Nutrición
+  muestren cifras distintas del mismo día. Si alguien "optimiza" una de las dos, ese test se pone rojo.
+- **Sin peso/edad en el perfil el gasto es 0**, así que la grilla saldría **vacía** para quien no
+  completó el perfil (regresión: antes andaba solo con la duración). Por eso hay un mensaje explícito
+  con acceso al perfil, **con test**. La familia en Argentina es el caso real.
+- **`availableYears` recibe sesiones Y actividades.** Sin eso, quien solo hace cardio no tiene años
+  en el selector y su historial es inalcanzable.
+- **El heatmap NO distingue tipo por color.** Se evaluó y se descartó: 3 familias × 4 niveles = 12
+  tonos en celdas de ~10 px. El desglose fuerza/cardio aparece **al tocar**, debajo de la grilla.
+
+### ⚠️ Lección: SEIS defectos en mi plan, los seis encontrados EJECUTANDO
+
+Ninguno se veía leyendo el diff. Cuatro eran **tests que pasaban con la feature rota** —el patrón ya
+crónico de este repo (§0-BARRAS, §0-SEMAFORO, §0-AHORA)— pero dos eran peores:
+
+1. **Off-by-one en el cuartil** (`Math.floor` en vez de nearest-rank): repartía los niveles desparejo.
+2. **Test de umbrales falso**: con un solo día por año caía en el fallback fijo, o sea los mismos
+   umbrales del input. El implementador lo **demostró empíricamente** inyectando la mutación.
+3. **Test de ventana que no mordía**: aserción `kcal === 900` bajo una mutación que devolvía 999.
+4. **`toHaveTextContent` con string exige match exacto** en este repo, no substring.
+5. **`availableYears` sin cardio en el call-site** — **bug funcional real**, no un test flojo.
+6. **Tres tests de `progreso.tsx` vacíos por accidente** (mockeaban `getSessions` a `[]`, así que la
+   celda no existía igual con la feature rota).
+
+**Lo nuevo respecto de sesiones anteriores:** el #5 muestra que el plan no solo genera tests falsos
+sino **agujeros de comportamiento**, y que los implementadores los encuentran únicamente si se les
+pide explícitamente verificar en vez de copiar. Los prompts de esta sesión les decían el número de
+defectos ya encontrados; a partir del tercero, todos empezaron a agregar mutaciones propias.
+
+### Pendiente
+
+1. **Pieza C — que la IA vea el cardio.** `buildProgressSummary` (`backend/src/ai/progress.ts`)
+   **sigue sin mirar `cardio_activity`**: la IA no sabe que el usuario corrió al generar programas ni
+   al refrescar la memoria del atleta. Toca el prompt de generación → **spec propio**, no hecho.
+2. **Verificar en el teléfono** la escala relativa con un año que mezcle fuerza y cardio, y el área
+   táctil de las celdas (~10 px con `hitSlop`, nunca medida en device).
+3. **`MET_BY_CARDIO.elliptical = 5.0` subestima** la elíptica a FC alta. Solo afecta el fallback sin
+   FC. Detectado de paso.
 
 ## 0-BARRAS. ✅ HECHO (2026-07-22): BARRAS EN DOS COLORES + EL EJERCICIO SUBE LA META DE CARBOS
 
