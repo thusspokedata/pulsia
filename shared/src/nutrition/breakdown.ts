@@ -1,4 +1,5 @@
-import type { Meal, MealType } from "../schemas/nutrition";
+import type { Meal, MealItem, MealType } from "../schemas/nutrition";
+import { saltGFromSodiumMg } from "./derived";
 
 // Criterio de redondeo de `pct`/`pctActual`/`pctTarget`, compartido por todas las tortas de este
 // archivo (comidas y macros): cada porcentaje se redondea por separado, así que pueden sumar 99 o
@@ -101,6 +102,14 @@ export function macroSplit(comido: MacroGrams, meta: MacroGrams | null): MacroSl
 // UI; `water_ml` queda afuera a propósito (el líquido tiene su propia vista).
 export type RankNutrient = "sugars_g" | "fiber_g" | "saturated_fat_g" | "salt_g" | "cholesterol_mg";
 
+// `salt_g` no es un campo del ítem: el snapshot guarda SODIO. El ranking sigue hablando en SAL
+// porque es la unidad que el usuario lee en el resto de la app (referencia OMS de 5 g/día).
+// Mismo criterio que nutrientValue en nutrientLevel.ts.
+function rankAmount(item: MealItem, nutrient: RankNutrient): number | null {
+  if (nutrient === "salt_g") return saltGFromSodiumMg(item.sodium_mg);
+  return item[nutrient] ?? null;
+}
+
 export interface FoodRank {
   name: string;
   amount: number; // del nutriente, sumado en el rango
@@ -116,7 +125,7 @@ export function foodsHighestIn(meals: Meal[], nutrient: RankNutrient): FoodRank[
   const by = new Map<string, { amount: number; grams: number }>();
   for (const m of meals) {
     for (const item of m.items) {
-      const v = item[nutrient];
+      const v = rankAmount(item, nutrient);
       if (v == null || v <= 0) continue;
       const acc = by.get(item.foodName) ?? { amount: 0, grams: 0 };
       by.set(item.foodName, { amount: acc.amount + v, grams: acc.grams + item.grams });

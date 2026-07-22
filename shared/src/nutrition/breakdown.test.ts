@@ -134,3 +134,18 @@ test("sin comidas, o sin ningún dato del nutriente → lista vacía (sin dividi
   expect(foodsHighestIn([], "cholesterol_mg")).toEqual([]);
   expect(foodsHighestIn([itemsMeal([it("Lechuga", 50)])], "cholesterol_mg")).toEqual([]);
 });
+
+test("el ranking de SAL sale del sodio del ítem, y en gramos de sal", () => {
+  // El snapshot del ítem guarda sodio; el ranking habla en sal, como el resto de la app.
+  // 800 mg → 2 g de sal; 200 mg → 0,5 g.
+  const meals = [itemsMeal([it("Jamón", 100, { sodium_mg: 800 }), it("Pan", 80, { sodium_mg: 200 })])];
+  expect(foodsHighestIn(meals, "salt_g")).toEqual([
+    { name: "Jamón", amount: 2, grams: 100, pctOfTotal: 80 },
+    { name: "Pan", amount: 0.5, grams: 80, pctOfTotal: 20 },
+  ]);
+});
+
+test("un ítem sin sodio no entra al ranking de sal (ni como 0)", () => {
+  const meals = [itemsMeal([it("Jamón", 100, { sodium_mg: 800 }), it("Lechuga", 50)])];
+  expect(foodsHighestIn(meals, "salt_g").map((f) => f.name)).toEqual(["Jamón"]);
+});
