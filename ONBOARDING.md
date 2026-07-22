@@ -99,9 +99,14 @@ Escribí en el plan una aserción **tautológica** (`saturatedFatRefG(okGoal.kca
 mismo) que pasaba con la feature borrada entera. El implementador la escribió tal cual, porque hizo
 lo que se le pidió. La destapó la **verificación por mutación**, no la review.
 
-Es la tercera vez que este proyecto registra el patrón (ver §0-AHORA y §0-HOY-PREVIA), pero esta vez
-el origen fue el plan. **Un plan detallado da confianza de que los tests prueban lo que dicen, y esa
-confianza no está justificada.** Los tests del plan se verifican por mutación igual que los demás.
+**El plan como origen ya es un patrón establecido, no una novedad**: §0-AHORA se titula "tres tests
+falsos, todos salidos de MIS planes" y §0-ULTIMO dice "la causa raíz fue del plan, no del
+implementador". Lo que agrega este caso es el mecanismo más directo de todos — no un requisito
+omitido ni un test que no discrimina, sino **una aserción literal escrita en el plan y copiada
+verbatim**, que un implementador cuidadoso no tiene por qué cuestionar.
+
+**Un plan detallado da confianza de que los tests prueban lo que dicen, y esa confianza no está
+justificada.** El código del plan se verifica por mutación igual que el que sale de la implementación.
 
 ### Pendiente del owner
 
