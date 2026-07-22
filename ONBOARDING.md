@@ -56,6 +56,19 @@ de una actividad incluyen el basal del intervalo. Cronometer, que importa de Gar
 explícitamente (*"imports active calories only. Which are activity − BMR"*; en su ejemplo, Garmin 638
 → Cronometer 517). Ahora `estimateCardioBurn` resta `bmr/1440 × minutos` con clamp a 0.
 
+**Fuentes** (conservadas porque esta decisión cambia números de cara al usuario y tiene que poder
+re-litigarse con la evidencia a la vista, no de memoria):
+- [Cronometer — "activity calories do not match Garmin"](https://forums.cronometer.com/discussion/6137/version-4-17-0-bug-cronometer-activity-calories-do-not-match-garmin)
+- [Garmin Forums — "Active Calories and calories burned from activities don't add up"](https://forums.garmin.com/apps-software/mobile-apps-web/f/garmin-connect-web/115272/active-calories-and-calories-burned-from-activities-don-t-add-up)
+
+⚠️ **Alcance de la afirmación, para no sobre-leerla:** la evidencia viene de **foros de Garmin y del
+comportamiento de un tercero que importa sus datos**, NO de documentación oficial del FIT SDK ni de
+la Health API. Se aplicó sobre el campo `kcal` que nuestro parser saca del `.FIT` (`kcalSource:
+"device"`), contrastado con actividades de **caminata y elíptica** del reloj del owner. **No está
+verificado por dispositivo ni por tipo de actividad.** Si aparece un Garmin (o un Coros) que reporte
+neto, esta resta lo dejaría subcontado y habría que condicionarla por fuente en vez de aplicarla a
+toda la rama `device`.
+
 **Aproximación aceptada:** Garmin usa **RMR**, no BMR, y el RMR es algo mayor → restar Mifflin-St
 Jeor sub-resta levemente. Corregirlo exigiría inventar una constante para un sesgo de segundo orden.
 
