@@ -199,12 +199,33 @@ Pintar color con kcal simplemente lo vuelve visible.
 Si el número del reloj ya fuera neto (Garmin distingue "Calories" de "Active Calories"),
 restarle el BMR crearía un bug nuevo en la dirección contraria — subcontaría el gasto.
 
-**Verificación:** tomar una actividad `.FIT` real del usuario en prod y comparar sus
-`kcal` (`kcalSource: "device"`) contra el estimado Keytel/MET de la misma actividad. Si el reloj
-da ~20-30 % más, confirma bruto.
+### RESULTADO (2026-07-22): CONFIRMADO — el reloj reporta bruto
 
-- **Si confirma:** aplicar B.3.
-- **Si no confirma:** no se toca nada y el spec queda como registro de por qué se descartó.
+**La verificación empírica que este spec proponía NO sirvió.** Comparar las kcal del reloj contra
+Keytel/MET da resultados contradictorios: contra Keytel el reloj queda siempre por debajo
+(compatible con neto), contra MET queda muy por encima en elíptica (compatible con bruto). Las dos
+referencias son demasiado ruidosas para arbitrar — Keytel sobreestima a FC alta y el MET 5,0 de
+elíptica es bajo para FC 150+. **Error de diseño de este spec: se propuso validar una hipótesis
+contra una fórmula que no es lo bastante confiable para ser referencia.**
+
+Lo que sí lo resolvió fue la documentación del propio Garmin y el comportamiento de terceros que
+importan sus datos:
+
+- Garmin define **Total Calories = Active + Resting**, y las calorías que muestra una **actividad**
+  incluyen el metabolismo basal de ese intervalo.
+- **Cronometer**, que importa actividades de Garmin, resta el basal explícitamente: *"Cronometer
+  imports active calories only. Which are activity − BMR."* En su ejemplo documentado, Garmin
+  reporta 638 kcal y Cronometer registra 517.
+
+Contra los datos reales del owner el ajuste da valores plausibles: una caminata de 61 min a FC 79
+pasa de 187 kcal a ~117 netas (1,9 kcal/min), coherente con 3 km en una hora.
+
+**Matiz aceptado:** Garmin usa **RMR**, no BMR, y el RMR es algo mayor. Restar el BMR de
+Mifflin-St Jeor (el que ya calcula `computeNutritionGoal`) **sub-resta levemente**. Es una
+aproximación deliberada: introducir una estimación de RMR aparte agregaría una constante inventada
+para corregir un sesgo de segundo orden.
+
+→ **Se aplica B.3.**
 
 ### B.3 La corrección (condicionada a B.2)
 
