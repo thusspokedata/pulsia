@@ -1,6 +1,8 @@
 # Pulsia — Onboarding / Handoff
 
-> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: **2026-07-21** (sesión **SEMÁFORO NUTRICIONAL**: el catálogo de alimentos ahora dice de un vistazo qué alimento es alto en grasa, saturadas, azúcar, sal o colesterol, y cuál es buena fuente de fibra — con umbrales de la **FSA** británica y la **FDA**, más un filtro "mostrame los altos en colesterol". [#176](https://github.com/thusspokedata/pulsia/pull/176), mergeado + **OTA a vc10 publicado** (runtime `784872cb` verificado). Detalle en **§0-SEMAFORO**, incluida la tanda de **3 bugs que pasaban CI y fallaban en el teléfono** y los **6 errores del plan** que encontró el proceso.)
+> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: **2026-07-22** (sesión **BARRAS EN DOS COLORES + EL EJERCICIO SUBE LA META DE CARBOS**: pasarte de un macro ya no borra cuánto llevabas —la barra se parte en la línea de la meta, turquesa hasta ahí y ámbar el excedente—, y las kcal quemadas entrenando ahora suben la meta de **carbos**, no solo el restante de kcal. El principio que ordena todo: **las metas de energía escalan con el gasto, los límites de salud no** — el colesterol sigue en 300 mg entrenes o no. [#179](https://github.com/thusspokedata/pulsia/pull/179), mergeado + backend deployado + **OTA a vc10 publicado** (runtime `784872cb` verificado). Detalle en **§0-BARRAS**, incluidos **tres bugs que ninguna lectura del diff encontró** y un **test falso que vino del propio plan**.)
+>
+> Actualización previa: **2026-07-21** (sesión **SEMÁFORO NUTRICIONAL**: el catálogo de alimentos ahora dice de un vistazo qué alimento es alto en grasa, saturadas, azúcar, sal o colesterol, y cuál es buena fuente de fibra — con umbrales de la **FSA** británica y la **FDA**, más un filtro "mostrame los altos en colesterol". [#176](https://github.com/thusspokedata/pulsia/pull/176), mergeado + **OTA a vc10 publicado** (runtime `784872cb` verificado). Detalle en **§0-SEMAFORO**, incluida la tanda de **3 bugs que pasaban CI y fallaban en el teléfono** y los **6 errores del plan** que encontró el proceso.)
 >
 > Actualización previa (mismo día): sesión **TRILOGÍA DEL `.FIT`**: cerraron las fases **2 (visualización)** y **3 (reprocesamiento)** de la captura total — [#167](https://github.com/thusspokedata/pulsia/pull/167) y [#173](https://github.com/thusspokedata/pulsia/pull/173) —, más el fix [#172](https://github.com/thusspokedata/pulsia/pull/172) de un bug **que ningún test veía**: `buildFitActivity` descartaba en silencio los 15 campos del parser. Todo LIVE y **verificado por el usuario en prod**. Detalle en **§0-ULTIMO**. ⚠️ Lección transversal: **unidades en verde ≠ sistema sano** — el cliente que arma el payload también se testea ([[testear-la-costura]]).) 
 >
@@ -10,7 +12,110 @@
 
 ## 0. Estado en una línea
 
-**Pulsia está EN INTERNET, multi-usuario, con login.** Backend en **`https://pulsia.lahuelladelcaminante.de`** (VPS nginx → Wireguard → Pi:3011, HTTPS por certbot, rate-limit en `/auth/`). La app (Android, **APK vc10**; todo lo nuevo llega por **OTA** a vc10) tiene 3 dominios grandes: **(1) Entrenamiento** — genera programas async, registra/resume/revisa sesiones, HR por banda BLE, resumen con mapa corporal + FC, español+inglés, memoria del atleta, entreno puntual, **cardio/actividades** (manual o import `.FIT`, ya entra al balance de nutrición, con **pantalla de detalle** —tiles, gráficos de FC/cadencia/respiración/Body Battery y tiempo en zonas— y **reprocesamiento** del `.FIT` guardado), y un **catálogo de 273 ejercicios** (auto-generado del SDK de Garmin) con **demostraciones animadas + cues de técnica** en 86 de ellos, accesibles desde el Programa, la sesión, un buscador y el selector de alternativas; **(2) Nutrición** (tab "Nutrición", **COMPLETO** — ver §0-HOY-PREVIA): alta de alimentos por **foto + IA** (Opus visión) **o escribiendo el nombre** ("almendra") → catálogo personal (con chip **etiqueta/estimado** y **semáforo nutricional** por alimento: chips de alto/medio en grasa, saturadas, azúcar, sal y colesterol, fibra como positivo, con filtro "mostrame los altos en X" — ver §0-SEMAFORO) → registrar en gramos/ml/unidad con snapshot de macros/micros/colesterol/agua, **metas calóricas + de macros** desde el perfil (BMR Mifflin-St Jeor + objetivo + gasto de entrenamiento = **net calories**), **dashboard del día con 4 pestañas** (Resumen / Calorías con torta por comida / Nutrientes vs referencias OMS / Macros con dona), **qué alimentos aportan cada nutriente** + **su evolución en el tiempo**, **suplementos** (catálogo por foto + plan IA semanal + checklist + ajuste dinámico), tracker de líquido, y un **agente de informes** (diario/semanal/quincenal/mensual con consejos, opt-in); **(3) Progreso/Salud** — seguimiento cuantitativo (composición/presión/actividad/bienestar con backfill) + tendencias + heatmap, y **ECG (KardiaMobile)** (interpretación IA no-diagnóstica). **La IA observa** (progreso, ECG, y ahora los informes de nutrición → memoria del atleta). Owner: la cuenta principal. La familia baja el APK **vc10** desde **`pulsia.lahuelladelcaminante.de/download`** (QR) + se registra con el **`INVITE_CODE`** (valor real solo en `/home/kilo/pulsia/deploy/app.env` de la Pi). Un merge a `main` **auto-deploya el backend a la Pi**.
+**Pulsia está EN INTERNET, multi-usuario, con login.** Backend en **`https://pulsia.lahuelladelcaminante.de`** (VPS nginx → Wireguard → Pi:3011, HTTPS por certbot, rate-limit en `/auth/`). La app (Android, **APK vc10**; todo lo nuevo llega por **OTA** a vc10) tiene 3 dominios grandes: **(1) Entrenamiento** — genera programas async, registra/resume/revisa sesiones, HR por banda BLE, resumen con mapa corporal + FC, español+inglés, memoria del atleta, entreno puntual, **cardio/actividades** (manual o import `.FIT`, ya entra al balance de nutrición, con **pantalla de detalle** —tiles, gráficos de FC/cadencia/respiración/Body Battery y tiempo en zonas— y **reprocesamiento** del `.FIT` guardado), y un **catálogo de 273 ejercicios** (auto-generado del SDK de Garmin) con **demostraciones animadas + cues de técnica** en 86 de ellos, accesibles desde el Programa, la sesión, un buscador y el selector de alternativas; **(2) Nutrición** (tab "Nutrición", **COMPLETO** — ver §0-HOY-PREVIA): alta de alimentos por **foto + IA** (Opus visión) **o escribiendo el nombre** ("almendra") → catálogo personal (con chip **etiqueta/estimado** y **semáforo nutricional** por alimento: chips de alto/medio en grasa, saturadas, azúcar, sal y colesterol, fibra como positivo, con filtro "mostrame los altos en X" — ver §0-SEMAFORO) → registrar en gramos/ml/unidad con snapshot de macros/micros/colesterol/agua, **metas calóricas + de macros** desde el perfil (BMR Mifflin-St Jeor + objetivo + gasto de entrenamiento = **net calories**; el gasto además **sube la meta de carbos**, nunca la de proteína/grasa ni ningún límite de salud — ver §0-BARRAS), **barras que al pasarte muestran turquesa hasta la meta y ámbar solo el excedente**, **dashboard del día con 4 pestañas** (Resumen / Calorías con torta por comida / Nutrientes vs referencias OMS / Macros con dona), **qué alimentos aportan cada nutriente** + **su evolución en el tiempo**, **suplementos** (catálogo por foto + plan IA semanal + checklist + ajuste dinámico), tracker de líquido, y un **agente de informes** (diario/semanal/quincenal/mensual con consejos, opt-in); **(3) Progreso/Salud** — seguimiento cuantitativo (composición/presión/actividad/bienestar con backfill) + tendencias + heatmap, y **ECG (KardiaMobile)** (interpretación IA no-diagnóstica). **La IA observa** (progreso, ECG, y ahora los informes de nutrición → memoria del atleta). Owner: la cuenta principal. La familia baja el APK **vc10** desde **`pulsia.lahuelladelcaminante.de/download`** (QR) + se registra con el **`INVITE_CODE`** (valor real solo en `/home/kilo/pulsia/deploy/app.env` de la Pi). Un merge a `main` **auto-deploya el backend a la Pi**.
+
+## 0-BARRAS. ✅ HECHO (2026-07-22): BARRAS EN DOS COLORES + EL EJERCICIO SUBE LA META DE CARBOS
+
+Disparador: el usuario mandó una captura de la card de Nutrición y pidió dos cosas. Que al pasarse
+de un macro se siga viendo el turquesa hasta la meta y solo el excedente en ámbar. Y preguntó algo
+más de fondo: *"si hago ejercicio, ¿no debería agregarse esas calorías como necesidad? ¿de qué tipo?
+¿grasas, carbos, proteínas? ¿qué pasa con el colesterol cuando se hace ejercicio?"*.
+
+**Estado:** [#179](https://github.com/thusspokedata/pulsia/pull/179) mergeado, backend deployado
+(`/health` OK) y **OTA a vc10 publicado** (runtime android `784872cb` verificado en la salida del
+`eas update`). Spec en `docs/superpowers/specs/2026-07-21-macros-ejercicio-barras-design.md`,
+plan en `docs/superpowers/plans/2026-07-21-macros-ejercicio-barras.md`.
+
+### El problema real: había DOS presupuestos en la misma tarjeta
+
+El gasto de ejercicio entraba **solo** al restante de kcal; las metas de macros salían de
+`computeNutritionGoal` y **no veían el ejercicio en absoluto**. Con 1667 kcal quemadas, la card decía
+"te quedan 1692 kcal" arriba y pintaba los macros en ámbar abajo. No era un bug puntual: era una
+contradicción **por construcción**.
+
+### 🧭 El principio rector (esto es lo que hay que recordar)
+
+> **Las metas de energía escalan con el gasto. Los límites de salud no.**
+
+| | ¿Escala? | Por qué |
+|---|---|---|
+| Carbohidratos | **Sí** | El glucógeno es el combustible del entrenamiento. El bonus va **entero** acá. |
+| Proteína | No | Se fija **por peso corporal** (2.0 g/kg en déficit), no por gasto. Quemar 1667 kcal no duplica la necesidad proteica. |
+| Grasa | No | Tiene piso por función hormonal, pero el ejercicio no la "pide". |
+| **Colesterol, saturadas, sal, azúcares** | **No** | Son **límites de salud**, no presupuestos. El ejercicio mejora el perfil lipídico en sangre, pero eso no habilita a comer más colesterol. |
+
+**Decisión del owner:** el bonus va entero a carbos, no repartido proporcional. Repartir habría hecho
+que la card "cierre" (nada en ámbar) a costa de afirmar que hacen falta 236 g de proteína, que es falso.
+
+### ⚠️ La trampa: `exerciseAdjustedTargets` NO puede mutar el `goal`
+
+La implementación obvia —inflar `goal.kcal` y devolver el mismo tipo— **rompe el colesterol**.
+`saturatedFatRefG(goalKcal)` deriva el techo de saturadas como el 10% de esa cifra, así que inflarla
+subiría un límite de salud por haber salido a correr. Por eso la función devuelve una estructura
+aparte y **`GoalView.kcal.meta` sigue siendo la meta BASE** (es la que consume `NutrientesTab`).
+Hay un test de invariante, un test estructural sobre las claves que devuelve, y un test de no-mutación.
+**Si algún día alguien "unifica" esto por consistencia, esos tres son los que se ponen en rojo.**
+
+### Cómo quedó en pantalla
+
+```text
+2087 / 2112 kcal          +1667 por ejercicio
+Carb 198 / 254 g +417 ejercicio · faltan 473
+Gras 119 / 63 g · 56 de más        ← turquesa 53% + naranja 47%
+Colesterol 254 / 300 mg            ← sin cambios, entrene o no
+```
+
+Base + bonus etiquetado, nunca un `671 g` pelado: sin explicación parece un error y esconde la meta
+real de un día de descanso. El sufijo aparece **solo** si hubo ejercicio.
+
+### Qué NO tocar
+
+- **`Bar` recibe `{ value, target, kind, height }`, no `{ pct, over }`.** Antes cada call-site
+  calculaba los dos por separado, que es la forma que permite que el color y el texto se contradigan.
+  Ahora el estado inconsistente no es representable. **No vuelvas a pasarle porcentajes ya calculados.**
+- **`kind="floor"` existe por la fibra.** Es un piso: pasarse de 30 g es bueno y nunca se avisa. Una
+  barra que solo mire `value` y `target` no puede saberlo.
+- **Los dos segmentos tienen clamps simétricos** (`[1, 99]`): sin ellos, un excedente de 0.4%
+  redondea el ámbar a 0% y uno de 200× redondea el turquesa a 0%. En ambos casos la barra vuelve a
+  ser de un solo color y se pierde justo lo que el rediseño vino a mostrar.
+
+### ⚠️ Lección: tres bugs que ninguna lectura del diff encontró
+
+La suite estaba verde y el diff se leía bien. Los tres salieron de **ejecutar hipótesis contra el
+código**, no de mirarlo:
+
+1. **El restante de kcal no saneaba el gasto.** Con `exercise` negativo —alcanzable, porque
+   `estimateCardioBurn` pasa las kcal del `.FIT` verbatim— **le restaba meta al usuario**. Los macros
+   sí se protegían; las kcal no, porque el guard vivía en un solo lado de un cálculo duplicado.
+2. **Tres aserciones de `detalle.test.tsx` no podían fallar con nada.** El `testID` que miraban pasó
+   a ser siempre el segmento turquesa. La peor tapaba el borde "tocar el límite no es pasarse": se
+   comprobó poniendo sal **20× por encima** del límite y el test siguió verde.
+3. **Un excedente sub-0.5% desaparecía de la barra** mientras el texto avisaba en ámbar (colesterol
+   301/300) — exactamente la contradicción color/texto que el PR venía a eliminar.
+
+### ⚠️ Lección: el test falso vino del PLAN, no de la implementación
+
+Escribí en el plan una aserción **tautológica** (`saturatedFatRefG(okGoal.kcal)` comparado consigo
+mismo) que pasaba con la feature borrada entera. El implementador la escribió tal cual, porque hizo
+lo que se le pidió. La destapó la **verificación por mutación**, no la review.
+
+**El plan como origen ya es un patrón establecido, no una novedad**: §0-AHORA se titula "tres tests
+falsos, todos salidos de MIS planes" y §0-ULTIMO dice "la causa raíz fue del plan, no del
+implementador". Lo que agrega este caso es el mecanismo más directo de todos — no un requisito
+omitido ni un test que no discrimina, sino **una aserción literal escrita en el plan y copiada
+verbatim**, que un implementador cuidadoso no tiene por qué cuestionar.
+
+**Un plan detallado da confianza de que los tests prueban lo que dicen, y esa confianza no está
+justificada.** El código del plan se verifica por mutación igual que el que sale de la implementación.
+
+### Pendiente del owner
+
+1. **Verlo en el teléfono un día de entrenamiento fuerte.** La fila `Carb 198 / 254 g +417 ejercicio`
+   es la más larga de la card y en 320 px esta app ya tuvo texto cortándose.
+2. **Decidir si acreditar el 100% del gasto es correcto.** Hoy se acredita entero, y con 1667 kcal la
+   meta de carbos casi se triplica. Todo el diseño descansa en que ese número sea confiable: si viene
+   de un `.FIT` con kcal del reloj, bien; si es un estimado MET/Keytel, un error del 30% mueve la meta
+   ~125 g. Achicarlo a una fracción es **una línea** de `exerciseAdjustedTargets`.
 
 ## 0-SEMAFORO. ✅ HECHO (2026-07-21): SEMÁFORO NUTRICIONAL EN EL CATÁLOGO
 
