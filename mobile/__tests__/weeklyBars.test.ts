@@ -1,44 +1,45 @@
-import { buildDailyMinutes } from "../src/session/weeklyBars";
+import { buildDailyKcal } from "../src/session/weeklyBars";
+import type { DayBurn } from "../src/session/dailyBurn";
 
-function session(dateStr: string, mins: number) {
-  return { startedAt: new Date(dateStr).getTime(), totalDurationMs: mins * 60000 };
+function burnMap(entries: Record<string, number>): Map<string, DayBurn> {
+  const m = new Map<string, DayBurn>();
+  for (const [date, kcal] of Object.entries(entries)) {
+    m.set(date, { kcal, strengthKcal: kcal, cardioKcal: 0, minutes: 0 });
+  }
+  return m;
 }
 
-const NOW = new Date("2026-07-10T12:00:00").getTime();
+const NOW = new Date("2026-03-15T12:00:00").getTime();
 
-test("devuelve exactamente 28 entradas terminando hoy", () => {
-  const days = buildDailyMinutes([], NOW);
-  expect(days.length).toBe(28);
-  expect(days[27].date).toBe("2026-07-10");
-  expect(days[0].date).toBe("2026-06-13");
+test("devuelve exactamente `days` entradas terminando en hoy", () => {
+  const out = buildDailyKcal(burnMap({}), NOW, 28);
+  expect(out).toHaveLength(28);
+  expect(out[27].date).toBe("2026-03-15");
+  expect(out[0].date).toBe("2026-02-16");
 });
 
-test("una sesión hoy aparece en la última entrada", () => {
-  const days = buildDailyMinutes([session("2026-07-10T09:00:00", 30)], NOW);
-  expect(days[27].minutes).toBe(30);
+test("un día con gasto aparece con sus kcal", () => {
+  const out = buildDailyKcal(burnMap({ "2026-03-14": 450 }), NOW, 28);
+  expect(out.find((d) => d.date === "2026-03-14")!.kcal).toBe(450);
 });
 
-test("una sesión de hace 30 días queda excluida (fuera de la ventana de 28)", () => {
-  const days = buildDailyMinutes([session("2026-06-10T09:00:00", 30)], NOW);
-  expect(days.every((d) => d.minutes === 0)).toBe(true);
+test("los días sin actividad van en 0, no se omiten", () => {
+  // Las barras necesitan el eje completo: omitir días comprimiría el gráfico y mentiría
+  // sobre la constancia.
+  const out = buildDailyKcal(burnMap({ "2026-03-14": 450 }), NOW, 28);
+  expect(out.filter((d) => d.kcal === 0)).toHaveLength(27);
 });
 
-test("dos sesiones el mismo día suman minutos", () => {
-  const days = buildDailyMinutes(
-    [session("2026-07-10T08:00:00", 10), session("2026-07-10T20:00:00", 15)],
-    NOW
-  );
-  expect(days[27].minutes).toBe(25);
-});
-
-test("días sin sesión quedan en 0", () => {
-  const days = buildDailyMinutes([session("2026-07-10T08:00:00", 10)], NOW);
-  expect(days[0].minutes).toBe(0);
-  expect(days[26].minutes).toBe(0);
+test("un día fuera de la ventana no entra", () => {
+  const out = buildDailyKcal(burnMap({ "2026-01-01": 900 }), NOW, 28);
+  expect(out.some((d) => d.date === "2026-01-01")).toBe(false);
+  // Ni su gasto se cuela en otro día: la ventana recorta, no reasigna.
+  expect(out.every((d) => d.kcal === 0)).toBe(true);
 });
 
 test("respeta un tamaño de ventana `days` custom", () => {
-  const days = buildDailyMinutes([], NOW, 7);
-  expect(days.length).toBe(7);
-  expect(days[6].date).toBe("2026-07-10");
+  const out = buildDailyKcal(burnMap({}), NOW, 7);
+  expect(out).toHaveLength(7);
+  expect(out[6].date).toBe("2026-03-15");
+  expect(out[0].date).toBe("2026-03-09");
 });

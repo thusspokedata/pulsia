@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import Svg, { Rect } from "react-native-svg";
 import { availableYears, buildYearHeatmap, type HeatmapCell } from "../session/heatmap";
+import type { DayBurn } from "../session/dailyBurn";
 import { colors, radius, spacing } from "../theme/tokens";
 
 const CELL = 12;
@@ -23,13 +24,17 @@ function cellColor(cell: HeatmapCell): string {
 }
 
 interface Props {
-  sessions: { startedAt: number; totalDurationMs: number | null }[];
+  burnByDate: Map<string, DayBurn>;
+  thresholds: [number, number, number];
+  sessions: { startedAt: number }[];
+  activities: { startedAt: number }[];
   year: number;
   onSelectYear: (year: number) => void;
 }
 
-export function YearHeatmap({ sessions, year, onSelectYear }: Props) {
-  const years = availableYears(sessions);
+export function YearHeatmap({ burnByDate, thresholds, sessions, activities, year, onSelectYear }: Props) {
+  const years = availableYears(sessions, activities);
+  const [selected, setSelected] = useState<string | null>(null);
 
   // Fecha de referencia para ocultar los días futuros. Se refresca en la próxima medianoche
   // local, así el nuevo "hoy" aparece aunque la pantalla quede montada al cambiar de día.
@@ -45,7 +50,7 @@ export function YearHeatmap({ sessions, year, onSelectYear }: Props) {
     return <Text style={{ color: colors.textMuted, padding: spacing.md }}>Todavía no hay entrenamientos registrados.</Text>;
   }
 
-  const { weeks } = buildYearHeatmap(sessions, year, nowMs);
+  const { weeks } = buildYearHeatmap(burnByDate, thresholds, year, nowMs);
   const width = weeks.length * STEP;
   const height = 7 * STEP;
 
@@ -83,17 +88,40 @@ export function YearHeatmap({ sessions, year, onSelectYear }: Props) {
             week.map((cell, row) => (
               <Rect
                 key={cell.date + row}
+                testID={`heatmap-cell-${cell.date}`}
                 x={col * STEP}
                 y={row * STEP}
                 width={CELL}
                 height={CELL}
                 rx={3}
                 fill={cellColor(cell)}
+                onPress={
+                  cell.inYear && !cell.future
+                    ? () => setSelected((s) => (s === cell.date ? null : cell.date))
+                    : undefined
+                }
               />
             ))
           )}
         </Svg>
       </ScrollView>
+
+      {selected != null && burnByDate.has(selected) ? (
+        <View testID="heatmap-detail" style={{ gap: 2, paddingVertical: spacing.xs }}>
+          <Text style={{ color: colors.text, fontWeight: "600" }}>
+            {selected} · {burnByDate.get(selected)!.kcal} kcal
+          </Text>
+          <Text testID="heatmap-detail-strength" style={{ color: colors.textMuted, fontSize: 12 }}>
+            Fuerza {burnByDate.get(selected)!.strengthKcal} kcal
+          </Text>
+          <Text testID="heatmap-detail-cardio" style={{ color: colors.textMuted, fontSize: 12 }}>
+            Cardio {burnByDate.get(selected)!.cardioKcal} kcal
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+            {burnByDate.get(selected)!.minutes} min en movimiento
+          </Text>
+        </View>
+      ) : null}
 
       <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
         <Text style={{ color: colors.textMuted, fontSize: 12 }}>menos</Text>

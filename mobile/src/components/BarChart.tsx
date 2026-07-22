@@ -1,7 +1,7 @@
 import { View, Text } from "react-native";
 import Svg, { Rect, Line, Text as SvgText } from "react-native-svg";
 import { colors, spacing } from "../theme/tokens";
-import type { DailyMinutes } from "../session/weeklyBars";
+import type { DailyKcal } from "../session/weeklyBars";
 
 const WEEKDAY_LABELS = ["D", "L", "M", "M", "J", "V", "S"];
 
@@ -17,15 +17,15 @@ export function barCenterX(i: number, dataLength: number, width: number, padding
 // Barras verticales para una serie diaria (p.ej. últimas 4 semanas). Reusa la
 // idea de viewBox responsive de chart.ts, pero acá el eje X es categórico
 // (un día = una barra), no continuo.
-export function BarChart({ data, height = 140 }: { data: DailyMinutes[]; height?: number }) {
+export function BarChart({ data, height = 140 }: { data: DailyKcal[]; height?: number }) {
   if (data.length === 0) {
     return <Text style={{ color: colors.textMuted, padding: spacing.md }}>Sin datos todavía.</Text>;
   }
 
   const width = Math.max(320, data.length * 12);
   const padding = 16;
-  const realMax = Math.max(0, ...data.map((d) => d.minutes));
-  const maxMinutes = Math.max(1, realMax); // clamp solo para el cálculo de altura (evita div/0)
+  const realMax = Math.max(0, ...data.map((d) => d.kcal));
+  const maxKcal = Math.max(1, realMax); // clamp solo para el cálculo de altura (evita div/0)
   const innerW = width - padding * 2;
   const innerH = height - padding * 2 - 14; // deja lugar a los ticks de día abajo
   const barGap = 2;
@@ -34,7 +34,7 @@ export function BarChart({ data, height = 140 }: { data: DailyMinutes[]; height?
   return (
     <View>
       <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: spacing.xs }}>
-        {realMax > 0 ? `Máx: ${Math.round(realMax)} min` : "Sin datos"}
+        {realMax > 0 ? `Máx: ${Math.round(realMax)} kcal` : "Sin datos"}
       </Text>
       <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
         <Line
@@ -46,7 +46,7 @@ export function BarChart({ data, height = 140 }: { data: DailyMinutes[]; height?
           strokeWidth={1}
         />
         {data.map((d, i) => {
-          const barHeight = maxMinutes > 0 ? (d.minutes / maxMinutes) * innerH : 0;
+          const barHeight = maxKcal > 0 ? (d.kcal / maxKcal) * innerH : 0;
           const x = padding + i * (innerW / data.length);
           const y = padding + innerH - barHeight;
           return (
@@ -58,7 +58,7 @@ export function BarChart({ data, height = 140 }: { data: DailyMinutes[]; height?
               height={Math.max(0, barHeight)}
               rx={2}
               fill={colors.accent}
-              opacity={d.minutes > 0 ? 1 : 0.15}
+              opacity={d.kcal > 0 ? 1 : 0.15}
             />
           );
         })}

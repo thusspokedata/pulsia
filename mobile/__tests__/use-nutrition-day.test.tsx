@@ -84,9 +84,12 @@ test("mapea el cardio del reloj al gasto del día y llama listCardio con (url, f
   // → Promise.all → setState) drenen dentro de act antes de leer el resultado.
   await act(async () => { await Promise.resolve(); });
 
-  // kcal del reloj (device): pasa tal cual, sin estimarse por Keytel/MET. Si el mapeo avgHr↔kcal
-  // estuviera invertido, kcal caería a null → se estimaría y NO daría 150.
-  await waitFor(() => expect(result.current.exercise).toBe(150));
+  // kcal del reloj (device): se toman del .FIT, no se estiman por Keytel/MET, pero se les resta el
+  // basal del intervalo (el reloj reporta bruto). BMR Mifflin del perfil = 1780; 30 min de
+  // actividad → 1780/1440*30 = 37.08 → 150 - 37.08 = 112.9 → 113.
+  // Si el mapeo avgHr↔kcal estuviera invertido, kcal caería a null → se estimaría por MET
+  // (3.5*80*0.5h = 140 bruto → 103 neto) y NO daría 113.
+  await waitFor(() => expect(result.current.exercise).toBe(113));
 
   // Orden correcto de argumentos del rango: (baseUrl, from, to) con from <= to.
   expect(mockListCardio).toHaveBeenCalledTimes(1);
