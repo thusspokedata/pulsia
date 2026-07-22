@@ -1,4 +1,4 @@
-import { sumNullableMicro, dayExerciseBurn } from "@pulsia/shared";
+import { sumNullableMicro, dayExerciseBurn, saltGFromSodiumMg } from "@pulsia/shared";
 import type { AthleteContext, Meal, WaterLog, PlanView, CardioActivity } from "@pulsia/shared";
 import { listMeals as listMealsImpl, listWater as listWaterImpl } from "../nutrition/repository";
 import { listSessions as listSessionsImpl } from "../sessions/repository";
@@ -84,13 +84,18 @@ export async function collectReportData(
     takes: takes.map((t) => ({ supplementName: t.supplementName, status: t.status, plannedDose: t.plannedDose, actualDose: t.actualDose ?? null, date: t.date })),
     catalog: catalog.map((s) => ({ id: s.id, name: s.name, components: s.components })),
   } : null;
-  const micro = (k: "sugars_g" | "fiber_g" | "saturated_fat_g" | "salt_g") => sumNullableMicro(items.map((it) => it[k]));
+  const micro = (k: "sugars_g" | "fiber_g" | "saturated_fat_g") => sumNullableMicro(items.map((it) => it[k]));
   const totals = {
     kcal: items.reduce((a, it) => a + it.kcal, 0),
     protein_g: Math.round(items.reduce((a, it) => a + it.protein_g, 0)),
     carbs_g: Math.round(items.reduce((a, it) => a + it.carbs_g, 0)),
     fat_g: Math.round(items.reduce((a, it) => a + it.fat_g, 0)),
-    sugars_g: micro("sugars_g"), fiber_g: micro("fiber_g"), saturated_fat_g: micro("saturated_fat_g"), salt_g: micro("salt_g"),
+    sugars_g: micro("sugars_g"), fiber_g: micro("fiber_g"), saturated_fat_g: micro("saturated_fat_g"),
+    // El informe sigue hablando en SAL (referencia OMS de 5 g/día, que es la que el usuario
+    // reconoce) pero lo persistido es SODIO — misma regla que el semáforo. Se SUMA el sodio y se
+    // convierte AL FINAL: convertir ítem por ítem y después sumar acumularía el redondeo a 1
+    // decimal de cada ítem.
+    salt_g: saltGFromSodiumMg(sumNullableMicro(items.map((it) => it.sodium_mg))),
   };
   const cholesterolMg = sumNullableMicro(items.map((it) => it.cholesterol_mg));
   const fromFood = sumNullableMicro(items.map((it) => it.water_ml)) ?? 0;

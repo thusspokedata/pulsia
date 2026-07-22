@@ -2,7 +2,7 @@ import { test, expect } from "bun:test";
 import { collectReportData, hasAnyData } from "./collect";
 
 const meal = (items: any[]) => ({ id: "m", eatenAt: 1, mealType: "almuerzo", note: null, items });
-const item = (o: any) => ({ id: "i", foodId: null, foodName: "Pollo", quantity: 100, quantityUnit: "g", grams: 100, kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, saturated_fat_g: null, sugars_g: null, fiber_g: null, salt_g: null, cholesterol_mg: null, water_ml: null, ...o });
+const item = (o: any) => ({ id: "i", foodId: null, foodName: "Pollo", quantity: 100, quantityUnit: "g", grams: 100, kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, saturated_fat_g: null, sugars_g: null, fiber_g: null, sodium_mg: null, cholesterol_mg: null, water_ml: null, ...o });
 
 function fakeDb(opts: any) {
   return {
@@ -134,4 +134,27 @@ test("hasAnyData false si SOLO hay datos de suplementos (no justifican un inform
   const data = await collectReportData({} as any, "u", 0, 10, athleteIncomplete, deps as any);
   expect(data.supplements).not.toBeNull();
   expect(hasAnyData(data)).toBe(false);
+});
+
+// El ítem persiste SODIO pero el informe habla en SAL. Sin estos tests, cambiar el campo a
+// sodium_mg dejaba pasar un informe que reportaba miligramos de sodio bajo la etiqueta "sal g":
+// 1400 en vez de 3,5. La mutación existió y ningún test la veía.
+test("totals.salt_g deriva de la suma de sodio, no del sodio crudo", async () => {
+  const deps = { ...baseDeps, listMeals: async () => [meal([item({ sodium_mg: 1000 }), item({ sodium_mg: 400 })])] };
+  const data = await collectReportData({} as any, "u", 0, 10, athleteIncomplete, deps as any);
+  expect(data.totals.salt_g).toBe(3.5); // 1400 mg de sodio × 2.5 / 1000
+});
+
+// Discrimina "sumar y después convertir" de "convertir cada ítem y después sumar": convirtiendo
+// primero, cada 50 mg redondea a 0,1 g y el total daría 0,2. El criterio correcto da 0,3.
+test("totals.salt_g suma el sodio ANTES de convertir (no acumula el redondeo por ítem)", async () => {
+  const deps = { ...baseDeps, listMeals: async () => [meal([item({ sodium_mg: 50 }), item({ sodium_mg: 50 })])] };
+  const data = await collectReportData({} as any, "u", 0, 10, athleteIncomplete, deps as any);
+  expect(data.totals.salt_g).toBe(0.3);
+});
+
+test("totals.salt_g es null si ningún ítem tiene sodio (null no es 0)", async () => {
+  const deps = { ...baseDeps, listMeals: async () => [meal([item({}), item({})])] };
+  const data = await collectReportData({} as any, "u", 0, 10, athleteIncomplete, deps as any);
+  expect(data.totals.salt_g).toBe(null);
 });

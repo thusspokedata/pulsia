@@ -8,8 +8,9 @@ const IMG_BASE64 = Buffer.from("fake jpeg bytes").toString("base64");
 
 const bananaRow = {
   id: FOOD_ID, userId: "single-user", name: "Banana", basis: "per_100g",
-  kcal: 89, proteinG: 1.1, carbsG: 23, fatG: 0.3, unitWeightG: 120, source: "estimate", createdAt: new Date(0),
-  saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, saltG: 0,
+  kcal: 89, proteinG: 1.1, carbsG: 23, fatG: 0.3, unitWeightG: 120, createdAt: new Date(0),
+  sourceMacros: "ai", sourceMicros: null, usdaFdcId: null,
+  saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, sodiumMg: 0,
 };
 
 function fakeDb(opts: {
@@ -83,11 +84,11 @@ function fakeDb(opts: {
 const baseConfig = { encryptionKey: KEY, defaultModel: "claude-sonnet-4-6", inviteCode: "x", sessionTtlDays: 4, singleUserMode: true, defaultAiApiKey: "sk-x" };
 const aiClient = {
   generateProgram: async () => ({ name: "x", weeks: [] }),
-  extractFood: async () => ({ name: "Banana", basis: "per_100g", kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120, source: "estimate" }),
+  extractFood: async () => ({ name: "Banana", basis: "per_100g", kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120, sourceMacros: "ai", sourceMicros: null }),
   describeFood: async () => ({
     name: "Almendra", basis: "per_100g" as const, kcal: 579, protein_g: 21, carbs_g: 22, fat_g: 50,
-    saturated_fat_g: 3.8, sugars_g: 4.4, fiber_g: 12.5, salt_g: 0, cholesterol_mg: 0, water_ml: 4,
-    unitWeightG: 1.2, source: "estimate" as const,
+    saturated_fat_g: 3.8, sugars_g: 4.4, fiber_g: 12.5, sodium_mg: 0, cholesterol_mg: 0, water_ml: 4,
+    unitWeightG: 1.2, sourceMacros: "ai" as const, sourceMicros: null,
   }),
 };
 const deps = (db: any, aiClientOverride: any = aiClient): any => ({ db, config: baseConfig, aiClient: aiClientOverride });
@@ -99,7 +100,7 @@ test("POST /nutrition/foods/extract → devuelve la extracción sin persistir", 
     body: JSON.stringify({ imageBase64: IMG_BASE64, mediaType: "image/jpeg" }),
   });
   expect(res.status).toBe(200);
-  expect(await res.json()).toMatchObject({ name: "Banana", source: "estimate" });
+  expect(await res.json()).toMatchObject({ name: "Banana", sourceMacros: "ai", sourceMicros: null });
 });
 
 test("POST /nutrition/foods/extract rechaza mediaType inválido", async () => {
@@ -116,12 +117,15 @@ test("POST /nutrition/foods crea un alimento con micros", async () => {
   const app = createApp(deps(db));
   const res = await app.request("/nutrition/foods", {
     method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: "Muesli", basis: "per_100g", kcal: 442, protein_g: 9.9, carbs_g: 63, fat_g: 14.8, unitWeightG: null, source: "label", saturated_fat_g: 4.2, sugars_g: 14, fiber_g: 8.4, salt_g: 0.2 }),
+    body: JSON.stringify({ name: "Muesli", basis: "per_100g", kcal: 442, protein_g: 9.9, carbs_g: 63, fat_g: 14.8, unitWeightG: null, sourceMacros: "label", sourceMicros: "usda", usdaFdcId: 168871, saturated_fat_g: 4.2, sugars_g: 14, fiber_g: 8.4, sodium_mg: 80, zinc_mg: 1.9 }),
   });
   expect(res.status).toBe(200);
   // el insert recibió los micros mapeados a las columnas drizzle
   const inserted = db._inserts.at(-1).rows[0];
-  expect(inserted).toMatchObject({ sugarsG: 14, fiberG: 8.4, saturatedFatG: 4.2, saltG: 0.2 });
+  expect(inserted).toMatchObject({
+    sugarsG: 14, fiberG: 8.4, saturatedFatG: 4.2, sodiumMg: 80, zincMg: 1.9,
+    sourceMacros: "label", sourceMicros: "usda", usdaFdcId: 168871,
+  });
 });
 
 test("POST /nutrition/meals snapshotea macros desde el catálogo (ignora los del cliente)", async () => {
@@ -185,7 +189,7 @@ test("PATCH /nutrition/foods/:id → 200 con el alimento actualizado", async () 
   const app = createApp(deps(fakeDb({ foodRow: { ...bananaRow, name: "Banana madura" } })));
   const res = await app.request(`/nutrition/foods/${FOOD_ID}`, {
     method: "PATCH", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: "Banana madura", basis: "per_100g", kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120, source: "estimate", sugars_g: 15 }),
+    body: JSON.stringify({ name: "Banana madura", basis: "per_100g", kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120, sourceMacros: "ai", sourceMicros: null, sugars_g: 15 }),
   });
   expect(res.status).toBe(200);
   expect(await res.json()).toMatchObject({ name: "Banana madura" });
@@ -194,7 +198,7 @@ test("PATCH /nutrition/foods/:id → 200 con el alimento actualizado", async () 
 test("PATCH /nutrition/foods/:id → 404 si no existe", async () => {
   const res = await createApp(deps(fakeDb())).request(`/nutrition/foods/${FOOD_ID}`, {
     method: "PATCH", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: "X", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, source: "estimate" }),
+    body: JSON.stringify({ name: "X", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, sourceMacros: "ai", sourceMicros: null }),
   });
   expect(res.status).toBe(404);
 });
@@ -202,7 +206,7 @@ test("PATCH /nutrition/foods/:id → 404 si no existe", async () => {
 test("PATCH /nutrition/foods/:id → 400 con body inválido", async () => {
   const res = await createApp(deps(fakeDb({ foodRow: bananaRow }))).request(`/nutrition/foods/${FOOD_ID}`, {
     method: "PATCH", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: "", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, source: "estimate" }),
+    body: JSON.stringify({ name: "", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, sourceMacros: "ai", sourceMicros: null }),
   });
   expect(res.status).toBe(400);
 });
@@ -449,8 +453,8 @@ test("POST /nutrition/reports/generate: daily con ajuste pero SIN plan activo �
 
 const ALMENDRA = {
   name: "Almendra", basis: "per_100g" as const, kcal: 579, protein_g: 21, carbs_g: 22, fat_g: 50,
-  saturated_fat_g: 3.8, sugars_g: 4.4, fiber_g: 12.5, salt_g: 0, cholesterol_mg: 0, water_ml: 4,
-  unitWeightG: 1.2, source: "estimate" as const,
+  saturated_fat_g: 3.8, sugars_g: 4.4, fiber_g: 12.5, sodium_mg: 0, cholesterol_mg: 0, water_ml: 4,
+  unitWeightG: 1.2, sourceMacros: "ai" as const, sourceMicros: null,
 };
 
 const describePost = (app: any, text: string) =>
