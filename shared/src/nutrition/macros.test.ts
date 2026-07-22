@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import { foodMacrosForQuantity, sumNullableMicro } from "./macros";
+import { NUTRIENT_KEYS } from "./nutrients";
 
 const banana = { basis: "per_100g" as const, kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120 };
 const leche = { basis: "per_100ml" as const, kcal: 42, protein_g: 3.4, carbs_g: 5, fat_g: 1, unitWeightG: null };
@@ -43,7 +44,7 @@ test("error si ml con basis per_100g", () => {
 
 const muesli = {
   basis: "per_100g" as const, kcal: 442, protein_g: 9.9, carbs_g: 63, fat_g: 14.8, unitWeightG: null,
-  saturated_fat_g: 4.2, sugars_g: 14, fiber_g: 8.4, salt_g: 0.2,
+  saturated_fat_g: 4.2, sugars_g: 14, fiber_g: 8.4, sodium_mg: 0.2,
 };
 
 test("escala los micros cuando el alimento los tiene", () => {
@@ -51,7 +52,7 @@ test("escala los micros cuando el alimento los tiene", () => {
   expect(r.sugars_g).toBe(7);       // 14 * 0.5
   expect(r.fiber_g).toBe(4.2);      // 8.4 * 0.5
   expect(r.saturated_fat_g).toBe(2.1);
-  expect(r.salt_g).toBe(0.1);
+  expect(r.sodium_mg).toBe(0.1);
 });
 
 test("micros ausentes → null (alimento legacy sin micros)", () => {
@@ -60,7 +61,7 @@ test("micros ausentes → null (alimento legacy sin micros)", () => {
   expect(r.sugars_g).toBeNull();
   expect(r.fiber_g).toBeNull();
   expect(r.saturated_fat_g).toBeNull();
-  expect(r.salt_g).toBeNull();
+  expect(r.sodium_mg).toBeNull();
   expect(r.kcal).toBe(89); // los macros core no se tocan
 });
 
@@ -110,4 +111,40 @@ test("colesterol y agua ausentes → null (alimento legacy)", () => {
   const r = foodMacrosForQuantity(legacy, 100, "g");
   expect(r.cholesterol_mg).toBeNull();
   expect(r.water_ml).toBeNull();
+});
+
+test("escala TODOS los nutrientes del registro, no una lista a mano", () => {
+  const food = {
+    basis: "per_100g" as const,
+    kcal: 100, protein_g: 10, carbs_g: 10, fat_g: 10,
+    unitWeightG: null,
+    // 1 en cada nutriente del registro
+    ...Object.fromEntries(NUTRIENT_KEYS.map((k) => [k, 1])),
+  };
+  const out = foodMacrosForQuantity(food as never, 200, "g");
+  for (const k of NUTRIENT_KEYS) {
+    expect((out as Record<string, unknown>)[k]).toBe(2); // 200 g = factor 2
+  }
+});
+
+test("un nutriente ausente queda null, no 0", () => {
+  const food = {
+    basis: "per_100g" as const,
+    kcal: 100, protein_g: 10, carbs_g: 10, fat_g: 10, unitWeightG: null,
+  };
+  const out = foodMacrosForQuantity(food as never, 200, "g");
+  expect(out.zinc_mg).toBe(null);
+  expect(out.zinc_mg).not.toBe(0);
+});
+
+test("respeta los decimales declarados en el registro", () => {
+  const food = {
+    basis: "per_100g" as const,
+    kcal: 100, protein_g: 10, carbs_g: 10, fat_g: 10, unitWeightG: null,
+    iron_mg: 1.239,     // decimals: 2
+    calcium_mg: 1.239,  // decimals: 1
+  };
+  const out = foodMacrosForQuantity(food as never, 100, "g");
+  expect(out.iron_mg).toBe(1.24);
+  expect(out.calcium_mg).toBe(1.2);
 });
