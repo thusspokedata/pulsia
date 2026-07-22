@@ -24,10 +24,33 @@ const roundTo = (n: number, decimals: number) => {
   return Math.round(n * f) / f;
 };
 
-// null si TODOS los valores son null/undefined; si no, suma tratando null como 0, redondeado a 1 decimal.
+export interface NutrientSum {
+  value: number | null; // null = ningún ítem tenía dato
+  partial: boolean; // true = al menos uno tenía dato y al menos uno no
+  withData: number;
+  total: number;
+}
+
+// `partial` es la diferencia entre "comiste 0,8 mg de zinc" y "0,8 de los que sabemos". La UI
+// tiene que poder decirlo; sumar los ausentes como 0 en silencio es afirmar un dato falso.
+export function sumNutrient(values: Array<number | null | undefined>): NutrientSum {
+  const total = values.length;
+  const withData = values.filter((v) => v != null).length;
+  if (withData === 0) return { value: null, partial: false, withData: 0, total };
+  const sum = values.reduce<number>((a, v) => a + (v ?? 0), 0);
+  return {
+    value: Math.round(sum * 10) / 10,
+    partial: withData < total,
+    withData,
+    total,
+  };
+}
+
+// Compatibilidad con los llamadores existentes. Se implementa sobre sumNutrient a propósito:
+// dos criterios de suma distintos es exactamente cómo Progreso y Nutrición terminan mostrando
+// cifras distintas del mismo día.
 export function sumNullableMicro(values: Array<number | null | undefined>): number | null {
-  if (!values.some((v) => v != null)) return null;
-  return Math.round(values.reduce<number>((a, v) => a + (v ?? 0), 0) * 10) / 10;
+  return sumNutrient(values).value;
 }
 
 // Fuente única del cálculo: la usan el móvil (preview) y el backend (snapshot).

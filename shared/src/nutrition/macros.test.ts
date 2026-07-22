@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { foodMacrosForQuantity, sumNullableMicro } from "./macros";
+import { foodMacrosForQuantity, sumNullableMicro, sumNutrient } from "./macros";
 import { NUTRIENT_KEYS } from "./nutrients";
 
 const banana = { basis: "per_100g" as const, kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120 };
@@ -135,6 +135,31 @@ test("un nutriente ausente queda null, no 0", () => {
   const out = foodMacrosForQuantity(food as never, 200, "g");
   expect(out.zinc_mg).toBe(null);
   expect(out.zinc_mg).not.toBe(0);
+});
+
+test("todos con dato: total completo", () => {
+  expect(sumNutrient([1, 2, 3])).toEqual({ value: 6, partial: false, withData: 3, total: 3 });
+});
+
+test("algunos sin dato: total PARCIAL", () => {
+  expect(sumNutrient([1, null, 3])).toEqual({ value: 4, partial: true, withData: 2, total: 3 });
+});
+
+test("ninguno con dato: value null y no es parcial (no hay nada que completar)", () => {
+  expect(sumNutrient([null, null])).toEqual({ value: null, partial: false, withData: 0, total: 2 });
+});
+
+test("undefined cuenta como sin dato, igual que null", () => {
+  expect(sumNutrient([1, undefined])).toEqual({ value: 1, partial: true, withData: 1, total: 2 });
+});
+
+test("lista vacía", () => {
+  expect(sumNutrient([])).toEqual({ value: null, partial: false, withData: 0, total: 0 });
+});
+
+test("sumNullableMicro sigue devolviendo lo mismo que antes", () => {
+  expect(sumNullableMicro([1, null, 3])).toBe(4);
+  expect(sumNullableMicro([null, null])).toBe(null);
 });
 
 test("respeta los decimales declarados en el registro", () => {
