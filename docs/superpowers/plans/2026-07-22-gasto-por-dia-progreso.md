@@ -481,8 +481,11 @@ export const FIXED_THRESHOLDS: [number, number, number] = [200, 400, 600];
 // Por debajo de esto los cuartiles son inestables: un mes flojo pintaría días normales de oscuro.
 export const MIN_DAYS_FOR_PERCENTILES = 20;
 
+// Percentil por rango más cercano (nearest-rank): el índice es ceil(n * fraction) - 1.
+// Con `Math.floor(n * fraction)` el corte se corre un puesto hacia arriba y deja de partir el
+// historial en cuartos parejos (con 20 días daría 600/1100/1600 en vez de 500/1000/1500).
 function quartile(sorted: number[], fraction: number): number {
-  const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * fraction));
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * fraction) - 1));
   return sorted[idx];
 }
 
