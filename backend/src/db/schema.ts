@@ -2,6 +2,8 @@ import { pgTable, uuid, text, jsonb, timestamp, integer, bigint, boolean, double
 import { relations } from "drizzle-orm";
 import type { TrainingProfile, Program, PlannedExercise, SupplementComponent, Frequency, AdjustmentItem, CardioSamples, CardioFitExtras } from "@pulsia/shared";
 
+export { usdaFood, usdaDataset } from "../usda/schema";
+
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() { return "bytea"; },
 });

@@ -169,6 +169,13 @@
       "when": 1784749736158,
       "tag": "0023_romantic_forge",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784750287083,
+      "tag": "0024_wakeful_christian_walker",
+      "breakpoints": true
     }
   ]
 }
