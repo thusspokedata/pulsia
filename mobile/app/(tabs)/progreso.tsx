@@ -5,6 +5,9 @@ import { getBackendUrl } from "../../src/storage/config";
 import { getLatestMetrics, getMetricSeries, postReading } from "../../src/api/metrics";
 import { getPerformance } from "../../src/api/progress";
 import { getSessions, type SessionListItem } from "../../src/api/sessions";
+import { listCardio } from "../../src/api/cardio";
+import { getProfile } from "../../src/storage/profile";
+import { getNutritionGoal } from "../../src/api/nutrition";
 import { LineChart } from "../../src/components/LineChart";
 import { MultiLineChart } from "../../src/components/MultiLineChart";
 import { YearHeatmap } from "../../src/components/YearHeatmap";
@@ -12,8 +15,10 @@ import { BarChart } from "../../src/components/BarChart";
 import { buildReadingFromForm, buildBpReadingFromForm, buildReadingForTypes, valuesForDay, type BpForm } from "../../src/session/metricForm";
 import { dayAtNoon, dayLabel } from "../../src/session/metricDate";
 import { availableYears } from "../../src/session/heatmap";
-import { buildDailyMinutes } from "../../src/session/weeklyBars";
-import { BODY_METRIC_TYPES, ACTIVITY_METRIC_TYPES, SUBJECTIVE_METRIC_TYPES, FLOW_METRIC_TYPES, METRIC_LABELS, METRIC_UNITS, type MetricType, type BodyMetric, type PerformanceTrends } from "@pulsia/shared";
+import { buildDailyKcal } from "../../src/session/weeklyBars";
+import { buildDailyBurn } from "../../src/session/dailyBurn";
+import { burnThresholds } from "../../src/session/burnThresholds";
+import { computeNutritionGoal, BODY_METRIC_TYPES, ACTIVITY_METRIC_TYPES, SUBJECTIVE_METRIC_TYPES, FLOW_METRIC_TYPES, METRIC_LABELS, METRIC_UNITS, type MetricType, type BodyMetric, type PerformanceTrends, type CardioActivity, type TrainingProfile, type NutritionGoalInput } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
 // Trío categórico distinguible (incl. daltonismo): teal (acento), azul, ámbar.
@@ -51,6 +56,10 @@ export default function ProgresoScreen() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
+  const [activities, setActivities] = useState<CardioActivity[]>([]);
+  const [burnProfile, setBurnProfile] = useState<TrainingProfile | null>(null);
+  const [goalInput, setGoalInput] = useState<NutritionGoalInput | null>(null);
+  const [burnWeightKg, setBurnWeightKg] = useState<number | undefined>(undefined);
   const [heatmapYear, setHeatmapYear] = useState<number | null>(null);
   const [bpSystolicSeries, setBpSystolicSeries] = useState<BodyMetric[]>([]);
   const [bpDiastolicSeries, setBpDiastolicSeries] = useState<BodyMetric[]>([]);
@@ -100,9 +109,18 @@ export default function ProgresoScreen() {
         await Promise.all([loadSeries(url, selected), loadBpSeries(url), loadFlowSeries(url)]);
       } catch { setError("No se pudo cargar el progreso"); }
       try {
-        const sess = await getSessions(url);
-        setSessions(sess);
-        const years = availableYears(sess);
+        // El gasto necesita las cuatro fuentes: fuerza, cardio, perfil (peso/edad/sexo) y el
+        // objetivo de nutrición (de donde sale el BMR que vuelve NETO el gasto).
+        const [ss, cardio, prof, gi] = await Promise.all([
+          getSessions(url), listCardio(url), getProfile(), getNutritionGoal(url),
+        ]);
+        setSessions(ss); setActivities(cardio); setBurnProfile(prof); setGoalInput(gi);
+        // Mismo criterio que `useNutritionDay`: el peso del perfil, pisado por la última medición.
+        let w = prof?.weightKg;
+        try { const l = await getLatestMetrics(url); if (l.weight_kg?.value != null) w = l.weight_kg.value; } catch { /* offline */ }
+        setBurnWeightKg(w);
+        // Con las actividades incluidas: quien solo hace cardio también tiene años para elegir.
+        const years = availableYears(ss, cardio);
         if (years.length > 0) setHeatmapYear(years[0]);
       } catch { setError((prev) => prev ?? "No se pudo cargar el historial de entrenamientos"); }
     })();
@@ -210,6 +228,24 @@ export default function ProgresoScreen() {
     }
     finally { setSavingFn(false); }
   }
+
+  // Sin peso no hay gasto calculable: `estimateSessionBurn` devuelve 0 y la grilla saldría vacía.
+  // Antes el heatmap se pintaba solo con la duración, así que un usuario sin perfil completo vería
+  // desaparecer sus días entrenados; por eso se le explica qué falta en vez de mostrar la grilla.
+  const canComputeBurn = burnWeightKg != null && burnProfile?.age != null;
+  const burnGoal = goalInput
+    ? computeNutritionGoal({
+        sex: burnProfile?.sex, age: burnProfile?.age, heightCm: burnProfile?.heightCm,
+        weightKg: burnWeightKg, activityLevel: burnProfile?.activityLevel,
+        objective: goalInput.objective, rateKgPerWeek: goalInput.rateKgPerWeek,
+        manualKcal: goalInput.manualKcal,
+      })
+    : null;
+  const burnByDate = buildDailyBurn(sessions, activities, {
+    weightKg: burnWeightKg, age: burnProfile?.age, sex: burnProfile?.sex,
+    bmr: burnGoal?.status === "ok" ? burnGoal.bmr : null,
+  });
+  const thresholds = burnThresholds(Array.from(burnByDate.values(), (d) => d.kcal));
 
   const chartData = series.map((m) => ({ x: m.measuredAt, y: m.value }));
   const bpCurrent = latest.bp_systolic && latest.bp_diastolic
@@ -387,19 +423,36 @@ export default function ProgresoScreen() {
         </Pressable>
       </Section>
 
-      <Section title="Días entrenados">
-        {sessions.length === 0 ? (
+      <Section title="Días entrenados y gasto">
+        {!canComputeBurn ? (
+          <Pressable testID="burn-perfil-cta" onPress={() => router.push("/perfil")}>
+            <Text style={{ color: colors.textMuted }}>
+              Completá tu peso y edad en el perfil para ver el gasto.
+            </Text>
+          </Pressable>
+        ) : sessions.length === 0 && activities.length === 0 ? (
           <Text style={{ color: colors.textMuted }}>Todavía no hay entrenamientos registrados.</Text>
         ) : (
-          <YearHeatmap sessions={sessions} year={heatmapYear ?? new Date().getFullYear()} onSelectYear={setHeatmapYear} />
+          <YearHeatmap
+            burnByDate={burnByDate}
+            thresholds={thresholds}
+            sessions={sessions}
+            activities={activities}
+            year={heatmapYear ?? new Date().getFullYear()}
+            onSelectYear={setHeatmapYear}
+          />
         )}
       </Section>
 
-      <Section title="Tiempo por día (últimas 4 semanas)">
-        {sessions.length === 0 ? (
+      <Section title="Gasto por día (4 sem)">
+        {!canComputeBurn ? (
+          <Text style={{ color: colors.textMuted }}>
+            Completá tu peso y edad en el perfil para ver el gasto.
+          </Text>
+        ) : sessions.length === 0 && activities.length === 0 ? (
           <Text style={{ color: colors.textMuted }}>Todavía no hay entrenamientos registrados.</Text>
         ) : (
-          <BarChart data={buildDailyMinutes(sessions, Date.now())} />
+          <BarChart data={buildDailyKcal(burnByDate, Date.now())} />
         )}
       </Section>
     </ScrollView>
