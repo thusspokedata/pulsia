@@ -8,16 +8,13 @@ una con su propio spec.
 
 ## 1. Disparador
 
-El usuario mostró capturas de la app **Pulso** con el detalle de un alimento: calidad
-nutricional, impacto metabólico/digestivo/cardiovascular, aporte a los objetivos del día, y un
-listado completo de vitaminas y minerales con barra y `X/Y · %`. Pedido: *"necesito tener más
-información por comidas"*.
+El usuario pidió **más información por comida**, con capturas de referencia que muestran el
+detalle de un alimento: calidad nutricional, impacto metabólico/digestivo/cardiovascular,
+aporte a los objetivos del día, y un listado completo de vitaminas y minerales con barra y
+`X/Y · %`.
 
 Hoy Pulsia guarda **10 números por alimento**: kcal, proteína, carbos, grasa, saturadas,
-azúcares, fibra, sal, colesterol y agua. Las capturas implican **36**.
-
-(Nota lateral, fuera de este spec: **"Pulso" ya existe como app**. En algún momento hay que
-decidir si Pulsia conserva el nombre.)
+azúcares, fibra, sal, colesterol y agua. La referencia implica **36**.
 
 ## 2. Decisiones tomadas
 
@@ -45,13 +42,22 @@ nutrientes sino los gramos estimados desde una foto**, que merece su propia disc
 usar esto unas semanas mide cuánto cubre FNDDS de la comida real del usuario, que es
 exactamente el dato que hoy falta para dimensionar la descomposición.
 
-### Corrección a una propuesta previa
+### Búsqueda semántica: por qué no en la v1, y qué haría falta
 
-Durante el brainstorming se propuso **pgvector** para el matching. Es incorrecto: la extensión
-viene en la imagen de Docker pero **no se usa en ninguna parte del backend** (ni una columna
-`vector`), y **Anthropic no ofrece API de embeddings**, así que generarlos exigiría sumar un
-proveedor nuevo solo para esto. Con 7.800–16.000 filas, la búsqueda de texto de Postgres
-alcanza. Queda documentado para que nadie lo reintroduzca.
+Se evaluó **pgvector** para el matching. La extensión viene en la imagen de Docker pero **hoy no
+se usa en ninguna parte del backend** (no hay una sola columna `vector`), y **Anthropic no
+ofrece API de embeddings**: habría que sumar un proveedor (Voyage, OpenAI u otro) y generar los
+embeddings de las ~16.000 descripciones.
+
+**No entra en esta versión** porque la búsqueda de texto de Postgres alcanza para ese volumen y
+evita meter una dependencia nueva en el mismo spec que ya trae dataset, migración destructiva y
+tres pantallas. **Pero es una mejora prevista**, no una puerta cerrada: el owner no tiene
+problema en incorporar un proveedor de embeddings más adelante.
+
+Para que esa mejora salga barata, el matcher (§4.3) se diseña con la **estrategia de búsqueda
+detrás de su interfaz**: quien lo llama pasa un texto y recibe candidatos, sin saber si por
+dentro hubo `pg_trgm` o similitud de vectores. Cambiar de una a otra —o combinarlas— no debe
+tocar ni el alta de alimentos ni el spec de descomposición.
 
 ## 3. Los nutrientes
 
@@ -128,6 +134,11 @@ El script de descarga se corre a mano y rara vez: SR Legacy está congelado desd
 texto de búsqueda, devuelve candidatos con sus nutrientes— y **no vive dentro del handler de
 `/foods/extract`**. El spec siguiente (descomposición por ingredientes) lo va a llamar N veces,
 una por ingrediente. Si queda acoplado al alta de un alimento, ese spec empieza refactorizando.
+
+**La estrategia de búsqueda queda detrás de esa interfaz.** En la v1 es `pg_trgm` + texto
+completo, pero quien llama al matcher no lo sabe: pasa un texto y recibe candidatos. Eso es lo
+que permite sumar búsqueda semántica por embeddings más adelante (§2) sin tocar a ningún
+consumidor.
 
 **Prioridad de resultados:** Foundation y SR Legacy antes que FNDDS. FNDDS son valores
 derivados de recetas, no de laboratorio — muy por encima de una estimación de IA, un escalón
@@ -279,7 +290,7 @@ Casos obligatorios — son donde este spec se rompe en silencio:
 | **Descomposición de un plato en ingredientes** | Ver §2. Spec propio, el siguiente. |
 | **Rediseño visual de la card de comida** | Identidad visual, con decisión de paleta abierta en el backlog. |
 | **Badge de "estimado" en los totales** | Ya en el backlog; exige definir qué se mide (¿% de kcal? ¿por nutriente?) antes de dibujar nada. |
-| **Renombrar la app** | Decisión de producto del owner. |
+| **Búsqueda semántica por embeddings** | Mejora prevista, no descartada (§2). Exige un proveedor de embeddings; la interfaz del matcher ya la contempla. |
 
 ## 10. Referencias
 
