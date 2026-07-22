@@ -6,3 +6,13 @@ dist/
 backend/.env
 .DS_Store
 .superpowers/
+
+# CSV crudos de USDA FoodData Central. Son ~500 MB descomprimidos y NO van al repo: se bajan a una
+# carpeta temporal y se le pasan a backend/scripts/build-usda-dataset.ts. Lo único que se versiona
+# es el artefacto derivado backend/data/usda-<version>.json.gz (~1 MB).
+FoodData_Central_*/
+FoodData_Central_*.zip
+food.csv
+food_nutrient.csv
+nutrient.csv
+backend/data/*.csv
