@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { foodMacrosForQuantity, sumNullableMicro, sumNutrient } from "./macros";
+import { foodMacrosForQuantity, sumNullableMicro, sumNutrient, sumNutrientByKey } from "./macros";
 import { NUTRIENT_KEYS } from "./nutrients";
 
 const banana = { basis: "per_100g" as const, kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120 };
@@ -160,6 +160,33 @@ test("lista vacía", () => {
 test("sumNullableMicro sigue devolviendo lo mismo que antes", () => {
   expect(sumNullableMicro([1, null, 3])).toBe(4);
   expect(sumNullableMicro([null, null])).toBe(null);
+});
+
+test("sumNutrient sin decimals: default 1 (compatibilidad)", () => {
+  expect(sumNutrient([0.04, 0.04, 0.04]).value).toBe(0.1);
+});
+
+test("sumNutrient con decimals explícito: no pierde precisión", () => {
+  expect(sumNutrient([0.04, 0.04, 0.04], 2).value).toBe(0.12);
+});
+
+test("sumNutrientByKey: zinc_mg usa los 2 decimales que declara el registro", () => {
+  expect(sumNutrientByKey([0.04, 0.04, 0.04], "zinc_mg").value).toBe(0.12);
+});
+
+test("sumNutrientByKey: calcium_mg usa 1 decimal, distinto de zinc_mg", () => {
+  expect(sumNutrientByKey([0.04, 0.04, 0.04], "calcium_mg").value).toBe(0.1);
+});
+
+test("sumNutrient: partial/withData/total no cambian con distintos decimals", () => {
+  const a = sumNutrient([1, null, 3], 0);
+  const b = sumNutrient([1, null, 3], 3);
+  expect(a.partial).toBe(true);
+  expect(b.partial).toBe(true);
+  expect(a.withData).toBe(2);
+  expect(b.withData).toBe(2);
+  expect(a.total).toBe(3);
+  expect(b.total).toBe(3);
 });
 
 test("respeta los decimales declarados en el registro", () => {

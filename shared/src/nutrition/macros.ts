@@ -1,5 +1,5 @@
 import type { FoodBasis, QuantityUnit } from "../schemas/nutrition";
-import { NUTRIENTS, type NutrientValues } from "./nutrients";
+import { NUTRIENTS, type NutrientKey, type NutrientValues } from "./nutrients";
 
 export type MacroSource = {
   basis: FoodBasis;
@@ -33,17 +33,28 @@ export interface NutrientSum {
 
 // `partial` es la diferencia entre "comiste 0,8 mg de zinc" y "0,8 de los que sabemos". La UI
 // tiene que poder decirlo; sumar los ausentes como 0 en silencio es afirmar un dato falso.
-export function sumNutrient(values: Array<number | null | undefined>): NutrientSum {
+// `decimals` default 1 preserva el comportamiento de los llamadores existentes (informes, resumen
+// del día): cambiar el default les movería totales que ya están en producción sin que nadie lo
+// pidiera. Quien sabe qué nutriente suma y necesita más precisión usa sumNutrientByKey.
+export function sumNutrient(values: Array<number | null | undefined>, decimals = 1): NutrientSum {
   const total = values.length;
   const withData = values.filter((v) => v != null).length;
   if (withData === 0) return { value: null, partial: false, withData: 0, total };
   const sum = values.reduce<number>((a, v) => a + (v ?? 0), 0);
   return {
-    value: Math.round(sum * 10) / 10,
+    value: roundTo(sum, decimals),
     partial: withData < total,
     withData,
     total,
   };
+}
+
+// Suma el nutriente `key` respetando los decimales que declara el registro. Es la que hay que
+// usar cuando se sabe QUÉ nutriente se está sumando: sumar zinc a 1 decimal convierte 0.12 en
+// 0.1, un 17% de error en silencio.
+export function sumNutrientByKey(values: Array<number | null | undefined>, key: NutrientKey): NutrientSum {
+  const def = NUTRIENTS.find((n) => n.key === key);
+  return sumNutrient(values, def?.decimals ?? 1);
 }
 
 // Compatibilidad con los llamadores existentes. Se implementa sobre sumNutrient a propósito:
