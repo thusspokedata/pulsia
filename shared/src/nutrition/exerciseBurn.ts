@@ -64,9 +64,18 @@ export interface CardioBurnInput {
 }
 export type AthleteBurnArgs = { weightKg?: number; age?: number; sex?: Sex; bmr?: number | null };
 
-// El reloj le gana a la fórmula: mide con acelerómetro + FC + perfil.
+// El reloj le gana a la fórmula: mide con acelerómetro + FC + perfil. Pero reporta el gasto
+// BRUTO del intervalo (incluye el metabolismo basal de ese rato), mientras que `burnFrom` deja
+// la fuerza en NETO. Sin este ajuste las dos ramas no son comparables y el BMR de la actividad
+// se cuenta dos veces: la meta diaria ya lo incluye por las 24 h.
 export function estimateCardioBurn(a: CardioBurnInput, athlete: AthleteBurnArgs): CardioBurn {
-  if (a.kcal != null) return { kcal: a.kcal, method: "device" };
+  if (a.kcal != null) {
+    const minutes = a.durationMs / 60000;
+    const net = athlete.bmr != null ? a.kcal - (athlete.bmr / 1440) * minutes : a.kcal;
+    // El schema garantiza kcal >= 0, pero la RESTA puede dar negativo (actividad larga y muy
+    // suave). Sin el clamp, un día de cardio le restaría meta al usuario en vez de sumarle.
+    return { kcal: Math.round(Math.max(0, net)), method: "device" };
+  }
   return burnFrom({ durationMs: a.durationMs, avgHr: a.avgHr, met: MET_BY_CARDIO[a.type], ...athlete });
 }
 

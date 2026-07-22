@@ -66,12 +66,32 @@ test("MET_BY_CARDIO: caminata pesa menos que running", () => {
   expect(MET_BY_CARDIO.run).toBe(9.8);
 });
 
-test("cardio con kcal del reloj: se usa tal cual, sin estimar", () => {
+test("cardio con kcal del reloj: se resta el BMR del intervalo (el reloj reporta bruto)", () => {
+  // 140 kcal del reloj, 60 min, bmr 1718 → basal del rato = (1718/1440)*60 = 71.58
+  // neto = 140 - 71.58 = 68.42 → 68
   const r = estimateCardioBurn(
     { type: "walk", durationMs: HOUR, avgHr: 105, kcal: 140 },
     { weightKg: 80, age: 40, sex: "male", bmr: 1718 },
   );
+  expect(r).toEqual({ kcal: 68, method: "device" });
+});
+
+test("cardio con kcal del reloj y SIN bmr: se usan tal cual", () => {
+  // Sin perfil completo no hay BMR que restar; el dato del reloj pasa intacto.
+  const r = estimateCardioBurn(
+    { type: "walk", durationMs: HOUR, avgHr: 105, kcal: 140 },
+    { weightKg: 80, age: 40, sex: "male", bmr: null },
+  );
   expect(r).toEqual({ kcal: 140, method: "device" });
+});
+
+test("cardio del reloj: el neto nunca es negativo (clamp a 0)", () => {
+  // Actividad larga y muy suave: 50 kcal en 120 min, basal del rato = 144 → -94, clampeado a 0.
+  const r = estimateCardioBurn(
+    { type: "walk", durationMs: 2 * HOUR, avgHr: 80, kcal: 50 },
+    { weightKg: 80, age: 40, sex: "male", bmr: 1728 },
+  );
+  expect(r).toEqual({ kcal: 0, method: "device" });
 });
 
 test("cardio sin kcal y sin FC: MET del tipo, neto de BMR", () => {
