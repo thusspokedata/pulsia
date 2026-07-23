@@ -53,6 +53,33 @@ export const FoodExtractionSchema = z.object({
 });
 export type FoodExtraction = z.infer<typeof FoodExtractionSchema>;
 
+// Lo que la 1ª llamada de IA devuelve: identifica el alimento y da una frase de búsqueda. NO
+// incluye vitaminas ni minerales — esos los aporta USDA. Los "micros de etiqueta" (saturadas,
+// azúcares, fibra, sodio, colesterol, agua) SÍ los da, porque son legibles de una etiqueta y son
+// los mismos 6 que la app ya manejaba.
+export const FoodIdentificationSchema = z.object({
+  name: z.string().trim().min(1),
+  basis: FoodBasisSchema,
+  // Macros: de la etiqueta si hay, estimados si no.
+  kcal: z.number().nonnegative(),
+  protein_g: z.number().nonnegative(),
+  carbs_g: z.number().nonnegative(),
+  fat_g: z.number().nonnegative(),
+  // Micros legibles de una etiqueta (los 6 de siempre; sal ya convertida a sodio).
+  saturated_fat_g: z.number().nonnegative().nullable().optional(),
+  sugars_g: z.number().nonnegative().nullable().optional(),
+  fiber_g: z.number().nonnegative().nullable().optional(),
+  sodium_mg: z.number().nonnegative().nullable().optional(),
+  cholesterol_mg: z.number().nonnegative().nullable().optional(),
+  water_ml: z.number().nonnegative().nullable().optional(),
+  unitWeightG: z.number().positive().nullable(),
+  // "label" si leyó una tabla nutricional; "ai" si estimó.
+  sourceMacros: z.enum(["label", "ai"]),
+  // Frase de búsqueda en INGLÉS para matchear contra USDA.
+  searchQuery: z.string().trim().min(1),
+});
+export type FoodIdentification = z.infer<typeof FoodIdentificationSchema>;
+
 // Alta/edición de un alimento del catálogo (lo que confirma el usuario).
 export const FoodInputSchema = FoodExtractionSchema;
 export type FoodInput = z.infer<typeof FoodInputSchema>;

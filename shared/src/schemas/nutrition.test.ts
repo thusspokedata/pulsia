@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import {
-  FoodExtractionSchema, FoodSchema, FoodInputSchema,
+  FoodExtractionSchema, FoodIdentificationSchema, FoodSchema, FoodInputSchema,
   MealInputSchema, MealItemInputSchema, MealItemSchema, MealSchema,
   QuantityUnitSchema, FoodBasisSchema, MealTypeSchema,
   WaterLogInputSchema, WaterLogSchema,
@@ -157,6 +157,43 @@ test("usdaFdcId es opcional y entero", () => {
   expect(FoodExtractionSchema.safeParse({ ...extraction, usdaFdcId: 1750340 }).success).toBe(true);
   expect(FoodExtractionSchema.safeParse({ ...extraction, usdaFdcId: null }).success).toBe(true);
   expect(FoodExtractionSchema.safeParse({ ...extraction, usdaFdcId: 1.5 }).success).toBe(false);
+});
+
+const identificacion = {
+  name: "Huevo frito", basis: "per_100g",
+  kcal: 196, protein_g: 13.6, carbs_g: 0.8, fat_g: 15,
+  unitWeightG: 46, sourceMacros: "ai", searchQuery: "egg whole cooked fried",
+};
+
+test("FoodIdentificationSchema acepta una identificación válida con searchQuery", () => {
+  const r = FoodIdentificationSchema.safeParse(identificacion);
+  expect(r.success).toBe(true);
+  expect(r.success && r.data.searchQuery).toBe("egg whole cooked fried");
+});
+
+test("FoodIdentificationSchema exige searchQuery no vacío", () => {
+  const { searchQuery: _q, ...faltante } = identificacion;
+  expect(FoodIdentificationSchema.safeParse(faltante).success).toBe(false);
+  expect(FoodIdentificationSchema.safeParse({ ...identificacion, searchQuery: "   " }).success).toBe(false);
+});
+
+test("FoodIdentificationSchema NO le pide vitaminas ni minerales a la IA", () => {
+  // El corazón de la feature: la IA identifica, USDA aporta los micros. Si un vitamin_/mineral
+  // apareciera en el schema de identificación, le estaríamos pidiendo al modelo que los invente.
+  const claves = Object.keys(FoodIdentificationSchema.shape);
+  const microsUsda = NUTRIENT_KEYS.filter(
+    (k) => !["saturated_fat_g", "sugars_g", "fiber_g", "sodium_mg", "cholesterol_mg", "water_ml"].includes(k),
+  );
+  for (const k of microsUsda) expect(claves).not.toContain(k);
+  // Y sí conserva los 6 micros de etiqueta.
+  for (const k of ["saturated_fat_g", "sugars_g", "fiber_g", "sodium_mg", "cholesterol_mg", "water_ml"]) {
+    expect(claves).toContain(k);
+  }
+});
+
+test("FoodIdentificationSchema: sourceMacros es label|ai (nunca manual: no lo carga la IA)", () => {
+  expect(FoodIdentificationSchema.safeParse({ ...identificacion, sourceMacros: "label" }).success).toBe(true);
+  expect(FoodIdentificationSchema.safeParse({ ...identificacion, sourceMacros: "manual" }).success).toBe(false);
 });
 
 test("MealItemSchema acepta micros snapshoteados o null", () => {

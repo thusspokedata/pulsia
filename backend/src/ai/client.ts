@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import {
   ProgramSchema,
   EcgAnalysisSchema,
-  FoodExtractionSchema,
+  FoodIdentificationSchema,
   ReportOutputSchema,
   SupplementExtractionSchema,
   AiPlanOutputSchema,
@@ -45,8 +45,8 @@ export interface AiClient {
     imageBase64: string;
     mediaType: string;
     apiKey: string;
-  }): Promise<import("@pulsia/shared").FoodExtraction>;
-  describeFood?(input: { text: string; apiKey: string }): Promise<import("@pulsia/shared").FoodExtraction>;
+  }): Promise<import("@pulsia/shared").FoodIdentification>;
+  describeFood?(input: { text: string; apiKey: string }): Promise<import("@pulsia/shared").FoodIdentification>;
   extractSupplement?(input: {
     imageBase64: string;
     mediaType: string;
@@ -180,9 +180,9 @@ export class AnthropicAiClient implements AiClient {
       client,
       model: "claude-opus-4-8",
       maxTokens: 1024,
-      schema: FoodExtractionSchema,
+      schema: FoodIdentificationSchema,
       toolName: "return_food",
-      description: "Devuelve los datos nutricionales del alimento de la foto.",
+      description: "Identifica el alimento de la foto: macros, micros de etiqueta y frase de búsqueda.",
       content: [
         { type: "image", source: { type: "base64", media_type: mediaType as any, data: imageBase64 } },
         { type: "text", text: buildFoodPrompt("photo") },
@@ -200,9 +200,9 @@ export class AnthropicAiClient implements AiClient {
       client,
       model: "claude-opus-4-8",
       maxTokens: 1024,
-      schema: FoodExtractionSchema,
+      schema: FoodIdentificationSchema,
       toolName: "return_food",
-      description: "Devuelve los datos nutricionales estimados del alimento nombrado.",
+      description: "Identifica el alimento nombrado: macros estimados, micros de etiqueta y frase de búsqueda.",
       content: [{ type: "text", text: `${buildFoodPrompt("text")}\n\nAlimento: ${text}` }],
       truncatedMsg: "La respuesta se truncó.",
       missingMsg: "La IA no devolvió los datos del alimento.",
