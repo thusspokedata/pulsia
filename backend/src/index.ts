@@ -19,6 +19,7 @@ import { createApp } from "./app";
 import { createDb } from "./db/client";
 import { AnthropicAiClient } from "./ai/client";
 import { loadServerEnv } from "./config";
+import { cargarUsdaSiHaceFalta } from "./usda/loader";
 
 const { databaseUrl, config } = loadServerEnv();
 const { db } = createDb(databaseUrl);
@@ -27,6 +28,11 @@ const app = createApp({
   config,
   aiClient: new AnthropicAiClient(),
 });
+
+// Se corre después de las migraciones (ya aplicadas por `db:migrate` antes de `bun run start`,
+// ver Dockerfile). Se espera antes de aceptar tráfico (tarda ~1-2s, ver medición en el commit),
+// pero si falla NO bloquea el arranque: ver el comentario en usda/loader.ts.
+await cargarUsdaSiHaceFalta(db);
 
 const port = Number(process.env.PORT ?? 8787);
 console.log(`Pulsia backend en :${port}`);
