@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { FoodSourceSchema } from "./nutrition";
 import { AthleteContextSchema } from "./athlete";
 
 // Franjas del día, en orden canónico (el checklist agrupa en este orden).
@@ -7,7 +6,11 @@ export const TAKE_SLOTS = ["desayuno", "almuerzo", "cena", "post_entreno", "ante
 export const TakeSlotSchema = z.enum(TAKE_SLOTS);
 export type TakeSlot = z.infer<typeof TakeSlotSchema>;
 
-export const SupplementSourceSchema = FoodSourceSchema; // 'label' | 'estimate', misma semántica que comidas
+// Los suplementos NO entran en la migración a USDA: no tienen micros por 100 g ni matcheo, así
+// que se quedan con el par 'label' | 'estimate'. Antes era un alias de FoodSourceSchema; ese
+// schema desapareció al partirse en sourceMacros/sourceMicros, y compartirlo habría arrastrado
+// a los suplementos a una migración que no les toca.
+export const SupplementSourceSchema = z.enum(["label", "estimate"]);
 export type SupplementSource = z.infer<typeof SupplementSourceSchema>;
 export const TakeStatusSchema = z.enum(["taken", "deviated", "skipped"]);
 export type TakeStatus = z.infer<typeof TakeStatusSchema>;

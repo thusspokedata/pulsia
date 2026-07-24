@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import { createApp } from "../app";
-import { food, meal, mealItem, waterLog, bodyMetric, supplementPlanItem, supplementAdjustment } from "../db/schema";
+import { food, meal, mealItem, waterLog, bodyMetric, supplementPlanItem, supplementAdjustment, usdaFood } from "../db/schema";
 
 const KEY = "a".repeat(64);
 const FOOD_ID = "11111111-1111-4111-8111-111111111111";
@@ -8,18 +8,28 @@ const IMG_BASE64 = Buffer.from("fake jpeg bytes").toString("base64");
 
 const bananaRow = {
   id: FOOD_ID, userId: "single-user", name: "Banana", basis: "per_100g",
-  kcal: 89, proteinG: 1.1, carbsG: 23, fatG: 0.3, unitWeightG: 120, source: "estimate", createdAt: new Date(0),
-  saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, saltG: 0,
+  kcal: 89, proteinG: 1.1, carbsG: 23, fatG: 0.3, unitWeightG: 120, createdAt: new Date(0),
+  sourceMacros: "ai", sourceMicros: null, usdaFdcId: null,
+  saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, sodiumMg: 0,
 };
 
 function fakeDb(opts: {
   foods?: any[]; meals?: any[]; items?: any[]; foodRow?: any; mealFull?: any; water?: any[]; goal?: any;
   settingsRow?: any; report?: any; sessions?: any[]; metrics?: any[];
   planRow?: any | null; planItemRows?: any[];
+  // USDA: `usdaCandidates` son las filas crudas (snake_case) que devuelve el SELECT de searchUsda;
+  // `usdaRow` es la fila completa (camelCase) que devuelve getUsdaFood; `usdaExecuteThrows` simula
+  // la tabla vacía/rota (searchUsda tira).
+  usdaCandidates?: any[]; usdaRow?: any; usdaExecuteThrows?: boolean;
 } = {}) {
   const inserts: any[] = [];
   const db: any = {
     _inserts: inserts,
+    // searchUsda usa db.execute(sql`...`). Devuelve las filas crudas o tira si la tabla está rota.
+    execute: async () => {
+      if (opts.usdaExecuteThrows) throw new Error("relation usda_food does not exist");
+      return opts.usdaCandidates ?? [];
+    },
     insert: (table: any) => ({
       values(v: any) {
         const rows = (Array.isArray(v) ? v : [v]).map((r, i) => ({ id: r.id ?? `${FOOD_ID.slice(0, -1)}${i}`, createdAt: new Date(0), ...r }));
@@ -57,9 +67,11 @@ function fakeDb(opts: {
             else if (table === waterLog) rows = opts.water ?? [];
             else if (table === bodyMetric) rows = opts.metrics ?? [];
             else if (table === supplementPlanItem) rows = joins === 1 ? (opts.planItemRows ?? []) : [];
+            else if (table === usdaFood) rows = opts.usdaRow ? [opts.usdaRow] : []; // getUsdaFood
             else rows = []; // incluye `supplement` (catálogo): no lo necesitan los tests actuales
             const p: any = Promise.resolve(rows);
             p.orderBy = async () => rows;
+            p.limit = async (n: number) => rows.slice(0, n); // getUsdaFood hace .where().limit(1)
             return p;
           },
         };
@@ -83,12 +95,14 @@ function fakeDb(opts: {
 const baseConfig = { encryptionKey: KEY, defaultModel: "claude-sonnet-4-6", inviteCode: "x", sessionTtlDays: 4, singleUserMode: true, defaultAiApiKey: "sk-x" };
 const aiClient = {
   generateProgram: async () => ({ name: "x", weeks: [] }),
-  extractFood: async () => ({ name: "Banana", basis: "per_100g", kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120, source: "estimate" }),
+  extractFood: async () => ({ name: "Banana", basis: "per_100g", kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120, sourceMacros: "ai", searchQuery: "banana raw" }),
   describeFood: async () => ({
     name: "Almendra", basis: "per_100g" as const, kcal: 579, protein_g: 21, carbs_g: 22, fat_g: 50,
-    saturated_fat_g: 3.8, sugars_g: 4.4, fiber_g: 12.5, salt_g: 0, cholesterol_mg: 0, water_ml: 4,
-    unitWeightG: 1.2, source: "estimate" as const,
+    saturated_fat_g: 3.8, sugars_g: 4.4, fiber_g: 12.5, sodium_mg: 0, cholesterol_mg: 0, water_ml: 4,
+    unitWeightG: 1.2, sourceMacros: "ai" as const, searchQuery: "almonds raw",
   }),
+  // Por defecto no matchea ningún candidato (los tests que sí matchean pasan su propio mock).
+  pickUsdaCandidate: async () => null,
 };
 const deps = (db: any, aiClientOverride: any = aiClient): any => ({ db, config: baseConfig, aiClient: aiClientOverride });
 
@@ -99,7 +113,7 @@ test("POST /nutrition/foods/extract → devuelve la extracción sin persistir", 
     body: JSON.stringify({ imageBase64: IMG_BASE64, mediaType: "image/jpeg" }),
   });
   expect(res.status).toBe(200);
-  expect(await res.json()).toMatchObject({ name: "Banana", source: "estimate" });
+  expect(await res.json()).toMatchObject({ name: "Banana", sourceMacros: "ai", sourceMicros: null });
 });
 
 test("POST /nutrition/foods/extract rechaza mediaType inválido", async () => {
@@ -116,12 +130,15 @@ test("POST /nutrition/foods crea un alimento con micros", async () => {
   const app = createApp(deps(db));
   const res = await app.request("/nutrition/foods", {
     method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: "Muesli", basis: "per_100g", kcal: 442, protein_g: 9.9, carbs_g: 63, fat_g: 14.8, unitWeightG: null, source: "label", saturated_fat_g: 4.2, sugars_g: 14, fiber_g: 8.4, salt_g: 0.2 }),
+    body: JSON.stringify({ name: "Muesli", basis: "per_100g", kcal: 442, protein_g: 9.9, carbs_g: 63, fat_g: 14.8, unitWeightG: null, sourceMacros: "label", sourceMicros: "usda", usdaFdcId: 168871, saturated_fat_g: 4.2, sugars_g: 14, fiber_g: 8.4, sodium_mg: 80, zinc_mg: 1.9 }),
   });
   expect(res.status).toBe(200);
   // el insert recibió los micros mapeados a las columnas drizzle
   const inserted = db._inserts.at(-1).rows[0];
-  expect(inserted).toMatchObject({ sugarsG: 14, fiberG: 8.4, saturatedFatG: 4.2, saltG: 0.2 });
+  expect(inserted).toMatchObject({
+    sugarsG: 14, fiberG: 8.4, saturatedFatG: 4.2, sodiumMg: 80, zincMg: 1.9,
+    sourceMacros: "label", sourceMicros: "usda", usdaFdcId: 168871,
+  });
 });
 
 test("POST /nutrition/meals snapshotea macros desde el catálogo (ignora los del cliente)", async () => {
@@ -185,7 +202,7 @@ test("PATCH /nutrition/foods/:id → 200 con el alimento actualizado", async () 
   const app = createApp(deps(fakeDb({ foodRow: { ...bananaRow, name: "Banana madura" } })));
   const res = await app.request(`/nutrition/foods/${FOOD_ID}`, {
     method: "PATCH", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: "Banana madura", basis: "per_100g", kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120, source: "estimate", sugars_g: 15 }),
+    body: JSON.stringify({ name: "Banana madura", basis: "per_100g", kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120, sourceMacros: "ai", sourceMicros: null, sugars_g: 15 }),
   });
   expect(res.status).toBe(200);
   expect(await res.json()).toMatchObject({ name: "Banana madura" });
@@ -194,7 +211,7 @@ test("PATCH /nutrition/foods/:id → 200 con el alimento actualizado", async () 
 test("PATCH /nutrition/foods/:id → 404 si no existe", async () => {
   const res = await createApp(deps(fakeDb())).request(`/nutrition/foods/${FOOD_ID}`, {
     method: "PATCH", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: "X", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, source: "estimate" }),
+    body: JSON.stringify({ name: "X", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, sourceMacros: "ai", sourceMicros: null }),
   });
   expect(res.status).toBe(404);
 });
@@ -202,7 +219,7 @@ test("PATCH /nutrition/foods/:id → 404 si no existe", async () => {
 test("PATCH /nutrition/foods/:id → 400 con body inválido", async () => {
   const res = await createApp(deps(fakeDb({ foodRow: bananaRow }))).request(`/nutrition/foods/${FOOD_ID}`, {
     method: "PATCH", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: "", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, source: "estimate" }),
+    body: JSON.stringify({ name: "", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, sourceMacros: "ai", sourceMicros: null }),
   });
   expect(res.status).toBe(400);
 });
@@ -449,8 +466,25 @@ test("POST /nutrition/reports/generate: daily con ajuste pero SIN plan activo �
 
 const ALMENDRA = {
   name: "Almendra", basis: "per_100g" as const, kcal: 579, protein_g: 21, carbs_g: 22, fat_g: 50,
-  saturated_fat_g: 3.8, sugars_g: 4.4, fiber_g: 12.5, salt_g: 0, cholesterol_mg: 0, water_ml: 4,
-  unitWeightG: 1.2, source: "estimate" as const,
+  saturated_fat_g: 3.8, sugars_g: 4.4, fiber_g: 12.5, sodium_mg: 0, cholesterol_mg: 0, water_ml: 4,
+  unitWeightG: 1.2, sourceMacros: "ai" as const, searchQuery: "almonds raw",
+};
+
+// Identificación "huevo frito" (camino ai) + su candidato y fila completa de USDA, para los tests
+// de match. La fila trae hierro y B12 con valores plausibles; el resto de vitaminas queda en null.
+const HUEVO_ID = {
+  name: "Huevo frito", basis: "per_100g" as const, kcal: 200, protein_g: 14, carbs_g: 1, fat_g: 15,
+  saturated_fat_g: 4, sugars_g: 0.5, fiber_g: 0, sodium_mg: 200, cholesterol_mg: 370, water_ml: 60,
+  unitWeightG: 50, sourceMacros: "ai" as const, searchQuery: "egg whole cooked fried",
+};
+const HUEVO_FDC = 323294;
+const usdaCandidateRows = [
+  { fdc_id: HUEVO_FDC, description: "Egg, whole, cooked, fried", data_type: "sr_legacy", similarity: 0.62 },
+  { fdc_id: 748967, description: "Egg, whole, raw, fresh", data_type: "sr_legacy", similarity: 0.5 },
+];
+const usdaEggRow = {
+  fdcId: HUEVO_FDC, description: "Egg, whole, cooked, fried", dataType: "sr_legacy",
+  kcal: 196, proteinG: 13.6, carbsG: 0.8, fatG: 14.8, ironMg: 1.9, vitaminB12Mcg: 1.3, calciumMg: 62,
 };
 
 const describePost = (app: any, text: string) =>
@@ -465,13 +499,78 @@ test("POST /nutrition/foods/describe → devuelve el alimento estimado desde el 
   expect(await res.json()).toMatchObject({ name: "Almendra", kcal: 579 });
 });
 
-test("POST /nutrition/foods/describe: el server PISA el source aunque la IA diga 'label'", async () => {
+test("POST /nutrition/foods/describe: el server FUERZA sourceMacros='ai' aunque la IA diga 'label'", async () => {
   // Por texto no hay etiqueta que leer. Si el modelo dijera "label" porque cree saber la etiqueta
   // de una marca, el catálogo mentiría sobre la procedencia del dato.
-  const mentiroso = { ...aiClient, describeFood: async () => ({ ...ALMENDRA, source: "label" as const }) };
+  const mentiroso = { ...aiClient, describeFood: async () => ({ ...ALMENDRA, sourceMacros: "label" as const }) };
   const res = await describePost(createApp(deps(fakeDb(), mentiroso)), "almendra");
   expect(res.status).toBe(200);
-  expect((await res.json()).source).toBe("estimate");
+  expect((await res.json()).sourceMacros).toBe("ai");
+});
+
+// ---- USDA: micros vía búsqueda + elección asistida por IA (Task 13) ----
+
+test("sin match en USDA el alta NO se bloquea (describe): sourceMicros null, iron_mg null (no 0)", async () => {
+  // Sin usdaCandidates → searchUsda devuelve [] → assemble(id, null).
+  const res = await describePost(createApp(deps(fakeDb())), "dulce de leche");
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.sourceMicros).toBe(null);
+  expect(body.sourceMacros).toBe("ai");
+  expect(body.iron_mg ?? null).toBe(null); // null, NO 0
+});
+
+test("con match, los micros salen de USDA: sourceMicros usda, usdaFdcId > 0, iron_mg > 0", async () => {
+  const db = fakeDb({ usdaCandidates: usdaCandidateRows, usdaRow: usdaEggRow });
+  const ai = { ...aiClient, describeFood: async () => ({ ...HUEVO_ID }), pickUsdaCandidate: async () => HUEVO_FDC };
+  const res = await describePost(createApp(deps(db, ai)), "huevo frito");
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.sourceMicros).toBe("usda");
+  expect(body.usdaFdcId).toBe(HUEVO_FDC);
+  expect(body.iron_mg).toBeGreaterThan(0);
+  expect(body.vitamin_b12_mcg).toBeGreaterThan(0);
+});
+
+test("si la 2ª llamada de IA falla, devuelve los candidatos para elegir a mano", async () => {
+  const db = fakeDb({ usdaCandidates: usdaCandidateRows, usdaRow: usdaEggRow });
+  const ai = { ...aiClient, describeFood: async () => ({ ...HUEVO_ID }), pickUsdaCandidate: async () => { throw new Error("boom"); } };
+  const res = await describePost(createApp(deps(db, ai)), "huevo frito");
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.candidates.length).toBeGreaterThan(0);
+  expect(body.sourceMicros).toBe(null);
+});
+
+test("si la 2ª llamada dice 'ninguno' (null), no matchea pero ofrece candidatos", async () => {
+  const db = fakeDb({ usdaCandidates: usdaCandidateRows, usdaRow: usdaEggRow });
+  const ai = { ...aiClient, describeFood: async () => ({ ...HUEVO_ID }), pickUsdaCandidate: async () => null };
+  const res = await describePost(createApp(deps(db, ai)), "huevo frito");
+  const body = await res.json();
+  expect(body.sourceMicros).toBe(null);
+  expect(body.candidates.length).toBeGreaterThan(0);
+});
+
+test("con usda_food vacía/rota (searchUsda tira), el alta cae al comportamiento actual (200, sourceMicros null)", async () => {
+  const db = fakeDb({ usdaExecuteThrows: true });
+  const ai = { ...aiClient, describeFood: async () => ({ ...HUEVO_ID }) };
+  const res = await describePost(createApp(deps(db, ai)), "huevo frito");
+  expect(res.status).toBe(200);
+  expect((await res.json()).sourceMicros).toBe(null);
+});
+
+test("GET /nutrition/usda/search devuelve los candidatos rankeados", async () => {
+  const db = fakeDb({ usdaCandidates: usdaCandidateRows });
+  const res = await createApp(deps(db)).request("/nutrition/usda/search?q=egg%20fried");
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body[0]).toMatchObject({ fdcId: HUEVO_FDC, description: "Egg, whole, cooked, fried", dataType: "sr_legacy" });
+});
+
+test("GET /nutrition/usda/search con q vacía → []", async () => {
+  const res = await createApp(deps(fakeDb())).request("/nutrition/usda/search?q=");
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual([]);
 });
 
 test("POST /nutrition/foods/describe: texto muy corto → 400", async () => {

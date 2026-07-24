@@ -19,6 +19,7 @@ import { createApp } from "./app";
 import { createDb } from "./db/client";
 import { AnthropicAiClient } from "./ai/client";
 import { loadServerEnv } from "./config";
+import { cargarUsdaSiHaceFalta } from "./usda/loader";
 
 const { databaseUrl, config } = loadServerEnv();
 const { db } = createDb(databaseUrl);
@@ -27,6 +28,16 @@ const app = createApp({
   config,
   aiClient: new AnthropicAiClient(),
 });
+
+// Se corre después de las migraciones (ya aplicadas por `db:migrate` antes de `bun run start`,
+// ver Dockerfile). Se ESPERA antes de aceptar tráfico, así que su duración es tiempo de arranque
+// en el que el server no responde. Dos caminos muy distintos:
+//   - No-op (la versión del artefacto ya está cargada, el caso de casi todos los reinicios): una
+//     sola consulta a usda_dataset, despreciable.
+//   - Carga real (primer arranque o cambio de versión del dataset): ~14,5 s medidos en una Mac.
+//     En la Pi (aarch64), que es donde corre en producción, NO está medido y va a ser más.
+// Si falla NO bloquea el arranque: ver el comentario en usda/loader.ts.
+await cargarUsdaSiHaceFalta(db);
 
 const port = Number(process.env.PORT ?? 8787);
 console.log(`Pulsia backend en :${port}`);

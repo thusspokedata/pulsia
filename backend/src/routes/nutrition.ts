@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { FoodInputSchema, MealInputSchema, WaterLogInputSchema, NutritionGoalInputSchema, ReportGenerateInputSchema, type ReportKind } from "@pulsia/shared";
+import { FoodInputSchema, MealInputSchema, WaterLogInputSchema, NutritionGoalInputSchema, ReportGenerateInputSchema, type ReportKind, type FoodExtraction, type FoodIdentification } from "@pulsia/shared";
+import { searchUsda, getUsdaFood, type UsdaCandidate } from "../usda/matcher";
+import { assembleFoodExtraction } from "../nutrition/assemble";
 import {
   insertFood, listFoods, getFood, updateFood, deleteFood,
   createMeal, listMeals, updateMeal, deleteMeal, getMealById,
@@ -32,6 +34,56 @@ function parseQueryNumber(raw: string | undefined): number | undefined {
   return Number.isNaN(n) ? undefined : n;
 }
 
+// La respuesta de extract/describe: la extracción persistible + los candidatos de USDA rankeados
+// (para el "¿no es este?" del Plan 2). `candidates` va SIEMPRE (vacío si no hubo búsqueda o match).
+// Cuál se eligió queda en `extraction.usdaFdcId`.
+type ExtractResponse = FoodExtraction & { candidates: UsdaCandidate[] };
+
+/**
+ * Toma la identificación de la 1ª llamada de IA y le adjunta los micros de USDA:
+ *   1. searchUsda(searchQuery) → candidatos
+ *   2. pickUsdaCandidate → elige uno (o null / "ninguno")
+ *   3. getUsdaFood(fdcId) → la fila completa
+ *   4. assembleFoodExtraction(id, usda) → mezcla
+ *
+ * Toda la parte de USDA (búsqueda + elección + fila) está en su propio try/catch, SEPARADO del de
+ * la llamada de IA que identifica el alimento: si `usda_food` está vacía/rota o la 2ª llamada
+ * falla, el alta NO se bloquea — cae a "sin match" (spec §7). Un alta sin vitaminas es
+ * infinitamente mejor que un 500.
+ */
+async function attachUsdaMicros(deps: AppDeps, id: FoodIdentification, apiKey: string): Promise<ExtractResponse> {
+  let candidates: UsdaCandidate[] = [];
+  try {
+    candidates = await searchUsda(deps.db, id.searchQuery);
+  } catch (e) {
+    // usda_food vacía o rota: degradar, no romper (spec §7).
+    console.warn("searchUsda falló (usda_food vacía o rota); alta sin micros:", (e as Error).message);
+    return { ...assembleFoodExtraction(id, null), candidates: [] };
+  }
+  if (candidates.length === 0) return { ...assembleFoodExtraction(id, null), candidates: [] };
+
+  let chosenFdcId: number | null = null;
+  try {
+    chosenFdcId = deps.aiClient.pickUsdaCandidate
+      ? await deps.aiClient.pickUsdaCandidate({ foodName: id.name, candidates, apiKey })
+      : null;
+  } catch (e) {
+    // La 2ª llamada falló: se ofrecen los candidatos para elegir a mano (spec §7).
+    console.warn("pickUsdaCandidate falló; se ofrecen candidatos para elegir a mano:", (e as Error).message);
+    chosenFdcId = null;
+  }
+  if (chosenFdcId == null) return { ...assembleFoodExtraction(id, null), candidates };
+
+  let usda = null;
+  try {
+    usda = await getUsdaFood(deps.db, chosenFdcId);
+  } catch (e) {
+    console.warn("getUsdaFood falló; alta sin micros:", (e as Error).message);
+    usda = null;
+  }
+  return { ...assembleFoodExtraction(id, usda), candidates };
+}
+
 export function nutritionRoutes(deps: AppDeps) {
   const r = new Hono<{ Variables: { userId: string } }>();
 
@@ -45,13 +97,15 @@ export function nutritionRoutes(deps: AppDeps) {
     const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
     const apiKey = resolveAiKey(settingsRow, deps.config);
     if (!apiKey) return c.json({ error: "No hay API key de IA disponible." }, 400);
+    let id: FoodIdentification;
     try {
-      const extraction = await deps.aiClient.extractFood({ imageBase64: parsed.data.imageBase64, mediaType: parsed.data.mediaType, apiKey });
-      return c.json(extraction);
+      id = await deps.aiClient.extractFood({ imageBase64: parsed.data.imageBase64, mediaType: parsed.data.mediaType, apiKey });
     } catch (e) {
       console.warn("extractFood falló:", (e as Error).message);
       return c.json({ error: "No se pudo analizar la foto. Reintentá o cargá el alimento a mano." }, 502);
     }
+    // Por foto sí puede haber etiqueta: se respeta el sourceMacros que devolvió la IA ("label"|"ai").
+    return c.json(await attachUsdaMicros(deps, id, apiKey));
   });
 
   // ---- Alta por texto (sincrónica, no persiste) ----
@@ -63,15 +117,31 @@ export function nutritionRoutes(deps: AppDeps) {
     const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
     const apiKey = resolveAiKey(settingsRow, deps.config);
     if (!apiKey) return c.json({ error: "No hay API key de IA disponible." }, 400);
+    let id: FoodIdentification;
     try {
-      const food = await deps.aiClient.describeFood({ text: parsed.data.text, apiKey });
-      // Por texto no hay etiqueta que leer: el dato es SIEMPRE una estimación. No se lo pedimos al
-      // prompt y confiamos — se pisa acá. Si el modelo contestara "label" porque cree saber la
-      // etiqueta de una marca, el catálogo mentiría sobre la procedencia del dato.
-      return c.json({ ...food, source: "estimate" as const });
+      id = await deps.aiClient.describeFood({ text: parsed.data.text, apiKey });
     } catch (e) {
       console.warn("describeFood falló:", (e as Error).message);
       return c.json({ error: "No se pudo analizar el alimento. Reintentá o cargalo a mano." }, 502);
+    }
+    // Por texto no hay etiqueta que leer: el dato es SIEMPRE una estimación. No se lo pedimos al
+    // prompt y confiamos — se fuerza acá. Si el modelo contestara "label" porque cree saber la
+    // etiqueta de una marca, el catálogo mentiría sobre la procedencia del dato.
+    const idForced: FoodIdentification = { ...id, sourceMacros: "ai" };
+    return c.json(await attachUsdaMicros(deps, idForced, apiKey));
+  });
+
+  // ---- Búsqueda manual en USDA (para el "¿no es este?" del Plan 2) ----
+  // Query vacía → [] (la UI puede pedir sin término y recibir nada, en vez de un error). Si
+  // usda_food está vacía/rota, también degrada a [] en vez de romper.
+  r.get("/usda/search", async (c) => {
+    const q = (c.req.query("q") ?? "").trim();
+    if (q.length === 0) return c.json([] as UsdaCandidate[]);
+    try {
+      return c.json(await searchUsda(deps.db, q));
+    } catch (e) {
+      console.warn("usda/search falló:", (e as Error).message);
+      return c.json([] as UsdaCandidate[]);
     }
   });
 

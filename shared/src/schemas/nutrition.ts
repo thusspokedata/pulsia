@@ -1,16 +1,27 @@
 import { z } from "zod";
+import { NUTRIENTS } from "../nutrition/nutrients";
 
 export const FoodBasisSchema = z.enum(["per_100g", "per_100ml"]); // sólido vs líquido
 export const QuantityUnitSchema = z.enum(["g", "ml", "unit"]);
-export const FoodSourceSchema = z.enum(["label", "estimate"]);
 export const MealTypeSchema = z.enum(["desayuno", "almuerzo", "cena", "snack"]);
 
 export type FoodBasis = z.infer<typeof FoodBasisSchema>;
 export type QuantityUnit = z.infer<typeof QuantityUnitSchema>;
-export type FoodSource = z.infer<typeof FoodSourceSchema>;
 export type MealType = z.infer<typeof MealTypeSchema>;
 
-// Macros por 100g/100ml (núcleo; extensible a micros después).
+// Procedencia de los macros y de los micros de etiqueta. `estimate` se abrió en `ai` (lo estimó
+// el modelo) y `manual` (lo cargó el usuario a mano): la distinción estaba pendiente en el
+// backlog y la migración se hacía igual.
+export const SourceMacrosSchema = z.enum(["label", "ai", "manual"]);
+export type SourceMacros = z.infer<typeof SourceMacrosSchema>;
+
+// Procedencia del bloque de vitaminas y minerales. null = no se pudo matchear contra USDA y el
+// bloque quedó vacío (NO es lo mismo que valores en 0).
+export const SourceMicrosSchema = z.enum(["usda", "ai"]).nullable();
+export type SourceMicros = z.infer<typeof SourceMicrosSchema>;
+
+// Macros por 100g/100ml. Obligatorios y no-nullable: son el núcleo, y a diferencia de los
+// micros siempre hay un valor (aunque sea estimado).
 const macrosPer100 = {
   kcal: z.number().nonnegative(),
   protein_g: z.number().nonnegative(),
@@ -18,28 +29,56 @@ const macrosPer100 = {
   fat_g: z.number().nonnegative(),
 };
 
-// Micros de etiqueta (por 100g/100ml). Todos OPCIONALES + nullable: la IA puede omitirlos y
-// los alimentos/comidas viejos no los tienen.
-const microsPer100 = {
-  saturated_fat_g: z.number().nonnegative().nullable().optional(),
-  sugars_g: z.number().nonnegative().nullable().optional(),
-  fiber_g: z.number().nonnegative().nullable().optional(),
-  salt_g: z.number().nonnegative().nullable().optional(),
-  cholesterol_mg: z.number().nonnegative().nullable().optional(), // mg (no g)
-  water_ml: z.number().nonnegative().nullable().optional(),        // aporte de agua por 100g/ml
-};
+// Los 30 nutrientes salen del REGISTRO, no de una lista repetida acá: agregar uno en
+// nutrients.ts lo agrega al schema, al escalado y a las sumas de una sola vez.
+// Todos OPCIONALES + nullable: la IA puede omitirlos, un alimento sin match en USDA los deja
+// vacíos, y los alimentos/comidas viejos no los tienen. `null` es "no sabemos", que NO es 0.
+const nutrientFields = Object.fromEntries(
+  NUTRIENTS.map((n) => [n.key, z.number().nonnegative().nullable().optional()]),
+) as Record<(typeof NUTRIENTS)[number]["key"], z.ZodOptional<z.ZodNullable<z.ZodNumber>>>;
 
 // Lo que la IA extrae de la foto (output estructurado). Sin id/userId.
 export const FoodExtractionSchema = z.object({
   name: z.string().trim().min(1),
   basis: FoodBasisSchema,
   ...macrosPer100,
-  ...microsPer100,
+  ...nutrientFields,
   // "1 unidad" en la base del alimento (g si per_100g, ml si per_100ml). null si no es contable.
   unitWeightG: z.number().positive().nullable(),
-  source: FoodSourceSchema,
+  sourceMacros: SourceMacrosSchema,
+  sourceMicros: SourceMicrosSchema,
+  // fdcId de la fila de USDA usada, para rastrear de dónde salieron los micros y re-matchear
+  // después. null si no hubo match.
+  usdaFdcId: z.number().int().nullable().optional(),
 });
 export type FoodExtraction = z.infer<typeof FoodExtractionSchema>;
+
+// Lo que la 1ª llamada de IA devuelve: identifica el alimento y da una frase de búsqueda. NO
+// incluye vitaminas ni minerales — esos los aporta USDA. Los "micros de etiqueta" (saturadas,
+// azúcares, fibra, sodio, colesterol, agua) SÍ los da, porque son legibles de una etiqueta y son
+// los mismos 6 que la app ya manejaba.
+export const FoodIdentificationSchema = z.object({
+  name: z.string().trim().min(1),
+  basis: FoodBasisSchema,
+  // Macros: de la etiqueta si hay, estimados si no.
+  kcal: z.number().nonnegative(),
+  protein_g: z.number().nonnegative(),
+  carbs_g: z.number().nonnegative(),
+  fat_g: z.number().nonnegative(),
+  // Micros legibles de una etiqueta (los 6 de siempre; sal ya convertida a sodio).
+  saturated_fat_g: z.number().nonnegative().nullable().optional(),
+  sugars_g: z.number().nonnegative().nullable().optional(),
+  fiber_g: z.number().nonnegative().nullable().optional(),
+  sodium_mg: z.number().nonnegative().nullable().optional(),
+  cholesterol_mg: z.number().nonnegative().nullable().optional(),
+  water_ml: z.number().nonnegative().nullable().optional(),
+  unitWeightG: z.number().positive().nullable(),
+  // "label" si leyó una tabla nutricional; "ai" si estimó.
+  sourceMacros: z.enum(["label", "ai"]),
+  // Frase de búsqueda en INGLÉS para matchear contra USDA.
+  searchQuery: z.string().trim().min(1),
+});
+export type FoodIdentification = z.infer<typeof FoodIdentificationSchema>;
 
 // Alta/edición de un alimento del catálogo (lo que confirma el usuario).
 export const FoodInputSchema = FoodExtractionSchema;
@@ -78,7 +117,7 @@ export const MealItemSchema = z.object({
   quantityUnit: QuantityUnitSchema,
   grams: z.number(),
   ...macrosPer100,
-  ...microsPer100,
+  ...nutrientFields,
 });
 export type MealItem = z.infer<typeof MealItemSchema>;
 

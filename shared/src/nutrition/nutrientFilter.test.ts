@@ -5,7 +5,7 @@ const food = (name: string, over: Record<string, unknown> = {}) => ({
   name,
   basis: "per_100g" as const,
   fat_g: 0, saturated_fat_g: 0, sugars_g: 0,
-  salt_g: 0, cholesterol_mg: 0, fiber_g: 0,
+  sodium_mg: 0, cholesterol_mg: 0, fiber_g: 0,
   ...over,
 });
 
