@@ -13,7 +13,7 @@ import { buildGenerationPrompt } from "./prompt";
 import { buildOneOffPrompt, type OneOffArgs } from "./oneoff";
 import { buildMemoryUpdatePrompt } from "./memory";
 import { buildEcgPrompt } from "./ecg";
-import { buildFoodPrompt, buildPickCandidatePrompt } from "./nutrition";
+import { buildFoodPrompt, buildPickCandidatePrompt, buildSearchQueryPrompt } from "./nutrition";
 import { buildReportPrompt } from "./report";
 import { buildSupplementExtractPrompt, buildSupplementExplainPrompt, buildSupplementPlanPrompt } from "./supplements";
 import type { ReportData } from "../reports/collect";
@@ -54,6 +54,9 @@ export interface AiClient {
     candidates: { fdcId: number; description: string }[];
     apiKey: string;
   }): Promise<number | null>;
+  // Refresh de un alimento YA guardado: reconstruye la frase de búsqueda a partir del nombre. En el
+  // alta esa frase viene dentro de la identificación; acá no hay identificación que pedir.
+  usdaSearchQuery?(input: { foodName: string; apiKey: string }): Promise<string>;
   extractSupplement?(input: {
     imageBase64: string;
     mediaType: string;
@@ -238,6 +241,24 @@ export class AnthropicAiClient implements AiClient {
     });
     if (index === null || !Number.isInteger(index) || index < 1 || index > candidates.length) return null;
     return candidates[index - 1].fdcId;
+  }
+
+  // Refresh de un alimento ya guardado: solo la frase de búsqueda, sin macros ni micros (esos ya
+  // están en la base). Usa la MISMA regla que el alta (REGLA_SEARCH_QUERY).
+  async usdaSearchQuery({ foodName, apiKey }: { foodName: string; apiKey: string }): Promise<string> {
+    const client = new Anthropic({ apiKey });
+    const out = await callStructuredTool({
+      client,
+      model: "claude-opus-4-8",
+      maxTokens: 256,
+      schema: z.object({ searchQuery: z.string().trim().min(1) }),
+      toolName: "return_search_query",
+      description: "Devuelve la frase en inglés para buscar el alimento en las tablas de USDA.",
+      content: [{ type: "text", text: `${buildSearchQueryPrompt()}\n\nAlimento: ${foodName}` }],
+      truncatedMsg: "La respuesta se truncó.",
+      missingMsg: "La IA no devolvió la frase de búsqueda.",
+    });
+    return out.searchQuery;
   }
 
   async extractSupplement({ imageBase64, mediaType, apiKey }: {
