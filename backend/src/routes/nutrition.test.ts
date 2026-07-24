@@ -61,6 +61,9 @@ function fakeDb(opts: {
   // `usdaRow` es la fila completa (camelCase) que devuelve getUsdaFood; `usdaExecuteThrows` simula
   // la tabla vacía/rota (searchUsda tira).
   usdaCandidates?: any[]; usdaRow?: any; usdaRows?: Record<number, any>; usdaExecuteThrows?: boolean;
+  // El alimento se lee OK pero el UPDATE no encuentra la fila: simula que se borró entre el
+  // chequeo de existencia y la escritura (la ventana que el 404 de `usda-apply` cubre).
+  foodDesaparecidoEnUpdate?: boolean;
 } = {}) {
   const inserts: any[] = [];
   const updates: any[] = [];
@@ -104,7 +107,7 @@ function fakeDb(opts: {
           // con la fila que salió del UPDATE, y con la vieja los ítems quedarían sin micros.
           const escritas = table === mealItem
             ? filaItemDelWhere(cond)
-            : (opts.foodRow ? [{ ...opts.foodRow, ...values }] : []);
+            : (opts.foodRow && !opts.foodDesaparecidoEnUpdate ? [{ ...opts.foodRow, ...values }] : []);
           const p: any = Promise.resolve([]);
           p.returning = async () => escritas;
           return p;
@@ -1016,6 +1019,26 @@ test("aplicar sobre un alimento de OTRO usuario → 404 y no escribe nada", asyn
   const res = await postApply(createApp(deps(db, refreshAi)), applyBody);
   expect(res.status).toBe(404);
   expect(db._updates).toHaveLength(0);
+});
+
+// Los dos casos que HOY se confunden: ambos terminaban en un 200 `{0, 0}` indistinguible.
+test("aplicar cuando el alimento se borra DENTRO de la transacción → 404, no un 200 '0 y 0'", async () => {
+  // `getFood` lo encontró, pero el UPDATE ya no: la fila se fue en esa ventana.
+  const db = refreshDb({ foodDesaparecidoEnUpdate: true });
+  const res = await postApply(createApp(deps(db, refreshAi)), applyBody);
+  expect(res.status).toBe(404);
+  // Y ni se intentó re-snapshotear: sin fila nueva no hay con qué recalcular.
+  expect(updatesDe(db, mealItem)).toHaveLength(0);
+});
+
+test("aplicar sobre un alimento que existe pero no está en ninguna comida → 200 con 0 y 0", async () => {
+  // El caso normal de un alimento del catálogo que nunca se comió: NO es un error.
+  const db = refreshDb({ meals: [], items: [] });
+  const res = await postApply(createApp(deps(db, refreshAi)), applyBody);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ mealsUpdated: 0, itemsUpdated: 0 });
+  expect(updatesDe(db, food)).toHaveLength(1); // el alimento SÍ se actualizó
+  expect(updatesDe(db, mealItem)).toHaveLength(0);
 });
 
 test("aplicar con body inválido → 400 (no 500)", async () => {

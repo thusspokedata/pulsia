@@ -36,6 +36,12 @@ const AssembleSchema = z.object({
   fdcId: z.number().int(),
 });
 
+// El alimento existía cuando lo leímos, pero el UPDATE de la transacción ya no lo encontró: se
+// borró en esa ventana. Se señala con un error tipado —el mismo idioma que `MealValidationError`
+// en este archivo— en vez de devolver un resultado: además de mapearse a 404, tirar aborta la
+// transacción, que es lo que corresponde cuando la premisa del apply dejó de ser cierta.
+class AlimentoDesaparecidoError extends Error {}
+
 function parseQueryNumber(raw: string | undefined): number | undefined {
   if (raw == null) return undefined;
   const n = Number(raw);
@@ -305,11 +311,19 @@ export function nutritionRoutes(deps: AppDeps) {
     // en un dato "de etiqueta" que él nunca leyó.
     const paraGuardar = { ...final, sourceMacros: f.sourceMacros };
 
-    return c.json(await deps.db.transaction(async (tx) => {
-      const fila = await updateFoodRow(tx, userId, foodId, paraGuardar);
-      if (!fila) return { mealsUpdated: 0, itemsUpdated: 0 };
-      return resnapshotItemsOfFood(tx, userId, foodId, fila);
-    }));
+    // Ojo con el `{ mealsUpdated: 0, itemsUpdated: 0 }`: es la respuesta LEGÍTIMA de un alimento
+    // del catálogo que nunca se comió. Por eso "el alimento ya no está" NO puede contestar eso
+    // —serían indistinguibles para el cliente, que trata el 200 como "se aplicó" y lo recarga—.
+    try {
+      return c.json(await deps.db.transaction(async (tx) => {
+        const fila = await updateFoodRow(tx, userId, foodId, paraGuardar);
+        if (!fila) throw new AlimentoDesaparecidoError();
+        return resnapshotItemsOfFood(tx, userId, foodId, fila);
+      }));
+    } catch (e) {
+      if (e instanceof AlimentoDesaparecidoError) return c.json({ error: "No encontrado" }, 404);
+      throw e; // cualquier otra falla sigue siendo un 500, como antes
+    }
   });
 
   // ---- Meals ----
