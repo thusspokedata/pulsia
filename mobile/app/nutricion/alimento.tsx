@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { ScrollView, View, Text, Pressable, ActivityIndicator } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import type { Food } from "@pulsia/shared";
-import { getFood } from "../../src/api/nutrition";
+import { getFood, getUsdaEntry, type UsdaEntry } from "../../src/api/nutrition";
 import { getBackendUrl } from "../../src/storage/config";
 import { buildNutrientRows } from "../../src/nutrition/nutrientRows";
 import { NutrientList } from "../../src/nutrition/NutrientList";
@@ -17,13 +17,20 @@ export default function AlimentoDetalleScreen() {
   const screenPad = useScreenPadding(spacing.lg);
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [food, setFood] = useState<Food | null>(null);
+  const [entradaUsda, setEntradaUsda] = useState<UsdaEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
     try {
       const url = await getBackendUrl();
-      setFood(await getFood(url, id)); setError(null);
+      const f = await getFood(url, id);
+      setFood(f); setError(null);
+      // La descripción de la entrada de USDA NO viaja con el alimento (el alimento guarda solo el
+      // `usdaFdcId`): se resuelve aparte. Va en su propio catch porque es un adorno: si el backend
+      // no la resuelve, la pantalla muestra el alimento entero y cae al número, en vez de
+      // convertir un dato de contexto en un error de carga.
+      setEntradaUsda(f.usdaFdcId == null ? null : await getUsdaEntry(url, f.usdaFdcId).catch(() => null));
     } catch (e) { setError((e as Error).message); }
   }, [id]);
 
@@ -65,14 +72,17 @@ export default function AlimentoDetalleScreen() {
                 {`1 unidad ≈ ${food.unitWeightG} ${food.basis === "per_100ml" ? "ml" : "g"}`}
               </Text>
             )}
-            {/* De qué fila de USDA salieron las vitaminas y minerales. Se muestra el fdcId y no un
-                nombre porque el alimento guarda SOLO el id (`usda_fdc_id`): la descripción de esa
-                fila vive en la tabla `usda_food` del backend y no viaja en `GET /nutrition/foods/:id`.
-                Escribir acá el nombre del alimento propio sería afirmar que USDA matcheó eso, que
-                es justo lo que el usuario tiene que poder desconfiar. */}
+            {/* De qué fila de USDA salieron las vitaminas y minerales. Se muestra la DESCRIPCIÓN
+                de esa fila (en inglés, tal como la publica USDA) y no el nombre del alimento
+                propio: el punto es que el usuario pueda desconfiar del match ("le puse 'lentejas'
+                pero USDA matcheó 'Lentils, sprouted, raw'"). Con el nombre propio el chequeo sería
+                imposible, y con el fdcId crudo, ilegible. Si no se pudo resolver, queda el número:
+                es feo pero verificable. */}
             {food.usdaFdcId != null && (
               <Text testID="alimento-usda" style={{ color: colors.icon, fontSize: 12 }}>
-                {`Vitaminas y minerales de la entrada ${food.usdaFdcId} de USDA`}
+                {entradaUsda != null
+                  ? `Vitaminas y minerales de «${entradaUsda.description}» (USDA)`
+                  : `Vitaminas y minerales de la entrada ${food.usdaFdcId} de USDA`}
               </Text>
             )}
           </Card>

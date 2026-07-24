@@ -47,6 +47,29 @@ export async function getFood(baseUrl: string, id: string): Promise<Food> {
   return (await res.json()) as Food;
 }
 
+/**
+ * Identidad de una fila de la copia local de USDA — SIN sus 34 nutrientes: quien quiera los
+ * valores está eligiendo otra fila, y para eso está `/nutrition/usda/assemble`.
+ */
+export interface UsdaEntry {
+  fdcId: number;
+  description: string;
+  dataType: string;
+}
+
+/**
+ * Resuelve un `usdaFdcId` a la descripción de esa entrada.
+ *
+ * El alimento persiste SOLO el id: la descripción vive en la tabla `usda_food` del backend, que
+ * es un catálogo compartido y no viaja con el alimento del usuario. Se pide aparte porque las
+ * únicas pantallas que la muestran miran un alimento por vez.
+ */
+export async function getUsdaEntry(baseUrl: string, fdcId: number): Promise<UsdaEntry> {
+  const res = await apiFetch(baseUrl, `/nutrition/usda/${fdcId}`);
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo cargar la entrada de USDA."));
+  return (await res.json()) as UsdaEntry;
+}
+
 export async function updateFood(baseUrl: string, id: string, input: FoodInput): Promise<Food> {
   const res = await apiFetch(baseUrl, `/nutrition/foods/${id}`, { method: "PATCH", body: JSON.stringify(input) });
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo actualizar el alimento."));

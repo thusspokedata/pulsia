@@ -20,13 +20,14 @@ jest.mock("expo-router", () => {
 jest.mock("../src/storage/config", () => ({ getBackendUrl: jest.fn(async () => "http://x") }));
 jest.mock("../src/api/nutrition", () => ({
   getFood: jest.fn(),
+  getUsdaEntry: jest.fn(),
   listFoods: jest.fn(async () => []),
   deleteFood: jest.fn(),
 }));
 
 import AlimentoDetalleScreen from "../app/nutricion/alimento";
 import CatalogoScreen from "../app/nutricion/catalogo";
-import { getFood, listFoods } from "../src/api/nutrition";
+import { getFood, getUsdaEntry, listFoods } from "../src/api/nutrition";
 
 const alimento = (over: Partial<Food> = {}): Food => ({
   id: FOOD_ID, name: "Lentejas cocidas", basis: "per_100g", createdAt: 0,
@@ -37,9 +38,12 @@ const alimento = (over: Partial<Food> = {}): Food => ({
   ...over,
 });
 
+const ENTRADA_USDA = { fdcId: 175249, description: "Lentils, mature seeds, cooked, boiled", dataType: "sr_legacy" };
+
 beforeEach(() => {
   jest.clearAllMocks();
   (getFood as jest.Mock).mockResolvedValue(alimento());
+  (getUsdaEntry as jest.Mock).mockResolvedValue(ENTRADA_USDA);
 });
 
 test("desde el catálogo se llega al detalle del alimento", async () => {
@@ -77,20 +81,32 @@ test("un nutriente que el alimento no tiene dice 'sin dato'", async () => {
   expect(screen.getByTestId("nutr-calcium_mg-amount")).toHaveTextContent(/^sin dato$/);
 });
 
-test("dice que los micros salieron de USDA y de qué entrada", async () => {
+test("dice que los micros salieron de USDA y NOMBRA la entrada, no su número", async () => {
   await render(<AlimentoDetalleScreen />);
   await waitFor(() => expect(screen.getByTestId("source-chip-micros-usda")).toBeTruthy());
-  // El backend guarda el fdcId, NO la descripción de la fila de USDA: se muestra el identificador
-  // real y no un nombre inventado.
-  expect(screen.getByTestId("alimento-usda")).toHaveTextContent(/175249/);
+  // El alimento guarda solo el fdcId; la descripción se resuelve contra `GET /nutrition/usda/:id`.
+  await waitFor(() => expect(screen.getByTestId("alimento-usda")).toHaveTextContent(/Lentils, mature seeds, cooked, boiled/));
+  expect(getUsdaEntry).toHaveBeenCalledWith("http://x", 175249);
+  // Un fdcId crudo no le dice nada a nadie: si el nombre se resolvió, el número sobra.
+  expect(screen.getByTestId("alimento-usda")).not.toHaveTextContent(/175249/);
 });
 
-test("sin match contra USDA no hay chip ni referencia de entrada", async () => {
+test("si no se puede resolver la entrada de USDA, cae al número y NO rompe la pantalla", async () => {
+  (getUsdaEntry as jest.Mock).mockRejectedValue(new Error("500"));
+  await render(<AlimentoDetalleScreen />);
+  // El alimento se sigue viendo entero: la descripción es un adorno, no un requisito.
+  await waitFor(() => expect(screen.getByTestId("alimento-macros")).toBeTruthy());
+  expect(screen.getByTestId("alimento-usda")).toHaveTextContent(/175249/);
+  expect(screen.queryByText("500")).toBeNull(); // el error no se muestra como si el alimento fallara
+});
+
+test("sin match contra USDA no hay chip, ni referencia de entrada, ni pedido al backend", async () => {
   (getFood as jest.Mock).mockResolvedValue(alimento({ sourceMicros: null, usdaFdcId: null }));
   await render(<AlimentoDetalleScreen />);
   await waitFor(() => expect(screen.getByText("Lentejas cocidas")).toBeTruthy());
   expect(screen.queryByTestId("source-chip-micros-usda")).toBeNull();
   expect(screen.queryByTestId("alimento-usda")).toBeNull();
+  expect(getUsdaEntry).not.toHaveBeenCalled();
 });
 
 test("muestra los macros por 100 g y desde acá se edita el alimento", async () => {
