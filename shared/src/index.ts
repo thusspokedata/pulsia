@@ -36,6 +36,7 @@ export * from "./nutrition/macros";
 export * from "./nutrition/goal";
 export * from "./nutrition/exerciseBurn";
 export * from "./nutrition/references";
+export * from "./nutrition/references.efsa";
 export * from "./nutrition/breakdown";
 export * from "./nutrition/nutrientLevel";
 export * from "./nutrition/nutrientFilter";
