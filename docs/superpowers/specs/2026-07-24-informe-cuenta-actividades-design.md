@@ -18,7 +18,7 @@ entrenamientos** en el informe.
 Los `.FIT` de fuerza (`subSport: strengthTraining`) se importan como **cardio tipo "other"**
 (`mapSport` no reconoce la fuerza). En la DB del owner:
 
-```
+```text
 type   sport_profile_name  metabolic_kcal  kcal  fecha
 other  Fuerza              39              124   2026-07-24
 other  Fuerza              65              354   2026-07-23
@@ -27,7 +27,7 @@ other  Fuerza              65              354   2026-07-23
 `collect.ts` calcula las actividades del día (`dayCardio`) pero **solo las usa para el total de
 kcal** (`exercise`); nunca se las pasa a la IA. El prompt (`report.ts:23`) dice:
 
-```
+```text
 - Entrenamiento: ${d.sessionsCount} sesión(es), gasto estimado ${d.exercise} kcal
 ```
 
@@ -74,14 +74,14 @@ del rango, ordenadas por `startedAt`.
 Reemplazar la línea única de entrenamiento por dos, y ramificar por `periodDays`:
 
 **Diario** (`periodDays === 1`) — listar cada actividad:
-```
+```text
 - Entrenamiento de fuerza (app): 0 sesión(es)
 - Actividades registradas/importadas: Fuerza 47 min (354 kcal, FC 134), Fuerza 28 min (124 kcal, FC 102)
 - Gasto total de ejercicio: 478 kcal
 ```
 
 **Periódico** (`periodDays > 1`) — agregar por nombre para no inundar el prompt:
-```
+```text
 - Entrenamiento de fuerza (app): 3 sesión(es)
 - Actividades registradas/importadas: 8× Fuerza, 5× Caminar, 3× Elíptica
 - Gasto total de ejercicio: 5240 kcal

@@ -60,6 +60,17 @@ const defaultDeps: CollectDeps = {
   listSupplements: (db, u) => listSupplementsImpl(db, u),
 };
 
+// El nombre del perfil deportivo viene del .FIT (texto EXTERNO del usuario) y se interpola en el
+// prompt de la IA. Se colapsa todo el whitespace —incluidos los newlines, que si no podrían inyectar
+// una línea falsa en el bloque de datos y simular otra sección (CWE-74)—, se recorta y se capa la
+// longitud. Si queda vacío ("" o solo espacios en el .FIT), el llamador cae al label del tipo. La
+// defensa global del prompt ya declara el bloque como DATOS; esto además impide romper su estructura.
+export function cleanProfileName(s: string | undefined): string | undefined {
+  if (s == null) return undefined;
+  const cleaned = s.replace(/\s+/g, " ").trim().slice(0, 40);
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
 export async function collectReportData(
   db: Db, userId: string, from: number, to: number, athlete: AthleteContext, deps: CollectDeps = defaultDeps,
 ): Promise<ReportData> {
@@ -102,14 +113,14 @@ export async function collectReportData(
   const fromFood = sumNullableMicro(items.map((it) => it.water_ml)) ?? 0;
   const drank = water.reduce((a, w) => a + w.ml, 0);
   const daySessions = allSessions.filter((s) => s.startedAt >= from && s.startedAt <= to);
-  const dayCardio = allCardio
-    .filter((a) => a.startedAt >= from && a.startedAt <= to)
-    .map((a) => ({ type: a.type, durationMs: a.durationMs, avgHr: a.avgHr, kcal: a.kcal }));
-  const activities = allCardio
-    .filter((a) => a.startedAt >= from && a.startedAt <= to)
+  // Un solo filtro por rango, del que se derivan las dos vistas: si el criterio cambia, no puede
+  // divergir entre el gasto (dayCardio) y el desglose (activities).
+  const inRange = allCardio.filter((a) => a.startedAt >= from && a.startedAt <= to);
+  const dayCardio = inRange.map((a) => ({ type: a.type, durationMs: a.durationMs, avgHr: a.avgHr, kcal: a.kcal }));
+  const activities = [...inRange]
     .sort((x, y) => x.startedAt - y.startedAt)
     .map((a) => ({
-      name: a.sportProfileName ?? CARDIO_LABELS[a.type],
+      name: cleanProfileName(a.sportProfileName) ?? CARDIO_LABELS[a.type],
       durationMin: Math.round(a.durationMs / 60000),
       kcal: a.kcal,
       avgHr: a.avgHr,

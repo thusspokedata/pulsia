@@ -23,7 +23,7 @@
 **El bug, concreto:** los `.FIT` de fuerza se importan como `cardio_activity` con `type: "other"` y `sport_profile_name: "Fuerza"`. El informe (`report.ts`) solo reporta `sessionsCount` (que cuenta `workout_session`, no el cardio), así que la IA lee `"Entrenamiento: 0 sesión(es)"`. `collect.ts` ya calcula las actividades del día (`dayCardio`) pero solo las usa para el total de kcal — nunca se las pasa a la IA.
 
 **Datos de referencia (prod, del owner):**
-```
+```text
 type   sport_profile_name  kcal  avg_hr  duración
 other  Fuerza              354   134     47 min   (2026-07-23)
 other  Fuerza              124   102     28 min   (2026-07-24)
