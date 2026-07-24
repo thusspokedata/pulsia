@@ -43,7 +43,14 @@ function parseQueryNumber(raw: string | undefined): number | undefined {
 // La respuesta de extract/describe: la extracción persistible + los candidatos de USDA rankeados
 // (para el "¿no es este?" del Plan 2). `candidates` va SIEMPRE (vacío si no hubo búsqueda o match).
 // Cuál se eligió queda en `extraction.usdaFdcId`.
-type ExtractResponse = FoodExtraction & { candidates: UsdaCandidate[] };
+//
+// `identification` es la identificación que usó ESTE handler, devuelta para que el móvil pueda
+// re-mezclarla con otro candidato vía `POST /usda/assemble`. Sin ella el "¿no es este?" no existe:
+// `searchQuery` (que el schema del assemble exige) NO es un campo de `FoodExtraction`, así que el
+// formulario no tiene con qué reconstruirla — recibiría los candidatos y no podría elegir ninguno.
+// En `describe` viaja la identificación YA forzada a `sourceMacros: "ai"`: mandar la original
+// reintroduciría en la re-mezcla la mentira que el handler acaba de corregir.
+type ExtractResponse = FoodExtraction & { candidates: UsdaCandidate[]; identification: FoodIdentification };
 
 /**
  * Toma la identificación de la 1ª llamada de IA y le adjunta los micros de USDA:
@@ -64,9 +71,9 @@ async function attachUsdaMicros(deps: AppDeps, id: FoodIdentification, apiKey: s
   } catch (e) {
     // usda_food vacía o rota: degradar, no romper (spec §7).
     console.warn("searchUsda falló (usda_food vacía o rota); alta sin micros:", (e as Error).message);
-    return { ...assembleFoodExtraction(id, null), candidates: [] };
+    return { ...assembleFoodExtraction(id, null), candidates: [], identification: id };
   }
-  if (candidates.length === 0) return { ...assembleFoodExtraction(id, null), candidates: [] };
+  if (candidates.length === 0) return { ...assembleFoodExtraction(id, null), candidates: [], identification: id };
 
   let chosenFdcId: number | null = null;
   try {
@@ -78,7 +85,7 @@ async function attachUsdaMicros(deps: AppDeps, id: FoodIdentification, apiKey: s
     console.warn("pickUsdaCandidate falló; se ofrecen candidatos para elegir a mano:", (e as Error).message);
     chosenFdcId = null;
   }
-  if (chosenFdcId == null) return { ...assembleFoodExtraction(id, null), candidates };
+  if (chosenFdcId == null) return { ...assembleFoodExtraction(id, null), candidates, identification: id };
 
   let usda = null;
   try {
@@ -87,7 +94,7 @@ async function attachUsdaMicros(deps: AppDeps, id: FoodIdentification, apiKey: s
     console.warn("getUsdaFood falló; alta sin micros:", (e as Error).message);
     usda = null;
   }
-  return { ...assembleFoodExtraction(id, usda), candidates };
+  return { ...assembleFoodExtraction(id, usda), candidates, identification: id };
 }
 
 export function nutritionRoutes(deps: AppDeps) {

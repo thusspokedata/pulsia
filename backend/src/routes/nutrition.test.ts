@@ -603,6 +603,29 @@ const usdaPaltaRow = {
 };
 const dosFilasUsda = { [HUEVO_FDC]: usdaEggRow, [PALTA_FDC]: usdaPaltaRow };
 
+test("extract/describe devuelven la identificación que usaron: sin ella no se puede re-mezclar", async () => {
+  // El "¿no es este?" necesita mandarle a /usda/assemble la MISMA identificación con otro fdcId,
+  // y `searchQuery` (que el schema exige) no está en el FoodExtraction. Sin este campo en la
+  // respuesta, el móvil no tiene con qué llamar al endpoint: los candidatos llegarían y no se
+  // podría elegir ninguno.
+  const db = fakeDb({ usdaCandidates: usdaCandidateRows, usdaRows: dosFilasUsda });
+  const ai = { ...aiClient, describeFood: async () => ({ ...HUEVO_ID }), pickUsdaCandidate: async () => HUEVO_FDC };
+  const body = await (await describePost(createApp(deps(db, ai)), "huevo frito")).json();
+  expect(body.identification).toMatchObject({ name: "Huevo frito", searchQuery: "egg whole cooked fried" });
+
+  // Y es re-mezclable tal cual llegó: el viaje de ida y vuelta no la rompe.
+  const remezcla = await assemblePost(createApp(deps(db)), { identification: body.identification, fdcId: PALTA_FDC });
+  expect(remezcla.status).toBe(200);
+  expect(await remezcla.json()).toMatchObject({ usdaFdcId: PALTA_FDC, iron_mg: 0.55 });
+});
+
+test("describe devuelve la identificación FORZADA a sourceMacros 'ai', no la que dijo la IA", async () => {
+  // Si viajara la original ("label"), re-mezclar reintroduciría la mentira que el handler corrige.
+  const mentiroso = { ...aiClient, describeFood: async () => ({ ...HUEVO_ID, sourceMacros: "label" as const }) };
+  const body = await (await describePost(createApp(deps(fakeDb(), mentiroso)), "huevo frito")).json();
+  expect(body.identification.sourceMacros).toBe("ai");
+});
+
 const assemblePost = (app: any, body: unknown) =>
   app.request("/nutrition/usda/assemble", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
