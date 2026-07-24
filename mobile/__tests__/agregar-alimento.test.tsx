@@ -1,11 +1,14 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
 import * as ImagePicker from "expo-image-picker";
 import AgregarAlimentoScreen from "../app/nutricion/agregar-alimento";
-import { createFood, describeFood, extractFood } from "../src/api/nutrition";
+import {
+  assembleUsdaFood, createFood, describeFood, extractFood, getFood, getUsdaEntry, searchUsdaFoods,
+} from "../src/api/nutrition";
+import { useLocalSearchParams } from "expo-router";
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn() },
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: jest.fn(() => ({})),
 }));
 jest.mock("expo-image-picker", () => ({
   requestCameraPermissionsAsync: jest.fn(async () => ({ granted: true })),
@@ -20,7 +23,25 @@ jest.mock("../src/api/nutrition", () => ({
   createFood: jest.fn(),
   getFood: jest.fn(),
   updateFood: jest.fn(),
+  getUsdaEntry: jest.fn(),
+  searchUsdaFoods: jest.fn(),
+  assembleUsdaFood: jest.fn(),
 }));
+
+// Los candidatos que el backend devolvió junto con la extracción. El primero es el que eligió la
+// IA (`usdaFdcId`); el segundo es la corrección que hace el usuario en los tests del "¿no es este?".
+const CANDIDATOS = [
+  { fdcId: 170567, description: "Nuts, almonds", dataType: "sr_legacy_food" },
+  { fdcId: 170178, description: "Nuts, almond butter, plain, without salt", dataType: "sr_legacy_food" },
+];
+
+// La identificación que usó el backend. Es lo que hay que devolverle a `/usda/assemble` para
+// re-mezclar: `searchQuery` no existe en `FoodExtraction`, así que sin guardarla no se puede.
+const IDENTIFICACION = {
+  name: "Almendra", basis: "per_100g", kcal: 579, protein_g: 21, carbs_g: 22, fat_g: 50,
+  saturated_fat_g: 3.8, sugars_g: 4.4, fiber_g: 12.5, sodium_mg: 0, cholesterol_mg: 0, water_ml: 4,
+  unitWeightG: 1.2, sourceMacros: "ai", searchQuery: "almonds raw",
+};
 
 const ALMENDRA = {
   name: "Almendra", basis: "per_100g", kcal: 579, protein_g: 21, carbs_g: 22, fat_g: 50,
@@ -28,15 +49,35 @@ const ALMENDRA = {
   unitWeightG: 1.2, sourceMacros: "ai", sourceMicros: "usda", usdaFdcId: 170567,
   // Un micro de USDA que el formulario NO edita: sirve para probar que sobrevive al guardado.
   vitamin_e_mg: 25.6,
+  candidates: CANDIDATOS, identification: IDENTIFICACION,
+};
+
+// Lo que devuelve `/usda/assemble` con el SEGUNDO candidato: otra fila de USDA, otros micros.
+// Los macros también cambian porque con `sourceMacros: "ai"` USDA le gana a la estimación.
+const MANTECA_ALMENDRA = {
+  ...ALMENDRA, kcal: 614, fiber_g: 10.3, usdaFdcId: 170178, vitamin_e_mg: 24.2, calcium_mg: 347,
+  candidates: undefined, identification: undefined,
 };
 
 beforeEach(() => {
   jest.clearAllMocks();
+  (useLocalSearchParams as jest.Mock).mockReturnValue({});
   (describeFood as jest.Mock).mockResolvedValue(ALMENDRA);
+  (assembleUsdaFood as jest.Mock).mockResolvedValue(MANTECA_ALMENDRA);
+  (searchUsdaFoods as jest.Mock).mockResolvedValue([]);
+  (getUsdaEntry as jest.Mock).mockResolvedValue(CANDIDATOS[0]);
   // `clearAllMocks` limpia las llamadas pero NO las implementaciones: sin esto, el mock que pone el
   // test de la foto se filtraría a los que corren después.
   (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: true });
 });
+
+// Alta por texto que deja el formulario precargado con el match de USDA.
+async function altaConMatch() {
+  await render(<AgregarAlimentoScreen />);
+  await fireEvent.changeText(screen.getByTestId("food-text-input"), "almendra");
+  await fireEvent.press(screen.getByTestId("food-text-submit"));
+  await waitFor(() => expect(screen.getByDisplayValue("Almendra")).toBeTruthy());
+}
 
 test("escribir el alimento precarga el formulario, sin foto", async () => {
   await render(<AgregarAlimentoScreen />);
@@ -98,6 +139,107 @@ test("el alta guarda SODIO aunque el campo se cargue en sal", async () => {
   // Alta a mano: no la estimó nadie, y no hay micros de USDA que anunciar.
   expect(input.sourceMacros).toBe("manual");
   expect(input.sourceMicros).toBeNull();
+});
+
+// ---- "¿no es este?": corregir a mano la fila de USDA que eligió la IA ----
+// La 2ª llamada de IA se equivoca de verdad (para "fried egg" el mejor match por trigramas es
+// "Fried eggplant"), así que sin esto los micros quedan mal y no hay forma de arreglarlos.
+
+test("el alta con match dice de qué entrada de USDA salieron los micros", async () => {
+  await altaConMatch();
+  expect(screen.getByTestId("usda-chip")).toHaveTextContent(/^USDA · Nuts, almonds$/);
+});
+
+test("el '¿no es este?' despliega los candidatos, y arrancan ocultos", async () => {
+  await altaConMatch();
+  // Cerrado por defecto: son 8 filas en inglés y el 90 % de las veces el match está bien.
+  expect(screen.queryByTestId("usda-candidato-170178")).toBeNull();
+  await fireEvent.press(screen.getByTestId("usda-no-es-este"));
+  expect(screen.getByTestId("usda-candidato-170178")).toBeTruthy();
+  expect(screen.getByText("Nuts, almond butter, plain, without salt")).toBeTruthy();
+});
+
+test("elegir otro candidato re-mezcla con la identificación del alta y recarga el formulario", async () => {
+  await altaConMatch();
+  await fireEvent.press(screen.getByTestId("usda-no-es-este"));
+  await fireEvent.press(screen.getByTestId("usda-candidato-170178"));
+
+  await waitFor(() => expect(assembleUsdaFood).toHaveBeenCalledWith("http://x", IDENTIFICACION, 170178));
+  // Los valores VISIBLES cambian: kcal y fibra son de la fila nueva, no de la que eligió la IA.
+  await waitFor(() => expect(screen.getByDisplayValue("614")).toBeTruthy());
+  expect(screen.getByDisplayValue("10.3")).toBeTruthy();
+  // Y el chip nombra la entrada nueva: si siguiera diciendo "Nuts, almonds" el usuario no sabría
+  // si su corrección se aplicó.
+  expect(screen.getByTestId("usda-chip")).toHaveTextContent(/^USDA · Nuts, almond butter, plain, without salt$/);
+});
+
+test("elegir otro candidato y guardar persiste los micros del NUEVO, no los del viejo", async () => {
+  // EL BUG DE LA COSTURA. El formulario solo edita 6 micros; los otros 24 viajan de vuelta en
+  // `carried` porque el PATCH reemplaza la fila entera. Si al recargar con el resultado de la
+  // re-mezcla `carried` no se actualiza, la pantalla muestra la fila nueva y guarda la vieja.
+  await altaConMatch();
+  await fireEvent.press(screen.getByTestId("usda-no-es-este"));
+  await fireEvent.press(screen.getByTestId("usda-candidato-170178"));
+  await waitFor(() => expect(screen.getByDisplayValue("614")).toBeTruthy());
+
+  await fireEvent.press(screen.getByText("Guardar en el catálogo"));
+  await waitFor(() => expect(createFood).toHaveBeenCalled());
+  const input = (createFood as jest.Mock).mock.calls[0][1];
+  expect(input.usdaFdcId).toBe(170178);
+  expect(input.vitamin_e_mg).toBe(24.2); // la manteca de almendras, NO los 25,6 de la almendra
+  expect(input.calcium_mg).toBe(347);
+  expect(input.sourceMicros).toBe("usda");
+  // Y los micros que el form SÍ edita también son los nuevos.
+  expect(input.fiber_g).toBe(10.3);
+});
+
+test("si el candidato no está en la lista, se busca en USDA y se elige de los resultados", async () => {
+  const otro = { fdcId: 173424, description: "Egg, whole, cooked, fried", dataType: "sr_legacy_food" };
+  (searchUsdaFoods as jest.Mock).mockResolvedValue([otro]);
+  (assembleUsdaFood as jest.Mock).mockResolvedValue({ ...MANTECA_ALMENDRA, kcal: 196, usdaFdcId: 173424 });
+
+  await altaConMatch();
+  await fireEvent.press(screen.getByTestId("usda-no-es-este"));
+  await fireEvent.changeText(screen.getByTestId("usda-buscar-input"), "fried egg");
+  await fireEvent.press(screen.getByTestId("usda-buscar-submit"));
+
+  await waitFor(() => expect(searchUsdaFoods).toHaveBeenCalledWith("http://x", "fried egg"));
+  await waitFor(() => expect(screen.getByTestId("usda-resultado-173424")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("usda-resultado-173424"));
+  await waitFor(() => expect(assembleUsdaFood).toHaveBeenCalledWith("http://x", IDENTIFICACION, 173424));
+  await waitFor(() => expect(screen.getByDisplayValue("196")).toBeTruthy());
+});
+
+test("si la re-mezcla falla, lo dice y no deja el formulario mostrando otra cosa", async () => {
+  (assembleUsdaFood as jest.Mock).mockRejectedValue(new Error("No se pudo usar esa entrada de USDA."));
+  await altaConMatch();
+  await fireEvent.press(screen.getByTestId("usda-no-es-este"));
+  await fireEvent.press(screen.getByTestId("usda-candidato-170178"));
+
+  await waitFor(() => expect(screen.getByText("No se pudo usar esa entrada de USDA.")).toBeTruthy());
+  // El formulario sigue con lo que había, y el chip con la entrada que sigue vigente.
+  expect(screen.getByDisplayValue("579")).toBeTruthy();
+  expect(screen.getByTestId("usda-chip")).toHaveTextContent(/^USDA · Nuts, almonds$/);
+});
+
+test("en modo edición se ve el chip de USDA pero NO se ofrece corregir el match", async () => {
+  // El alimento persistido no guarda `searchQuery`, así que no hay identificación con la que
+  // re-mezclar. Ofrecer el "¿no es este?" acá daría un botón que no puede funcionar.
+  (useLocalSearchParams as jest.Mock).mockReturnValue({ foodId: "abc" });
+  (getFood as jest.Mock).mockResolvedValue({ ...ALMENDRA, id: "abc", createdAt: 1, candidates: undefined, identification: undefined });
+
+  await render(<AgregarAlimentoScreen />);
+  await waitFor(() => expect(screen.getByDisplayValue("Almendra")).toBeTruthy());
+  expect(getUsdaEntry).toHaveBeenCalledWith("http://x", 170567);
+  await waitFor(() => expect(screen.getByTestId("usda-chip")).toHaveTextContent(/^USDA · Nuts, almonds$/));
+  expect(screen.queryByTestId("usda-no-es-este")).toBeNull();
+});
+
+test("un alta a mano no muestra nada de USDA", async () => {
+  await render(<AgregarAlimentoScreen />);
+  await fireEvent.changeText(screen.getByPlaceholderText("Nombre"), "Fiambre");
+  expect(screen.queryByTestId("usda-chip")).toBeNull();
+  expect(screen.queryByTestId("usda-no-es-este")).toBeNull();
 });
 
 test("si la IA falla, lo dice y no rompe el formulario", async () => {

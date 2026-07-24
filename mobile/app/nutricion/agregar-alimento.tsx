@@ -3,9 +3,12 @@ import { ScrollView, View, Text, TextInput, Pressable, ActivityIndicator } from 
 import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { getBackendUrl } from "../../src/storage/config";
-import { extractFood, describeFood, createFood, getFood, updateFood } from "../../src/api/nutrition";
+import {
+  extractFood, describeFood, createFood, getFood, updateFood,
+  getUsdaEntry, searchUsdaFoods, assembleUsdaFood, type UsdaEntry,
+} from "../../src/api/nutrition";
 import { NUTRIENT_KEYS } from "@pulsia/shared";
-import type { FoodBasis, FoodExtraction, NutrientValues, SourceMacros, SourceMicros } from "@pulsia/shared";
+import type { FoodBasis, FoodExtraction, FoodIdentification, NutrientValues, SourceMacros, SourceMicros } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 import { SourceChip } from "../../src/nutrition/SourceChip";
@@ -80,6 +83,22 @@ export default function AgregarAlimentoScreen() {
   const { foodId } = useLocalSearchParams<{ foodId?: string }>();
   const [loading, setLoading] = useState(!!foodId);
 
+  // ---- Estado del "¿no es este?" ----
+  // `identification` es lo que hace posible corregir el match: la re-mezcla necesita la
+  // identificación ENTERA (con su `searchQuery`, que no es un campo de FoodExtraction), así que
+  // guardarla al prefillear no es un detalle — sin ella los candidatos no se pueden usar.
+  // En modo edición queda en null: el alimento persistido no guarda `searchQuery`.
+  const [identification, setIdentification] = useState<FoodIdentification | null>(null);
+  const [candidatos, setCandidatos] = useState<UsdaEntry[]>([]);
+  // La fila de USDA vigente, para nombrarla en el chip. En el alta sale de los candidatos; en
+  // edición se resuelve por `getUsdaEntry` (el alimento solo persiste el id).
+  const [entradaUsda, setEntradaUsda] = useState<UsdaEntry | null>(null);
+  const [corrigiendo, setCorrigiendo] = useState(false);
+  const [remezclando, setRemezclando] = useState(false);
+  const [busquedaUsda, setBusquedaUsda] = useState("");
+  const [resultadosUsda, setResultadosUsda] = useState<UsdaEntry[] | null>(null);
+  const [buscandoUsda, setBuscandoUsda] = useState(false);
+
   useEffect(() => {
     (async () => {
       const url = await getBackendUrl();
@@ -89,16 +108,28 @@ export default function AgregarAlimentoScreen() {
           // Un Food es un FoodExtraction con id y createdAt, así que el alimento guardado se carga
           // por el MISMO camino que lo que devuelve la IA: dos mapeos paralelos son dos lugares
           // donde olvidarse de un campo nuevo.
-          prefillFrom(await getFood(url, foodId));
+          const f = await getFood(url, foodId);
+          prefillFrom(f);
+          // La descripción de la entrada de USDA NO viaja con el alimento (que solo persiste el
+          // `usdaFdcId`): se resuelve aparte, igual que en el detalle del catálogo. Va en su
+          // propio catch porque es un adorno — si falla, el chip cae al id y la edición sigue.
+          if (f.usdaFdcId != null) {
+            try { setEntradaUsda(await getUsdaEntry(url, f.usdaFdcId)); } catch { /* el chip cae al id */ }
+          }
         } catch (e) { setError((e as Error).message); }
       }
       setLoading(false);
     })();
   }, [foodId]);
 
-  // Compartida por los dos caminos de alta con IA (foto y texto): el formulario tiene que quedar
-  // igual venga de donde venga.
-  function prefillFrom(ex: FoodExtraction) {
+  // Compartida por los TRES caminos que cargan valores (foto, texto y la re-mezcla del "¿no es
+  // este?"), más la edición: el formulario tiene que quedar igual venga de donde venga.
+  //
+  // `setCarried` acá dentro es lo que hace que corregir el match sea seguro: `carried` lleva los
+  // 24 micros que el formulario NO edita, y el PATCH reemplaza la fila entera. Si esta función
+  // recargara los campos visibles y dejara el `carried` viejo, elegir otro candidato mostraría la
+  // fila nueva en pantalla y persistiría las vitaminas de la anterior.
+  function prefillFrom(ex: FoodExtraction, entrada?: UsdaEntry | null) {
     const numStr = (v: number | null | undefined) => (v == null ? "" : String(v));
     setForm({
       name: ex.name, basis: ex.basis, kcal: String(ex.kcal), protein_g: String(ex.protein_g),
@@ -109,6 +140,49 @@ export default function AgregarAlimentoScreen() {
       unitWeightG: ex.unitWeightG == null ? "" : String(ex.unitWeightG), sourceMacros: ex.sourceMacros,
     });
     setCarried(carriedFrom(ex));
+    if (entrada !== undefined) setEntradaUsda(entrada);
+  }
+
+  // Lo que devuelven extract/describe: la extracción + los candidatos de USDA + la identificación
+  // que el backend usó. Los tres llegan juntos y se guardan juntos.
+  function prefillFromExtraction(res: FoodExtraction & { candidates?: UsdaEntry[]; identification?: FoodIdentification }) {
+    const cands = res.candidates ?? [];
+    setIdentification(res.identification ?? null);
+    setCandidatos(cands);
+    setCorrigiendo(false);
+    setBusquedaUsda(""); setResultadosUsda(null);
+    prefillFrom(res, cands.find((c) => c.fdcId === res.usdaFdcId) ?? null);
+  }
+
+  /** El usuario dijo "no es este" y eligió otra fila: se re-mezcla y se recarga TODO el form. */
+  async function elegirEntradaUsda(entrada: UsdaEntry) {
+    if (identification == null || !baseUrl.current) return;
+    setError(null);
+    setRemezclando(true);
+    try {
+      prefillFrom(await assembleUsdaFood(baseUrl.current, identification, entrada.fdcId), entrada);
+      setCorrigiendo(false);
+    } catch (e) {
+      // El backend NO degrada a "sin micros" cuando el fdcId no existe, y acá tampoco: se avisa y
+      // el formulario queda con la entrada que seguía vigente.
+      setError((e as Error).message);
+    } finally {
+      setRemezclando(false);
+    }
+  }
+
+  async function buscarEnUsda() {
+    const q = busquedaUsda.trim();
+    if (q.length < 2 || !baseUrl.current) return;
+    setError(null);
+    setBuscandoUsda(true);
+    try {
+      setResultadosUsda(await searchUsdaFoods(baseUrl.current, q));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBuscandoUsda(false);
+    }
   }
 
   async function describeAndPrefill() {
@@ -120,7 +194,7 @@ export default function AgregarAlimentoScreen() {
     if (!baseUrl.current) { setError("No se pudo conectar con el servidor."); return; }
     setAnalyzing(true);
     try {
-      prefillFrom(await describeFood(baseUrl.current, text));
+      prefillFromExtraction(await describeFood(baseUrl.current, text));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -143,8 +217,7 @@ export default function AgregarAlimentoScreen() {
     if (!baseUrl.current) { setError("No se pudo conectar con el servidor."); return; }
     setAnalyzing(true);
     try {
-      const ex = await extractFood(baseUrl.current, asset.base64!, mime);
-      prefillFrom(ex);
+      prefillFromExtraction(await extractFood(baseUrl.current, asset.base64!, mime));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -215,6 +288,93 @@ export default function AgregarAlimentoScreen() {
     </Pressable>
   );
 
+  // Una fila elegible de USDA. La descripción va en inglés, tal como la publica USDA: traducirla
+  // impediría el chequeo que el usuario está haciendo justamente acá (ver "fried egg" →
+  // "Fried eggplant", que es el error que este bloque existe para corregir).
+  const filaUsda = (entrada: UsdaEntry, prefijo: string) => (
+    <Pressable
+      key={`${prefijo}-${entrada.fdcId}`}
+      testID={`usda-${prefijo}-${entrada.fdcId}`}
+      accessibilityRole="button"
+      disabled={remezclando}
+      onPress={() => void elegirEntradaUsda(entrada)}
+      style={{ paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}
+    >
+      <Text style={{ color: colors.text, fontSize: 13 }}>{entrada.description}</Text>
+    </Pressable>
+  );
+
+  // De qué fila de USDA salieron las vitaminas y los minerales, y cómo cambiarla.
+  //
+  // El "¿no es este?" SOLO aparece cuando hay `identification` (alta por foto o texto). En modo
+  // edición el alimento persistido no guarda `searchQuery`, así que no hay con qué re-mezclar:
+  // el chip informa, y corregir el match se hace dando de alta de nuevo.
+  const puedeCorregir = identification != null;
+  const bloqueUsda = (carried.usdaFdcId != null || puedeCorregir) && (
+    <View style={{ gap: spacing.xs }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" }}>
+        {carried.usdaFdcId != null ? (
+          <Text testID="usda-chip" style={{ color: colors.icon, fontSize: 12, flexShrink: 1 }}>
+            {`USDA · ${entradaUsda?.description ?? `entrada ${carried.usdaFdcId}`}`}
+          </Text>
+        ) : (
+          <Text testID="usda-sin-match" style={{ color: colors.icon, fontSize: 12, flexShrink: 1 }}>
+            Sin vitaminas ni minerales de USDA
+          </Text>
+        )}
+        {puedeCorregir && (
+          <Pressable testID="usda-no-es-este" accessibilityRole="button" onPress={() => setCorrigiendo((v) => !v)}>
+            <Text style={{ color: colors.accentText, fontSize: 12, fontWeight: "600" }}>
+              {carried.usdaFdcId != null ? "¿no es este?" : "elegir a mano"}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+
+      {/* Arranca cerrado: son hasta 8 filas en inglés, y la mayoría de las veces el match está
+          bien. Se abre solo cuando el usuario dice que no. */}
+      {corrigiendo && puedeCorregir && (
+        <View style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md }}>
+          <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+            Elegí la entrada de USDA que corresponde. Los valores del formulario se recargan con esa fila.
+          </Text>
+          {/* La vigente no se lista: "¿no es este?" es la lista de las OTRAS, y volver a elegir la
+              misma sería una llamada al backend que no cambia nada. */}
+          {candidatos.filter((c) => c.fdcId !== carried.usdaFdcId).map((c) => filaUsda(c, "candidato"))}
+
+          <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: spacing.md }}>¿No está el que buscás?</Text>
+          <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs }}>
+            <TextInput
+              testID="usda-buscar-input"
+              value={busquedaUsda}
+              onChangeText={setBusquedaUsda}
+              placeholder="Buscar en USDA (en inglés)"
+              placeholderTextColor={colors.icon}
+              style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.sm, color: colors.text }}
+            />
+            <Pressable
+              testID="usda-buscar-submit"
+              onPress={() => void buscarEnUsda()}
+              disabled={buscandoUsda || busquedaUsda.trim().length < 2}
+              style={{ backgroundColor: colors.accentSoft, borderRadius: radius.sm, paddingHorizontal: spacing.md, justifyContent: "center", opacity: buscandoUsda || busquedaUsda.trim().length < 2 ? 0.5 : 1 }}
+            >
+              <Text style={{ color: colors.accentText, fontWeight: "600", fontSize: 13 }}>Buscar</Text>
+            </Pressable>
+          </View>
+          {/* `null` = todavía no se buscó; `[]` = se buscó y no hubo nada. Un "sin resultados"
+              mostrado antes de buscar diría que USDA no tiene el alimento, que es otra cosa. */}
+          {resultadosUsda != null && resultadosUsda.length === 0 && !buscandoUsda && (
+            <Text testID="usda-sin-resultados" style={{ color: colors.textMuted, fontSize: 12, marginTop: spacing.sm }}>
+              No hay entradas de USDA para esa búsqueda.
+            </Text>
+          )}
+          {(resultadosUsda ?? []).map((c) => filaUsda(c, "resultado"))}
+          {remezclando && <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.sm }} />}
+        </View>
+      )}
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center" }}>
@@ -262,6 +422,7 @@ export default function AgregarAlimentoScreen() {
 
       {form.name.trim() !== "" && <SourceChip sourceMacros={form.sourceMacros} sourceMicros={carried.sourceMicros} />}
       {field("Nombre", "name")}
+      {bloqueUsda}
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
         {chip("Sólido (100g)", form.basis === "per_100g", () => setForm((f) => ({ ...f, basis: "per_100g" })))}
         {chip("Líquido (100ml)", form.basis === "per_100ml", () => setForm((f) => ({ ...f, basis: "per_100ml" })))}

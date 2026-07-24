@@ -3,6 +3,7 @@ import type {
   Food,
   FoodInput,
   FoodExtraction,
+  FoodIdentification,
   Meal,
   MealInput,
   NutritionGoalInput,
@@ -10,23 +11,37 @@ import type {
   WaterLogInput,
 } from "@pulsia/shared";
 
-export async function extractFood(baseUrl: string, imageBase64: string, mediaType: string): Promise<FoodExtraction> {
+/**
+ * Lo que devuelven `extract` y `describe`: la extracción que prefillea el formulario MÁS lo que
+ * hace posible el "¿no es este?".
+ *
+ * `candidates` son las filas de USDA que matchearon (hasta 8, rankeadas; vacío si no hubo match) y
+ * `identification` es la identificación que usó el backend — la que hay que devolverle a
+ * `/usda/assemble` para re-mezclar con otra fila. Viaja porque `searchQuery` NO es un campo de
+ * `FoodExtraction`: sin ella el formulario recibiría los candidatos y no podría elegir ninguno.
+ */
+export interface FoodExtractionResponse extends FoodExtraction {
+  candidates: UsdaEntry[];
+  identification: FoodIdentification;
+}
+
+export async function extractFood(baseUrl: string, imageBase64: string, mediaType: string): Promise<FoodExtractionResponse> {
   // La imagen va entera en el body → margen mayor al timeout por defecto (15s).
   const res = await apiFetch(baseUrl, "/nutrition/foods/extract", {
     method: "POST", body: JSON.stringify({ imageBase64, mediaType }), timeoutMs: 60000,
   });
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo analizar la foto."));
-  return (await res.json()) as FoodExtraction;
+  return (await res.json()) as FoodExtractionResponse;
 }
 
-export async function describeFood(baseUrl: string, text: string): Promise<FoodExtraction> {
+export async function describeFood(baseUrl: string, text: string): Promise<FoodExtractionResponse> {
   // El timeout largo no es por el payload (son 2 palabras) sino por el modelo: el default de 15s
   // no alcanza para una respuesta de Opus.
   const res = await apiFetch(baseUrl, "/nutrition/foods/describe", {
     method: "POST", body: JSON.stringify({ text }), timeoutMs: 60000,
   });
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo analizar el alimento."));
-  return (await res.json()) as FoodExtraction;
+  return (await res.json()) as FoodExtractionResponse;
 }
 
 export async function createFood(baseUrl: string, input: FoodInput): Promise<Food> {
@@ -68,6 +83,40 @@ export async function getUsdaEntry(baseUrl: string, fdcId: number): Promise<Usda
   const res = await apiFetch(baseUrl, `/nutrition/usda/${fdcId}`);
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo cargar la entrada de USDA."));
   return (await res.json()) as UsdaEntry;
+}
+
+/**
+ * Búsqueda manual en la copia local de USDA, para cuando el candidato correcto no está entre los
+ * 8 que trajo el alta ("¿no es este?" → "no está el que busco").
+ *
+ * Devuelve identidades, no valores: elegir uno pasa por `assembleUsdaFood`.
+ */
+export async function searchUsdaFoods(baseUrl: string, q: string): Promise<UsdaEntry[]> {
+  // `encodeURIComponent` y no interpolar crudo: los términos son frases en inglés con espacios
+  // ("fried egg"), y sin escapar el backend recibe otra cosa que la que el usuario escribió.
+  const res = await apiFetch(baseUrl, `/nutrition/usda/search?q=${encodeURIComponent(q)}`);
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo buscar en USDA."));
+  return (await res.json()) as UsdaEntry[];
+}
+
+/**
+ * Re-mezcla: la misma identificación del alta, pero con la fila de USDA que eligió el usuario.
+ *
+ * No persiste nada — devuelve la extracción para que el formulario recargue sus valores. Un
+ * `fdcId` inexistente da 404 y ACÁ SE LANZA: el backend no degrada a "sin micros" a propósito
+ * (el usuario pidió ESA fila), y tragarse el error dejaría el formulario mostrando el alimento
+ * anterior como si la elección hubiera funcionado.
+ */
+export async function assembleUsdaFood(
+  baseUrl: string,
+  identification: FoodIdentification,
+  fdcId: number,
+): Promise<FoodExtraction> {
+  const res = await apiFetch(baseUrl, "/nutrition/usda/assemble", {
+    method: "POST", body: JSON.stringify({ identification, fdcId }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo usar esa entrada de USDA."));
+  return (await res.json()) as FoodExtraction;
 }
 
 export async function updateFood(baseUrl: string, id: string, input: FoodInput): Promise<Food> {
