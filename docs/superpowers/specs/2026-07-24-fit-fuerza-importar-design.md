@@ -82,6 +82,14 @@ Estas dos piezas son sobre el **`.FIT`**, no sobre dónde se guarda. Valen igual
 C, así que son seguras de construir antes de que decidas §3. Funciones puras, con tests, sin DB, sin
 migración.
 
+> **⚠️ Estado real (2026-07-24, noche, owner ausente):** el `.FIT` de ejemplo del owner **ya no está
+> en disco** (fue transitorio). El **parser (4a)** necesita ese archivo para verificar cómo cada
+> `setMesg` referencia su ejercicio — la hipótesis es por `category`+`categorySubtype` (que casan con
+> `exerciseTitleMesg.exerciseCategory`+`exerciseName`), NO por `wktStepIndex` (que en el análisis
+> previo NO indexaba los títulos 1:1). **Esa relación no se adivina**: 4a queda **bloqueado** hasta
+> que el owner re-comparta un `.FIT` de fuerza. El **mapeo (4b)** NO depende del archivo (usa el SDK)
+> → se implementa esta noche.
+
 ### 4a — Parser de fuerza
 
 `backend/src/cardio/parseFitStrength.ts` (nuevo): `parseFitStrength(messages) → FitStrengthPreview`.
@@ -109,7 +117,11 @@ interface FitStrengthPreview {
 
 ### 4b — Mapeo de ejercicios al catálogo
 
-`shared/src/catalog/fitExerciseMap.ts` (nuevo): `mapFitExercise(category, exerciseNameIndex) → catalogId | null`.
+`backend/src/cardio/fitExerciseMap.ts` (nuevo): `mapFitExercise(category, exerciseNameIndex) → catalogId | null`.
+
+> Va en **backend**, no en shared: usa `Profile.types` de `@garmin/fitsdk`, que es dep de backend.
+> Meterlo en el runtime de shared arrastraría el SDK al bundle móvil y **rebasaría el fingerprint del
+> OTA** ([[ota-fingerprint-gotcha]]). El catálogo (`EXERCISE_CATALOG`) sí se importa de `@pulsia/shared`.
 
 - Usa `Profile.types[`${category}ExerciseName`][index]` del SDK de Garmin (la **misma fuente** de la
   que se genera nuestro catálogo) → `camelName` → slug → match contra `EXERCISE_CATALOG`.
