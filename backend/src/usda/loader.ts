@@ -106,16 +106,33 @@ interface Artefacto {
 
 const DATA_DIR = join(import.meta.dir, "..", "..", "data");
 
-/** Busca el único `.json.gz` de USDA en `backend/data`. null si no hay ninguno. */
-async function encontrarArtefacto(dataDir: string): Promise<string | null> {
-  let entradas: string[];
+export type SeleccionArtefacto =
+  | { tipo: "ok"; nombre: string }
+  | { tipo: "ambiguo"; nombres: string[] }
+  | { tipo: "ninguno" };
+
+/**
+ * Elige el artefacto entre los nombres de archivo de `backend/data`. Parte pura, sin IO.
+ *
+ * Con DOS artefactos no elige: un `.find()` cargaría el que el filesystem devuelva primero y
+ * `usda_dataset` quedaría con esa versión, en silencio y distinto en cada máquina. Ambiguo es un
+ * error del operador (agregar una versión sin borrar la vieja) y se resuelve borrando una, no
+ * adivinando. La lista sale ordenada para que el mensaje de error sea reproducible.
+ */
+export function elegirArtefacto(entradas: string[]): SeleccionArtefacto {
+  const candidatos = entradas.filter((f) => f.startsWith("usda-") && f.endsWith(".json.gz")).sort();
+  if (candidatos.length === 0) return { tipo: "ninguno" };
+  if (candidatos.length > 1) return { tipo: "ambiguo", nombres: candidatos };
+  return { tipo: "ok", nombre: candidatos[0]! };
+}
+
+/** Lista `backend/data` y delega la decisión en `elegirArtefacto`. Un dir ilegible = ninguno. */
+async function encontrarArtefacto(dataDir: string): Promise<SeleccionArtefacto> {
   try {
-    entradas = await readdir(dataDir);
+    return elegirArtefacto(await readdir(dataDir));
   } catch {
-    return null;
+    return { tipo: "ninguno" };
   }
-  const candidato = entradas.find((f) => f.startsWith("usda-") && f.endsWith(".json.gz"));
-  return candidato ? join(dataDir, candidato) : null;
 }
 
 async function leerArtefacto(ruta: string): Promise<Artefacto> {
@@ -158,13 +175,23 @@ async function cargarFilas(db: Db, version: string, filas: FilaArtefacto[]): Pro
  */
 export async function cargarUsdaSiHaceFalta(db: Db, dataDir: string = DATA_DIR): Promise<void> {
   try {
-    const ruta = await encontrarArtefacto(dataDir);
-    if (!ruta) {
+    const seleccion = await encontrarArtefacto(dataDir);
+    if (seleccion.tipo === "ninguno") {
       console.warn(`usda: no encontré ningún .json.gz en ${dataDir}; sigo sin catálogo local`);
       return;
     }
+    if (seleccion.tipo === "ambiguo") {
+      // Ruidoso pero NO fatal: el arranque sigue (spec §7) y el alta de alimentos degrada al
+      // camino sin USDA, que es preferible a cargar una versión elegida al azar.
+      console.error(
+        `usda: hay ${seleccion.nombres.length} artefactos en ${dataDir} ` +
+          `(${seleccion.nombres.join(", ")}); no cargo ninguno para no elegir una versión al azar. ` +
+          `Dejá uno solo y reiniciá.`,
+      );
+      return;
+    }
 
-    const { version, rows } = await leerArtefacto(ruta);
+    const { version, rows } = await leerArtefacto(join(dataDir, seleccion.nombre));
 
     const actuales = await db.select().from(usdaDataset).where(eq(usdaDataset.id, 1));
     const actual: DatasetRow | null = actuales[0]

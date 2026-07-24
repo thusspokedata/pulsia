@@ -98,8 +98,9 @@ export const food = pgTable("food", {
   carbsG: real("carbs_g").notNull(),
   fatG: real("fat_g").notNull(),
   // --- Los 30 nutrientes del registro (shared/src/nutrition/nutrients.ts). TODOS nullable:
-  // `null` es "no sabemos", que NO es 0. El test de schema.nutrients.test.ts verifica que no se
-  // desincronicen con el registro. ---
+  // `null` es "no sabemos", que NO es 0. La paridad con el registro (y la de meal_item) la
+  // guardan los tests de nutrition/columns.test.ts: si se agrega un nutriente y se olvida la
+  // columna acá, fallan. ---
   // Grasas
   saturatedFatG: real("saturated_fat_g"),
   omega3G: real("omega3_g"),
@@ -169,6 +170,7 @@ export const mealItem = pgTable("meal_item", {
   fatG: real("fat_g").notNull(),
   // Los mismos 30 nutrientes que `food`, pero YA escalados a este ítem (snapshot). NO lleva
   // source_macros/source_micros/usda_fdc_id: el ítem guarda valores, no la procedencia.
+  // La paridad con el registro la guarda nutrition/columns.test.ts (ver el comentario en `food`).
   saturatedFatG: real("saturated_fat_g"),
   omega3G: real("omega3_g"),
   omega6G: real("omega6_g"),

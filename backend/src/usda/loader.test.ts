@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { NUTRIENT_KEYS } from "@pulsia/shared";
 import { nutrientColumn } from "../nutrition/columns";
-import { shouldLoad, filaAColumnas, type FilaArtefacto } from "./loader";
+import { shouldLoad, filaAColumnas, elegirArtefacto, type FilaArtefacto } from "./loader";
 
 // --------------------------------------------------------------------------------------------
 // shouldLoad
@@ -77,4 +77,48 @@ test("filaAColumnas escribe null (no undefined) para lo que la fila no trae", ()
   for (const key of NUTRIENT_KEYS) {
     expect(columnas[nutrientColumn(key)], key).toBeNull();
   }
+});
+
+// --------------------------------------------------------------------------------------------
+// elegirArtefacto — parte pura de la búsqueda del `.json.gz` en backend/data.
+//
+// El caso que importa es el de DOS artefactos (agregar una versión nueva sin borrar la vieja):
+// con un `.find()` se cargaría el que el filesystem devuelva primero y `usda_dataset` quedaría
+// con esa versión, en silencio y sin ser reproducible entre máquinas. Preferimos no cargar nada
+// y gritarlo: sin dataset el alta de alimentos degrada al camino sin USDA (spec §7), y eso se
+// nota; cargar la versión equivocada, no.
+// --------------------------------------------------------------------------------------------
+
+test("con un solo artefacto, lo elige", () => {
+  expect(elegirArtefacto(["usda-2026-07.json.gz"])).toEqual({ tipo: "ok", nombre: "usda-2026-07.json.gz" });
+});
+
+test("con dos artefactos NO elige ninguno: ambiguo, con los nombres para el log", () => {
+  const r = elegirArtefacto(["usda-2026-07.json.gz", "usda-2025-01.json.gz"]);
+  expect(r).toEqual({ tipo: "ambiguo", nombres: ["usda-2025-01.json.gz", "usda-2026-07.json.gz"] });
+});
+
+test("el listado de ambiguos NO depende del orden que devuelva el filesystem", () => {
+  const a = elegirArtefacto(["usda-2026-07.json.gz", "usda-2025-01.json.gz"]);
+  const b = elegirArtefacto(["usda-2025-01.json.gz", "usda-2026-07.json.gz"]);
+  expect(a).toEqual(b);
+});
+
+test("sin artefactos, ninguno", () => {
+  expect(elegirArtefacto([])).toEqual({ tipo: "ninguno" });
+});
+
+test("los archivos que no matchean el patron se ignoran", () => {
+  const entradas = [
+    "README.md",
+    "usda-2026-07.json", // sin .gz: es el intermedio del build, no el artefacto
+    "otro-2026-07.json.gz", // no empieza con usda-
+    "usda-2026-07.json.gz",
+    ".DS_Store",
+  ];
+  expect(elegirArtefacto(entradas)).toEqual({ tipo: "ok", nombre: "usda-2026-07.json.gz" });
+});
+
+test("solo archivos que no matchean = ninguno (no confundir con ambiguo)", () => {
+  expect(elegirArtefacto(["README.md", "usda-2026-07.json"])).toEqual({ tipo: "ninguno" });
 });
