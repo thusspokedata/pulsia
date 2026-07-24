@@ -7,7 +7,7 @@ const data: any = {
   metrics: { weight_kg: 80, sleep_hours: 5, stress: 4 },
   athlete: { goal: { status: "ok", kcal: 2000, protein_g: 150, carbs_g: 200, fat_g: 60, bmr: 1700 } },
   periodDays: 7, weightTrend: { first: 82, last: 80 },
-  foodNames: [], foodNamesTotal: 0, supplements: null,
+  foodNames: [], foodNamesTotal: 0, supplements: null, activities: [],
 };
 
 test("el prompt incluye los datos, el tipo, anti-inyección y el anclaje no-médico", () => {
@@ -35,6 +35,38 @@ test("periódico: instruye a promediar por día y menciona la tendencia de peso"
 test("diario NO habla de promedios de varios días", () => {
   const p = buildReportPrompt("daily", { ...data, periodDays: 1, weightTrend: null });
   expect(p).not.toMatch(/promediá por día|dividí por/i);
+});
+
+test("diario: lista cada actividad con su nombre, duración, kcal y FC", () => {
+  const p = buildReportPrompt("daily", {
+    ...data, periodDays: 1, sessionsCount: 0,
+    activities: [
+      { name: "Fuerza", durationMin: 47, kcal: 354, avgHr: 134 },
+      { name: "Fuerza", durationMin: 28, kcal: 124, avgHr: 102 },
+    ],
+  });
+  expect(p).toMatch(/Fuerza 47 min/);   // patrón completo, no el literal "Fuerza" suelto
+  expect(p).toMatch(/Fuerza 28 min/);
+  expect(p).toMatch(/354/);
+});
+
+test("periódico: agrega las actividades por nombre en vez de listarlas", () => {
+  const p = buildReportPrompt("weekly", {
+    ...data, periodDays: 7,
+    activities: [
+      { name: "Fuerza", durationMin: 47, kcal: 354, avgHr: 134 },
+      { name: "Fuerza", durationMin: 28, kcal: 124, avgHr: 102 },
+      { name: "Caminata", durationMin: 30, kcal: 150, avgHr: 90 },
+    ],
+  });
+  expect(p).toMatch(/2×\s*Fuerza/);
+  expect(p).toMatch(/1×\s*Caminata/);
+  expect(p).not.toMatch(/Fuerza 47 min/); // en periódico NO se lista cada una
+});
+
+test("sin actividades no aparece la línea de actividades", () => {
+  const p = buildReportPrompt("daily", { ...data, periodDays: 1, activities: [] });
+  expect(p).not.toMatch(/Actividades registradas/);
 });
 
 // ---- PR3: sección de suplementos + ajuste ----

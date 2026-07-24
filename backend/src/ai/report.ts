@@ -7,6 +7,24 @@ const KIND_ES: Record<ReportKind, string> = {
 
 const n = (v: number | null | undefined, unit = "") => (v == null ? "s/d" : `${v}${unit}`);
 
+// Desglose de actividades registradas/importadas (cardio + entrenamientos de fuerza importados del
+// .FIT, que hoy se guardan como cardio "other" con sportProfileName="Fuerza"). En el informe diario
+// se lista cada una; en el periódico se agregan por nombre para no inundar el prompt. Devuelve null
+// si no hubo ninguna (la línea se filtra igual que foodNamesLine).
+function activitiesLine(d: ReportData): string | null {
+  if (d.activities.length === 0) return null;
+  if (d.periodDays === 1) {
+    const items = d.activities.map(
+      (a) => `${a.name} ${a.durationMin} min (${n(a.kcal, " kcal")}, FC ${n(a.avgHr)})`,
+    );
+    return `- Actividades registradas/importadas: ${items.join(", ")}`;
+  }
+  const counts = new Map<string, number>();
+  for (const a of d.activities) counts.set(a.name, (counts.get(a.name) ?? 0) + 1);
+  const agg = [...counts.entries()].map(([name, c]) => `${c}× ${name}`);
+  return `- Actividades registradas/importadas: ${agg.join(", ")}`;
+}
+
 function dataBlock(d: ReportData): string {
   const g = d.athlete.goal;
   const meta = g.status === "ok" ? `meta ${n(g.kcal)} kcal (P ${n(g.protein_g)} · C ${n(g.carbs_g)} · G ${n(g.fat_g)})` : "sin meta configurada";
@@ -20,7 +38,9 @@ function dataBlock(d: ReportData): string {
     `- Otros: azúcares ${n(d.totals.sugars_g, "g")}, fibra ${n(d.totals.fiber_g, "g")}, saturadas ${n(d.totals.saturated_fat_g, "g")}, sal ${n(d.totals.salt_g, "g")}`,
     `- Colesterol: ${n(d.cholesterolMg, " mg")} (referencia 300 mg/día)`,
     `- Líquido: ${d.liquid.total} ml (tomada ${d.liquid.drank}, aporte de alimentos ${d.liquid.fromFood})`,
-    `- Entrenamiento: ${d.sessionsCount} sesión(es), gasto estimado ${d.exercise} kcal`,
+    `- Entrenamiento de fuerza (app): ${d.sessionsCount} sesión(es)`,
+    activitiesLine(d),
+    `- Gasto total de ejercicio: ${d.exercise} kcal`,
     `- Progreso: peso ${n(m.weight_kg, " kg")}, pasos ${n(m.steps)}, sueño ${n(m.sleep_hours, " h")}, FC reposo ${n(m.resting_hr)}, estrés ${n(m.stress, "/5")}, ánimo ${n(m.mood, "/5")}, energía ${n(m.energy, "/5")}`,
     // Solo si el peso efectivamente cambió en el rango (redundante en un día con una sola medición).
     d.weightTrend && d.weightTrend.first !== d.weightTrend.last
