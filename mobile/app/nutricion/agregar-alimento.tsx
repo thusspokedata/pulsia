@@ -5,7 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { getBackendUrl } from "../../src/storage/config";
 import {
   extractFood, describeFood, createFood, getFood, updateFood,
-  getUsdaEntry, searchUsdaFoods, assembleUsdaFood, type UsdaEntry,
+  getUsdaEntry, assembleUsdaFood, type UsdaEntry,
 } from "../../src/api/nutrition";
 import { NUTRIENT_KEYS } from "@pulsia/shared";
 import type { FoodBasis, FoodExtraction, FoodIdentification, NutrientValues, SourceMacros, SourceMicros } from "@pulsia/shared";
@@ -13,6 +13,7 @@ import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 import { SourceChip } from "../../src/nutrition/SourceChip";
 import { NutrientFlags } from "../../src/nutrition/NutrientFlags";
+import { UsdaCorrector } from "../../src/nutrition/UsdaCorrector";
 
 const num = (s: string) => Number(s.replace(",", "."));
 const optNum = (s: string) => (s.trim() === "" ? null : num(s));
@@ -95,9 +96,6 @@ export default function AgregarAlimentoScreen() {
   const [entradaUsda, setEntradaUsda] = useState<UsdaEntry | null>(null);
   const [corrigiendo, setCorrigiendo] = useState(false);
   const [remezclando, setRemezclando] = useState(false);
-  const [busquedaUsda, setBusquedaUsda] = useState("");
-  const [resultadosUsda, setResultadosUsda] = useState<UsdaEntry[] | null>(null);
-  const [buscandoUsda, setBuscandoUsda] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -149,8 +147,9 @@ export default function AgregarAlimentoScreen() {
     const cands = res.candidates ?? [];
     setIdentification(res.identification ?? null);
     setCandidatos(cands);
+    // Cerrar el panel también limpia su búsqueda: el estado vive dentro de `UsdaCorrector`, que se
+    // desmonta al cerrarse.
     setCorrigiendo(false);
-    setBusquedaUsda(""); setResultadosUsda(null);
     prefillFrom(res, cands.find((c) => c.fdcId === res.usdaFdcId) ?? null);
   }
 
@@ -161,31 +160,17 @@ export default function AgregarAlimentoScreen() {
     setRemezclando(true);
     try {
       prefillFrom(await assembleUsdaFood(baseUrl.current, identification, entrada.fdcId), entrada);
+      // Cerrar el panel limpia su búsqueda (se desmonta con ella adentro). Los candidatos filtran
+      // la entrada ya vigente, pero los resultados no: si quedaran, al reabrir "¿no es este?" la
+      // fila recién elegida seguiría clickeable y volvería a pedirle al backend la mezcla que ya
+      // está en pantalla.
       setCorrigiendo(false);
-      // La búsqueda se limpia junto con el panel. Los candidatos filtran la entrada ya vigente,
-      // pero los resultados no: si quedaran, al reabrir "¿no es este?" la fila recién elegida
-      // seguiría clickeable y volvería a pedirle al backend la mezcla que ya está en pantalla.
-      setBusquedaUsda(""); setResultadosUsda(null);
     } catch (e) {
       // El backend NO degrada a "sin micros" cuando el fdcId no existe, y acá tampoco: se avisa y
       // el formulario queda con la entrada que seguía vigente.
       setError((e as Error).message);
     } finally {
       setRemezclando(false);
-    }
-  }
-
-  async function buscarEnUsda() {
-    const q = busquedaUsda.trim();
-    if (q.length < 2 || !baseUrl.current) return;
-    setError(null);
-    setBuscandoUsda(true);
-    try {
-      setResultadosUsda(await searchUsdaFoods(baseUrl.current, q));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBuscandoUsda(false);
     }
   }
 
@@ -292,22 +277,6 @@ export default function AgregarAlimentoScreen() {
     </Pressable>
   );
 
-  // Una fila elegible de USDA. La descripción va en inglés, tal como la publica USDA: traducirla
-  // impediría el chequeo que el usuario está haciendo justamente acá (ver "fried egg" →
-  // "Fried eggplant", que es el error que este bloque existe para corregir).
-  const filaUsda = (entrada: UsdaEntry, prefijo: string) => (
-    <Pressable
-      key={`${prefijo}-${entrada.fdcId}`}
-      testID={`usda-${prefijo}-${entrada.fdcId}`}
-      accessibilityRole="button"
-      disabled={remezclando}
-      onPress={() => void elegirEntradaUsda(entrada)}
-      style={{ paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}
-    >
-      <Text style={{ color: colors.text, fontSize: 13 }}>{entrada.description}</Text>
-    </Pressable>
-  );
-
   // De qué fila de USDA salieron las vitaminas y los minerales, y cómo cambiarla.
   //
   // El "¿no es este?" SOLO aparece cuando hay `identification` (alta por foto o texto). En modo
@@ -338,43 +307,15 @@ export default function AgregarAlimentoScreen() {
       {/* Arranca cerrado: son hasta 8 filas en inglés, y la mayoría de las veces el match está
           bien. Se abre solo cuando el usuario dice que no. */}
       {corrigiendo && puedeCorregir && (
-        <View style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md }}>
-          <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-            Elegí la entrada de USDA que corresponde. Los valores del formulario se recargan con esa fila.
-          </Text>
-          {/* La vigente no se lista: "¿no es este?" es la lista de las OTRAS, y volver a elegir la
-              misma sería una llamada al backend que no cambia nada. */}
-          {candidatos.filter((c) => c.fdcId !== carried.usdaFdcId).map((c) => filaUsda(c, "candidato"))}
-
-          <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: spacing.md }}>¿No está el que buscás?</Text>
-          <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs }}>
-            <TextInput
-              testID="usda-buscar-input"
-              value={busquedaUsda}
-              onChangeText={setBusquedaUsda}
-              placeholder="Buscar en USDA (en inglés)"
-              placeholderTextColor={colors.icon}
-              style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.sm, color: colors.text }}
-            />
-            <Pressable
-              testID="usda-buscar-submit"
-              onPress={() => void buscarEnUsda()}
-              disabled={buscandoUsda || busquedaUsda.trim().length < 2}
-              style={{ backgroundColor: colors.accentSoft, borderRadius: radius.sm, paddingHorizontal: spacing.md, justifyContent: "center", opacity: buscandoUsda || busquedaUsda.trim().length < 2 ? 0.5 : 1 }}
-            >
-              <Text style={{ color: colors.accentText, fontWeight: "600", fontSize: 13 }}>Buscar</Text>
-            </Pressable>
-          </View>
-          {/* `null` = todavía no se buscó; `[]` = se buscó y no hubo nada. Un "sin resultados"
-              mostrado antes de buscar diría que USDA no tiene el alimento, que es otra cosa. */}
-          {resultadosUsda != null && resultadosUsda.length === 0 && !buscandoUsda && (
-            <Text testID="usda-sin-resultados" style={{ color: colors.textMuted, fontSize: 12, marginTop: spacing.sm }}>
-              No hay entradas de USDA para esa búsqueda.
-            </Text>
-          )}
-          {(resultadosUsda ?? []).map((c) => filaUsda(c, "resultado"))}
-          {remezclando && <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.sm }} />}
-        </View>
+      <UsdaCorrector
+        baseUrl={baseUrl.current}
+        candidatos={candidatos}
+        fdcIdVigente={carried.usdaFdcId}
+        ocupado={remezclando}
+        onElegir={(entrada) => void elegirEntradaUsda(entrada)}
+        onError={setError}
+        ayuda="Elegí la entrada de USDA que corresponde. Los valores del formulario se recargan con esa fila."
+      />
       )}
     </View>
   );

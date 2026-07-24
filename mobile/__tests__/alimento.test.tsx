@@ -3,9 +3,9 @@
 // OJO con el vecino: `alimento-detalle.test.tsx` NO cubre esta pantalla. A pesar del nombre,
 // cubre el FORMULARIO de alta/edición (`agregar-alimento.tsx`) en modo edición — el semáforo, el
 // campo de sal y el bug de los micros que se borraban al guardar. Son dos pantallas distintas.
-import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react-native";
 import { router } from "expo-router";
-import type { Food } from "@pulsia/shared";
+import type { Food, FoodIdentification } from "@pulsia/shared";
 
 const FOOD_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -23,11 +23,18 @@ jest.mock("../src/api/nutrition", () => ({
   getUsdaEntry: jest.fn(),
   listFoods: jest.fn(async () => []),
   deleteFood: jest.fn(),
+  proposeUsdaRefresh: jest.fn(),
+  applyUsdaRefresh: jest.fn(),
+  assembleUsdaFood: jest.fn(),
+  searchUsdaFoods: jest.fn(async () => []),
 }));
 
 import AlimentoDetalleScreen from "../app/nutricion/alimento";
 import CatalogoScreen from "../app/nutricion/catalogo";
-import { getFood, getUsdaEntry, listFoods } from "../src/api/nutrition";
+import {
+  getFood, getUsdaEntry, listFoods,
+  proposeUsdaRefresh, applyUsdaRefresh, assembleUsdaFood,
+} from "../src/api/nutrition";
 
 const alimento = (over: Partial<Food> = {}): Food => ({
   id: FOOD_ID, name: "Lentejas cocidas", basis: "per_100g", createdAt: 0,
@@ -39,11 +46,32 @@ const alimento = (over: Partial<Food> = {}): Food => ({
 });
 
 const ENTRADA_USDA = { fdcId: 175249, description: "Lentils, mature seeds, cooked, boiled", dataType: "sr_legacy" };
+const OTRA_ENTRADA = { fdcId: 172421, description: "Lentils, sprouted, raw", dataType: "sr_legacy" };
+
+// La identificación que arma el backend desde el alimento guardado. Viaja de vuelta en el apply.
+const IDENTIFICACION: FoodIdentification = {
+  name: "Lentejas cocidas", basis: "per_100g", kcal: 116, protein_g: 9, carbs_g: 20, fat_g: 0.4,
+  saturated_fat_g: 0.1, sugars_g: 1.8, fiber_g: 7.9, sodium_mg: 238, cholesterol_mg: 0, water_ml: 69.6,
+  unitWeightG: null, sourceMacros: "ai", searchQuery: "lentils cooked boiled",
+};
+
+const propuesta = (over: Record<string, unknown> = {}) => ({
+  identification: IDENTIFICACION,
+  candidates: [ENTRADA_USDA, OTRA_ENTRADA],
+  chosen: 175249,
+  // Un alimento estimado por IA deja que USDA gane: las kcal pueden cambiar, y con ellas los días
+  // que el usuario ya miró.
+  proposal: { ...IDENTIFICACION, kcal: 120, sourceMicros: "usda", usdaFdcId: 175249, iron_mg: 3.7 },
+  mealsAffected: 2,
+  ...over,
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
   (getFood as jest.Mock).mockResolvedValue(alimento());
   (getUsdaEntry as jest.Mock).mockResolvedValue(ENTRADA_USDA);
+  (proposeUsdaRefresh as jest.Mock).mockResolvedValue(propuesta());
+  (applyUsdaRefresh as jest.Mock).mockResolvedValue({ mealsUpdated: 2, itemsUpdated: 3 });
 });
 
 test("desde el catálogo se llega al detalle del alimento", async () => {
@@ -139,4 +167,150 @@ test("muestra los macros por 100 g y desde acá se edita el alimento", async () 
 
   await fireEvent.press(screen.getByText("Editar"));
   expect(router.push).toHaveBeenCalledWith(`/nutricion/agregar-alimento?foodId=${FOOD_ID}`);
+});
+
+// ---- "Actualizar": traer las vitaminas y minerales de USDA ----
+// Los 80 alimentos cargados antes de la copia local de USDA no tienen micros. El botón los trae, y
+// de paso RE-SNAPSHOTEA las comidas que usan el alimento: por eso hay una confirmación en el medio.
+
+async function abrirPropuesta() {
+  await render(<AlimentoDetalleScreen />);
+  await waitFor(() => expect(screen.getByTestId("alimento-macros")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("alimento-actualizar"));
+  await waitFor(() => expect(screen.getByTestId("refresh-panel")).toBeTruthy());
+}
+
+test("el botón Actualizar pide la propuesta y muestra qué entrada de USDA encontró", async () => {
+  await abrirPropuesta();
+  expect(proposeUsdaRefresh).toHaveBeenCalledWith("http://x", FOOD_ID);
+  // La descripción en inglés es lo único que le permite al usuario desconfiar del match.
+  expect(screen.getByTestId("refresh-entrada")).toHaveTextContent(/Lentils, mature seeds, cooked, boiled/);
+});
+
+test("avisa cuántas comidas se van a tocar ANTES de aplicar", async () => {
+  // La condición que el owner puso para aceptar el diseño: el re-snapshot cambia kcal y macros de
+  // días que el usuario ya vio, así que el número va antes del botón, no después.
+  await abrirPropuesta();
+  expect(screen.getByTestId("refresh-comidas")).toHaveTextContent(/2 comidas/);
+  expect(applyUsdaRefresh).not.toHaveBeenCalled();
+});
+
+test("el aviso habla de UNA comida cuando es una sola", async () => {
+  (proposeUsdaRefresh as jest.Mock).mockResolvedValue(propuesta({ mealsAffected: 1 }));
+  await abrirPropuesta();
+  expect(screen.getByTestId("refresh-comidas")).toHaveTextContent(/\b1 comida\b/);
+});
+
+test("si ninguna comida usa el alimento, lo dice en vez de prometer un recálculo", async () => {
+  (proposeUsdaRefresh as jest.Mock).mockResolvedValue(propuesta({ mealsAffected: 0 }));
+  await abrirPropuesta();
+  expect(screen.getByTestId("refresh-comidas")).toHaveTextContent(/Ninguna comida/);
+});
+
+test("muestra las kcal que quedarían: es el número que va a cambiar los días pasados", async () => {
+  await abrirPropuesta();
+  expect(screen.getByTestId("refresh-cambios")).toHaveTextContent(/116 → 120/);
+});
+
+test("sin match avisa y no ofrece aplicar", async () => {
+  // El backend degrada solo (nunca 500): `chosen: null` es "no encontré nada". Ofrecer "Aplicar"
+  // acá escribiría el alimento tal cual y re-snapshotearía las comidas sin ganar nada.
+  (proposeUsdaRefresh as jest.Mock).mockResolvedValue(
+    propuesta({ chosen: null, candidates: [], proposal: { ...IDENTIFICACION, sourceMicros: null, usdaFdcId: null } }),
+  );
+  await abrirPropuesta();
+  expect(screen.getByTestId("refresh-sin-match")).toBeTruthy();
+  expect(screen.queryByTestId("refresh-aplicar")).toBeNull();
+});
+
+test("aplicar manda el fdcId elegido y recarga el alimento con los micros nuevos", async () => {
+  await abrirPropuesta();
+  (getFood as jest.Mock).mockResolvedValue(alimento({ iron_mg: 3.7, kcal: 120 }));
+
+  await fireEvent.press(screen.getByTestId("refresh-aplicar"));
+  await waitFor(() => expect(applyUsdaRefresh).toHaveBeenCalledWith("http://x", FOOD_ID, IDENTIFICACION, 175249));
+
+  // Recargado: la pantalla muestra lo que quedó en la base, no la propuesta.
+  await waitFor(() => expect(screen.getByTestId("alimento-macros")).toHaveTextContent(/^120 kcal/));
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales")); // arrancan colapsados
+  expect(screen.getByTestId("nutr-iron_mg-amount")).toHaveTextContent(/^3\.7 mg$/);
+  // Y el panel se cierra: dejarlo abierto invitaría a aplicar dos veces lo mismo.
+  expect(screen.queryByTestId("refresh-panel")).toBeNull();
+});
+
+test("mientras la propuesta viaja lo dice, y tocar de nuevo no dispara otra", async () => {
+  // Son DOS llamadas a la IA (la frase de búsqueda y la elección): tarda, y sin señal el usuario
+  // toca el botón otra vez.
+  let resolver: (v: unknown) => void = () => {};
+  (proposeUsdaRefresh as jest.Mock).mockReturnValue(new Promise((r) => { resolver = r; }));
+
+  await render(<AlimentoDetalleScreen />);
+  await waitFor(() => expect(screen.getByTestId("alimento-macros")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("alimento-actualizar"));
+
+  expect(screen.getByTestId("refresh-cargando")).toBeTruthy();
+  await fireEvent.press(screen.getByTestId("alimento-actualizar"));
+  expect(proposeUsdaRefresh).toHaveBeenCalledTimes(1);
+
+  await act(async () => { resolver(propuesta()); });
+  await waitFor(() => expect(screen.getByTestId("refresh-panel")).toBeTruthy());
+  expect(screen.queryByTestId("refresh-cargando")).toBeNull();
+});
+
+test("si la propuesta falla, lo dice y no ofrece aplicar", async () => {
+  (proposeUsdaRefresh as jest.Mock).mockRejectedValue(new Error("No hay API key de IA disponible."));
+  await render(<AlimentoDetalleScreen />);
+  await waitFor(() => expect(screen.getByTestId("alimento-macros")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("alimento-actualizar"));
+
+  await waitFor(() => expect(screen.getByText("No hay API key de IA disponible.")).toBeTruthy());
+  expect(screen.queryByTestId("refresh-aplicar")).toBeNull();
+  // El alimento se sigue viendo: la propuesta falló, la pantalla no.
+  expect(screen.getByTestId("alimento-macros")).toBeTruthy();
+});
+
+test("si aplicar falla, lo dice, NO recarga y el panel sigue ahí para reintentar", async () => {
+  (applyUsdaRefresh as jest.Mock).mockRejectedValue(new Error("No encontrado"));
+  await abrirPropuesta();
+
+  await fireEvent.press(screen.getByTestId("refresh-aplicar"));
+  await waitFor(() => expect(screen.getByText("No encontrado")).toBeTruthy());
+  expect(screen.getByTestId("refresh-aplicar")).toBeTruthy();
+  // Recargar acá mostraría el alimento "actualizado" cuando en la base no cambió nada.
+  expect(getFood).toHaveBeenCalledTimes(1);
+});
+
+test("el '¿no es este?' corrige la fila y aplica la CORREGIDA, no la que eligió la IA", async () => {
+  (assembleUsdaFood as jest.Mock).mockResolvedValue({
+    ...IDENTIFICACION, kcal: 106, sourceMicros: "usda", usdaFdcId: 172421, iron_mg: 3.1,
+  });
+  await abrirPropuesta();
+
+  await fireEvent.press(screen.getByTestId("refresh-no-es-este"));
+  await fireEvent.press(screen.getByTestId("usda-candidato-172421"));
+  await waitFor(() => expect(assembleUsdaFood).toHaveBeenCalledWith("http://x", IDENTIFICACION, 172421));
+
+  // El panel nombra la fila nueva y muestra SUS kcal: sin esto el usuario no sabe si su corrección
+  // llegó a algún lado.
+  await waitFor(() => expect(screen.getByTestId("refresh-entrada")).toHaveTextContent(/Lentils, sprouted, raw/));
+  expect(screen.getByTestId("refresh-cambios")).toHaveTextContent(/116 → 106/);
+
+  await fireEvent.press(screen.getByTestId("refresh-aplicar"));
+  await waitFor(() => expect(applyUsdaRefresh).toHaveBeenCalledWith("http://x", FOOD_ID, IDENTIFICACION, 172421));
+});
+
+test("sin match, el '¿no es este?' deja elegir a mano y recién ahí se puede aplicar", async () => {
+  // "No encontré nada" no es "no hay nada": los candidatos pueden existir y la IA haber dicho que
+  // ninguno sirve. Elegir uno a mano es una decisión del usuario, y ahí sí se puede aplicar.
+  (proposeUsdaRefresh as jest.Mock).mockResolvedValue(propuesta({ chosen: null, proposal: { ...IDENTIFICACION, sourceMicros: null, usdaFdcId: null } }));
+  (assembleUsdaFood as jest.Mock).mockResolvedValue({ ...IDENTIFICACION, kcal: 106, sourceMicros: "usda", usdaFdcId: 172421 });
+  await abrirPropuesta();
+  expect(screen.queryByTestId("refresh-aplicar")).toBeNull();
+
+  await fireEvent.press(screen.getByTestId("refresh-no-es-este"));
+  await fireEvent.press(screen.getByTestId("usda-candidato-172421"));
+  await waitFor(() => expect(screen.getByTestId("refresh-aplicar")).toBeTruthy());
+
+  await fireEvent.press(screen.getByTestId("refresh-aplicar"));
+  await waitFor(() => expect(applyUsdaRefresh).toHaveBeenCalledWith("http://x", FOOD_ID, IDENTIFICACION, 172421));
 });

@@ -119,6 +119,62 @@ export async function assembleUsdaFood(
   return (await res.json()) as FoodExtraction;
 }
 
+/**
+ * Lo que devuelve `POST /foods/:id/usda-proposal`: qué fila de USDA le corresponde a un alimento
+ * YA guardado. **No escribe nada.**
+ *
+ * `chosen` en `null` significa "no encontré nada" (no hubo candidatos, la IA dijo que ninguno
+ * sirve, o falló): el backend degrada solo y nunca tira 500, así que la pantalla tiene que
+ * distinguir ese caso y NO ofrecer aplicar.
+ *
+ * `mealsAffected` es cuántas comidas del usuario se van a reescribir al aplicar. Es el dato que
+ * hace segura la feature: el re-snapshot cambia kcal y macros de días que el usuario ya miró.
+ */
+export interface UsdaRefreshProposal {
+  identification: FoodIdentification;
+  candidates: UsdaEntry[];
+  chosen: number | null;
+  proposal: FoodExtraction;
+  mealsAffected: number;
+}
+
+export async function proposeUsdaRefresh(baseUrl: string, foodId: string): Promise<UsdaRefreshProposal> {
+  // Timeout largo: la propuesta encadena DOS respuestas de Opus (la frase de búsqueda en inglés y
+  // la elección del candidato). Con los 15 s por defecto el request se aborta del lado del
+  // teléfono mientras el backend todavía está contestando.
+  const res = await apiFetch(baseUrl, `/nutrition/foods/${foodId}/usda-proposal`, {
+    method: "POST", timeoutMs: 60000,
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo buscar el alimento en USDA."));
+  return (await res.json()) as UsdaRefreshProposal;
+}
+
+/** Cuánto se tocó al aplicar: comidas y ítems re-snapshoteados. */
+export interface UsdaRefreshResult {
+  mealsUpdated: number;
+  itemsUpdated: number;
+}
+
+/**
+ * Aplica la propuesta: guarda los micros en el alimento y re-snapshotea las comidas que lo usan.
+ *
+ * El backend re-arma la propuesta server-side y del body **solo usa el `fdcId`** (no confía en
+ * valores del cliente). La `identification` viaja igual porque el body está validado con
+ * `FoodIdentificationSchema`, y sin ella rebota con 400.
+ */
+export async function applyUsdaRefresh(
+  baseUrl: string,
+  foodId: string,
+  identification: FoodIdentification,
+  fdcId: number,
+): Promise<UsdaRefreshResult> {
+  const res = await apiFetch(baseUrl, `/nutrition/foods/${foodId}/usda-apply`, {
+    method: "POST", body: JSON.stringify({ identification, fdcId }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo actualizar el alimento con USDA."));
+  return (await res.json()) as UsdaRefreshResult;
+}
+
 export async function updateFood(baseUrl: string, id: string, input: FoodInput): Promise<Food> {
   const res = await apiFetch(baseUrl, `/nutrition/foods/${id}`, { method: "PATCH", body: JSON.stringify(input) });
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo actualizar el alimento."));
