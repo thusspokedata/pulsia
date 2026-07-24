@@ -21,8 +21,17 @@ import { buildNutrientRows, filaDeSal, sustituirSodioPorSal, type NutrientSectio
  *    la precedencia sea explícita y no dependa de que EFSA siga sin cubrirlos.
  */
 
-// `goalKcal` en null = todavía no hay meta diaria (perfil incompleto).
-function referenciasOms(goalKcal: number | null): Partial<Record<NutrientKey, NutrientReference | null>> {
+/**
+ * Las 5 referencias de la OMS, listas para pasar como override a `buildNutrientRows`.
+ *
+ * Se exporta porque el detalle de UNA comida las necesita IGUALES: esa pantalla también compara
+ * "sobre la referencia diaria", y con las de EFSA solas mostraba referencia para las vitaminas y
+ * la sal pero ninguna para azúcares, fibra, colesterol y saturadas. Dos pantallas que dicen medir
+ * lo mismo contra lo mismo tienen que leer la misma tabla, no copiarla.
+ *
+ * `goalKcal` en null = todavía no hay meta diaria (perfil incompleto).
+ */
+export function referenciasOms(goalKcal: number | null): Partial<Record<NutrientKey, NutrientReference | null>> {
   return {
     sugars_g: { value: NUTRIENT_REFERENCES.sugars_g, kind: NUTRIENT_REFERENCE_KIND.sugars_g },
     fiber_g: { value: NUTRIENT_REFERENCES.fiber_g, kind: NUTRIENT_REFERENCE_KIND.fiber_g },

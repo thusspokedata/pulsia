@@ -8,6 +8,7 @@ import { getBackendUrl } from "../../src/storage/config";
 import { loadDailyGoalContext, type DailyGoalContext } from "../../src/nutrition/dailyGoal";
 import { buildGoalView, macroTargetLabel } from "../../src/nutrition/goalView";
 import { buildNutrientRows, filaDeSal, sustituirSodioPorSal } from "../../src/nutrition/nutrientRows";
+import { referenciasOms } from "../../src/nutrition/dayNutrientRows";
 import { NutrientList } from "../../src/nutrition/NutrientList";
 import { Card, SectionTitle, Bar } from "../../src/nutrition/tabs/ui";
 import { hhmm } from "../../src/session/metricDate";
@@ -95,14 +96,23 @@ export default function ComidaDetalleScreen() {
   // dos sexos). Es correcto, pero el usuario merece saber que está mirando un valor genérico.
   const perfilIncompleto = profile == null || profile.sex == null || profile.age == null;
   const nutrientes = nutrientesDeLaComida(items);
+  // La meta de kcal del día: es lo que hace calculable el techo de saturadas (10 % de la energía).
+  const goalKcal = goalView?.status === "ok" ? goalView.kcal!.meta : null;
   const secciones = sustituirSodioPorSal(
     buildNutrientRows(nutrientes, { sex: profile?.sex, age: profile?.age }, {
-      // El agua va SIN referencia. La AI de EFSA es de agua TOTAL del día (bebida + la que
-      // aportan los alimentos, ~2-2,5 L), y la columna `water_ml` de una comida es solo la
-      // segunda mitad de una sola comida: compararlas diría "tomaste el 12 % de lo que
-      // necesitás" el día que el usuario tomó 2,1 L. La pestaña del día sí puede compararlas
-      // porque ahí se usa el líquido total (bebido + de los alimentos); acá no hay equivalente.
-      refs: { water_ml: null },
+      // Las MISMAS 5 referencias de la OMS que la pestaña del día (azúcares, fibra, colesterol,
+      // saturadas y sal). Sin ellas esta pantalla decía "sobre la referencia diaria" y mostraba
+      // referencia solo para las vitaminas y la sal: la misma fila con referencia en una pantalla
+      // y sin ella en la otra es una incoherencia de cara al usuario, no una decisión.
+      refs: {
+        ...referenciasOms(goalKcal),
+        // El agua va SIN referencia. La AI de EFSA es de agua TOTAL del día (bebida + la que
+        // aportan los alimentos, ~2-2,5 L), y la columna `water_ml` de una comida es solo la
+        // segunda mitad de una sola comida: compararlas diría "tomaste el 12 % de lo que
+        // necesitás" el día que el usuario tomó 2,1 L. La pestaña del día sí puede compararlas
+        // porque ahí se usa el líquido total (bebido + de los alimentos); acá no hay equivalente.
+        water_ml: null,
+      },
     }),
     // La sal es la unidad que habla el resto de la app (ver filaDeSal). La referencia es la
     // diaria de la OMS, igual que el resto de las filas de esta pantalla: el título dice

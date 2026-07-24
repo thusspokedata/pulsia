@@ -159,6 +159,46 @@ test("una comida sin sodio muestra la sal 'sin dato', no 0 g", async () => {
   expect(screen.queryByTestId("nutr-salt_g-bar")).toBeNull();
 });
 
+// Las 5 referencias de la OMS (azúcares, fibra, colesterol, saturadas y sal) también valen acá:
+// el título de la sección dice "sobre la referencia diaria" y son diarias. Sin ellas, la misma
+// pantalla mostraba referencia para las vitaminas y la sal y ninguna para estas cuatro.
+test("los azúcares de la comida se comparan contra la referencia de la OMS", async () => {
+  mockComida(comida([item({ foodName: "Gaseosa", sugars_g: 25 })]));
+  await render(<ComidaDetalleScreen />);
+
+  // OMS: 50 g/día de azúcares libres → 25 g es el 50 %.
+  await waitFor(() => expect(screen.getByTestId("nutr-sugars_g-amount")).toHaveTextContent(/^25 \/ 50 g$/));
+  expect(screen.getByTestId("nutr-sugars_g-pct")).toHaveTextContent(/^50 %$/);
+});
+
+test("la fibra de la comida se compara contra la referencia de la OMS, y es un PISO", async () => {
+  mockComida(comida([item({ foodName: "Lentejas", fiber_g: 45 })]));
+  await render(<ComidaDetalleScreen />);
+
+  // OMS: ≥30 g/día. Pasarse de un piso es bueno: no puede aparecer el aviso de "te pasaste".
+  await waitFor(() => expect(screen.getByTestId("nutr-fiber_g-amount")).toHaveTextContent(/^45 \/ 30 g$/));
+  expect(screen.queryByTestId("nutr-grupo-carbohidratos-alerta")).toBeNull();
+});
+
+test("el colesterol de la comida se compara contra la referencia de la OMS", async () => {
+  mockComida(comida([item({ foodName: "Huevo", cholesterol_mg: 150 })]));
+  await render(<ComidaDetalleScreen />);
+
+  // Referencia clásica: 300 mg/día → 150 mg es el 50 %.
+  await waitFor(() => expect(screen.getByTestId("nutr-cholesterol_mg-amount")).toHaveTextContent(/^150 \/ 300 mg$/));
+  expect(screen.getByTestId("nutr-cholesterol_mg-pct")).toHaveTextContent(/^50 %$/);
+});
+
+test("las saturadas de la comida se comparan contra el 10 % de la meta de kcal", async () => {
+  // La OMS acota las saturadas al 10 % de la ENERGÍA: la referencia depende de la meta diaria,
+  // que esta pantalla ya tiene (2200 kcal del objetivo mockeado) → 2200 × 0,1 / 9 = 24,4 g.
+  mockComida(comida([item({ foodName: "Manteca", saturated_fat_g: 12.2 })]));
+  await render(<ComidaDetalleScreen />);
+
+  await waitFor(() => expect(screen.getByTestId("nutr-saturated_fat_g-amount")).toHaveTextContent(/^12\.2 \/ 24\.4 g$/));
+  expect(screen.getByTestId("nutr-saturated_fat_g-pct")).toHaveTextContent(/^50 %$/);
+});
+
 test("el aporte de la comida se muestra contra la meta del día", async () => {
   mockComida(comida([
     item({ foodName: "Pechuga de pollo", kcal: 248, protein_g: 46.5, carbs_g: 0, fat_g: 5.4 }),
