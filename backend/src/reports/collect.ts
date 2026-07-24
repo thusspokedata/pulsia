@@ -1,4 +1,4 @@
-import { sumNullableMicro, dayExerciseBurn, saltGFromSodiumMg } from "@pulsia/shared";
+import { sumNullableMicro, dayExerciseBurn, saltGFromSodiumMg, CARDIO_LABELS } from "@pulsia/shared";
 import type { AthleteContext, Meal, WaterLog, PlanView, CardioActivity } from "@pulsia/shared";
 import { listMeals as listMealsImpl, listWater as listWaterImpl } from "../nutrition/repository";
 import { listSessions as listSessionsImpl } from "../sessions/repository";
@@ -22,6 +22,7 @@ export interface ReportData {
   liquid: { total: number; drank: number; fromFood: number };
   exercise: number;
   sessionsCount: number;
+  activities: { name: string; durationMin: number; kcal: number | null; avgHr: number | null }[];
   metrics: Partial<Record<string, number>>; // último valor por tipo en el período
   athlete: AthleteContext;
   periodDays: number;
@@ -104,6 +105,15 @@ export async function collectReportData(
   const dayCardio = allCardio
     .filter((a) => a.startedAt >= from && a.startedAt <= to)
     .map((a) => ({ type: a.type, durationMs: a.durationMs, avgHr: a.avgHr, kcal: a.kcal }));
+  const activities = allCardio
+    .filter((a) => a.startedAt >= from && a.startedAt <= to)
+    .sort((x, y) => x.startedAt - y.startedAt)
+    .map((a) => ({
+      name: a.sportProfileName ?? CARDIO_LABELS[a.type],
+      durationMin: Math.round(a.durationMs / 60000),
+      kcal: a.kcal,
+      avgHr: a.avgHr,
+    }));
   const bmr = athlete.goal.status === "ok" ? (athlete.goal.bmr ?? null) : null;
   const exercise = dayExerciseBurn(daySessions, dayCardio, { weightKg: athlete.weightKg, age: athlete.age, sex: athlete.sex, bmr });
   const metricsByType: Partial<Record<string, number>> = {};
@@ -113,7 +123,7 @@ export async function collectReportData(
   const weightTrend = weights.length > 0 ? { first: weights[0].value, last: weights[weights.length - 1].value } : null;
   return {
     totals, cholesterolMg, liquid: { total: Math.round(fromFood + drank), drank, fromFood },
-    exercise, sessionsCount: daySessions.length, metrics: metricsByType, athlete, periodDays, weightTrend,
+    exercise, sessionsCount: daySessions.length, activities, metrics: metricsByType, athlete, periodDays, weightTrend,
     foodNames, foodNamesTotal, supplements,
   };
 }
