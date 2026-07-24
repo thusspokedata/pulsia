@@ -1,4 +1,4 @@
-import { sumNullableMicro, dayExerciseBurn, saltGFromSodiumMg } from "@pulsia/shared";
+import { sumNullableMicro, dayExerciseBurn, saltGFromSodiumMg, CARDIO_LABELS } from "@pulsia/shared";
 import type { AthleteContext, Meal, WaterLog, PlanView, CardioActivity } from "@pulsia/shared";
 import { listMeals as listMealsImpl, listWater as listWaterImpl } from "../nutrition/repository";
 import { listSessions as listSessionsImpl } from "../sessions/repository";
@@ -22,6 +22,7 @@ export interface ReportData {
   liquid: { total: number; drank: number; fromFood: number };
   exercise: number;
   sessionsCount: number;
+  activities: { name: string; durationMin: number; kcal: number | null; avgHr: number | null }[];
   metrics: Partial<Record<string, number>>; // último valor por tipo en el período
   athlete: AthleteContext;
   periodDays: number;
@@ -58,6 +59,17 @@ const defaultDeps: CollectDeps = {
   listTakesForRange: (db, u, f, t) => listTakesForRangeImpl(db, u, f, t),
   listSupplements: (db, u) => listSupplementsImpl(db, u),
 };
+
+// El nombre del perfil deportivo viene del .FIT (texto EXTERNO del usuario) y se interpola en el
+// prompt de la IA. Se colapsa todo el whitespace —incluidos los newlines, que si no podrían inyectar
+// una línea falsa en el bloque de datos y simular otra sección (CWE-74)—, se recorta y se capa la
+// longitud. Si queda vacío ("" o solo espacios en el .FIT), el llamador cae al label del tipo. La
+// defensa global del prompt ya declara el bloque como DATOS; esto además impide romper su estructura.
+export function cleanProfileName(s: string | undefined): string | undefined {
+  if (s == null) return undefined;
+  const cleaned = s.replace(/\s+/g, " ").trim().slice(0, 40);
+  return cleaned.length > 0 ? cleaned : undefined;
+}
 
 export async function collectReportData(
   db: Db, userId: string, from: number, to: number, athlete: AthleteContext, deps: CollectDeps = defaultDeps,
@@ -101,9 +113,18 @@ export async function collectReportData(
   const fromFood = sumNullableMicro(items.map((it) => it.water_ml)) ?? 0;
   const drank = water.reduce((a, w) => a + w.ml, 0);
   const daySessions = allSessions.filter((s) => s.startedAt >= from && s.startedAt <= to);
-  const dayCardio = allCardio
-    .filter((a) => a.startedAt >= from && a.startedAt <= to)
-    .map((a) => ({ type: a.type, durationMs: a.durationMs, avgHr: a.avgHr, kcal: a.kcal }));
+  // Un solo filtro por rango, del que se derivan las dos vistas: si el criterio cambia, no puede
+  // divergir entre el gasto (dayCardio) y el desglose (activities).
+  const inRange = allCardio.filter((a) => a.startedAt >= from && a.startedAt <= to);
+  const dayCardio = inRange.map((a) => ({ type: a.type, durationMs: a.durationMs, avgHr: a.avgHr, kcal: a.kcal }));
+  const activities = [...inRange]
+    .sort((x, y) => x.startedAt - y.startedAt)
+    .map((a) => ({
+      name: cleanProfileName(a.sportProfileName) ?? CARDIO_LABELS[a.type],
+      durationMin: Math.round(a.durationMs / 60000),
+      kcal: a.kcal,
+      avgHr: a.avgHr,
+    }));
   const bmr = athlete.goal.status === "ok" ? (athlete.goal.bmr ?? null) : null;
   const exercise = dayExerciseBurn(daySessions, dayCardio, { weightKg: athlete.weightKg, age: athlete.age, sex: athlete.sex, bmr });
   const metricsByType: Partial<Record<string, number>> = {};
@@ -113,7 +134,7 @@ export async function collectReportData(
   const weightTrend = weights.length > 0 ? { first: weights[0].value, last: weights[weights.length - 1].value } : null;
   return {
     totals, cholesterolMg, liquid: { total: Math.round(fromFood + drank), drank, fromFood },
-    exercise, sessionsCount: daySessions.length, metrics: metricsByType, athlete, periodDays, weightTrend,
+    exercise, sessionsCount: daySessions.length, activities, metrics: metricsByType, athlete, periodDays, weightTrend,
     foodNames, foodNamesTotal, supplements,
   };
 }
