@@ -4,7 +4,7 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import type { Food } from "@pulsia/shared";
 import { getFood, getUsdaEntry, type UsdaEntry } from "../../src/api/nutrition";
 import { getBackendUrl } from "../../src/storage/config";
-import { buildNutrientRows } from "../../src/nutrition/nutrientRows";
+import { buildNutrientRows, filaDeSal, sustituirSodioPorSal } from "../../src/nutrition/nutrientRows";
 import { NutrientList } from "../../src/nutrition/NutrientList";
 import { SourceChip } from "../../src/nutrition/SourceChip";
 import { Card, SectionTitle } from "../../src/nutrition/tabs/ui";
@@ -40,7 +40,11 @@ export default function AlimentoDetalleScreen() {
   // contra una referencia DIARIA diría "el 30 % de tu hierro del día" de algo que nadie come en
   // porciones de 100 g necesariamente. La referencia personal aparece en el detalle de la comida,
   // donde sí hay una cantidad real.
-  const secciones = food ? buildNutrientRows(food, null) : [];
+  // La fila del sodio se muestra como SAL, la misma unidad que la comida, el día, el campo del
+  // alta y el semáforo del catálogo (ver filaDeSal). Sin referencia: por 100 g no hay ninguna.
+  const secciones = food
+    ? sustituirSodioPorSal(buildNutrientRows(food, null), filaDeSal(food.sodium_mg ?? null, null))
+    : [];
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.md }}>

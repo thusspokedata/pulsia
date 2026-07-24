@@ -2,12 +2,11 @@ import {
   NUTRIENT_KEYS,
   NUTRIENT_REFERENCES,
   NUTRIENT_REFERENCE_KIND,
-  saltGFromSodiumMg,
   saturatedFatRefG,
 } from "@pulsia/shared";
-import type { NutrientKey, NutrientReference, NutrientSum } from "@pulsia/shared";
+import type { NutrientKey, NutrientReference } from "@pulsia/shared";
 import type { NutritionDaySummary } from "./daySummary";
-import { buildNutrientRows, porcentaje, type NutrientRow, type NutrientSection } from "./nutrientRows";
+import { buildNutrientRows, filaDeSal, sustituirSodioPorSal, type NutrientSection } from "./nutrientRows";
 
 /**
  * Filas de nutrientes del TOTAL DEL DÍA.
@@ -21,36 +20,6 @@ import { buildNutrientRows, porcentaje, type NutrientRow, type NutrientSection }
  *    que no haya dos referencias distintas del mismo nutriente. Se pasan como override para que
  *    la precedencia sea explícita y no dependa de que EFSA siga sin cubrirlos.
  */
-
-/**
- * DECISIÓN: la fila del día es SAL, y REEMPLAZA a la de sodio; no se muestran las dos.
- *
- * El ítem persiste sodio (es lo que entrega USDA), pero 1600 mg de sodio y 4 g de sal son el
- * MISMO hecho en dos unidades: mostrarlos como dos filas sería duplicar un dato, con el agravante
- * de que solo una de las dos tendría referencia (EFSA marca el sodio como "ongoing", sin valor,
- * mientras que la OMS acota la sal a 5 g/día). La sal es además lo que el resto de la app habla:
- * el ranking de alimentos, la curva de evolución, el semáforo del catálogo y el backend.
- *
- * ⚠️ Queda una inconsistencia para el owner: el detalle de comida y el del catálogo siguen
- * mostrando "Sodio" (sin referencia, porque EFSA no la da). Unificar las tres superficies es una
- * decisión de producto, no de implementación.
- */
-function filaDeSal(sodio: NutrientSum): NutrientRow {
-  // Se convierte sobre el sodio YA SUMADO del día, no ítem por ítem (ver daySummary.ts).
-  const value = saltGFromSodiumMg(sodio.value);
-  const ref = NUTRIENT_REFERENCES.salt_g;
-  return {
-    key: "salt_g",
-    label: "Sal",
-    unit: "g",
-    value,
-    ref,
-    pct: value == null ? null : porcentaje(value, ref),
-    kind: NUTRIENT_REFERENCE_KIND.salt_g,
-    // La sal es el sodio en otra unidad: si el sodio del día tenía agujeros, la sal también.
-    partial: sodio.partial,
-  };
-}
 
 // `goalKcal` en null = todavía no hay meta diaria (perfil incompleto).
 function referenciasOms(goalKcal: number | null): Partial<Record<NutrientKey, NutrientReference | null>> {
@@ -92,11 +61,9 @@ export function buildDayNutrientRows(
 
   const secciones = buildNutrientRows(values, persona, { refs: referenciasOms(goalKcal), partial });
 
-  // La sustitución se hace acá y no dentro de `buildNutrientRows` porque la sal no existe en el
-  // registro: es un derivado que solo esta superficie muestra. Se sustituye EN SU LUGAR para que
-  // la fila siga en Minerales y el conteo "N de M con dato" del grupo no cambie.
-  return secciones.map((s) => ({
-    ...s,
-    rows: s.rows.map((r) => (r.key === "sodium_mg" ? filaDeSal(summary.nutrients.sodium_mg) : r)),
-  }));
+  // La sal se convierte sobre el sodio YA SUMADO del día, no ítem por ítem (ver daySummary.ts), y
+  // hereda el `partial`: es el sodio en otra unidad, así que si el sodio del día tenía agujeros,
+  // la sal también.
+  const sodio = summary.nutrients.sodium_mg;
+  return sustituirSodioPorSal(secciones, filaDeSal(sodio.value, NUTRIENT_REFERENCES.salt_g, sodio.partial));
 }

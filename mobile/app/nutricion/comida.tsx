@@ -1,13 +1,13 @@
 import { useCallback, useState } from "react";
 import { ScrollView, View, Text, Pressable, ActivityIndicator } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { NUTRIENT_KEYS, sumNutrientByKey } from "@pulsia/shared";
+import { NUTRIENT_KEYS, NUTRIENT_REFERENCES, sumNutrientByKey } from "@pulsia/shared";
 import type { Meal, MealItem, NutrientKey } from "@pulsia/shared";
 import { getMeal } from "../../src/api/nutrition";
 import { getBackendUrl } from "../../src/storage/config";
 import { loadDailyGoalContext, type DailyGoalContext } from "../../src/nutrition/dailyGoal";
 import { buildGoalView, macroTargetLabel } from "../../src/nutrition/goalView";
-import { buildNutrientRows } from "../../src/nutrition/nutrientRows";
+import { buildNutrientRows, filaDeSal, sustituirSodioPorSal } from "../../src/nutrition/nutrientRows";
 import { NutrientList } from "../../src/nutrition/NutrientList";
 import { Card, SectionTitle, Bar } from "../../src/nutrition/tabs/ui";
 import { hhmm } from "../../src/session/metricDate";
@@ -94,9 +94,20 @@ export default function ComidaDetalleScreen() {
   // Sin sexo ni edad las referencias EFSA caen al fallback conservador (el valor más alto de los
   // dos sexos). Es correcto, pero el usuario merece saber que está mirando un valor genérico.
   const perfilIncompleto = profile == null || profile.sex == null || profile.age == null;
-  const secciones = buildNutrientRows(
-    nutrientesDeLaComida(items),
-    { sex: profile?.sex, age: profile?.age },
+  const nutrientes = nutrientesDeLaComida(items);
+  const secciones = sustituirSodioPorSal(
+    buildNutrientRows(nutrientes, { sex: profile?.sex, age: profile?.age }, {
+      // El agua va SIN referencia. La AI de EFSA es de agua TOTAL del día (bebida + la que
+      // aportan los alimentos, ~2-2,5 L), y la columna `water_ml` de una comida es solo la
+      // segunda mitad de una sola comida: compararlas diría "tomaste el 12 % de lo que
+      // necesitás" el día que el usuario tomó 2,1 L. La pestaña del día sí puede compararlas
+      // porque ahí se usa el líquido total (bebido + de los alimentos); acá no hay equivalente.
+      refs: { water_ml: null },
+    }),
+    // La sal es la unidad que habla el resto de la app (ver filaDeSal). La referencia es la
+    // diaria de la OMS, igual que el resto de las filas de esta pantalla: el título dice
+    // "sobre la referencia diaria" y lo que se lee es cuánto aportó ESTA comida al día.
+    filaDeSal(nutrientes.sodium_mg ?? null, NUTRIENT_REFERENCES.salt_g),
   );
 
   return (

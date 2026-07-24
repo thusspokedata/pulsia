@@ -1,6 +1,8 @@
 import {
+  NUTRIENT_REFERENCE_KIND,
   nutrientsByGroup,
   referencesFor,
+  saltGFromSodiumMg,
   type NutrientKey,
   type NutrientGroup,
   type NutrientReference,
@@ -129,5 +131,48 @@ export function buildNutrientRows(
         partial: opciones?.partial?.[key] ?? false,
       };
     }),
+  }));
+}
+
+/**
+ * Fila de SAL derivada del sodio. Está pensada para SUSTITUIR a la de sodio, no para sumarse:
+ * 1600 mg de sodio y 4 g de sal son el MISMO hecho en dos unidades.
+ *
+ * DECISIÓN (unificada en las TRES superficies: día, comida y alimento del catálogo): la app habla
+ * de sal en todas partes — el campo del alta pide "Sal (g)", el semáforo del catálogo evalúa sal
+ * por 100 g, el ranking y la curva de evolución son de sal — y es la única de las dos unidades con
+ * una referencia pública que mostrar (OMS, 5 g/día; EFSA marca el sodio como "ongoing", sin valor).
+ * Se persiste sodio porque es lo que entrega USDA, pero eso es un detalle del almacenamiento.
+ *
+ * `ref` en null = superficie sin referencia (los valores por 100 g del catálogo): ni la OMS ni
+ * EFSA hablan de 100 g de comida, hablan de un día.
+ */
+export function filaDeSal(sodiumMg: number | null, ref: number | null, partial = false): NutrientRow {
+  const value = saltGFromSodiumMg(sodiumMg);
+  return {
+    key: "salt_g",
+    label: "Sal",
+    unit: "g",
+    value,
+    ref,
+    pct: value == null || ref == null ? null : porcentaje(value, ref),
+    // Sin referencia no hay techo que exceder: el `kind` solo se lee para pintar el aviso y la
+    // barra, y las dos exigen `ref`.
+    kind: ref == null ? null : NUTRIENT_REFERENCE_KIND.salt_g,
+    partial,
+  };
+}
+
+/**
+ * Cambia la fila de sodio por la de sal EN SU LUGAR, para que siga en Minerales y el conteo
+ * "N de M con dato" del grupo no cambie.
+ *
+ * Va acá y no dentro de `buildNutrientRows` porque la sal no existe en el registro de nutrientes:
+ * es un derivado de la UI, y `buildNutrientRows` recorre el registro.
+ */
+export function sustituirSodioPorSal(secciones: NutrientSection[], sal: NutrientRow): NutrientSection[] {
+  return secciones.map((s) => ({
+    ...s,
+    rows: s.rows.map((r) => (r.key === "sodium_mg" ? sal : r)),
   }));
 }

@@ -117,6 +117,48 @@ test("una comida sin micros muestra 'sin dato', no ceros", async () => {
   expect(screen.queryByTestId("nutr-zinc_mg-bar")).toBeNull();
 });
 
+test("el agua de la comida NO se compara contra la referencia diaria de agua total", async () => {
+  // La AI de EFSA (2500 ml para un varón) es de agua TOTAL del día: bebida + la de los alimentos.
+  // Comparar contra ella los 300 ml que aportó UNA comida diría "tomaste el 12 % de lo que
+  // necesitás" el día que tomó 2,1 L. Sin referencia honesta, la fila muestra el valor y nada más.
+  mockComida(comida([item({ foodName: "Sopa", water_ml: 300 })]));
+  await render(<ComidaDetalleScreen />);
+
+  await waitFor(() => expect(screen.getByTestId("nutr-water_ml-amount")).toBeTruthy());
+  expect(screen.getByTestId("nutr-water_ml-amount")).toHaveTextContent(/^300 ml$/);
+  expect(screen.queryByTestId("nutr-water_ml-pct")).toBeNull();
+  expect(screen.queryByTestId("nutr-water_ml-bar")).toBeNull();
+});
+
+test("la fila del sodio es SAL en gramos, igual que en la pestaña del día", async () => {
+  // 1000 + 600 = 1600 mg de sodio = 4 g de sal. La app habla de sal en todas partes (el campo del
+  // alta, el semáforo, la curva) y es lo único con referencia pública (OMS, 5 g/día).
+  mockComida(comida([
+    item({ foodName: "Jamón", sodium_mg: 1000 }),
+    item({ id: "33333333-3333-4333-8333-333333333333", foodName: "Queso", sodium_mg: 600 }),
+  ]));
+  await render(<ComidaDetalleScreen />);
+
+  await waitFor(() => expect(screen.getByTestId("nutr-grupo-minerales")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+  expect(screen.getByText("Sal")).toBeTruthy();
+  expect(screen.getByTestId("nutr-salt_g-amount")).toHaveTextContent(/^4 \/ 5 g$/);
+  expect(screen.getByTestId("nutr-salt_g-pct")).toHaveTextContent(/^80 %$/);
+  // Sustituye a la de sodio, no se suma: dos filas del MISMO hecho en dos unidades, y una sola
+  // con referencia, es peor que una.
+  expect(screen.queryByTestId("nutr-sodium_mg-row")).toBeNull();
+});
+
+test("una comida sin sodio muestra la sal 'sin dato', no 0 g", async () => {
+  mockComida(comida([item({ foodName: "Pechuga de pollo" })]));
+  await render(<ComidaDetalleScreen />);
+
+  await waitFor(() => expect(screen.getByTestId("nutr-grupo-minerales")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+  expect(screen.getByTestId("nutr-salt_g-amount")).toHaveTextContent(/^sin dato$/);
+  expect(screen.queryByTestId("nutr-salt_g-bar")).toBeNull();
+});
+
 test("el aporte de la comida se muestra contra la meta del día", async () => {
   mockComida(comida([
     item({ foodName: "Pechuga de pollo", kcal: 248, protein_g: 46.5, carbs_g: 0, fat_g: 5.4 }),

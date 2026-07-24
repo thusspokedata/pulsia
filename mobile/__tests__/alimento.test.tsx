@@ -68,6 +68,30 @@ test("los valores son por 100 g y NO se comparan contra ninguna referencia diari
   expect(screen.queryByTestId("nutr-fiber_g-pct")).toBeNull();
 });
 
+test("el mineral se muestra como SAL, la misma unidad que la comida y el día", async () => {
+  // 238 mg de sodio por 100 g = 0,6 g de sal. Por 100 g no hay referencia diaria que valga, pero
+  // la UNIDAD tiene que ser la misma en las tres pantallas: el alta ya pide "Sal (g)" y el
+  // semáforo del catálogo ya evalúa sal por 100 g.
+  await render(<AlimentoDetalleScreen />);
+  await waitFor(() => expect(screen.getByTestId("nutr-grupo-minerales")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+
+  expect(screen.getByText("Sal")).toBeTruthy();
+  expect(screen.getByTestId("nutr-salt_g-amount")).toHaveTextContent(/^0\.6 g$/);
+  // Por 100 g no se compara contra nada (ni la OMS ni EFSA hablan de 100 g de comida).
+  expect(screen.queryByTestId("nutr-salt_g-pct")).toBeNull();
+  expect(screen.queryByTestId("nutr-salt_g-bar")).toBeNull();
+  expect(screen.queryByTestId("nutr-sodium_mg-row")).toBeNull();
+});
+
+test("un alimento sin sodio muestra la sal 'sin dato', no 0 g", async () => {
+  (getFood as jest.Mock).mockResolvedValue(alimento({ sodium_mg: null }));
+  await render(<AlimentoDetalleScreen />);
+  await waitFor(() => expect(screen.getByTestId("nutr-grupo-minerales")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+  expect(screen.getByTestId("nutr-salt_g-amount")).toHaveTextContent(/^sin dato$/);
+});
+
 test("un líquido dice por 100 ml, no por 100 g", async () => {
   (getFood as jest.Mock).mockResolvedValue(alimento({ basis: "per_100ml" }));
   await render(<AlimentoDetalleScreen />);
