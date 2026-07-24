@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { FoodInputSchema, MealInputSchema, WaterLogInputSchema, NutritionGoalInputSchema, ReportGenerateInputSchema, type ReportKind } from "@pulsia/shared";
+import { FoodInputSchema, FoodIdentificationSchema, MealInputSchema, WaterLogInputSchema, NutritionGoalInputSchema, ReportGenerateInputSchema, type ReportKind, type FoodExtraction, type FoodIdentification } from "@pulsia/shared";
+import { searchUsda, getUsdaFood, type UsdaCandidate } from "../usda/matcher";
+import { assembleFoodExtraction } from "../nutrition/assemble";
 import {
   insertFood, listFoods, getFood, updateFood, deleteFood,
   createMeal, listMeals, updateMeal, deleteMeal, getMealById,
@@ -26,10 +28,73 @@ const ExtractSchema = z.object({
 
 const DescribeSchema = z.object({ text: z.string().trim().min(2).max(100) });
 
+// Re-mezcla manual: la identificación que ya se tenía + la fila de USDA que eligió el usuario.
+const AssembleSchema = z.object({
+  identification: FoodIdentificationSchema,
+  fdcId: z.number().int(),
+});
+
 function parseQueryNumber(raw: string | undefined): number | undefined {
   if (raw == null) return undefined;
   const n = Number(raw);
   return Number.isNaN(n) ? undefined : n;
+}
+
+// La respuesta de extract/describe: la extracción persistible + los candidatos de USDA rankeados
+// (para el "¿no es este?" del Plan 2). `candidates` va SIEMPRE (vacío si no hubo búsqueda o match).
+// Cuál se eligió queda en `extraction.usdaFdcId`.
+//
+// `identification` es la identificación que usó ESTE handler, devuelta para que el móvil pueda
+// re-mezclarla con otro candidato vía `POST /usda/assemble`. Sin ella el "¿no es este?" no existe:
+// `searchQuery` (que el schema del assemble exige) NO es un campo de `FoodExtraction`, así que el
+// formulario no tiene con qué reconstruirla — recibiría los candidatos y no podría elegir ninguno.
+// En `describe` viaja la identificación YA forzada a `sourceMacros: "ai"`: mandar la original
+// reintroduciría en la re-mezcla la mentira que el handler acaba de corregir.
+type ExtractResponse = FoodExtraction & { candidates: UsdaCandidate[]; identification: FoodIdentification };
+
+/**
+ * Toma la identificación de la 1ª llamada de IA y le adjunta los micros de USDA:
+ *   1. searchUsda(searchQuery) → candidatos
+ *   2. pickUsdaCandidate → elige uno (o null / "ninguno")
+ *   3. getUsdaFood(fdcId) → la fila completa
+ *   4. assembleFoodExtraction(id, usda) → mezcla
+ *
+ * Toda la parte de USDA (búsqueda + elección + fila) está en su propio try/catch, SEPARADO del de
+ * la llamada de IA que identifica el alimento: si `usda_food` está vacía/rota o la 2ª llamada
+ * falla, el alta NO se bloquea — cae a "sin match" (spec §7). Un alta sin vitaminas es
+ * infinitamente mejor que un 500.
+ */
+async function attachUsdaMicros(deps: AppDeps, id: FoodIdentification, apiKey: string): Promise<ExtractResponse> {
+  let candidates: UsdaCandidate[] = [];
+  try {
+    candidates = await searchUsda(deps.db, id.searchQuery);
+  } catch (e) {
+    // usda_food vacía o rota: degradar, no romper (spec §7).
+    console.warn("searchUsda falló (usda_food vacía o rota); alta sin micros:", (e as Error).message);
+    return { ...assembleFoodExtraction(id, null), candidates: [], identification: id };
+  }
+  if (candidates.length === 0) return { ...assembleFoodExtraction(id, null), candidates: [], identification: id };
+
+  let chosenFdcId: number | null = null;
+  try {
+    chosenFdcId = deps.aiClient.pickUsdaCandidate
+      ? await deps.aiClient.pickUsdaCandidate({ foodName: id.name, candidates, apiKey })
+      : null;
+  } catch (e) {
+    // La 2ª llamada falló: se ofrecen los candidatos para elegir a mano (spec §7).
+    console.warn("pickUsdaCandidate falló; se ofrecen candidatos para elegir a mano:", (e as Error).message);
+    chosenFdcId = null;
+  }
+  if (chosenFdcId == null) return { ...assembleFoodExtraction(id, null), candidates, identification: id };
+
+  let usda = null;
+  try {
+    usda = await getUsdaFood(deps.db, chosenFdcId);
+  } catch (e) {
+    console.warn("getUsdaFood falló; alta sin micros:", (e as Error).message);
+    usda = null;
+  }
+  return { ...assembleFoodExtraction(id, usda), candidates, identification: id };
 }
 
 export function nutritionRoutes(deps: AppDeps) {
@@ -45,13 +110,15 @@ export function nutritionRoutes(deps: AppDeps) {
     const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
     const apiKey = resolveAiKey(settingsRow, deps.config);
     if (!apiKey) return c.json({ error: "No hay API key de IA disponible." }, 400);
+    let id: FoodIdentification;
     try {
-      const extraction = await deps.aiClient.extractFood({ imageBase64: parsed.data.imageBase64, mediaType: parsed.data.mediaType, apiKey });
-      return c.json(extraction);
+      id = await deps.aiClient.extractFood({ imageBase64: parsed.data.imageBase64, mediaType: parsed.data.mediaType, apiKey });
     } catch (e) {
       console.warn("extractFood falló:", (e as Error).message);
       return c.json({ error: "No se pudo analizar la foto. Reintentá o cargá el alimento a mano." }, 502);
     }
+    // Por foto sí puede haber etiqueta: se respeta el sourceMacros que devolvió la IA ("label"|"ai").
+    return c.json(await attachUsdaMicros(deps, id, apiKey));
   });
 
   // ---- Alta por texto (sincrónica, no persiste) ----
@@ -63,16 +130,71 @@ export function nutritionRoutes(deps: AppDeps) {
     const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
     const apiKey = resolveAiKey(settingsRow, deps.config);
     if (!apiKey) return c.json({ error: "No hay API key de IA disponible." }, 400);
+    let id: FoodIdentification;
     try {
-      const food = await deps.aiClient.describeFood({ text: parsed.data.text, apiKey });
-      // Por texto no hay etiqueta que leer: el dato es SIEMPRE una estimación. No se lo pedimos al
-      // prompt y confiamos — se pisa acá. Si el modelo contestara "label" porque cree saber la
-      // etiqueta de una marca, el catálogo mentiría sobre la procedencia del dato.
-      return c.json({ ...food, source: "estimate" as const });
+      id = await deps.aiClient.describeFood({ text: parsed.data.text, apiKey });
     } catch (e) {
       console.warn("describeFood falló:", (e as Error).message);
       return c.json({ error: "No se pudo analizar el alimento. Reintentá o cargalo a mano." }, 502);
     }
+    // Por texto no hay etiqueta que leer: el dato es SIEMPRE una estimación. No se lo pedimos al
+    // prompt y confiamos — se fuerza acá. Si el modelo contestara "label" porque cree saber la
+    // etiqueta de una marca, el catálogo mentiría sobre la procedencia del dato.
+    const idForced: FoodIdentification = { ...id, sourceMacros: "ai" };
+    return c.json(await attachUsdaMicros(deps, idForced, apiKey));
+  });
+
+  // ---- Búsqueda manual en USDA (para el "¿no es este?" del Plan 2) ----
+  // Query vacía → [] (la UI puede pedir sin término y recibir nada, en vez de un error). Si
+  // usda_food está vacía/rota, también degrada a [] en vez de romper.
+  r.get("/usda/search", async (c) => {
+    const q = (c.req.query("q") ?? "").trim();
+    if (q.length === 0) return c.json([] as UsdaCandidate[]);
+    try {
+      return c.json(await searchUsda(deps.db, q));
+    } catch (e) {
+      console.warn("usda/search falló:", (e as Error).message);
+      return c.json([] as UsdaCandidate[]);
+    }
+  });
+
+  // ---- Re-mezcla manual: el usuario eligió OTRA fila de USDA ("¿no es este?") ----
+  // Es la misma mezcla que hace el alta, pero con el fdcId que eligió el usuario en vez del que
+  // eligió la IA. No persiste: devuelve la extracción para que el form recargue sus valores, y
+  // recién el POST /foods la guarda.
+  //
+  // `identification` se revalida acá aunque el móvil la haya recibido del backend hace un minuto:
+  // es input del cliente y llega por HTTP. Sin el schema, un `name` vacío o un `searchQuery`
+  // perdido en el viaje se persistiría como un alimento sin rastro de dónde salió.
+  //
+  // A diferencia de extract/describe, acá un fdcId que no existe NO se degrada a "sin micros": el
+  // usuario pidió ESA fila. Devolver 200 con todo en null parecería que la eligió y no tenía datos.
+  r.post("/usda/assemble", async (c) => {
+    const parsed = AssembleSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Body inválido", detail: parsed.error.issues }, 400);
+    const fila = await getUsdaFood(deps.db, parsed.data.fdcId);
+    if (!fila) return c.json({ error: "No encontrado" }, 404);
+    return c.json(assembleFoodExtraction(parsed.data.identification, fila));
+  });
+
+  // ---- Una entrada puntual de USDA: resuelve fdcId → descripción ----
+  // El alimento del catálogo persiste SOLO `usda_fdc_id`; la descripción vive en `usda_food`, que
+  // es un catálogo compartido y no parte del alimento del usuario. Las pantallas que muestran el
+  // nombre de la entrada (el detalle de UN alimento, el chip del alta) miran un alimento por vez,
+  // así que una consulta puntual alcanza: el catálogo lista 50 alimentos pero NO muestra esta
+  // descripción, y por eso no se paga un JOIN ni 50 strings en cada `GET /nutrition/foods`.
+  //
+  // Devuelve la identidad de la fila (fdcId, descripción, tipo) y NO sus 34 nutrientes: quien
+  // quiera los valores está eligiendo otra fila, y para eso está `/usda/assemble`.
+  //
+  // Va DESPUÉS de `/usda/search` (hono resuelve por orden de registro): al revés, `:fdcId`
+  // capturaría la palabra "search".
+  r.get("/usda/:fdcId", async (c) => {
+    const fdcId = Number(c.req.param("fdcId"));
+    if (!Number.isInteger(fdcId)) return c.json({ error: "fdcId inválido" }, 400);
+    const fila = await getUsdaFood(deps.db, fdcId);
+    if (!fila) return c.json({ error: "No encontrado" }, 404);
+    return c.json({ fdcId: fila.fdcId, description: fila.description, dataType: fila.dataType });
   });
 
   // ---- Foods (catálogo) ----

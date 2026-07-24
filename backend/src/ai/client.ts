@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import {
   ProgramSchema,
   EcgAnalysisSchema,
-  FoodExtractionSchema,
+  FoodIdentificationSchema,
   ReportOutputSchema,
   SupplementExtractionSchema,
   AiPlanOutputSchema,
@@ -13,7 +13,7 @@ import { buildGenerationPrompt } from "./prompt";
 import { buildOneOffPrompt, type OneOffArgs } from "./oneoff";
 import { buildMemoryUpdatePrompt } from "./memory";
 import { buildEcgPrompt } from "./ecg";
-import { buildFoodPrompt } from "./nutrition";
+import { buildFoodPrompt, buildPickCandidatePrompt } from "./nutrition";
 import { buildReportPrompt } from "./report";
 import { buildSupplementExtractPrompt, buildSupplementExplainPrompt, buildSupplementPlanPrompt } from "./supplements";
 import type { ReportData } from "../reports/collect";
@@ -45,8 +45,15 @@ export interface AiClient {
     imageBase64: string;
     mediaType: string;
     apiKey: string;
-  }): Promise<import("@pulsia/shared").FoodExtraction>;
-  describeFood?(input: { text: string; apiKey: string }): Promise<import("@pulsia/shared").FoodExtraction>;
+  }): Promise<import("@pulsia/shared").FoodIdentification>;
+  describeFood?(input: { text: string; apiKey: string }): Promise<import("@pulsia/shared").FoodIdentification>;
+  // 2ª llamada del alta: elige el fdcId del candidato de USDA que mejor representa al alimento, o
+  // null si ninguno sirve (forzar un match malo es peor que no matchear).
+  pickUsdaCandidate?(input: {
+    foodName: string;
+    candidates: { fdcId: number; description: string }[];
+    apiKey: string;
+  }): Promise<number | null>;
   extractSupplement?(input: {
     imageBase64: string;
     mediaType: string;
@@ -180,9 +187,9 @@ export class AnthropicAiClient implements AiClient {
       client,
       model: "claude-opus-4-8",
       maxTokens: 1024,
-      schema: FoodExtractionSchema,
+      schema: FoodIdentificationSchema,
       toolName: "return_food",
-      description: "Devuelve los datos nutricionales del alimento de la foto.",
+      description: "Identifica el alimento de la foto: macros, micros de etiqueta y frase de búsqueda.",
       content: [
         { type: "image", source: { type: "base64", media_type: mediaType as any, data: imageBase64 } },
         { type: "text", text: buildFoodPrompt("photo") },
@@ -200,13 +207,37 @@ export class AnthropicAiClient implements AiClient {
       client,
       model: "claude-opus-4-8",
       maxTokens: 1024,
-      schema: FoodExtractionSchema,
+      schema: FoodIdentificationSchema,
       toolName: "return_food",
-      description: "Devuelve los datos nutricionales estimados del alimento nombrado.",
+      description: "Identifica el alimento nombrado: macros estimados, micros de etiqueta y frase de búsqueda.",
       content: [{ type: "text", text: `${buildFoodPrompt("text")}\n\nAlimento: ${text}` }],
       truncatedMsg: "La respuesta se truncó.",
       missingMsg: "La IA no devolvió los datos del alimento.",
     });
+  }
+
+  // 2ª llamada del alta: elegir el candidato de USDA. Devuelve el fdcId elegido o null. Valida el
+  // índice contra el rango de candidatos: un index alucinado (fuera de rango) se trata como "ninguno".
+  async pickUsdaCandidate({ foodName, candidates, apiKey }: {
+    foodName: string;
+    candidates: { fdcId: number; description: string }[];
+    apiKey: string;
+  }): Promise<number | null> {
+    if (candidates.length === 0) return null;
+    const client = new Anthropic({ apiKey });
+    const { index } = await callStructuredTool({
+      client,
+      model: "claude-opus-4-8",
+      maxTokens: 256,
+      schema: z.object({ index: z.number().int().nullable() }),
+      toolName: "pick_candidate",
+      description: "Elige el candidato de USDA que mejor representa el alimento, o null si ninguno sirve.",
+      content: buildPickCandidatePrompt(foodName, candidates),
+      truncatedMsg: "La respuesta se truncó al elegir el candidato de USDA.",
+      missingMsg: "La IA no eligió un candidato de USDA.",
+    });
+    if (index === null || !Number.isInteger(index) || index < 1 || index > candidates.length) return null;
+    return candidates[index - 1].fdcId;
   }
 
   async extractSupplement({ imageBase64, mediaType, apiKey }: {

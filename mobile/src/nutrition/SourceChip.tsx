@@ -1,32 +1,64 @@
 import { View, Text } from "react-native";
-import type { FoodSource } from "@pulsia/shared";
+import type { SourceMacros, SourceMicros } from "@pulsia/shared";
 import { colors, radius, spacing } from "../theme/tokens";
 
-// De dónde salió el dato nutricional de un alimento.
+// De dónde salió el dato nutricional de un alimento. Son DOS procedencias distintas y hay que
+// decir las dos, porque un mismo alimento puede tener los macros de una etiqueta y las vitaminas
+// de la base de composición de USDA.
 //
-// "etiqueta" = la IA leyó una tabla nutricional de una foto. "estimado" = TODO lo demás: la IA
-// estimando de memoria, o el usuario cargándolo a mano (el formulario arranca en "estimate" y no
-// hay control para cambiarlo). La app no puede distinguir esos dos casos — no vio la etiqueta —,
-// así que el chip afirma solo lo que el dato respalda: que NO se verificó contra una etiqueta.
-// Decir "lo estimó la IA" sería mentira para el alimento que el usuario copió de un envase real.
+//   sourceMacros: "label"  = la IA leyó una tabla nutricional de una foto
+//                 "ai"     = la IA lo estimó de memoria
+//                 "manual" = lo cargó el usuario a mano
+//   sourceMicros: "usda"   = las vitaminas y minerales salieron de la base de USDA
+//                 "ai"     = las estimó el modelo
+//                 null     = no hubo match: el bloque quedó vacío, y no hay nada que anunciar
+//
+// El chip de macros antes decía "estimado" para todo lo que no fuera etiqueta, porque el dato
+// guardado era un único `source` con el valor "estimate" y la app NO podía distinguir a la IA del
+// usuario cargando a mano. Ahora el schema separa `ai` de `manual`, así que el chip puede afirmar
+// cuál de los dos fue sin inventar nada.
 //
 // No usa `warning`: un estimado no es un error ni un exceso, y el ámbar ya significa "te pasaste
 // de un límite" en el resto de la app.
-export function SourceChip({ source }: { source: FoodSource }) {
-  const isLabel = source === "label";
+const MACROS_LABEL: Record<SourceMacros, string> = {
+  label: "etiqueta",
+  ai: "estimado",
+  manual: "a mano",
+};
+
+function Chip({ text, strong, testID }: { text: string; strong: boolean; testID: string }) {
   return (
     <View
-      testID={`source-chip-${source}`}
+      testID={testID}
       style={{
-        backgroundColor: isLabel ? colors.accentSoft : colors.surfaceMuted,
+        backgroundColor: strong ? colors.accentSoft : colors.surfaceMuted,
         borderRadius: radius.pill,
         paddingHorizontal: spacing.sm,
         paddingVertical: 2,
       }}
     >
-      <Text style={{ color: isLabel ? colors.accentText : colors.textMuted, fontSize: 11 }}>
-        {isLabel ? "etiqueta" : "estimado"}
-      </Text>
+      <Text style={{ color: strong ? colors.accentText : colors.textMuted, fontSize: 11 }}>{text}</Text>
+    </View>
+  );
+}
+
+export function SourceChip({
+  sourceMacros,
+  sourceMicros,
+}: {
+  sourceMacros: SourceMacros;
+  sourceMicros?: SourceMicros;
+}) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs, flexShrink: 0 }}>
+      {/* El destacado (accent) es para el dato que viene de una fuente real y no de una
+          estimación: una etiqueta leída, o la tabla de composición de USDA. */}
+      <Chip
+        text={MACROS_LABEL[sourceMacros]}
+        strong={sourceMacros === "label"}
+        testID={`source-chip-${sourceMacros}`}
+      />
+      {sourceMicros === "usda" && <Chip text="USDA" strong testID="source-chip-micros-usda" />}
     </View>
   );
 }

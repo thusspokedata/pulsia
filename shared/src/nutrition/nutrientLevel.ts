@@ -1,4 +1,5 @@
 import type { FoodBasis } from "../schemas/nutrition";
+import { saltGFromSodiumMg } from "./derived";
 
 // Los seis nutrientes que llevan semáforo. El ORDEN importa: desempata el orden de los chips
 // en la UI, así que cambiarlo cambia lo que ve el usuario.
@@ -116,12 +117,15 @@ export type FoodFlags = {
 
 // Lo mínimo que hace falta para juzgar un alimento. Un Food lo satisface, pero pedir solo esto
 // permite testear sin construir un Food entero con id, userId y timestamps.
+//
+// OJO: pide `sodium_mg`, no `salt_g`. El alimento persiste SODIO (es lo que entrega USDA y es la
+// fuente única), mientras el semáforo razona en SAL. Ver nutrientValue.
 export type FoodFlagsInput = {
   basis: FoodBasis;
   fat_g: number;
   saturated_fat_g?: number | null;
   sugars_g?: number | null;
-  salt_g?: number | null;
+  sodium_mg?: number | null;
   cholesterol_mg?: number | null;
   fiber_g?: number | null;
 };
@@ -147,9 +151,21 @@ const SENTIMENT_RANK: Record<NutrientSentiment, number> = {
  * ya trataba NaN como "unknown" por su propio chequeo de `Number.isFinite`, pero el `value` que
  * devuelve `foodFlags` quedaba como NaN — y la UI que lo imprime literal (`${value} mg`) no
  * distingue NaN de un número real sin este helper.
+ *
+ * `salt_g` es el único que NO es un campo del alimento: se DERIVA del sodio. Lo que se persiste
+ * es sodio (es lo que entrega USDA), pero los umbrales de la FSA y la referencia de la OMS
+ * (5 g/día) están escritos en gramos de sal y así los lee el usuario. La conversión pasa acá,
+ * en el borde, y no en los umbrales — traducir la tabla de la FSA a sodio la volvería imposible
+ * de contrastar contra la fuente.
  */
 export function nutrientValue(food: FoodFlagsInput, nutrient: FlaggedNutrient): number | null {
-  const raw = food[nutrient];
+  if (nutrient === "salt_g") return saltGFromSodiumMg(finite(food.sodium_mg));
+  return finite(food[nutrient]);
+}
+
+// El chequeo de `typeof` vive acá para que el camino del sodio pase por el mismo filtro que el
+// resto: un `sodium_mg` corrupto (string, NaN) tiene que dar "sin dato", no un NaN convertido.
+function finite(raw: unknown): number | null {
   return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
 }
 

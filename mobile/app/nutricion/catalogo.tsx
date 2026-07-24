@@ -23,10 +23,12 @@ function emptyResultsMessage(q: string, nutrient: FlaggedNutrient | null): strin
 function FoodRow({ food, onDelete }: { food: Food; onDelete: (f: Food) => void }) {
   return (
     <View style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-      <Pressable style={{ flex: 1 }} onPress={() => router.push(`/nutricion/agregar-alimento?foodId=${food.id}`)}>
+      {/* La fila abre el DETALLE (solo lectura, con los 30 nutrientes), no el formulario: editar
+          se sigue pudiendo desde ahí. */}
+      <Pressable style={{ flex: 1 }} onPress={() => router.push(`/nutricion/alimento?id=${food.id}`)}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
           <Text style={{ color: colors.text, fontWeight: "600", flexShrink: 1 }}>{food.name}</Text>
-          <SourceChip source={food.source} />
+          <SourceChip sourceMacros={food.sourceMacros} sourceMicros={food.sourceMicros} />
         </View>
         <Text style={{ color: colors.textMuted, fontSize: 12 }}>
           {food.kcal} kcal · P{food.protein_g} C{food.carbs_g} G{food.fat_g} /100{food.basis === "per_100ml" ? "ml" : "g"}

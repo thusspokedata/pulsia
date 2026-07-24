@@ -1,4 +1,6 @@
-import type { Meal, MealType } from "../schemas/nutrition";
+import type { Meal, MealItem, MealType } from "../schemas/nutrition";
+import { saltGFromSodiumMg } from "./derived";
+import type { NutrientKey } from "./nutrients";
 
 // Criterio de redondeo de `pct`/`pctActual`/`pctTarget`, compartido por todas las tortas de este
 // archivo (comidas y macros): cada porcentaje se redondea por separado, así que pueden sumar 99 o
@@ -97,9 +99,19 @@ export function macroSplit(comido: MacroGrams, meta: MacroGrams | null): MacroSl
   }));
 }
 
-// Los micros que se pueden rankear. Son los del snapshot de MealItem que tienen referencia en la
-// UI; `water_ml` queda afuera a propósito (el líquido tiene su propia vista).
-export type RankNutrient = "sugars_g" | "fiber_g" | "saturated_fat_g" | "salt_g" | "cholesterol_mg";
+// Los micros que se pueden rankear: TODOS los del registro (el snapshot de MealItem los guarda a
+// todos) más `salt_g`, que no es una columna sino un derivado del sodio. Se abrió del puñado de 5
+// original porque la pestaña del día pasó a mostrar los 30 y cualquiera de ellos puede pedir su
+// desglose de "qué alimentos lo aportan"; limitar el ranking dejaría 25 filas mudas.
+export type RankNutrient = NutrientKey | "salt_g";
+
+// `salt_g` no es un campo del ítem: el snapshot guarda SODIO. El ranking sigue hablando en SAL
+// porque es la unidad que el usuario lee en el resto de la app (referencia OMS de 5 g/día).
+// Mismo criterio que nutrientValue en nutrientLevel.ts.
+function rankAmount(item: MealItem, nutrient: RankNutrient): number | null {
+  if (nutrient === "salt_g") return saltGFromSodiumMg(item.sodium_mg);
+  return item[nutrient] ?? null;
+}
 
 export interface FoodRank {
   name: string;
@@ -116,7 +128,7 @@ export function foodsHighestIn(meals: Meal[], nutrient: RankNutrient): FoodRank[
   const by = new Map<string, { amount: number; grams: number }>();
   for (const m of meals) {
     for (const item of m.items) {
-      const v = item[nutrient];
+      const v = rankAmount(item, nutrient);
       if (v == null || v <= 0) continue;
       const acc = by.get(item.foodName) ?? { amount: 0, grams: 0 };
       by.set(item.foodName, { amount: acc.amount + v, grams: acc.grams + item.grams });

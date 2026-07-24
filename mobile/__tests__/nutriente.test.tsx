@@ -2,22 +2,25 @@ import { render, screen, fireEvent, waitFor, act } from "@testing-library/react-
 import NutrienteScreen from "../app/nutricion/nutriente";
 import { listMeals } from "../src/api/nutrition";
 
+let mockKey = "cholesterol_mg";
 jest.mock("expo-router", () => ({
   router: { back: jest.fn() },
-  useLocalSearchParams: () => ({ key: "cholesterol_mg", offset: "0" }),
+  useLocalSearchParams: () => ({ key: mockKey, offset: "0" }),
 }));
 jest.mock("../src/storage/config", () => ({ getBackendUrl: jest.fn(async () => "http://x") }));
 jest.mock("../src/api/nutrition", () => ({ listMeals: jest.fn(async () => []) }));
 
 const meal = (items: any[], eatenAt = 1) => ({ id: "m", eatenAt, mealType: null, note: null, items });
-const item = (foodName: string, grams: number, cholesterol_mg: number | null) => ({
+const item = (foodName: string, grams: number, cholesterol_mg: number | null, extra: any = {}) => ({
   id: "i", foodId: null, foodName, quantity: grams, quantityUnit: "g", grams,
   kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0,
-  saturated_fat_g: null, sugars_g: null, fiber_g: null, salt_g: null, cholesterol_mg, water_ml: null,
+  saturated_fat_g: null, sugars_g: null, fiber_g: null, sodium_mg: null, cholesterol_mg, water_ml: null,
+  ...extra,
 });
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockKey = "cholesterol_mg";
   (listMeals as jest.Mock).mockResolvedValue([meal([item("Huevo", 120, 440), item("Queso", 60, 110)])]);
 });
 
@@ -27,6 +30,43 @@ test("rankea los alimentos por aporte, con la cantidad comida y el %", async () 
   expect(screen.getByText("440 mg · 80%")).toBeTruthy();
   expect(screen.getByText("120 g")).toBeTruthy(); // la cantidad: sin esto no se puede decidir la porción
   expect(screen.getByText("110 mg · 20%")).toBeTruthy();
+});
+
+test("un nutriente del registro nuevo (zinc) también se desglosa, con su nombre y su unidad", async () => {
+  // La pestaña del día pasó de 5 nutrientes a 30 y todos navegan acá. Con la lista de etiquetas
+  // escrita a mano, esta pantalla decía "Alimentos con más undefined" y "5 undefined".
+  mockKey = "zinc_mg";
+  (listMeals as jest.Mock).mockResolvedValue([
+    meal([item("Ostras", 100, null, { zinc_mg: 60 }), item("Carne", 150, null, { zinc_mg: 20 })]),
+  ]);
+  await render(<NutrienteScreen />);
+  await waitFor(() => expect(screen.getByText("Ostras")).toBeTruthy());
+  expect(screen.getByText("Alimentos con más zinc")).toBeTruthy();
+  expect(screen.getByText("60 mg · 75%")).toBeTruthy();
+});
+
+test("el nombre del nutriente mantiene las mayúsculas internas del registro", async () => {
+  mockKey = "vitamin_b12_mcg";
+  (listMeals as jest.Mock).mockResolvedValue([meal([item("Hígado", 100, null, { vitamin_b12_mcg: 70 })])]);
+  await render(<NutrienteScreen />);
+  await waitFor(() => expect(screen.getByText("Hígado")).toBeTruthy());
+  expect(screen.getByText("Alimentos con más vitamina B12 (cobalamina)")).toBeTruthy();
+  expect(screen.getByText("70 mcg · 100%")).toBeTruthy();
+});
+
+test("la sal se sigue desglosando en gramos, derivada del sodio del ítem", async () => {
+  mockKey = "salt_g";
+  (listMeals as jest.Mock).mockResolvedValue([meal([item("Jamón", 100, null, { sodium_mg: 1200 })])]);
+  await render(<NutrienteScreen />);
+  await waitFor(() => expect(screen.getByText("Jamón")).toBeTruthy());
+  expect(screen.getByText("Alimentos con más sal")).toBeTruthy();
+  expect(screen.getByText("3 g · 100%")).toBeTruthy(); // 1200 mg de sodio = 3 g de sal
+});
+
+test("una clave que no existe no rompe la pantalla: cae al colesterol", async () => {
+  mockKey = "no_existe_mg";
+  await render(<NutrienteScreen />);
+  await waitFor(() => expect(screen.getByText("Alimentos con más colesterol")).toBeTruthy());
 });
 
 test("arranca en Día: pide un rango de 1 solo día", async () => {

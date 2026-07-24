@@ -2,6 +2,8 @@ import { pgTable, uuid, text, jsonb, timestamp, integer, bigint, boolean, double
 import { relations } from "drizzle-orm";
 import type { TrainingProfile, Program, PlannedExercise, SupplementComponent, Frequency, AdjustmentItem, CardioSamples, CardioFitExtras } from "@pulsia/shared";
 
+export { usdaFood, usdaDataset } from "../usda/schema";
+
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() { return "bytea"; },
 });
@@ -95,14 +97,49 @@ export const food = pgTable("food", {
   proteinG: real("protein_g").notNull(),
   carbsG: real("carbs_g").notNull(),
   fatG: real("fat_g").notNull(),
-  saturatedFatG: real("saturated_fat_g"), // nullable
+  // --- Los 30 nutrientes del registro (shared/src/nutrition/nutrients.ts). TODOS nullable:
+  // `null` es "no sabemos", que NO es 0. La paridad con el registro (y la de meal_item) la
+  // guardan los tests de nutrition/columns.test.ts: si se agrega un nutriente y se olvida la
+  // columna acá, fallan. ---
+  // Grasas
+  saturatedFatG: real("saturated_fat_g"),
+  omega3G: real("omega3_g"),
+  omega6G: real("omega6_g"),
+  cholesterolMg: real("cholesterol_mg"),
+  // Carbohidratos
   sugarsG: real("sugars_g"),
   fiberG: real("fiber_g"),
-  saltG: real("salt_g"),
-  cholesterolMg: real("cholesterol_mg"), // nullable
-  waterMl: real("water_ml"),             // nullable
+  waterMl: real("water_ml"),
+  // Vitaminas
+  vitaminAMcg: real("vitamin_a_mcg"),
+  vitaminB1Mg: real("vitamin_b1_mg"),
+  vitaminB2Mg: real("vitamin_b2_mg"),
+  vitaminB3Mg: real("vitamin_b3_mg"),
+  vitaminB5Mg: real("vitamin_b5_mg"),
+  vitaminB6Mg: real("vitamin_b6_mg"),
+  vitaminB7Mcg: real("vitamin_b7_mcg"),
+  vitaminB9Mcg: real("vitamin_b9_mcg"),
+  vitaminB12Mcg: real("vitamin_b12_mcg"),
+  vitaminCMg: real("vitamin_c_mg"),
+  vitaminDMcg: real("vitamin_d_mcg"),
+  vitaminEMg: real("vitamin_e_mg"),
+  vitaminKMcg: real("vitamin_k_mcg"),
+  cholineMg: real("choline_mg"),
+  // Minerales
+  calciumMg: real("calcium_mg"),
+  ironMg: real("iron_mg"),
+  magnesiumMg: real("magnesium_mg"),
+  iodineMcg: real("iodine_mcg"),
+  phosphorusMg: real("phosphorus_mg"),
+  potassiumMg: real("potassium_mg"),
+  seleniumMcg: real("selenium_mcg"),
+  sodiumMg: real("sodium_mg"), // reemplaza a salt_g: se persiste SODIO, se muestra SAL
+  zincMg: real("zinc_mg"),
   unitWeightG: real("unit_weight_g"), // nullable
-  source: text("source").notNull(), // 'label' | 'estimate'
+  // Procedencia partida: los macros y los micros pueden venir de fuentes distintas.
+  sourceMacros: text("source_macros").notNull(), // 'label' | 'ai' | 'manual'
+  sourceMicros: text("source_micros"),           // 'usda' | 'ai' | null (null = sin match USDA)
+  usdaFdcId: integer("usda_fdc_id"),             // fila de USDA de la que salieron los micros
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
   byUser: index("food_user_idx").on(t.userId),
@@ -131,12 +168,39 @@ export const mealItem = pgTable("meal_item", {
   proteinG: real("protein_g").notNull(),
   carbsG: real("carbs_g").notNull(),
   fatG: real("fat_g").notNull(),
+  // Los mismos 30 nutrientes que `food`, pero YA escalados a este ítem (snapshot). NO lleva
+  // source_macros/source_micros/usda_fdc_id: el ítem guarda valores, no la procedencia.
+  // La paridad con el registro la guarda nutrition/columns.test.ts (ver el comentario en `food`).
   saturatedFatG: real("saturated_fat_g"),
+  omega3G: real("omega3_g"),
+  omega6G: real("omega6_g"),
+  cholesterolMg: real("cholesterol_mg"),
   sugarsG: real("sugars_g"),
   fiberG: real("fiber_g"),
-  saltG: real("salt_g"),
-  cholesterolMg: real("cholesterol_mg"),
   waterMl: real("water_ml"),
+  vitaminAMcg: real("vitamin_a_mcg"),
+  vitaminB1Mg: real("vitamin_b1_mg"),
+  vitaminB2Mg: real("vitamin_b2_mg"),
+  vitaminB3Mg: real("vitamin_b3_mg"),
+  vitaminB5Mg: real("vitamin_b5_mg"),
+  vitaminB6Mg: real("vitamin_b6_mg"),
+  vitaminB7Mcg: real("vitamin_b7_mcg"),
+  vitaminB9Mcg: real("vitamin_b9_mcg"),
+  vitaminB12Mcg: real("vitamin_b12_mcg"),
+  vitaminCMg: real("vitamin_c_mg"),
+  vitaminDMcg: real("vitamin_d_mcg"),
+  vitaminEMg: real("vitamin_e_mg"),
+  vitaminKMcg: real("vitamin_k_mcg"),
+  cholineMg: real("choline_mg"),
+  calciumMg: real("calcium_mg"),
+  ironMg: real("iron_mg"),
+  magnesiumMg: real("magnesium_mg"),
+  iodineMcg: real("iodine_mcg"),
+  phosphorusMg: real("phosphorus_mg"),
+  potassiumMg: real("potassium_mg"),
+  seleniumMcg: real("selenium_mcg"),
+  sodiumMg: real("sodium_mg"),
+  zincMg: real("zinc_mg"),
 }, (t) => ({
   byMeal: index("meal_item_meal_idx").on(t.mealId),
 }));

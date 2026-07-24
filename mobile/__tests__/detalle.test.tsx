@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from "@testing-library/react-native";
 import { router } from "expo-router";
 import DetalleDiaScreen from "../app/nutricion/detalle";
+import { buildNutritionDaySummary } from "../src/nutrition/daySummary";
 import { useNutritionDay } from "../src/nutrition/useNutritionDay";
 import { colors } from "../src/theme/tokens";
 
@@ -11,11 +12,28 @@ jest.mock("expo-router", () => ({
 }));
 jest.mock("../src/nutrition/useNutritionDay", () => ({ useNutritionDay: jest.fn() }));
 
-const summary = {
-  dayTotals: { kcal: 1800, protein_g: 120, carbs_g: 180, fat_g: 60, sugars_g: 40, fiber_g: 22, saturated_fat_g: 18, salt_g: 4 },
-  cholesterolMg: 210,
-  liquid: { total: 2100, drank: 1800, fromFood: 300 },
-};
+// El summary se arma con el MISMO builder que usa la app, a partir de ítems, en vez de escribirse
+// a mano: es la costura donde el total del día (con su marca de parcial y su sodio→sal) se
+// encuentra con la pantalla. Un fixture inventado la saltearía justamente en la pestaña que este
+// test cubre.
+const item = (o: any = {}) => ({
+  id: "i", foodId: null, foodName: "Comida", quantity: 100, quantityUnit: "g", grams: 100,
+  kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, ...o,
+});
+const dia = (items: any[] = [diaBase()], drankMl = 1800) =>
+  buildNutritionDaySummary(
+    [{ id: "m", eatenAt: 1, mealType: null, note: null, items } as any],
+    [{ id: "w", ml: drankMl, loggedAt: 1 }],
+  );
+// El día de referencia del resto de los tests: 1800 kcal, 4 g de sal (1600 mg de sodio), etc.
+function diaBase(over: any = {}) {
+  return item({
+    kcal: 1800, protein_g: 120, carbs_g: 180, fat_g: 60,
+    sugars_g: 40, fiber_g: 22, saturated_fat_g: 18, sodium_mg: 1600, cholesterol_mg: 210, water_ml: 300,
+    ...over,
+  });
+}
+const summary = dia();
 const goalView = {
   status: "ok",
   kcal: { meta: 2200, comido: 1800, exercise: 300, restante: 700, over: false },
@@ -74,22 +92,18 @@ test("el error del hook se muestra en cualquier pestaña", async () => {
   expect(screen.getByText("sin red")).toBeTruthy();
 });
 
-test("un micro sin dato muestra — en vez de desaparecer de la tabla", async () => {
-  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, sugars_g: null } } });
+test("un micro sin dato dice 'sin dato' en vez de desaparecer de la tabla", async () => {
+  mockDay({ summary: dia([diaBase({ sugars_g: null })]) });
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
   expect(screen.getByText("Azúcares")).toBeTruthy(); // la fila sigue estando
-  expect(screen.getByText("—")).toBeTruthy();
+  expect(screen.getByTestId("nutr-sugars_g-amount")).toHaveTextContent(/^sin dato$/);
 });
 
 test("día sin ningún micro cargado: empty state en vez de una tabla de guiones", async () => {
-  mockDay({
-    summary: {
-      ...summary,
-      dayTotals: { ...summary.dayTotals, sugars_g: null, fiber_g: null, saturated_fat_g: null, salt_g: null },
-      cholesterolMg: null,
-    },
-  });
+  // Sin micros Y sin líquido registrado: el agua bebida también es un dato de esta pestaña, así
+  // que un día con 1,8 L tomados no estaría "sin datos".
+  mockDay({ summary: dia([item({ kcal: 1800, protein_g: 120, carbs_g: 180, fat_g: 60 })], 0) });
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
   expect(screen.getByText(/Todavía no hay datos de nutrientes/)).toBeTruthy();
@@ -112,7 +126,7 @@ test("la fibra es un PISO: llegar a la referencia no avisa", async () => {
 });
 
 test("fibra por encima del piso: llena de turquesa, sin segmento ámbar", async () => {
-  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, fiber_g: 45 } } }); // piso = 30
+  mockDay({ summary: dia([diaBase({ fiber_g: 45 })]) }); // piso = 30
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
   expect(screen.getByTestId("nutr-fiber_g-bar").props.style.width).toBe("100%");
@@ -120,9 +134,10 @@ test("fibra por encima del piso: llena de turquesa, sin segmento ámbar", async 
 });
 
 test("sal por encima del límite: turquesa hasta la meta + ámbar el excedente", async () => {
-  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, salt_g: 9 } } }); // ref = 5
+  mockDay({ summary: dia([diaBase({ sodium_mg: 3600 })]) }); // 9 g de sal, ref = 5
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales")); // la sal vive en Minerales
   const fill = screen.getByTestId("nutr-salt_g-bar");
   const over = screen.getByTestId("nutr-salt_g-bar-over");
   expect(fill.props.style.backgroundColor).toBe(colors.accent);
@@ -134,24 +149,25 @@ test("sal por encima del límite: turquesa hasta la meta + ámbar el excedente",
 });
 
 test("valor exactamente igual al límite NO avisa (tocar el límite no es pasarse)", async () => {
-  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, salt_g: 5 } } }); // ref de sal = 5
+  mockDay({ summary: dia([diaBase({ sodium_mg: 2000 })]) }); // 5 g de sal = la referencia exacta
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
   expect(screen.queryByTestId("nutr-salt_g-bar-over")).toBeNull();
 });
 
 test("un valor por encima de la referencia no desborda la barra (clamp al 100%)", async () => {
-  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, fiber_g: 45 } } }); // 150% del piso
+  mockDay({ summary: dia([diaBase({ fiber_g: 45 })]) }); // 150% del piso
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
   expect(screen.getByTestId("nutr-fiber_g-bar").props.style.width).toBe("100%");
 });
 
-test("micro sin dato: muestra — y no dibuja barra", async () => {
-  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, fiber_g: null } } });
+test("micro sin dato: lo dice y no dibuja barra", async () => {
+  mockDay({ summary: dia([diaBase({ fiber_g: null })]) });
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
-  expect(screen.getByText("—")).toBeTruthy();
+  expect(screen.getByTestId("nutr-fiber_g-amount")).toHaveTextContent(/^sin dato$/);
   expect(screen.queryByTestId("nutr-fiber_g-bar")).toBeNull();
 });
 
@@ -251,11 +267,83 @@ test("el desglose se abre en el día que estás mirando, no siempre en hoy", asy
 });
 
 test("un nutriente SIN dato no navega (no hay nada que desglosar)", async () => {
-  mockDay({ summary: { ...summary, dayTotals: { ...summary.dayTotals, fiber_g: null } } });
+  mockDay({ summary: dia([diaBase({ fiber_g: null })]) });
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
   await fireEvent.press(screen.getByTestId("nutr-fiber_g-row"));
   expect(router.push).not.toHaveBeenCalled();
+});
+
+test("la pestaña ya no son 5 filas: hay vitaminas y minerales agrupados", async () => {
+  mockDay({ summary: dia([diaBase({ zinc_mg: 5, vitamin_c_mg: 60 })]) });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  expect(screen.getByText("Vitaminas")).toBeTruthy();
+  expect(screen.getByText("Minerales")).toBeTruthy();
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+  expect(screen.getByTestId("nutr-zinc_mg-amount")).toHaveTextContent(/^5 \/ 11\.7 mg$/);
+});
+
+test("tocar un nutriente NUEVO también abre su desglose", async () => {
+  mockDay({ summary: dia([diaBase({ zinc_mg: 5 })]) });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+  await fireEvent.press(screen.getByTestId("nutr-zinc_mg-row"));
+  expect(router.push).toHaveBeenCalledWith("/nutricion/nutriente?key=zinc_mg&offset=0");
+});
+
+test("la sal navega con su clave, no con la del sodio que se persiste", async () => {
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+  await fireEvent.press(screen.getByTestId("nutr-salt_g-row"));
+  expect(router.push).toHaveBeenCalledWith("/nutricion/nutriente?key=salt_g&offset=0");
+});
+
+// La costura completa: perfil del hook → pantalla → pestaña → referencias EFSA. El hierro es el
+// caso que motivó la personalización (11 mg un varón, 16 mg una mujer en edad fértil). Van como
+// dos tests y no como uno con dos renders: con un perfil solo, una tabla que ignore el sexo pasa
+// igual.
+async function refDeHierroCon(profile: { sex: string; age: number }) {
+  mockDay({ summary: dia([diaBase({ iron_mg: 8 })]), profile });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+  return screen.getByTestId("nutr-iron_mg-amount");
+}
+
+test("con perfil de mujer, el hierro se compara contra 16 mg", async () => {
+  expect(await refDeHierroCon({ sex: "female", age: 35 })).toHaveTextContent(/^8 \/ 16 mg$/);
+});
+
+test("con perfil de varón, el MISMO hierro se compara contra 11 mg", async () => {
+  expect(await refDeHierroCon({ sex: "male", age: 35 })).toHaveTextContent(/^8 \/ 11 mg$/);
+});
+
+test("sin sexo ni edad en el perfil, ofrece completarlo", async () => {
+  await render(<DetalleDiaScreen />); // el mock base no trae perfil
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  expect(screen.getByTestId("nutrientes-aviso-perfil")).toBeTruthy();
+});
+
+test("un total con agujeros se muestra como piso, con '≥'", async () => {
+  // Un ítem declara el zinc y el otro no: el total del día es "al menos 5 mg", no "5 mg".
+  mockDay({ summary: dia([diaBase({ zinc_mg: 5 }), item({})]) });
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+  expect(screen.getByTestId("nutr-zinc_mg-amount")).toHaveTextContent(/^≥ 5 \/ 11\.7 mg$/);
+});
+
+test("pasarse de la sal se ve SIN abrir Minerales: el aviso sube al encabezado", async () => {
+  // Antes la sal era una de 5 filas siempre visibles. Ahora vive en un grupo colapsado, así que
+  // el excedente tiene que seguir viéndose de una o la feature se pierde de hecho.
+  mockDay({ summary: dia([diaBase({ sodium_mg: 3600 })]) }); // 9 g de sal, ref = 5
+  await render(<DetalleDiaScreen />);
+  await fireEvent.press(screen.getByTestId("seg-nutrientes"));
+  expect(screen.queryByTestId("nutr-salt_g-amount")).toBeNull(); // el grupo sigue cerrado
+  expect(screen.getByTestId("nutr-grupo-minerales-alerta")).toBeTruthy();
 });
 
 test("con ejercicio, la fila de carbos muestra el bonus etiquetado", async () => {

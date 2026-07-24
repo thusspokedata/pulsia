@@ -23,7 +23,7 @@ export default function DetalleDiaScreen() {
   const screenPad = useScreenPadding(spacing.lg);
   const { offset: offsetParam } = useLocalSearchParams<{ offset?: string }>();
   const offset = Number(offsetParam ?? 0) || 0;
-  const { error, meals, summary, goalView } = useNutritionDay(offset);
+  const { error, meals, summary, goalView, profile } = useNutritionDay(offset);
   const [tab, setTab] = useState<TabKey>("resumen");
 
   return (
@@ -41,7 +41,14 @@ export default function DetalleDiaScreen() {
         </>
       )}
       {tab === "calorias" && <CaloriasTab meals={meals} />}
-      {tab === "nutrientes" && <NutrientesTab summary={summary} goalView={goalView} offset={offset} />}
+      {tab === "nutrientes" && (
+        <NutrientesTab
+          summary={summary}
+          goalView={goalView}
+          persona={{ sex: profile?.sex, age: profile?.age }}
+          offset={offset}
+        />
+      )}
       {tab === "macros" && <MacrosTab summary={summary} goalView={goalView} />}
 
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}

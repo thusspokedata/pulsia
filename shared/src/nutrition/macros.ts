@@ -1,45 +1,68 @@
 import type { FoodBasis, QuantityUnit } from "../schemas/nutrition";
+import { NUTRIENTS, type NutrientKey, type NutrientValues } from "./nutrients";
 
-export interface MacroSource {
+export type MacroSource = {
   basis: FoodBasis;
   kcal: number;
   protein_g: number;
   carbs_g: number;
   fat_g: number;
   unitWeightG: number | null;
-  saturated_fat_g?: number | null;
-  sugars_g?: number | null;
-  fiber_g?: number | null;
-  salt_g?: number | null;
-  cholesterol_mg?: number | null;
-  water_ml?: number | null;
-}
+} & NutrientValues;
 
-export interface ScaledMacros {
+export type ScaledMacros = {
   grams: number;
   kcal: number;
   protein_g: number;
   carbs_g: number;
   fat_g: number;
-  saturated_fat_g: number | null;
-  sugars_g: number | null;
-  fiber_g: number | null;
-  salt_g: number | null;
-  cholesterol_mg: number | null;
-  water_ml: number | null;
-}
+} & { [K in keyof NutrientValues]-?: number | null };
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
+const roundTo = (n: number, decimals: number) => {
+  const f = 10 ** decimals;
+  return Math.round(n * f) / f;
+};
 
-// null si TODOS los valores son null/undefined; si no, suma tratando null como 0, redondeado a 1 decimal.
-export function sumNullableMicro(values: Array<number | null | undefined>): number | null {
-  if (!values.some((v) => v != null)) return null;
-  return Math.round(values.reduce<number>((a, v) => a + (v ?? 0), 0) * 10) / 10;
+export interface NutrientSum {
+  value: number | null; // null = ningún ítem tenía dato
+  partial: boolean; // true = al menos uno tenía dato y al menos uno no
+  withData: number;
+  total: number;
 }
 
-// Escala un micro opcional por el factor; null/undefined → null.
-const scaleMicro = (v: number | null | undefined, factor: number): number | null =>
-  v == null ? null : round1(v * factor);
+// `partial` es la diferencia entre "comiste 0,8 mg de zinc" y "0,8 de los que sabemos". La UI
+// tiene que poder decirlo; sumar los ausentes como 0 en silencio es afirmar un dato falso.
+// `decimals` default 1 preserva el comportamiento de los llamadores existentes (informes, resumen
+// del día): cambiar el default les movería totales que ya están en producción sin que nadie lo
+// pidiera. Quien sabe qué nutriente suma y necesita más precisión usa sumNutrientByKey.
+export function sumNutrient(values: Array<number | null | undefined>, decimals = 1): NutrientSum {
+  const total = values.length;
+  const withData = values.filter((v) => v != null).length;
+  if (withData === 0) return { value: null, partial: false, withData: 0, total };
+  const sum = values.reduce<number>((a, v) => a + (v ?? 0), 0);
+  return {
+    value: roundTo(sum, decimals),
+    partial: withData < total,
+    withData,
+    total,
+  };
+}
+
+// Suma el nutriente `key` respetando los decimales que declara el registro. Es la que hay que
+// usar cuando se sabe QUÉ nutriente se está sumando: sumar zinc a 1 decimal convierte 0.12 en
+// 0.1, un 17% de error en silencio.
+export function sumNutrientByKey(values: Array<number | null | undefined>, key: NutrientKey): NutrientSum {
+  const def = NUTRIENTS.find((n) => n.key === key);
+  return sumNutrient(values, def?.decimals ?? 1);
+}
+
+// Compatibilidad con los llamadores existentes. Se implementa sobre sumNutrient a propósito:
+// dos criterios de suma distintos es exactamente cómo Progreso y Nutrición terminan mostrando
+// cifras distintas del mismo día.
+export function sumNullableMicro(values: Array<number | null | undefined>): number | null {
+  return sumNutrient(values).value;
+}
 
 // Fuente única del cálculo: la usan el móvil (preview) y el backend (snapshot).
 export function foodMacrosForQuantity(food: MacroSource, quantity: number, unit: QuantityUnit): ScaledMacros {
@@ -53,17 +76,21 @@ export function foodMacrosForQuantity(food: MacroSource, quantity: number, unit:
   }
   const grams = unit === "unit" ? quantity * (food.unitWeightG as number) : quantity;
   const factor = grams / 100;
+
+  // Recorre el REGISTRO, no una lista escrita a mano: agregar un nutriente al registro lo hace
+  // escalar solo. Un nutriente ausente queda null — nunca 0, que afirmaría "no tiene".
+  const scaled = {} as Record<string, number | null>;
+  for (const n of NUTRIENTS) {
+    const v = (food as unknown as Record<string, number | null | undefined>)[n.key];
+    scaled[n.key] = v == null ? null : roundTo(v * factor, n.decimals);
+  }
+
   return {
     grams,
     kcal: Math.round(food.kcal * factor),
     protein_g: round1(food.protein_g * factor),
     carbs_g: round1(food.carbs_g * factor),
     fat_g: round1(food.fat_g * factor),
-    saturated_fat_g: scaleMicro(food.saturated_fat_g, factor),
-    sugars_g: scaleMicro(food.sugars_g, factor),
-    fiber_g: scaleMicro(food.fiber_g, factor),
-    salt_g: scaleMicro(food.salt_g, factor),
-    cholesterol_mg: scaleMicro(food.cholesterol_mg, factor),
-    water_ml: scaleMicro(food.water_ml, factor),
-  };
+    ...scaled,
+  } as ScaledMacros;
 }

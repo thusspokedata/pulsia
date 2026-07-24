@@ -4,7 +4,7 @@ import { router, useFocusEffect } from "expo-router";
 import { deleteMeal, logWater, deleteWater } from "../../src/api/nutrition";
 import { getDayChecklist, putTake } from "../../src/api/supplements";
 import { getBackendUrl } from "../../src/storage/config";
-import { dayLabel, dayAtNoon } from "../../src/session/metricDate";
+import { dayLabel, dayAtNoon, hhmm } from "../../src/session/metricDate";
 import { dateKey } from "../../src/session/dateKey";
 import { dayBounds } from "../../src/nutrition/dayBounds";
 import { useNutritionDay } from "../../src/nutrition/useNutritionDay";
@@ -15,11 +15,6 @@ import type { Meal, DayChecklistEntry, TakeStatus } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
 const SHORT: Record<"protein" | "carbs" | "fat", string> = { protein: "Prot", carbs: "Carb", fat: "Gras" };
-
-function hhmm(ms: number): string {
-  const d = new Date(ms);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
 
 export default function NutricionScreen() {
   const [offset, setOffset] = useState(0);
@@ -200,7 +195,7 @@ export default function NutricionScreen() {
       {meals.length === 0 && <Text style={{ color: colors.textMuted }}>No hay comidas registradas este día.</Text>}
 
       {meals.map((m) => (
-        <Pressable key={m.id} onPress={() => router.push(`/nutricion/nueva-comida?mealId=${m.id}`)} onLongPress={() => remove(m)} style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.xs }}>
+        <Pressable key={m.id} onPress={() => router.push(`/nutricion/comida?id=${m.id}`)} onLongPress={() => remove(m)} style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.xs }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
             <Text style={{ color: colors.text, fontWeight: "600" }}>{hhmm(m.eatenAt)}{m.mealType ? ` · ${m.mealType}` : ""}</Text>
             <Text style={{ color: colors.accentText }}>{mealKcal(m)} kcal</Text>

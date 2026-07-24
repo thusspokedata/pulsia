@@ -1,4 +1,4 @@
-import { foodMacrosForQuantity, sumNullableMicro } from "@pulsia/shared";
+import { foodMacrosForQuantity, saltGFromSodiumMg, sumNullableMicro } from "@pulsia/shared";
 import type { Food, MealInput, MealType, QuantityUnit } from "@pulsia/shared";
 
 export interface MealRow {
@@ -21,8 +21,12 @@ export function mealTotals(rows: MealRow[]) {
   const scaled = rows.map((r) => foodMacrosForQuantity(r.food, r.quantity, r.unit));
   const round1 = (n: number) => Math.round(n * 10) / 10;
   // Micro: null si NINGÚN ítem lo tiene; si al menos uno lo tiene, suma tratando null como 0.
-  const micro = (key: "saturated_fat_g" | "sugars_g" | "fiber_g" | "salt_g" | "cholesterol_mg" | "water_ml"): number | null =>
+  const micro = (key: "saturated_fat_g" | "sugars_g" | "fiber_g" | "cholesterol_mg" | "water_ml"): number | null =>
     sumNullableMicro(scaled.map((m) => m[key]));
+  // El alimento guarda SODIO; el resumen de la comida habla en SAL, igual que el total del día.
+  // Se suma el sodio y se convierte al final (convertir por ítem redondearía cada uno a 1 decimal
+  // y el total derivaría) — mismo criterio que buildNutritionDaySummary.
+  const saltG = saltGFromSodiumMg(sumNullableMicro(scaled.map((m) => m.sodium_mg)));
   return {
     kcal: scaled.reduce((a, m) => a + m.kcal, 0),
     protein_g: round1(scaled.reduce((a, m) => a + m.protein_g, 0)),
@@ -31,7 +35,7 @@ export function mealTotals(rows: MealRow[]) {
     saturated_fat_g: micro("saturated_fat_g"),
     sugars_g: micro("sugars_g"),
     fiber_g: micro("fiber_g"),
-    salt_g: micro("salt_g"),
+    salt_g: saltG,
     cholesterol_mg: micro("cholesterol_mg"),
     water_ml: micro("water_ml"),
   };

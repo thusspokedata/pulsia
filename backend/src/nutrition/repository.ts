@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, lte, inArray } from "drizzle-orm";
 import { food, meal, mealItem, waterLog, nutritionGoal } from "../db/schema";
 import { foodMacrosForQuantity } from "@pulsia/shared";
+import { nutrientsFromRow, nutrientsToColumns } from "./columns";
 import type { Food, FoodInput, Meal, MealItem, MealItemInput, MealInput, NutritionGoalInput, QuantityUnit, WaterLog, WaterLogInput } from "@pulsia/shared";
 import type { Db } from "../db/client";
 
@@ -16,10 +17,12 @@ export function toFood(row: FoodRow): Food {
     id: row.id, name: row.name, basis: row.basis as Food["basis"],
     kcal: row.kcal, protein_g: row.proteinG, carbs_g: row.carbsG, fat_g: row.fatG,
     unitWeightG: row.unitWeightG,
-    saturated_fat_g: row.saturatedFatG ?? null, sugars_g: row.sugarsG ?? null,
-    fiber_g: row.fiberG ?? null, salt_g: row.saltG ?? null,
-    cholesterol_mg: row.cholesterolMg ?? null, water_ml: row.waterMl ?? null,
-    source: row.source as Food["source"],
+    // Los 30 nutrientes salen del registro, no de una lista escrita a mano: olvidarse uno acá
+    // lo dejaría fuera de la respuesta de la API aunque estuviera guardado en la base.
+    ...nutrientsFromRow(row),
+    sourceMacros: row.sourceMacros as Food["sourceMacros"],
+    sourceMicros: row.sourceMicros as Food["sourceMicros"],
+    usdaFdcId: row.usdaFdcId ?? null,
     createdAt: new Date(row.createdAt).getTime(),
   };
 }
@@ -31,9 +34,7 @@ export function toMeal(row: MealRow, items: MealItemRow[]): Meal {
       id: it.id, foodId: it.foodId ?? null, foodName: it.foodName,
       quantity: it.quantity, quantityUnit: it.quantityUnit as QuantityUnit, grams: it.grams,
       kcal: it.kcal, protein_g: it.proteinG, carbs_g: it.carbsG, fat_g: it.fatG,
-      saturated_fat_g: it.saturatedFatG ?? null, sugars_g: it.sugarsG ?? null,
-      fiber_g: it.fiberG ?? null, salt_g: it.saltG ?? null,
-      cholesterol_mg: it.cholesterolMg ?? null, water_ml: it.waterMl ?? null,
+      ...nutrientsFromRow(it),
     })),
   };
 }
@@ -49,8 +50,7 @@ export function snapshotItems(items: MealItemInput[], catalog: Map<string, FoodR
         {
           basis: f.basis as Food["basis"], kcal: f.kcal, protein_g: f.proteinG, carbs_g: f.carbsG, fat_g: f.fatG,
           unitWeightG: f.unitWeightG,
-          saturated_fat_g: f.saturatedFatG, sugars_g: f.sugarsG, fiber_g: f.fiberG, salt_g: f.saltG,
-          cholesterol_mg: f.cholesterolMg, water_ml: f.waterMl,
+          ...nutrientsFromRow(f),
         },
         it.quantity, it.quantityUnit,
       );
@@ -60,8 +60,7 @@ export function snapshotItems(items: MealItemInput[], catalog: Map<string, FoodR
     return {
       foodId: f.id, foodName: f.name, quantity: it.quantity, quantityUnit: it.quantityUnit,
       grams: m.grams, kcal: m.kcal, proteinG: m.protein_g, carbsG: m.carbs_g, fatG: m.fat_g,
-      saturatedFatG: m.saturated_fat_g, sugarsG: m.sugars_g, fiberG: m.fiber_g, saltG: m.salt_g,
-      cholesterolMg: m.cholesterol_mg, waterMl: m.water_ml,
+      ...nutrientsToColumns(m),
     };
   });
 }
@@ -71,10 +70,10 @@ export async function insertFood(db: Db, userId: string, input: FoodInput): Prom
   const [row] = await db.insert(food).values({
     userId, name: input.name, basis: input.basis, kcal: input.kcal,
     proteinG: input.protein_g, carbsG: input.carbs_g, fatG: input.fat_g,
-    unitWeightG: input.unitWeightG, source: input.source,
-    saturatedFatG: input.saturated_fat_g ?? null, sugarsG: input.sugars_g ?? null,
-    fiberG: input.fiber_g ?? null, saltG: input.salt_g ?? null,
-    cholesterolMg: input.cholesterol_mg ?? null, waterMl: input.water_ml ?? null,
+    unitWeightG: input.unitWeightG,
+    sourceMacros: input.sourceMacros, sourceMicros: input.sourceMicros ?? null,
+    usdaFdcId: input.usdaFdcId ?? null,
+    ...nutrientsToColumns(input),
   }).returning();
   return toFood(row);
 }
@@ -93,10 +92,10 @@ export async function updateFood(db: Db, userId: string, id: string, input: Food
   const rows = await db.update(food).set({
     name: input.name, basis: input.basis, kcal: input.kcal,
     proteinG: input.protein_g, carbsG: input.carbs_g, fatG: input.fat_g,
-    unitWeightG: input.unitWeightG, source: input.source,
-    saturatedFatG: input.saturated_fat_g ?? null, sugarsG: input.sugars_g ?? null,
-    fiberG: input.fiber_g ?? null, saltG: input.salt_g ?? null,
-    cholesterolMg: input.cholesterol_mg ?? null, waterMl: input.water_ml ?? null,
+    unitWeightG: input.unitWeightG,
+    sourceMacros: input.sourceMacros, sourceMicros: input.sourceMicros ?? null,
+    usdaFdcId: input.usdaFdcId ?? null,
+    ...nutrientsToColumns(input),
   }).where(and(eq(food.id, id), eq(food.userId, userId))).returning();
   return rows[0] ? toFood(rows[0]) : null;
 }

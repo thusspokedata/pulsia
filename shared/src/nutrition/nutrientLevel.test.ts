@@ -7,6 +7,7 @@ import {
   FLAGGED_NUTRIENTS,
   type FoodFlagsInput,
 } from "./nutrientLevel";
+import { NUTRIENT_REFERENCES } from "./references";
 
 test("FSA sólidos: los bordes exactos caen del lado documentado", () => {
   // bajo usa <=, alto usa > → 5,0 es bajo y 22,5 es medio, no alto
@@ -116,7 +117,7 @@ test("unknown se propaga como sentiment propio, no como neutral", () => {
 const quesoCrema = {
   basis: "per_100g" as const,
   fat_g: 34, saturated_fat_g: 20, sugars_g: 3.2,
-  salt_g: 0.8, cholesterol_mg: 101, fiber_g: 0,
+  sodium_mg: 320, cholesterol_mg: 101, fiber_g: 0, // 320 mg de sodio = 0,8 g de sal → warn
 };
 
 test("foodFlags ordena por severidad y desempata por el orden de FLAGGED_NUTRIENTS", () => {
@@ -132,7 +133,7 @@ test("foodFlags separa los sin-dato y NO los mete en notable", () => {
   const almendra = {
     basis: "per_100g" as const,
     fat_g: 50, saturated_fat_g: 3.8, sugars_g: null,
-    salt_g: null, cholesterol_mg: 0, fiber_g: 12.5,
+    sodium_mg: null, cholesterol_mg: 0, fiber_g: 12.5,
   };
   const { notable, unknown } = foodFlags(almendra);
   expect(unknown).toEqual(["sugars_g", "salt_g"]);
@@ -148,14 +149,14 @@ test("foodFlags.all trae siempre los seis, en orden fijo", () => {
 });
 
 test("nutrientValue extrae el número o da null; un string o undefined nunca se cuelan como número", () => {
-  // El schema no permite salt_g: string, pero un dato corrupto (JSON externo mal tipado)
+  // El schema no permite sodium_mg: string, pero un dato corrupto (JSON externo mal tipado)
   // puede llegar así en runtime — de ahí el cast en vez de un tipo real.
   const food = {
     basis: "per_100g" as const,
     fat_g: 34,
     saturated_fat_g: null,
     sugars_g: undefined,
-    salt_g: "no-es-un-numero",
+    sodium_mg: "no-es-un-numero",
   } as unknown as FoodFlagsInput;
   expect(nutrientValue(food, "fat_g")).toBe(34);
   expect(nutrientValue(food, "saturated_fat_g")).toBeNull();
@@ -178,11 +179,63 @@ test("nutrientValue normaliza NaN a null: no es un string, pero tampoco es un n�
   expect(fat.sentiment).toBe("unknown");
 });
 
+// --- El semáforo de sal, partiendo de SODIO ---
+// Lo que se persiste es sodio (es lo que entrega USDA), pero los umbrales de la FSA y la
+// referencia de la OMS están definidos en gramos de SAL, y así los lee el usuario. La
+// conversión pasa en nutrientValue, con saltGFromSodiumMg. Estos tests son la costura: sin
+// ellos, cambiar el campo de salt_g a sodium_mg dejaría el chip de sal en "unknown" para
+// TODOS los alimentos, y ningún test lo vería.
+test("el chip de sal sigue saliendo del sodio: sodio alto → sal alta", () => {
+  // 700 mg de sodio = 1,75 g de sal, arriba del 1,5 de la FSA.
+  const salame = {
+    basis: "per_100g" as const,
+    fat_g: 30, saturated_fat_g: 11, sugars_g: 1, sodium_mg: 700, cholesterol_mg: 70, fiber_g: 0,
+  };
+  expect(nutrientValue(salame, "salt_g")).toBe(1.8); // 1,75 redondeado a 1 decimal
+  const sal = foodFlags(salame).all.find((f) => f.nutrient === "salt_g")!;
+  expect(sal.level).toBe("high");
+  expect(sal.sentiment).toBe("bad");
+  expect(foodFlags(salame).notable.some((f) => f.nutrient === "salt_g")).toBe(true);
+});
+
+test("el chip de sal sigue saliendo del sodio: sodio bajo → sal baja", () => {
+  // 100 mg de sodio = 0,25 g de sal, debajo del 0,3 de la FSA.
+  const arroz = {
+    basis: "per_100g" as const,
+    fat_g: 0.3, saturated_fat_g: 0.1, sugars_g: 0.1, sodium_mg: 100, cholesterol_mg: 0, fiber_g: 0.4,
+  };
+  expect(nutrientValue(arroz, "salt_g")).toBe(0.3);
+  const sal = foodFlags(arroz).all.find((f) => f.nutrient === "salt_g")!;
+  expect(sal.level).toBe("low");
+  expect(sal.sentiment).toBe("neutral");
+  expect(foodFlags(arroz).notable.some((f) => f.nutrient === "salt_g")).toBe(false);
+});
+
+test("sin sodio, la sal es 'unknown' y NO 'baja': no saberlo no es que haya poco", () => {
+  const sinDato = {
+    basis: "per_100g" as const,
+    fat_g: 1, saturated_fat_g: 0, sugars_g: 0, sodium_mg: null, cholesterol_mg: 0, fiber_g: 1,
+  };
+  expect(nutrientValue(sinDato, "salt_g")).toBeNull();
+  expect(foodFlags(sinDato).unknown).toContain("salt_g");
+});
+
+test("el valor del chip de sal va en GRAMOS DE SAL, no en mg de sodio", () => {
+  // Si la conversión se salteara, este número sería 700 (mg) y la UI diría "sal 700 g".
+  const salame = {
+    basis: "per_100g" as const,
+    fat_g: 30, saturated_fat_g: 11, sugars_g: 1, sodium_mg: 700, cholesterol_mg: 70, fiber_g: 0,
+  };
+  const sal = foodFlags(salame).all.find((f) => f.nutrient === "salt_g")!;
+  expect(sal.value).toBe(1.8);
+  expect(sal.value).toBeLessThan(NUTRIENT_REFERENCES.salt_g); // 5 g/día de la OMS, misma unidad
+});
+
 test("un alimento sin nada destacable no genera ningún chip", () => {
   const lechuga = {
     basis: "per_100g" as const,
     fat_g: 0.2, saturated_fat_g: 0, sugars_g: 0.8,
-    salt_g: 0.01, cholesterol_mg: 0, fiber_g: 1.3,
+    sodium_mg: 4, cholesterol_mg: 0, fiber_g: 1.3, // 4 mg de sodio = 0,01 g de sal
   };
   expect(foodFlags(lechuga).notable).toEqual([]);
   expect(foodFlags(lechuga).unknown).toEqual([]);
