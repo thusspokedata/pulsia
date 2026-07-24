@@ -1,13 +1,19 @@
 import { useCallback, useState } from "react";
 import { ScrollView, View, Text, Pressable, ActivityIndicator } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { NUTRIENT_KEYS, NUTRIENT_REFERENCES, sumNutrientByKey } from "@pulsia/shared";
-import type { Meal, MealItem, NutrientKey } from "@pulsia/shared";
+import { NUTRIENT_REFERENCES } from "@pulsia/shared";
+import type { Meal, MealItem } from "@pulsia/shared";
 import { getMeal } from "../../src/api/nutrition";
 import { getBackendUrl } from "../../src/storage/config";
 import { loadDailyGoalContext, type DailyGoalContext } from "../../src/nutrition/dailyGoal";
 import { buildGoalView, macroTargetLabel } from "../../src/nutrition/goalView";
-import { buildNutrientRows, filaDeSal, sustituirSodioPorSal } from "../../src/nutrition/nutrientRows";
+import {
+  buildNutrientRows,
+  filaDeSal,
+  separarValoresYParciales,
+  sustituirSodioPorSal,
+} from "../../src/nutrition/nutrientRows";
+import { sumarNutrientesDeItems } from "../../src/nutrition/daySummary";
 import { referenciasOms } from "../../src/nutrition/dayNutrientRows";
 import { NutrientList } from "../../src/nutrition/NutrientList";
 import { Card, SectionTitle, Bar } from "../../src/nutrition/tabs/ui";
@@ -16,21 +22,6 @@ import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 
 const UNIT_LABEL: Record<MealItem["quantityUnit"], string> = { g: "g", ml: "ml", unit: "u" };
-
-/**
- * Suma cada nutriente del REGISTRO a lo largo de los ítems de la comida.
- *
- * Se usa `sumNutrientByKey` y no una suma a mano por dos razones: respeta los decimales que cada
- * nutriente declara (sumar zinc a 1 decimal convierte 0,12 en 0,1) y devuelve `null` cuando NINGÚN
- * ítem tenía dato, que es lo que hace que la fila diga "sin dato" en vez de "0".
- */
-function nutrientesDeLaComida(items: MealItem[]): Partial<Record<NutrientKey, number | null>> {
-  const out: Partial<Record<NutrientKey, number | null>> = {};
-  for (const key of NUTRIENT_KEYS) {
-    out[key] = sumNutrientByKey(items.map((it) => it[key]), key).value;
-  }
-  return out;
-}
 
 function titulo(meal: Meal): string {
   const tipo = meal.mealType ? meal.mealType[0].toUpperCase() + meal.mealType.slice(1) : "Comida";
@@ -95,11 +86,18 @@ export default function ComidaDetalleScreen() {
   // Sin sexo ni edad las referencias EFSA caen al fallback conservador (el valor más alto de los
   // dos sexos). Es correcto, pero el usuario merece saber que está mirando un valor genérico.
   const perfilIncompleto = profile == null || profile.sex == null || profile.age == null;
-  const nutrientes = nutrientesDeLaComida(items);
+  // La MISMA suma que el total del día (ver daySummary.ts), sobre los ítems de esta comida: respeta
+  // los decimales de cada nutriente, devuelve `null` cuando NINGÚN ítem tenía dato (que es lo que
+  // hace que la fila diga "sin dato" en vez de "0") y marca `partial` cuando algunos ítems lo
+  // declaraban y otros no. El `partial` se propaga: una comida de lentejas más un alimento cargado
+  // a mano sin hierro tiene que decir "≥ 2,5 mg" acá igual que en la pestaña del día.
+  const sumas = sumarNutrientesDeItems(items);
+  const { values: nutrientes, partial: parciales } = separarValoresYParciales(sumas);
   // La meta de kcal del día: es lo que hace calculable el techo de saturadas (10 % de la energía).
   const goalKcal = goalView?.status === "ok" ? goalView.kcal!.meta : null;
   const secciones = sustituirSodioPorSal(
     buildNutrientRows(nutrientes, { sex: profile?.sex, age: profile?.age }, {
+      partial: parciales,
       // Las MISMAS 5 referencias de la OMS que la pestaña del día (azúcares, fibra, colesterol,
       // saturadas y sal). Sin ellas esta pantalla decía "sobre la referencia diaria" y mostraba
       // referencia solo para las vitaminas y la sal: la misma fila con referencia en una pantalla
@@ -117,7 +115,9 @@ export default function ComidaDetalleScreen() {
     // La sal es la unidad que habla el resto de la app (ver filaDeSal). La referencia es la
     // diaria de la OMS, igual que el resto de las filas de esta pantalla: el título dice
     // "sobre la referencia diaria" y lo que se lee es cuánto aportó ESTA comida al día.
-    filaDeSal(nutrientes.sodium_mg ?? null, NUTRIENT_REFERENCES.salt_g),
+    // Hereda el `partial` DEL SODIO: es el mismo dato en otra unidad, así que si el sodio de la
+    // comida tenía agujeros, la sal también (mismo criterio que dayNutrientRows.ts).
+    filaDeSal(sumas.sodium_mg.value, NUTRIENT_REFERENCES.salt_g, sumas.sodium_mg.partial),
   );
 
   return (

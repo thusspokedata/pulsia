@@ -1,4 +1,5 @@
 import {
+  NUTRIENT_KEYS,
   NUTRIENT_REFERENCE_KIND,
   nutrientsByGroup,
   referencesFor,
@@ -6,6 +7,7 @@ import {
   type NutrientKey,
   type NutrientGroup,
   type NutrientReference,
+  type NutrientSum,
   type ReferenceKind,
   type ReferencePerson,
 } from "@pulsia/shared";
@@ -44,6 +46,27 @@ export interface NutrientRowsOptions {
   refs?: Partial<Record<NutrientKey, NutrientReference | null>>;
   /** Nutrientes cuyo total viene de una suma con agujeros. */
   partial?: Partial<Record<NutrientKey, boolean>>;
+}
+
+/**
+ * Parte los totales (`NutrientSum`) en los dos mapas que pide `buildNutrientRows`.
+ *
+ * Existe para que ninguna pantalla vuelva a quedarse con el `.value` y tirar el `partial`: eso es
+ * exactamente lo que hacía el detalle de comida, y por eso una comida con un ítem cargado a mano
+ * se mostraba como total exacto ahí y como piso ("≥") en la pestaña del día. Mismo dato, dos
+ * lecturas distintas.
+ */
+export function separarValoresYParciales(sumas: Record<NutrientKey, NutrientSum>): {
+  values: Partial<Record<NutrientKey, number | null>>;
+  partial: Partial<Record<NutrientKey, boolean>>;
+} {
+  const values: Partial<Record<NutrientKey, number | null>> = {};
+  const partial: Partial<Record<NutrientKey, boolean>> = {};
+  for (const key of NUTRIENT_KEYS) {
+    values[key] = sumas[key].value;
+    partial[key] = sumas[key].partial;
+  }
+  return { values, partial };
 }
 
 export interface NutrientSection {

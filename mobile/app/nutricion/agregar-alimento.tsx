@@ -162,6 +162,10 @@ export default function AgregarAlimentoScreen() {
     try {
       prefillFrom(await assembleUsdaFood(baseUrl.current, identification, entrada.fdcId), entrada);
       setCorrigiendo(false);
+      // La búsqueda se limpia junto con el panel. Los candidatos filtran la entrada ya vigente,
+      // pero los resultados no: si quedaran, al reabrir "¿no es este?" la fila recién elegida
+      // seguiría clickeable y volvería a pedirle al backend la mezcla que ya está en pantalla.
+      setBusquedaUsda(""); setResultadosUsda(null);
     } catch (e) {
       // El backend NO degrada a "sin micros" cuando el fdcId no existe, y acá tampoco: se avisa y
       // el formulario queda con la entrada que seguía vigente.

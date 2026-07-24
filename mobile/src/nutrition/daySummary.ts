@@ -14,17 +14,29 @@ export interface NutritionDaySummary {
   liquid: { total: number; drank: number; fromFood: number };
 }
 
-export function buildNutritionDaySummary(meals: Meal[], water: WaterLog[]): NutritionDaySummary {
-  const items = meals.flatMap((m) => m.items);
-
-  // Se recorre el REGISTRO y no una lista escrita a mano: agregar un nutriente lo suma solo.
-  // `sumNutrientByKey` respeta los decimales que declara cada uno (sumar el zinc a 1 decimal
-  // convierte 0,25 en 0,3) y devuelve `partial: true` cuando algunos ítems tenían el dato y
-  // otros no — que es la diferencia entre "comiste 0,8 mg de zinc" y "0,8 de los que sabemos".
+/**
+ * Suma cada nutriente del REGISTRO a lo largo de una lista de ítems.
+ *
+ * Se recorre el REGISTRO y no una lista escrita a mano: agregar un nutriente lo suma solo.
+ * `sumNutrientByKey` respeta los decimales que declara cada uno (sumar el zinc a 1 decimal
+ * convierte 0,25 en 0,3) y devuelve `partial: true` cuando algunos ítems tenían el dato y otros
+ * no — que es la diferencia entre "comiste 0,8 mg de zinc" y "0,8 de los que sabemos".
+ *
+ * La usan el TOTAL DEL DÍA y el detalle de UNA comida. Es la misma cuenta sobre distintos ítems, y
+ * tenerla dos veces ya costó un bug: el detalle se quedaba con el `.value` y tiraba el `partial`,
+ * así que la misma comida se veía como piso en el día y como exacta en su propia pantalla.
+ */
+export function sumarNutrientesDeItems(items: MealItem[]): Record<NutrientKey, NutrientSum> {
   const nutrients = {} as Record<NutrientKey, NutrientSum>;
   for (const key of NUTRIENT_KEYS) {
-    nutrients[key] = sumNutrientByKey(items.map((it) => (it as MealItem)[key]), key);
+    nutrients[key] = sumNutrientByKey(items.map((it) => it[key]), key);
   }
+  return nutrients;
+}
+
+export function buildNutritionDaySummary(meals: Meal[], water: WaterLog[]): NutritionDaySummary {
+  const items = meals.flatMap((m) => m.items);
+  const nutrients = sumarNutrientesDeItems(items);
 
   // El ítem guarda SODIO; la pantalla habla en SAL (referencia OMS de 5 g/día). Se suma el sodio
   // y se convierte UNA vez al final: convertir por ítem redondea a 1 decimal cada vez y el total

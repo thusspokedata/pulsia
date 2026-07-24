@@ -1,12 +1,17 @@
 import {
-  NUTRIENT_KEYS,
   NUTRIENT_REFERENCES,
   NUTRIENT_REFERENCE_KIND,
   saturatedFatRefG,
 } from "@pulsia/shared";
 import type { NutrientKey, NutrientReference } from "@pulsia/shared";
 import type { NutritionDaySummary } from "./daySummary";
-import { buildNutrientRows, filaDeSal, sustituirSodioPorSal, type NutrientSection } from "./nutrientRows";
+import {
+  buildNutrientRows,
+  filaDeSal,
+  separarValoresYParciales,
+  sustituirSodioPorSal,
+  type NutrientSection,
+} from "./nutrientRows";
 
 /**
  * Filas de nutrientes del TOTAL DEL DÍA.
@@ -52,12 +57,7 @@ export function buildDayNutrientRows(
   persona: { sex?: string; age?: number },
   goalKcal: number | null,
 ): NutrientSection[] {
-  const values: Partial<Record<NutrientKey, number | null>> = {};
-  const partial: Partial<Record<NutrientKey, boolean>> = {};
-  for (const key of NUTRIENT_KEYS) {
-    values[key] = summary.nutrients[key].value;
-    partial[key] = summary.nutrients[key].partial;
-  }
+  const { values, partial } = separarValoresYParciales(summary.nutrients);
 
   // El agua de la fila es el LÍQUIDO TOTAL del día (lo bebido + el que aportan los alimentos) y
   // no solo la columna `water_ml` de los ítems: la referencia EFSA es de agua TOTAL, así que

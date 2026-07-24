@@ -210,6 +210,27 @@ test("si el candidato no está en la lista, se busca en USDA y se elige de los r
   await waitFor(() => expect(screen.getByDisplayValue("196")).toBeTruthy());
 });
 
+test("elegir un resultado de la búsqueda limpia la búsqueda", async () => {
+  // Al reabrir "¿no es este?", los candidatos ya filtran la entrada vigente; los resultados de la
+  // búsqueda no, así que si quedaran, la fila recién elegida seguiría clickeable y dispararía otra
+  // re-mezcla que no cambia nada.
+  const otro = { fdcId: 173424, description: "Egg, whole, cooked, fried", dataType: "sr_legacy_food" };
+  (searchUsdaFoods as jest.Mock).mockResolvedValue([otro]);
+  (assembleUsdaFood as jest.Mock).mockResolvedValue({ ...MANTECA_ALMENDRA, kcal: 196, usdaFdcId: 173424 });
+
+  await altaConMatch();
+  await fireEvent.press(screen.getByTestId("usda-no-es-este"));
+  await fireEvent.changeText(screen.getByTestId("usda-buscar-input"), "fried egg");
+  await fireEvent.press(screen.getByTestId("usda-buscar-submit"));
+  await waitFor(() => expect(screen.getByTestId("usda-resultado-173424")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("usda-resultado-173424"));
+  await waitFor(() => expect(screen.getByDisplayValue("196")).toBeTruthy());
+
+  await fireEvent.press(screen.getByTestId("usda-no-es-este"));
+  expect(screen.queryByTestId("usda-resultado-173424")).toBeNull();
+  expect(screen.getByTestId("usda-buscar-input")).toHaveDisplayValue("");
+});
+
 test("si la re-mezcla falla, lo dice y no deja el formulario mostrando otra cosa", async () => {
   (assembleUsdaFood as jest.Mock).mockRejectedValue(new Error("No se pudo usar esa entrada de USDA."));
   await altaConMatch();

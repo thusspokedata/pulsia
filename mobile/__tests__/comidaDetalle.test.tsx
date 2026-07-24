@@ -96,6 +96,50 @@ test("los nutrientes de la comida se comparan contra la referencia diaria person
   expect(screen.getByTestId("nutr-iron_mg-pct")).toHaveTextContent(/^50 %$/);
 });
 
+// La marca de PARCIAL ("≥"): algunos ítems de la comida declaraban el nutriente y otros no, así
+// que el total es un piso. Sin estos casos, la pantalla mostraba el mismo total que la pestaña del
+// día pero SIN el "≥": la misma comida se leía como exacta acá y como piso allá.
+test("con un ítem sin el nutriente, el total de la comida se marca como piso", async () => {
+  // Lentejas con hierro de USDA + un alimento cargado a mano que no lo declara: son 2,5 mg DE LOS
+  // QUE SABEMOS, no 2,5 mg.
+  mockComida(comida([
+    item({ foodName: "Lentejas", iron_mg: 2.5 }),
+    item({ id: "33333333-3333-4333-8333-333333333333", foodName: "Salsa casera" }),
+  ]));
+  await render(<ComidaDetalleScreen />);
+
+  await waitFor(() => expect(screen.getByTestId("nutr-grupo-minerales")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+  expect(screen.getByTestId("nutr-iron_mg-amount")).toHaveTextContent(/^≥ 2\.5 \/ 11 mg$/);
+});
+
+test("si TODOS los ítems declaran el nutriente, el total NO lleva la marca de piso", async () => {
+  // El caso espejo: sin él, un `partial: true` fijo también pasaría verde.
+  mockComida(comida([
+    item({ foodName: "Lentejas", iron_mg: 2.5 }),
+    item({ id: "33333333-3333-4333-8333-333333333333", foodName: "Espinaca", iron_mg: 3 }),
+  ]));
+  await render(<ComidaDetalleScreen />);
+
+  await waitFor(() => expect(screen.getByTestId("nutr-grupo-minerales")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+  expect(screen.getByTestId("nutr-iron_mg-amount")).toHaveTextContent(/^5\.5 \/ 11 mg$/);
+});
+
+test("la sal hereda la marca de piso del sodio", async () => {
+  // La sal es el sodio en otra unidad: si el sodio de la comida tenía agujeros, la sal también.
+  // 1000 mg de sodio = 2,5 g de sal, y el otro ítem no declara sodio.
+  mockComida(comida([
+    item({ foodName: "Jamón", sodium_mg: 1000 }),
+    item({ id: "33333333-3333-4333-8333-333333333333", foodName: "Pan casero" }),
+  ]));
+  await render(<ComidaDetalleScreen />);
+
+  await waitFor(() => expect(screen.getByTestId("nutr-grupo-minerales")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+  expect(screen.getByTestId("nutr-salt_g-amount")).toHaveTextContent(/^≥ 2\.5 \/ 5 g$/);
+});
+
 test("la referencia es la de ESE perfil: la misma comida da otro porcentaje para una mujer", async () => {
   // Sin este caso, una pantalla que ignore el perfil y use siempre la tabla masculina pasa verde.
   (getProfile as jest.Mock).mockResolvedValue({ ...perfilCompleto, sex: "female" });
