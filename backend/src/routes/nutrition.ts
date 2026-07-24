@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { FoodInputSchema, MealInputSchema, WaterLogInputSchema, NutritionGoalInputSchema, ReportGenerateInputSchema, type ReportKind, type FoodExtraction, type FoodIdentification } from "@pulsia/shared";
+import { FoodInputSchema, FoodIdentificationSchema, MealInputSchema, WaterLogInputSchema, NutritionGoalInputSchema, ReportGenerateInputSchema, type ReportKind, type FoodExtraction, type FoodIdentification } from "@pulsia/shared";
 import { searchUsda, getUsdaFood, type UsdaCandidate } from "../usda/matcher";
 import { assembleFoodExtraction } from "../nutrition/assemble";
 import {
@@ -27,6 +27,12 @@ const ExtractSchema = z.object({
 });
 
 const DescribeSchema = z.object({ text: z.string().trim().min(2).max(100) });
+
+// Re-mezcla manual: la identificación que ya se tenía + la fila de USDA que eligió el usuario.
+const AssembleSchema = z.object({
+  identification: FoodIdentificationSchema,
+  fdcId: z.number().int(),
+});
 
 function parseQueryNumber(raw: string | undefined): number | undefined {
   if (raw == null) return undefined;
@@ -143,6 +149,45 @@ export function nutritionRoutes(deps: AppDeps) {
       console.warn("usda/search falló:", (e as Error).message);
       return c.json([] as UsdaCandidate[]);
     }
+  });
+
+  // ---- Re-mezcla manual: el usuario eligió OTRA fila de USDA ("¿no es este?") ----
+  // Es la misma mezcla que hace el alta, pero con el fdcId que eligió el usuario en vez del que
+  // eligió la IA. No persiste: devuelve la extracción para que el form recargue sus valores, y
+  // recién el POST /foods la guarda.
+  //
+  // `identification` se revalida acá aunque el móvil la haya recibido del backend hace un minuto:
+  // es input del cliente y llega por HTTP. Sin el schema, un `name` vacío o un `searchQuery`
+  // perdido en el viaje se persistiría como un alimento sin rastro de dónde salió.
+  //
+  // A diferencia de extract/describe, acá un fdcId que no existe NO se degrada a "sin micros": el
+  // usuario pidió ESA fila. Devolver 200 con todo en null parecería que la eligió y no tenía datos.
+  r.post("/usda/assemble", async (c) => {
+    const parsed = AssembleSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Body inválido", detail: parsed.error.issues }, 400);
+    const fila = await getUsdaFood(deps.db, parsed.data.fdcId);
+    if (!fila) return c.json({ error: "No encontrado" }, 404);
+    return c.json(assembleFoodExtraction(parsed.data.identification, fila));
+  });
+
+  // ---- Una entrada puntual de USDA: resuelve fdcId → descripción ----
+  // El alimento del catálogo persiste SOLO `usda_fdc_id`; la descripción vive en `usda_food`, que
+  // es un catálogo compartido y no parte del alimento del usuario. Las pantallas que muestran el
+  // nombre de la entrada (el detalle de UN alimento, el chip del alta) miran un alimento por vez,
+  // así que una consulta puntual alcanza: el catálogo lista 50 alimentos pero NO muestra esta
+  // descripción, y por eso no se paga un JOIN ni 50 strings en cada `GET /nutrition/foods`.
+  //
+  // Devuelve la identidad de la fila (fdcId, descripción, tipo) y NO sus 34 nutrientes: quien
+  // quiera los valores está eligiendo otra fila, y para eso está `/usda/assemble`.
+  //
+  // Va DESPUÉS de `/usda/search` (hono resuelve por orden de registro): al revés, `:fdcId`
+  // capturaría la palabra "search".
+  r.get("/usda/:fdcId", async (c) => {
+    const fdcId = Number(c.req.param("fdcId"));
+    if (!Number.isInteger(fdcId)) return c.json({ error: "fdcId inválido" }, 400);
+    const fila = await getUsdaFood(deps.db, fdcId);
+    if (!fila) return c.json({ error: "No encontrado" }, 404);
+    return c.json({ fdcId: fila.fdcId, description: fila.description, dataType: fila.dataType });
   });
 
   // ---- Foods (catálogo) ----

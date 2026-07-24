@@ -13,6 +13,24 @@ const bananaRow = {
   saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, sodiumMg: 0,
 };
 
+// El `where` de drizzle es un objeto SQL; el valor de un `eq(col, n)` viaja en un `Param` dentro
+// de `queryChunks`. Se lee para que el fake pueda devolver la fila del fdcId PEDIDO y no siempre
+// la misma: sin esto, un handler que ignorara el fdcId del body igual pasaría los tests.
+function fdcIdDelWhere(cond: any): number | null {
+  const chunk = (cond?.queryChunks ?? []).find((k: any) => typeof k?.value === "number");
+  return chunk ? (chunk.value as number) : null;
+}
+
+// `usdaRows` (mapa fdcId → fila) manda sobre `usdaRow` (fila única, ignora el id pedido).
+function filasUsda(opts: { usdaRow?: any; usdaRows?: Record<number, any> }, cond: any): any[] {
+  if (opts.usdaRows) {
+    const fdcId = fdcIdDelWhere(cond);
+    const fila = fdcId == null ? undefined : opts.usdaRows[fdcId];
+    return fila ? [fila] : [];
+  }
+  return opts.usdaRow ? [opts.usdaRow] : [];
+}
+
 function fakeDb(opts: {
   foods?: any[]; meals?: any[]; items?: any[]; foodRow?: any; mealFull?: any; water?: any[]; goal?: any;
   settingsRow?: any; report?: any; sessions?: any[]; metrics?: any[];
@@ -20,7 +38,7 @@ function fakeDb(opts: {
   // USDA: `usdaCandidates` son las filas crudas (snake_case) que devuelve el SELECT de searchUsda;
   // `usdaRow` es la fila completa (camelCase) que devuelve getUsdaFood; `usdaExecuteThrows` simula
   // la tabla vacía/rota (searchUsda tira).
-  usdaCandidates?: any[]; usdaRow?: any; usdaExecuteThrows?: boolean;
+  usdaCandidates?: any[]; usdaRow?: any; usdaRows?: Record<number, any>; usdaExecuteThrows?: boolean;
 } = {}) {
   const inserts: any[] = [];
   const db: any = {
@@ -59,7 +77,7 @@ function fakeDb(opts: {
             joins++;
             return chain;
           },
-          where: () => {
+          where: (cond?: any) => {
             let rows: any[];
             if (table === food) rows = opts.foods ?? [];
             else if (table === meal) rows = opts.meals ?? [];
@@ -67,7 +85,7 @@ function fakeDb(opts: {
             else if (table === waterLog) rows = opts.water ?? [];
             else if (table === bodyMetric) rows = opts.metrics ?? [];
             else if (table === supplementPlanItem) rows = joins === 1 ? (opts.planItemRows ?? []) : [];
-            else if (table === usdaFood) rows = opts.usdaRow ? [opts.usdaRow] : []; // getUsdaFood
+            else if (table === usdaFood) rows = filasUsda(opts, cond); // getUsdaFood
             else rows = []; // incluye `supplement` (catálogo): no lo necesitan los tests actuales
             const p: any = Promise.resolve(rows);
             p.orderBy = async () => rows;
@@ -571,6 +589,86 @@ test("GET /nutrition/usda/search con q vacía → []", async () => {
   const res = await createApp(deps(fakeDb())).request("/nutrition/usda/search?q=");
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual([]);
+});
+
+// ---- USDA: re-mezcla manual ("¿no es este?") y resolución id → descripción (Plan 2, Task 7) ----
+
+// Una segunda fila REAL de USDA para verificar que la re-mezcla cambia de verdad: mismos campos
+// que la del huevo, valores distintos. Sin dos filas, un handler que devolviera siempre la misma
+// pasaría el test.
+const PALTA_FDC = 171705;
+const usdaPaltaRow = {
+  fdcId: PALTA_FDC, description: "Avocados, raw, all commercial varieties", dataType: "sr_legacy",
+  kcal: 160, proteinG: 2, carbsG: 8.5, fatG: 14.7, ironMg: 0.55, vitaminB12Mcg: 0, calciumMg: 12,
+};
+const dosFilasUsda = { [HUEVO_FDC]: usdaEggRow, [PALTA_FDC]: usdaPaltaRow };
+
+const assemblePost = (app: any, body: unknown) =>
+  app.request("/nutrition/usda/assemble", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+
+test("POST /nutrition/usda/assemble re-mezcla con OTRO fdcId: cambian los micros y el usdaFdcId", async () => {
+  const app = createApp(deps(fakeDb({ usdaRows: dosFilasUsda })));
+
+  const conHuevo = await assemblePost(app, { identification: HUEVO_ID, fdcId: HUEVO_FDC });
+  expect(conHuevo.status).toBe(200);
+  const huevo = await conHuevo.json();
+  expect(huevo).toMatchObject({ usdaFdcId: HUEVO_FDC, sourceMicros: "usda", iron_mg: 1.9, calcium_mg: 62 });
+
+  const conPalta = await assemblePost(app, { identification: HUEVO_ID, fdcId: PALTA_FDC });
+  expect(conPalta.status).toBe(200);
+  const palta = await conPalta.json();
+  expect(palta).toMatchObject({ usdaFdcId: PALTA_FDC, sourceMicros: "usda", iron_mg: 0.55, calcium_mg: 12 });
+
+  // La identidad la sigue poniendo el usuario, no la fila de USDA: elegir "Avocados, raw" no
+  // renombra el alimento a palta.
+  expect(palta.name).toBe("Huevo frito");
+});
+
+test("POST /nutrition/usda/assemble con fdcId inexistente → 404", async () => {
+  const res = await assemblePost(createApp(deps(fakeDb({ usdaRows: dosFilasUsda }))), {
+    identification: HUEVO_ID, fdcId: 999999,
+  });
+  expect(res.status).toBe(404);
+});
+
+test("POST /nutrition/usda/assemble con identification inválida → 400 (no 500)", async () => {
+  const app = createApp(deps(fakeDb({ usdaRows: dosFilasUsda })));
+  // Sin searchQuery: el schema lo exige y sin él la re-mezcla guardaría un alimento sin rastro.
+  const { searchQuery: _omitido, ...sinQuery } = HUEVO_ID;
+  expect((await assemblePost(app, { identification: sinQuery, fdcId: HUEVO_FDC })).status).toBe(400);
+  // Sin fdcId, y con un fdcId que no es entero.
+  expect((await assemblePost(app, { identification: HUEVO_ID })).status).toBe(400);
+  expect((await assemblePost(app, { identification: HUEVO_ID, fdcId: 1.5 })).status).toBe(400);
+  expect((await assemblePost(app, "no soy json de objeto")).status).toBe(400);
+});
+
+test("GET /nutrition/usda/:fdcId resuelve el id a su descripción", async () => {
+  const res = await createApp(deps(fakeDb({ usdaRows: dosFilasUsda }))).request(`/nutrition/usda/${HUEVO_FDC}`);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    fdcId: HUEVO_FDC, description: "Egg, whole, cooked, fried", dataType: "sr_legacy",
+  });
+});
+
+test("GET /nutrition/usda/:fdcId devuelve la fila PEDIDA, no una cualquiera", async () => {
+  const res = await createApp(deps(fakeDb({ usdaRows: dosFilasUsda }))).request(`/nutrition/usda/${PALTA_FDC}`);
+  expect((await res.json()).description).toBe("Avocados, raw, all commercial varieties");
+});
+
+test("GET /nutrition/usda/:fdcId inexistente → 404", async () => {
+  const res = await createApp(deps(fakeDb({ usdaRows: dosFilasUsda }))).request("/nutrition/usda/999999");
+  expect(res.status).toBe(404);
+});
+
+test("GET /nutrition/usda/:fdcId no numérico → 400 (y no pisa a /usda/search)", async () => {
+  const app = createApp(deps(fakeDb({ usdaCandidates: usdaCandidateRows, usdaRows: dosFilasUsda })));
+  expect((await app.request("/nutrition/usda/abc")).status).toBe(400);
+  // /usda/search sigue siendo la búsqueda, no un fdcId llamado "search".
+  const busqueda = await app.request("/nutrition/usda/search?q=egg");
+  expect(busqueda.status).toBe(200);
+  expect(await busqueda.json()).toHaveLength(2);
 });
 
 test("POST /nutrition/foods/describe: texto muy corto → 400", async () => {
