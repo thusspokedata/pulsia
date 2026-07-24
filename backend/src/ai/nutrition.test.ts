@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { buildFoodPrompt } from "./nutrition";
+import { buildFoodPrompt, buildSearchQueryPrompt, REGLA_SEARCH_QUERY } from "./nutrition";
 
 test("modo foto: habla de la foto y deja que la IA elija label o ai", () => {
   const p = buildFoodPrompt("photo");
@@ -80,4 +80,20 @@ test("las reglas nutricionales son las MISMAS en los dos modos: no pueden diverg
     expect(p).toMatch(/en ESPAÑOL/);
     expect(p).toMatch(/return_food/);
   }
+});
+
+test("la regla de searchQuery es literalmente la misma en el alta y en el refresh", () => {
+  // Si divergieran, el mismo alimento daría frases distintas según por dónde entró (alta vs
+  // refresh) y matchearía contra filas distintas de USDA.
+  expect(buildFoodPrompt("photo")).toContain(REGLA_SEARCH_QUERY);
+  expect(buildSearchQueryPrompt()).toContain(REGLA_SEARCH_QUERY);
+});
+
+test("el prompt del refresh avisa que el nombre es un DATO, no una instrucción", () => {
+  expect(buildSearchQueryPrompt()).toMatch(/NO instrucciones/);
+});
+
+test("el prompt del refresh NO pide macros ni micros: solo la frase", () => {
+  const p = buildSearchQueryPrompt();
+  for (const k of ["kcal", "protein_g", "saturated_fat_g", "iron_mg"]) expect(p).not.toContain(k);
 });

@@ -3,7 +3,7 @@ import { food, meal, mealItem, waterLog, nutritionGoal } from "../db/schema";
 import { foodMacrosForQuantity } from "@pulsia/shared";
 import { nutrientsFromRow, nutrientsToColumns } from "./columns";
 import type { Food, FoodInput, Meal, MealItem, MealItemInput, MealInput, NutritionGoalInput, QuantityUnit, WaterLog, WaterLogInput } from "@pulsia/shared";
-import type { Db } from "../db/client";
+import type { Db, DbOrTx } from "../db/client";
 
 type FoodRow = typeof food.$inferSelect;
 type MealRow = typeof meal.$inferSelect;
@@ -89,6 +89,13 @@ export async function getFood(db: Db, userId: string, id: string): Promise<Food 
 }
 
 export async function updateFood(db: Db, userId: string, id: string, input: FoodInput): Promise<Food | null> {
+  const row = await updateFoodRow(db, userId, id, input);
+  return row ? toFood(row) : null;
+}
+
+// Igual que `updateFood` pero devuelve la fila cruda: el refresh de USDA necesita las columnas
+// drizzle para pasárselas a `snapshotItems`, no la forma de dominio.
+export async function updateFoodRow(db: DbOrTx, userId: string, id: string, input: FoodInput): Promise<FoodRow | null> {
   const rows = await db.update(food).set({
     name: input.name, basis: input.basis, kcal: input.kcal,
     proteinG: input.protein_g, carbsG: input.carbs_g, fatG: input.fat_g,
@@ -97,7 +104,7 @@ export async function updateFood(db: Db, userId: string, id: string, input: Food
     usdaFdcId: input.usdaFdcId ?? null,
     ...nutrientsToColumns(input),
   }).where(and(eq(food.id, id), eq(food.userId, userId))).returning();
-  return rows[0] ? toFood(rows[0]) : null;
+  return rows[0] ?? null;
 }
 
 export async function deleteFood(db: Db, userId: string, id: string): Promise<boolean> {
@@ -166,6 +173,73 @@ export async function updateMeal(db: Db, userId: string, id: string, input: Meal
 export async function deleteMeal(db: Db, userId: string, id: string): Promise<boolean> {
   const rows = await db.delete(meal).where(and(eq(meal.id, id), eq(meal.userId, userId))).returning({ id: meal.id });
   return rows.length > 0;
+}
+
+// ---- Refresh de un alimento contra USDA: sus ítems de comida ----
+
+/** Un ítem de comida que referencia un alimento, con lo mínimo para re-snapshotearlo. */
+export interface ItemDeAlimento {
+  id: string;
+  mealId: string;
+  quantity: number;
+  quantityUnit: string;
+}
+
+/**
+ * Los ítems de comida DEL USUARIO que referencian este alimento.
+ *
+ * ⚠️ El JOIN con `meal.user_id` NO es decorativo: `meal_item` no tiene `userId` propio, así que
+ * sin él un `food_id` compartido alcanzaría comidas de OTRO usuario. Los ítems huérfanos
+ * (`food_id = null`, de alimentos borrados) quedan fuera solos: `null` no iguala a ningún id.
+ */
+export async function listItemsOfFood(db: DbOrTx, userId: string, foodId: string): Promise<ItemDeAlimento[]> {
+  return db
+    .select({ id: mealItem.id, mealId: mealItem.mealId, quantity: mealItem.quantity, quantityUnit: mealItem.quantityUnit })
+    .from(mealItem)
+    .innerJoin(meal, eq(meal.id, mealItem.mealId))
+    .where(and(eq(mealItem.foodId, foodId), eq(meal.userId, userId)));
+}
+
+/** Cuántas comidas del usuario tienen al menos un ítem de este alimento. */
+export async function countMealsWithFood(db: DbOrTx, userId: string, foodId: string): Promise<number> {
+  const items = await listItemsOfFood(db, userId, foodId);
+  return new Set(items.map((it) => it.mealId)).size;
+}
+
+/**
+ * Recalcula el snapshot de cada ítem de comida de este alimento con la fila YA actualizada del
+ * catálogo, reusando `snapshotItems` —la MISMA función que creó los snapshots originales—.
+ *
+ * ⚠️ `snapshotItems` también reescribe `foodName`. Es correcto (si el alimento se renombró, el
+ * snapshot se pone al día) pero no es obvio leyendo el UPDATE.
+ *
+ * Las cantidades NO cambian: 150 g siguen siendo 150 g; lo que cambia es la densidad de
+ * nutrientes. `mealsUpdated`/`itemsUpdated` se cuentan sobre lo que la base DEVOLVIÓ haber
+ * escrito (`returning`), no sobre la lista que se pidió actualizar.
+ */
+export async function resnapshotItemsOfFood(
+  db: DbOrTx, userId: string, foodId: string, row: FoodRow,
+): Promise<{ mealsUpdated: number; itemsUpdated: number }> {
+  const items = await listItemsOfFood(db, userId, foodId);
+  if (items.length === 0) return { mealsUpdated: 0, itemsUpdated: 0 };
+  const snapped = snapshotItems(
+    items.map((it) => ({ foodId, quantity: it.quantity, quantityUnit: it.quantityUnit as QuantityUnit })),
+    new Map([[foodId, row]]),
+  );
+  const comidas = new Set<string>();
+  let itemsUpdated = 0;
+  // Zip por índice: snapshotItems preserva el orden de entrada (mapea 1 a 1).
+  for (let i = 0; i < snapped.length; i++) {
+    const { foodId: _mismoAlimento, ...valores } = snapped[i];
+    const escritas = await db.update(mealItem).set(valores)
+      .where(eq(mealItem.id, items[i].id))
+      .returning({ id: mealItem.id, mealId: mealItem.mealId });
+    for (const fila of escritas) {
+      comidas.add(fila.mealId);
+      itemsUpdated++;
+    }
+  }
+  return { mealsUpdated: comidas.size, itemsUpdated };
 }
 
 // ---- Water log (agua tomada) ----
