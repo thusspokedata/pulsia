@@ -1,24 +1,46 @@
 import { test, expect } from "bun:test";
 import { createApp } from "../app";
 import { food, meal, mealItem, waterLog, bodyMetric, supplementPlanItem, supplementAdjustment, usdaFood } from "../db/schema";
+import { SINGLE_USER_ID } from "../constants";
 
 const KEY = "a".repeat(64);
 const FOOD_ID = "11111111-1111-4111-8111-111111111111";
 const IMG_BASE64 = Buffer.from("fake jpeg bytes").toString("base64");
 
 const bananaRow = {
-  id: FOOD_ID, userId: "single-user", name: "Banana", basis: "per_100g",
+  id: FOOD_ID, userId: SINGLE_USER_ID, name: "Banana", basis: "per_100g",
   kcal: 89, proteinG: 1.1, carbsG: 23, fatG: 0.3, unitWeightG: 120, createdAt: new Date(0),
   sourceMacros: "ai", sourceMicros: null, usdaFdcId: null,
   saturatedFatG: 0.1, sugarsG: 12, fiberG: 2.6, sodiumMg: 0,
 };
 
-// El `where` de drizzle es un objeto SQL; el valor de un `eq(col, n)` viaja en un `Param` dentro
-// de `queryChunks`. Se lee para que el fake pueda devolver la fila del fdcId PEDIDO y no siempre
-// la misma: sin esto, un handler que ignorara el fdcId del body igual pasaría los tests.
+// El `where` de drizzle es un objeto SQL; un `eq(col, v)` viaja como [Columna, " = ", Param]
+// dentro de `queryChunks`, y un `and(...)` los anida. Se leen las igualdades para que el fake
+// pueda FILTRAR de verdad en vez de devolver siempre lo mismo: sin esto, un handler que ignorara
+// el fdcId del body —o que se olvidara del `meal.user_id` del join— pasaría los tests igual.
+interface Igualdad { tabla: string; columna: string; valor: unknown }
+
+function igualdadesDeWhere(cond: any, out: Igualdad[] = []): Igualdad[] {
+  const chunks: any[] = cond?.queryChunks ?? [];
+  for (let i = 0; i < chunks.length; i++) {
+    const k = chunks[i];
+    if (Array.isArray(k?.queryChunks)) { igualdadesDeWhere(k, out); continue; }
+    const tabla = k?.table?.[Symbol.for("drizzle:Name")];
+    if (typeof tabla !== "string" || typeof k?.name !== "string") continue;
+    // La columna viene seguida de " = " y del Param con el valor.
+    const param = chunks.slice(i + 1, i + 4).find((c: any) => "value" in (c ?? {}) && c?.constructor?.name === "Param");
+    if (param) out.push({ tabla, columna: k.name, valor: param.value });
+  }
+  return out;
+}
+
+function valorDe(cond: any, tabla: string, columna: string): unknown {
+  return igualdadesDeWhere(cond).find((i) => i.tabla === tabla && i.columna === columna)?.valor;
+}
+
 function fdcIdDelWhere(cond: any): number | null {
-  const chunk = (cond?.queryChunks ?? []).find((k: any) => typeof k?.value === "number");
-  return chunk ? (chunk.value as number) : null;
+  const v = valorDe(cond, "usda_food", "fdc_id");
+  return typeof v === "number" ? v : null;
 }
 
 // `usdaRows` (mapa fdcId → fila) manda sobre `usdaRow` (fila única, ignora el id pedido).
@@ -41,8 +63,18 @@ function fakeDb(opts: {
   usdaCandidates?: any[]; usdaRow?: any; usdaRows?: Record<number, any>; usdaExecuteThrows?: boolean;
 } = {}) {
   const inserts: any[] = [];
+  const updates: any[] = [];
+  // El UPDATE de un ítem devuelve lo que la base "escribió": la fila del id pedido, o nada si ese
+  // id no está. Sin esto, contar comidas tocadas sobre el `returning` daría el mismo número
+  // aunque el UPDATE apuntara a filas que no existen.
+  const filaItemDelWhere = (cond: any) => {
+    const id = valorDe(cond, "meal_item", "id");
+    const it = (opts.items ?? []).find((x: any) => x.id === id);
+    return it ? [{ id: it.id, mealId: it.mealId }] : [];
+  };
   const db: any = {
     _inserts: inserts,
+    _updates: updates,
     // searchUsda usa db.execute(sql`...`). Devuelve las filas crudas o tira si la tabla está rota.
     execute: async () => {
       if (opts.usdaExecuteThrows) throw new Error("relation usda_food does not exist");
@@ -64,7 +96,21 @@ function fakeDb(opts: {
         return p;
       },
     }),
-    update: () => ({ set: () => ({ where: () => { const p: any = Promise.resolve([]); p.returning = async () => (opts.foodRow ? [opts.foodRow] : []); return p; } }) }),
+    update: (table: any) => ({
+      set: (values: any) => ({
+        where: (cond?: any) => {
+          updates.push({ table, values, cond });
+          // `returning()` devuelve la fila YA actualizada, no la vieja: el re-snapshot se calcula
+          // con la fila que salió del UPDATE, y con la vieja los ítems quedarían sin micros.
+          const escritas = table === mealItem
+            ? filaItemDelWhere(cond)
+            : (opts.foodRow ? [{ ...opts.foodRow, ...values }] : []);
+          const p: any = Promise.resolve([]);
+          p.returning = async () => escritas;
+          return p;
+        },
+      }),
+    }),
     delete: () => ({ where: () => { const p: any = Promise.resolve(undefined); p.returning = async () => [{ id: FOOD_ID }]; return p; } }),
     // select().from(table)[.innerJoin(...)].where()[.orderBy()] — table-aware (mismo patrón que
     // supplements.test.ts): cada tabla real del collect de informes necesita su propio balde de
@@ -81,6 +127,21 @@ function fakeDb(opts: {
             let rows: any[];
             if (table === food) rows = opts.foods ?? [];
             else if (table === meal) rows = opts.meals ?? [];
+            // meal_item JOIN meal: el fake APLICA el join de verdad. Si lo resolviera devolviendo
+            // `opts.items` tal cual, un handler que se olvidara del `meal.user_id` —o del join
+            // entero— pasaría el test de aislamiento entre usuarios sin merecerlo.
+            else if (table === mealItem && joins > 0) {
+              const porId = new Map((opts.meals ?? []).map((m: any) => [m.id, m]));
+              const foodIdPedido = valorDe(cond, "meal_item", "food_id");
+              const userIdPedido = valorDe(cond, "meal", "user_id");
+              rows = (opts.items ?? []).filter((it: any) => {
+                const m = porId.get(it.mealId);
+                if (!m) return false; // join INTERNO: un ítem sin comida no sale
+                if (foodIdPedido !== undefined && it.foodId !== foodIdPedido) return false;
+                if (userIdPedido !== undefined && m.userId !== userIdPedido) return false;
+                return true;
+              });
+            }
             else if (table === mealItem) rows = opts.items ?? [];
             else if (table === waterLog) rows = opts.water ?? [];
             else if (table === bodyMetric) rows = opts.metrics ?? [];
@@ -98,7 +159,17 @@ function fakeDb(opts: {
     }),
     transaction: async (fn: any) => fn(db),
     query: {
-      food: { findFirst: async () => opts.foodRow ?? null },
+      // Honra el `user_id` del where: el alimento de OTRO usuario tiene que dar null (404), y un
+      // handler que se olvidara de pasar el userId a getFood se vería.
+      food: {
+        findFirst: async ({ where }: any = {}) => {
+          const row = opts.foodRow ?? null;
+          if (!row) return null;
+          const userIdPedido = valorDe(where, "food", "user_id");
+          if (userIdPedido !== undefined && row.userId !== undefined && row.userId !== userIdPedido) return null;
+          return row;
+        },
+      },
       meal: { findFirst: async () => opts.mealFull ?? (opts.meals?.[0] ? { userId: opts.meals[0].userId } : null) },
       settings: { findFirst: async () => opts.settingsRow ?? { aiApiKeyEncrypted: null } },
       nutritionGoal: { findFirst: async () => opts.goal ?? null },
@@ -707,4 +778,250 @@ test("POST /nutrition/foods/describe: si la IA falla → 502 con el mensaje de c
   const res = await describePost(createApp(deps(fakeDb(), roto)), "almendra");
   expect(res.status).toBe(502);
   expect((await res.json()).error).toMatch(/a mano/);
+});
+
+// ---- Actualizar un alimento YA guardado contra USDA (proposal + apply) ----
+//
+// El fixture NO es decorativo: hay 4 comidas y 6 ítems, y solo 3 ítems en 2 comidas corresponden
+// a este alimento y a este usuario. Un handler que se olvide del join, que cuente ítems en vez de
+// comidas o que barra los huérfanos da otro número.
+
+const OTRO_FOOD_ID = "33333333-3333-4333-8333-333333333333";
+const OTRO_USUARIO = "00000000-0000-0000-0000-0000000000ff";
+const M1 = "aaaaaaaa-1111-4111-8111-111111111111";
+const M2 = "aaaaaaaa-2222-4222-8222-222222222222";
+const M3 = "aaaaaaaa-3333-4333-8333-333333333333";
+const M4_AJENA = "aaaaaaaa-4444-4444-8444-444444444444";
+const IT_M1_A = "bbbbbbbb-1111-4111-8111-111111111111";
+const IT_M1_B = "bbbbbbbb-2222-4222-8222-222222222222";
+const IT_M2 = "bbbbbbbb-3333-4333-8333-333333333333";
+const IT_OTRO_ALIMENTO = "bbbbbbbb-4444-4444-8444-444444444444";
+const IT_HUERFANO = "bbbbbbbb-5555-4555-8555-555555555555";
+const IT_AJENO = "bbbbbbbb-6666-4666-8666-666666666666";
+
+// El alimento a actualizar: cargado antes de USDA, sin una sola vitamina.
+const almendraRow = {
+  id: FOOD_ID, userId: SINGLE_USER_ID, name: "Almendra", basis: "per_100g",
+  kcal: 579, proteinG: 21.2, carbsG: 21.6, fatG: 49.9, unitWeightG: 1.2, createdAt: new Date(0),
+  sourceMacros: "ai", sourceMicros: null, usdaFdcId: null,
+  saturatedFatG: null, sugarsG: null, fiberG: null, sodiumMg: null, ironMg: null, calciumMg: null,
+};
+
+const ALMENDRA_FDC = 170567;
+const usdaAlmendraRow = {
+  fdcId: ALMENDRA_FDC, description: "Nuts, almonds", dataType: "sr_legacy",
+  kcal: 579, proteinG: 21.15, carbsG: 21.55, fatG: 49.93,
+  ironMg: 3.71, calciumMg: 269, vitaminB12Mcg: 0,
+};
+const usdaAlmendraCandidatos = [
+  { fdc_id: ALMENDRA_FDC, description: "Nuts, almonds", data_type: "sr_legacy", similarity: 0.7 },
+  { fdc_id: 172421, description: "Nuts, almonds, dry roasted", data_type: "sr_legacy", similarity: 0.6 },
+];
+
+const comidasFixture = [
+  { id: M1, userId: SINGLE_USER_ID }, { id: M2, userId: SINGLE_USER_ID },
+  { id: M3, userId: SINGLE_USER_ID }, { id: M4_AJENA, userId: OTRO_USUARIO },
+];
+const itemsFixture = [
+  { id: IT_M1_A, mealId: M1, foodId: FOOD_ID, quantity: 150, quantityUnit: "g" },
+  { id: IT_M1_B, mealId: M1, foodId: FOOD_ID, quantity: 10, quantityUnit: "unit" }, // 2º ítem de la MISMA comida
+  { id: IT_M2, mealId: M2, foodId: FOOD_ID, quantity: 30, quantityUnit: "g" },
+  { id: IT_OTRO_ALIMENTO, mealId: M3, foodId: OTRO_FOOD_ID, quantity: 100, quantityUnit: "g" },
+  { id: IT_HUERFANO, mealId: M3, foodId: null, quantity: 50, quantityUnit: "g" }, // alimento borrado
+  { id: IT_AJENO, mealId: M4_AJENA, foodId: FOOD_ID, quantity: 200, quantityUnit: "g" }, // MISMO alimento, OTRO usuario
+];
+
+const IDENT_ALMENDRA = {
+  name: "Almendra", basis: "per_100g" as const, kcal: 579, protein_g: 21.2, carbs_g: 21.6, fat_g: 49.9,
+  unitWeightG: 1.2, sourceMacros: "ai" as const, searchQuery: "almonds raw",
+};
+
+const refreshAi = { ...aiClient, usdaSearchQuery: async () => "almonds raw", pickUsdaCandidate: async () => ALMENDRA_FDC };
+
+function refreshDb(overrides: any = {}) {
+  return fakeDb({
+    foodRow: almendraRow, meals: comidasFixture, items: itemsFixture,
+    usdaCandidates: usdaAlmendraCandidatos, usdaRows: { [ALMENDRA_FDC]: usdaAlmendraRow },
+    ...overrides,
+  });
+}
+
+const postProposal = (app: any, id = FOOD_ID) =>
+  app.request(`/nutrition/foods/${id}/usda-proposal`, { method: "POST" });
+
+const postApply = (app: any, body: unknown, id = FOOD_ID) =>
+  app.request(`/nutrition/foods/${id}/usda-apply`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+
+const applyBody = { identification: IDENT_ALMENDRA, fdcId: ALMENDRA_FDC };
+const updatesDe = (db: any, table: any) => db._updates.filter((u: any) => u.table === table);
+const idsDeItemsActualizados = (db: any) =>
+  updatesDe(db, mealItem).map((u: any) => valorDe(u.cond, "meal_item", "id"));
+
+test("la propuesta NO escribe: el alimento y sus comidas quedan intactos hasta que se aplica", async () => {
+  const db = refreshDb();
+  const res = await postProposal(createApp(deps(db, refreshAi)));
+  expect(res.status).toBe(200);
+  expect((await res.json()).proposal.iron_mg).toBe(3.71); // sí propuso algo...
+  expect(db._updates).toHaveLength(0); // ...pero no escribió NADA
+  expect(db._inserts).toHaveLength(0);
+});
+
+test("la propuesta dice cuántas COMIDAS del usuario usan el alimento (no ítems, no las de otros)", async () => {
+  // 3 ítems del alimento en 2 comidas propias; hay una 3ª comida con otro alimento + un huérfano,
+  // y una 4ª comida de otro usuario que también lo usa.
+  const body = await (await postProposal(createApp(deps(refreshDb(), refreshAi)))).json();
+  expect(body.mealsAffected).toBe(2);
+});
+
+test("la propuesta elige un candidato y devuelve la identificación del alimento GUARDADO", async () => {
+  const body = await (await postProposal(createApp(deps(refreshDb(), refreshAi)))).json();
+  expect(body.chosen).toBe(ALMENDRA_FDC);
+  expect(body.candidates).toHaveLength(2);
+  expect(body.identification).toMatchObject({ name: "Almendra", searchQuery: "almonds raw" });
+  expect(body.proposal).toMatchObject({ name: "Almendra", sourceMicros: "usda", usdaFdcId: ALMENDRA_FDC, calcium_mg: 269 });
+});
+
+test("sin match, la propuesta lo dice y no propone micros (null, no 0)", async () => {
+  const sinPick = { ...refreshAi, pickUsdaCandidate: async () => null };
+  const body = await (await postProposal(createApp(deps(refreshDb(), sinPick)))).json();
+  expect(body.chosen).toBeNull();
+  expect(body.proposal.sourceMicros).toBeNull();
+  expect(body.proposal.iron_mg).toBeNull();
+  expect(body.proposal.kcal).toBe(579); // el alimento tal cual
+  expect(body.mealsAffected).toBe(2); // el conteo no depende de que haya match
+});
+
+test("si la IA de la frase de búsqueda falla, la propuesta degrada a 'sin match' y NUNCA tira 500", async () => {
+  const roto = { ...refreshAi, usdaSearchQuery: async () => { throw new Error("boom"); } };
+  const res = await postProposal(createApp(deps(refreshDb(), roto)));
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.chosen).toBeNull();
+  expect(body.proposal.iron_mg).toBeNull();
+});
+
+test("si usda_food está vacía/rota, la propuesta degrada a 'sin match' y NUNCA tira 500", async () => {
+  const res = await postProposal(createApp(deps(refreshDb({ usdaExecuteThrows: true }), refreshAi)));
+  expect(res.status).toBe(200);
+  expect((await res.json()).chosen).toBeNull();
+});
+
+test("la propuesta de un alimento de OTRO usuario → 404", async () => {
+  const db = refreshDb({ foodRow: { ...almendraRow, userId: OTRO_USUARIO } });
+  expect((await postProposal(createApp(deps(db, refreshAi)))).status).toBe(404);
+});
+
+test("sin API key la propuesta → 400 (no se llama a la IA)", async () => {
+  const db = refreshDb();
+  const sinKey: any = { db, config: { ...baseConfig, defaultAiApiKey: undefined }, aiClient: refreshAi };
+  expect((await postProposal(createApp(sinKey))).status).toBe(400);
+});
+
+test("aplicar guarda los micros de USDA en el alimento", async () => {
+  const db = refreshDb();
+  const res = await postApply(createApp(deps(db, refreshAi)), applyBody);
+  expect(res.status).toBe(200);
+  const guardado = updatesDe(db, food)[0].values;
+  expect(guardado).toMatchObject({ ironMg: 3.71, calciumMg: 269, sourceMicros: "usda", usdaFdcId: ALMENDRA_FDC });
+});
+
+test("aplicar re-snapshotea los ítems del alimento conservando los gramos", async () => {
+  const db = refreshDb();
+  const body = await (await postApply(createApp(deps(db, refreshAi)), applyBody)).json();
+  expect(body).toEqual({ mealsUpdated: 2, itemsUpdated: 3 });
+
+  const porItem = new Map(updatesDe(db, mealItem).map((u: any) => [valorDe(u.cond, "meal_item", "id"), u.values]));
+  const g150: any = porItem.get(IT_M1_A);
+  expect(g150.grams).toBe(150); // la cantidad NO cambia
+  expect(g150.quantity).toBe(150);
+  expect(g150.ironMg).toBeCloseTo(5.57, 2); // 3.71 × 1.5, redondeado como el resto de los snapshots
+  const unidades: any = porItem.get(IT_M1_B);
+  expect(unidades.grams).toBeCloseTo(12, 6); // 10 almendras × 1.2 g
+  expect(unidades.ironMg).toBeCloseTo(0.45, 2); // 3.71 × 0.12
+  // snapshotItems también reescribe foodName: si el alimento se renombró, el snapshot se pone al día.
+  expect(g150.foodName).toBe("Almendra");
+});
+
+test("mealsUpdated cuenta COMIDAS, no ítems: 3 ítems en 2 comidas", async () => {
+  const db = refreshDb();
+  const body = await (await postApply(createApp(deps(db, refreshAi)), applyBody)).json();
+  // Contado sobre lo que realmente se escribió en la base, no sobre lo que dice el handler.
+  const comidasTocadas = new Set(
+    idsDeItemsActualizados(db).map((id: string) => itemsFixture.find((it) => it.id === id)!.mealId),
+  );
+  expect(comidasTocadas.size).toBe(2);
+  expect(idsDeItemsActualizados(db)).toHaveLength(3);
+  expect(body.mealsUpdated).toBe(comidasTocadas.size);
+  expect(body.itemsUpdated).toBe(3);
+});
+
+test("aplicar NO toca las comidas de OTRO usuario aunque compartan el alimento", async () => {
+  const db = refreshDb();
+  await postApply(createApp(deps(db, refreshAi)), applyBody);
+  expect(idsDeItemsActualizados(db)).not.toContain(IT_AJENO);
+  expect(idsDeItemsActualizados(db)).toEqual([IT_M1_A, IT_M1_B, IT_M2]);
+});
+
+test("aplicar NO toca los ítems de OTROS alimentos", async () => {
+  const db = refreshDb();
+  await postApply(createApp(deps(db, refreshAi)), applyBody);
+  expect(idsDeItemsActualizados(db)).not.toContain(IT_OTRO_ALIMENTO);
+});
+
+test("aplicar NO toca los ítems huérfanos (food_id null): su snapshot es lo único que queda del alimento borrado", async () => {
+  const db = refreshDb();
+  await postApply(createApp(deps(db, refreshAi)), applyBody);
+  expect(idsDeItemsActualizados(db)).not.toContain(IT_HUERFANO);
+});
+
+test("el apply NO confía en el cliente: re-arma la propuesta desde el alimento guardado", async () => {
+  const db = refreshDb();
+  const adulterada = {
+    identification: { ...IDENT_ALMENDRA, name: "HACKEADO", kcal: 99999, sourceMacros: "label" as const },
+    fdcId: ALMENDRA_FDC,
+  };
+  const res = await postApply(createApp(deps(db, refreshAi)), adulterada);
+  expect(res.status).toBe(200);
+  const guardado = updatesDe(db, food)[0].values;
+  expect(guardado.kcal).not.toBe(99999);
+  expect(guardado.kcal).toBe(579); // el de USDA, porque el alimento guardado es sourceMacros "ai"
+  expect(guardado.name).toBe("Almendra");
+  // Y tampoco viaja a los ítems.
+  expect(updatesDe(db, mealItem)[0].values.foodName).toBe("Almendra");
+});
+
+test("aplicar conserva los macros tipeados a mano y su procedencia 'manual'", async () => {
+  // sourceMacros "manual" viaja como "label" en la mezcla (los macros del usuario ganan), pero lo
+  // que se guarda sigue siendo "manual": el dato no se convierte en una etiqueta que nadie leyó.
+  const db = refreshDb({ foodRow: { ...almendraRow, sourceMacros: "manual", kcal: 600 } });
+  const res = await postApply(createApp(deps(db, refreshAi)), applyBody);
+  expect(res.status).toBe(200);
+  const guardado = updatesDe(db, food)[0].values;
+  expect(guardado.sourceMacros).toBe("manual");
+  expect(guardado.kcal).toBe(600); // NO los 579 de USDA
+  expect(guardado.ironMg).toBe(3.71); // pero las vitaminas vacías sí se rellenan
+});
+
+test("aplicar con un fdcId inexistente → 404 y no escribe nada", async () => {
+  const db = refreshDb();
+  const res = await postApply(createApp(deps(db, refreshAi)), { identification: IDENT_ALMENDRA, fdcId: 99999999 });
+  expect(res.status).toBe(404);
+  expect(db._updates).toHaveLength(0);
+});
+
+test("aplicar sobre un alimento de OTRO usuario → 404 y no escribe nada", async () => {
+  const db = refreshDb({ foodRow: { ...almendraRow, userId: OTRO_USUARIO } });
+  const res = await postApply(createApp(deps(db, refreshAi)), applyBody);
+  expect(res.status).toBe(404);
+  expect(db._updates).toHaveLength(0);
+});
+
+test("aplicar con body inválido → 400 (no 500)", async () => {
+  const db = refreshDb();
+  const { searchQuery: _omitido, ...sinQuery } = IDENT_ALMENDRA;
+  expect((await postApply(createApp(deps(db, refreshAi)), { identification: sinQuery, fdcId: ALMENDRA_FDC })).status).toBe(400);
+  expect((await postApply(createApp(deps(db, refreshAi)), { identification: IDENT_ALMENDRA })).status).toBe(400);
+  expect(db._updates).toHaveLength(0);
 });

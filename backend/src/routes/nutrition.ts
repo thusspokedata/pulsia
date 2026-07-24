@@ -4,12 +4,14 @@ import { FoodInputSchema, FoodIdentificationSchema, MealInputSchema, WaterLogInp
 import { searchUsda, getUsdaFood, type UsdaCandidate } from "../usda/matcher";
 import { assembleFoodExtraction } from "../nutrition/assemble";
 import {
-  insertFood, listFoods, getFood, updateFood, deleteFood,
+  insertFood, listFoods, getFood, updateFood, updateFoodRow, deleteFood,
   createMeal, listMeals, updateMeal, deleteMeal, getMealById,
   insertWater, listWater, deleteWater,
   getGoalInput, upsertGoalInput,
+  countMealsWithFood, resnapshotItemsOfFood,
   MealValidationError,
 } from "../nutrition/repository";
+import { identificationFromFood } from "../nutrition/refreshUsda";
 import { resolveAiKey } from "../ai/resolveKey";
 import { settings } from "../db/schema";
 import { eq } from "drizzle-orm";
@@ -223,6 +225,91 @@ export function nutritionRoutes(deps: AppDeps) {
   r.delete("/foods/:id", async (c) => {
     const ok = await deleteFood(deps.db, c.get("userId"), c.req.param("id"));
     return ok ? c.json({ ok: true }) : c.json({ error: "No encontrado" }, 404);
+  });
+
+  // ---- Actualizar un alimento YA guardado contra USDA ----
+  // Los alimentos cargados antes de la copia local de USDA no tienen vitaminas ni minerales. Esta
+  // pareja de endpoints los rellena: primero se PROPONE (sin escribir nada) y recién con la
+  // confirmación del usuario se APLICA (y se re-snapshotean sus comidas).
+
+  // Paso 1: propuesta. NO escribe. Devuelve qué encontró, los candidatos para el "¿no es este?" y
+  // cuántas comidas se van a tocar si se aplica.
+  r.post("/foods/:id/usda-proposal", async (c) => {
+    const userId = c.get("userId");
+    const foodId = c.req.param("id");
+    const f = await getFood(deps.db, userId, foodId);
+    if (!f) return c.json({ error: "No encontrado" }, 404);
+
+    const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
+    const apiKey = resolveAiKey(settingsRow, deps.config);
+    if (!apiKey) return c.json({ error: "No hay API key de IA disponible." }, 400);
+
+    const mealsAffected = await countMealsWithFood(deps.db, userId, foodId);
+
+    // Toda la parte de IA + USDA va en un solo try/catch, igual que en `/foods/extract`: si la
+    // frase de búsqueda, `searchUsda` o la elección fallan, se responde "no encontré nada" con el
+    // alimento tal cual. El peor caso de esta feature es "no mejoró nada", NUNCA un 500.
+    let searchQuery = f.name;
+    let candidates: UsdaCandidate[] = [];
+    let chosen: number | null = null;
+    let usdaRow = null;
+    try {
+      searchQuery = deps.aiClient.usdaSearchQuery
+        ? await deps.aiClient.usdaSearchQuery({ foodName: f.name, apiKey })
+        : f.name;
+      candidates = await searchUsda(deps.db, searchQuery);
+      if (candidates.length > 0 && deps.aiClient.pickUsdaCandidate) {
+        chosen = await deps.aiClient.pickUsdaCandidate({ foodName: f.name, candidates, apiKey });
+      }
+      if (chosen != null) usdaRow = await getUsdaFood(deps.db, chosen);
+      if (usdaRow == null) chosen = null; // fdcId elegido que ya no existe: es "sin match", no un match roto
+    } catch (e) {
+      console.warn("propuesta de USDA falló; se degrada a 'sin match':", (e as Error).message);
+      chosen = null;
+      usdaRow = null;
+    }
+
+    const identification = identificationFromFood(f, searchQuery);
+    return c.json({
+      identification,
+      candidates,
+      chosen,
+      proposal: assembleFoodExtraction(identification, usdaRow),
+      mealsAffected,
+    });
+  });
+
+  // Paso 2: aplicar. Guarda el alimento y re-snapshotea sus ítems de comida, en UNA transacción.
+  //
+  // El body trae la `identification` que devolvió la propuesta (se valida: es input del cliente y
+  // llega por HTTP), pero los valores que se persisten NO salen de ahí: se re-arma la
+  // identificación desde el alimento GUARDADO. Una propuesta adulterada en el viaje —kcal
+  // absurdas, un `sourceMacros` cambiado para que los números del cliente ganen la mezcla— no
+  // llega a la base. Del body solo manda el `fdcId`: qué fila de USDA usar es justamente lo que
+  // el usuario elige con el "¿no es este?".
+  r.post("/foods/:id/usda-apply", async (c) => {
+    const userId = c.get("userId");
+    const foodId = c.req.param("id");
+    const parsed = AssembleSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Body inválido", detail: parsed.error.issues }, 400);
+
+    const f = await getFood(deps.db, userId, foodId);
+    if (!f) return c.json({ error: "No encontrado" }, 404);
+    const usdaRow = await getUsdaFood(deps.db, parsed.data.fdcId);
+    if (!usdaRow) return c.json({ error: "No encontrado" }, 404);
+
+    const final = assembleFoodExtraction(identificationFromFood(f, parsed.data.identification.searchQuery), usdaRow);
+    // `assembleFoodExtraction` devuelve el `sourceMacros` de la identificación, donde `manual` ya
+    // viajó como `label` para que los macros tipeados a mano ganen la mezcla. Eso es la REGLA, no
+    // la procedencia: se restaura la del alimento para no convertir un dato escrito por el usuario
+    // en un dato "de etiqueta" que él nunca leyó.
+    const paraGuardar = { ...final, sourceMacros: f.sourceMacros };
+
+    return c.json(await deps.db.transaction(async (tx) => {
+      const fila = await updateFoodRow(tx, userId, foodId, paraGuardar);
+      if (!fila) return { mealsUpdated: 0, itemsUpdated: 0 };
+      return resnapshotItemsOfFood(tx, userId, foodId, fila);
+    }));
   });
 
   // ---- Meals ----
