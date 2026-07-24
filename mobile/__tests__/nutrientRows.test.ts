@@ -105,6 +105,37 @@ test("pasarse de la referencia da más de 100%", () => {
   expect(fila(g, "iron_mg").pct).toBe(200);
 });
 
+test("una referencia pasada por opciones MANDA sobre la de EFSA", () => {
+  // La pestaña del día compara 5 nutrientes contra la OMS. La precedencia se prueba con un
+  // nutriente que EFSA SÍ cubre (hierro, 11 mg): si el override no mandara, el ref seguiría en 11
+  // y el test no distinguiría nada.
+  const g = buildNutrientRows({ iron_mg: 5.5 }, persona, { refs: { iron_mg: { value: 22, kind: "max" } } });
+  const f = fila(g, "iron_mg");
+  expect(f.ref).toBe(22);
+  expect(f.kind).toBe("max");
+  expect(f.pct).toBe(25);
+});
+
+test("una referencia pasada como null explícito borra la de EFSA (no cae de vuelta en ella)", () => {
+  // Es el caso de las saturadas sin meta de kcal: no hay referencia que mostrar, y la fila tiene
+  // que quedarse SIN barra en vez de heredar la de otra tabla.
+  const g = buildNutrientRows({ iron_mg: 5.5 }, persona, { refs: { iron_mg: null } });
+  const f = fila(g, "iron_mg");
+  expect(f.ref).toBeNull();
+  expect(f.pct).toBeNull();
+});
+
+test("un nutriente marcado como parcial llega marcado a la fila", () => {
+  const g = buildNutrientRows({ zinc_mg: 0.8 }, persona, { partial: { zinc_mg: true } });
+  expect(fila(g, "zinc_mg").partial).toBe(true);
+  expect(fila(g, "iron_mg").partial).toBe(false); // el resto no se contagia
+});
+
+test("sin opciones, ninguna fila es parcial", () => {
+  const g = buildNutrientRows({ zinc_mg: 0.8 }, persona);
+  expect(filas(g).every((r) => r.partial === false)).toBe(true);
+});
+
 test("todas las claves del registro producen exactamente una fila", () => {
   const g = buildNutrientRows({}, persona);
   const keys = filas(g).map((r) => r.key);

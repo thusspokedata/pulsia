@@ -3,7 +3,7 @@ import { View, Text, Pressable } from "react-native";
 import type { NutrientGroup } from "@pulsia/shared";
 import { colors, spacing } from "../theme/tokens";
 import { Bar } from "./tabs/ui";
-import type { NutrientRow, NutrientSection } from "./nutrientRows";
+import type { NutrientRow, NutrientRowKey, NutrientSection } from "./nutrientRows";
 
 /**
  * Lista de nutrientes agrupada. Recibe las secciones ya armadas y NADA más: no sabe si lo que
@@ -36,8 +36,17 @@ function fmt(n: number): string {
 
 function textoCantidad(r: NutrientRow): string {
   if (r.value == null) return "sin dato";
-  if (r.ref == null) return `${fmt(r.value)} ${r.unit}`;
-  return `${fmt(r.value)} / ${fmt(r.ref)} ${r.unit}`;
+  // "≥": algunos de los ítems que suman este total no declaraban el nutriente, así que lo que se
+  // muestra es un PISO, no el número exacto. Sin la marca, "0,8 mg de zinc" afirmaría un dato que
+  // no tenemos. Sin valor no hay piso de nada, así que "sin dato" no la lleva.
+  const marca = r.partial ? "≥ " : "";
+  if (r.ref == null) return `${marca}${fmt(r.value)} ${r.unit}`;
+  return `${marca}${fmt(r.value)} / ${fmt(r.ref)} ${r.unit}`;
+}
+
+// `over` solo aplica a los techos: pasarse de un piso (fibra, hierro) es BUENO y no se avisa.
+function seExcedio(r: NutrientRow): boolean {
+  return r.value != null && r.ref != null && r.kind === "max" && r.value > r.ref;
 }
 
 function textoConteo(rows: NutrientRow[]): string {
@@ -45,12 +54,20 @@ function textoConteo(rows: NutrientRow[]): string {
   return conDato === 0 ? "sin datos" : `${conDato} de ${rows.length} con dato`;
 }
 
-function Fila({ row }: { row: NutrientRow }) {
-  // `over` solo aplica a los techos: pasarse de un piso (fibra, hierro) es BUENO y no se avisa.
-  const over = row.value != null && row.ref != null && row.kind === "max" && row.value > row.ref;
+function Fila({ row, onPress }: { row: NutrientRow; onPress?: (key: NutrientRowKey) => void }) {
+  const over = seExcedio(row);
   const sinDato = row.value == null;
   return (
-    <View testID={`nutr-${row.key}-row`} style={{ gap: 4, marginTop: 4 }}>
+    // Pressable siempre (no un View cuando no hay `onPress`) para que el testID y la estructura
+    // no cambien según la pantalla: sin dato queda deshabilitado igual, porque no hay nada que
+    // desglosar y una lista vacía no es una respuesta.
+    <Pressable
+      testID={`nutr-${row.key}-row`}
+      accessibilityRole={onPress != null && !sinDato ? "button" : undefined}
+      disabled={onPress == null || sinDato}
+      onPress={() => onPress?.(row.key)}
+      style={{ gap: 4, marginTop: 4 }}
+    >
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: spacing.sm }}>
         <Text style={{ color: sinDato ? colors.textMuted : colors.text, fontSize: 14, flex: 1 }}>{row.label}</Text>
         <Text
@@ -76,17 +93,27 @@ function Fila({ row }: { row: NutrientRow }) {
           testID={`nutr-${row.key}-bar`}
         />
       )}
-    </View>
+    </Pressable>
   );
 }
 
-export function NutrientList({ sections }: { sections: NutrientSection[] }) {
+export function NutrientList({
+  sections,
+  onPressRow,
+}: {
+  sections: NutrientSection[];
+  onPressRow?: (key: NutrientRowKey) => void;
+}) {
   const [abiertos, setAbiertos] = useState<Partial<Record<NutrientGroup, boolean>>>({});
 
   return (
     <View style={{ gap: spacing.md }}>
       {sections.map((s) => {
         const abierto = abiertos[s.group] ?? ABIERTOS_POR_DEFECTO[s.group] ?? true;
+        // Un excedente dentro de un grupo CERRADO quedaría invisible: la sal, que hoy avisa de
+        // una en la pestaña del día, vive en Minerales y arranca colapsado. El aviso sube al
+        // encabezado para que colapsar no esconda información, solo detalle.
+        const hayExcedente = s.rows.some(seExcedio);
         return (
           <View key={s.group} style={{ gap: 2 }}>
             <Pressable
@@ -104,6 +131,11 @@ export function NutrientList({ sections }: { sections: NutrientSection[] }) {
             >
               <Text style={{ color: colors.text, fontSize: 14, fontWeight: "600" }}>{s.label}</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                {hayExcedente && (
+                  <Text testID={`nutr-grupo-${s.group}-alerta`} style={{ color: colors.warning, fontSize: 12 }}>
+                    te pasaste
+                  </Text>
+                )}
                 <Text testID={`nutr-grupo-${s.group}-conteo`} style={{ color: colors.textMuted, fontSize: 12 }}>
                   {textoConteo(s.rows)}
                 </Text>
@@ -111,7 +143,7 @@ export function NutrientList({ sections }: { sections: NutrientSection[] }) {
                 <Text style={{ color: colors.icon, fontSize: 13 }}>{abierto ? "−" : "+"}</Text>
               </View>
             </Pressable>
-            {abierto && s.rows.map((r) => <Fila key={r.key} row={r} />)}
+            {abierto && s.rows.map((r) => <Fila key={r.key} row={r} onPress={onPressRow} />)}
           </View>
         );
       })}

@@ -47,6 +47,39 @@ test("un ítem con sodio y otro sin: el que falta cuenta como 0, no anula el tot
   expect(s.dayTotals.salt_g).toBe(1);
 });
 
+test("un ítem con zinc y otro SIN zinc: el total del día queda marcado como parcial", () => {
+  // La diferencia entre "comiste 0,8 mg de zinc" y "0,8 de los alimentos que sabemos". Sumar el
+  // ausente como 0 en silencio afirma un dato que no tenemos.
+  const s = buildNutritionDaySummary([meal([item({ zinc_mg: 0.8 }), item({})])], []);
+  expect(s.nutrients.zinc_mg.value).toBe(0.8);
+  expect(s.nutrients.zinc_mg.partial).toBe(true);
+});
+
+test("si TODOS los ítems declaran el zinc, el total NO es parcial", () => {
+  const s = buildNutritionDaySummary([meal([item({ zinc_mg: 0.8 }), item({ zinc_mg: 0.2 })])], []);
+  expect(s.nutrients.zinc_mg.value).toBe(1);
+  expect(s.nutrients.zinc_mg.partial).toBe(false);
+});
+
+test("ningún ítem con el dato: no hay valor y tampoco es parcial (no falta una parte de nada)", () => {
+  const s = buildNutritionDaySummary([meal([item({}), item({})])], []);
+  expect(s.nutrients.zinc_mg.value).toBeNull();
+  expect(s.nutrients.zinc_mg.partial).toBe(false);
+});
+
+test("cada nutriente se suma con los decimales que declara el registro, no todos a 1", () => {
+  // El zinc declara 2 decimales: 0,12 + 0,13 = 0,25 mg. Sumado a 1 decimal daría 0,3 — un 20% de
+  // más, en silencio, en un nutriente cuyos valores reales viven cerca del décimo de miligramo.
+  const s = buildNutritionDaySummary([meal([item({ zinc_mg: 0.12 }), item({ zinc_mg: 0.13 })])], []);
+  expect(s.nutrients.zinc_mg.value).toBe(0.25);
+});
+
+test("la sal hereda el parcial del sodio: es el mismo dato en otra unidad", () => {
+  const s = buildNutritionDaySummary([meal([item({ sodium_mg: 400 }), item({})])], []);
+  expect(s.dayTotals.salt_g).toBe(1);
+  expect(s.nutrients.sodium_mg.partial).toBe(true);
+});
+
 test("sin comidas: totales en 0 y micros null", () => {
   const s = buildNutritionDaySummary([], []);
   expect(s.dayTotals.kcal).toBe(0);

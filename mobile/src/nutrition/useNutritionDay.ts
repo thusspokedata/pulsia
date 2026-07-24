@@ -4,7 +4,7 @@ import { getBackendUrl } from "../storage/config";
 import { listMeals, listWater } from "../api/nutrition";
 import { getSessions, type SessionListItem } from "../api/sessions";
 import { dayExerciseBurn } from "@pulsia/shared";
-import type { Meal, WaterLog, NutritionGoalResult, CardioBurnInput } from "@pulsia/shared";
+import type { Meal, WaterLog, NutritionGoalResult, CardioBurnInput, TrainingProfile } from "@pulsia/shared";
 import { listCardio } from "../api/cardio";
 import { loadDailyGoalContext, type DailyGoalContext } from "./dailyGoal";
 import { buildGoalView, type GoalView } from "./goalView";
@@ -17,6 +17,10 @@ export interface NutritionDay {
   meals: Meal[];
   water: WaterLog[];
   summary: NutritionDaySummary;
+  // El perfil se expone porque las referencias de micronutrientes dependen del sexo y la edad.
+  // Sale del MISMO `loadDailyGoalContext` que la meta: resolverlo aparte en la pantalla es cómo
+  // dos vistas del mismo día terminan comparando contra referencias distintas.
+  profile: TrainingProfile | null;
   goalResult: NutritionGoalResult | null;
   goalView: GoalView | null;
   exercise: number;
@@ -60,5 +64,5 @@ export function useNutritionDay(offset: number): NutritionDay {
       }, exercise)
     : null;
 
-  return { error, setError, meals, water, summary, goalResult, goalView, exercise, baseUrl: baseUrl.current, reload };
+  return { error, setError, meals, water, summary, profile, goalResult, goalView, exercise, baseUrl: baseUrl.current, reload };
 }

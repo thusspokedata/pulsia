@@ -3,18 +3,45 @@ import {
   referencesFor,
   type NutrientKey,
   type NutrientGroup,
+  type NutrientReference,
   type ReferenceKind,
   type ReferencePerson,
 } from "@pulsia/shared";
 
+// La clave de una fila es la del registro MÁS `salt_g`: la sal no es un nutriente que se
+// persista (se guarda sodio), pero es la unidad que el usuario lee, y la pestaña del día
+// sustituye la fila de sodio por la de sal (ver dayNutrientRows.ts). Tiparlo como unión y no
+// como `string` mantiene los testID y la navegación verificables por el compilador.
+export type NutrientRowKey = NutrientKey | "salt_g";
+
 export interface NutrientRow {
-  key: NutrientKey;
+  key: NutrientRowKey;
   label: string;
   unit: string;
   value: number | null; // null = SIN DATO (distinto de 0)
   ref: number | null; // null = EFSA no lo cubre, o modo "por 100 g"
   pct: number | null; // null si no hay valor o no hay referencia
   kind: ReferenceKind | null;
+  // true = algunos de los ítems que suman este total NO declaraban el nutriente. El total es un
+  // piso, no el número exacto. Solo tiene sentido en un total de varios ítems (el día); en un
+  // alimento suelto siempre es false.
+  partial: boolean;
+}
+
+export interface NutrientRowsOptions {
+  /**
+   * Referencias que MANDAN sobre las de EFSA, por clave. Que la clave ESTÉ presente ya es el
+   * override, aunque valga `null`: `null` significa "esta fila no tiene referencia que mostrar"
+   * (saturadas sin meta de kcal), no "usá la de EFSA".
+   *
+   * Existe porque 5 nutrientes (azúcares, fibra, saturadas, colesterol y sodio/sal) se comparan
+   * contra la OMS y están en `null` en la tabla EFSA justamente para no mostrar dos referencias
+   * distintas del mismo nutriente. Si mañana EFSA sumara un valor para alguno, la precedencia
+   * explícita evita que la fila cambie de referencia sola.
+   */
+  refs?: Partial<Record<NutrientKey, NutrientReference | null>>;
+  /** Nutrientes cuyo total viene de una suma con agujeros. */
+  partial?: Partial<Record<NutrientKey, boolean>>;
 }
 
 export interface NutrientSection {
@@ -51,7 +78,7 @@ function aPersona(persona: { sex?: string; age?: number }): ReferencePerson {
  * un cero medido, que es justo la distinción que este módulo existe para sostener. Es el mismo
  * criterio que ya usa `barSegments` para no perder un segmento por redondeo.
  */
-function porcentaje(value: number, ref: number): number {
+export function porcentaje(value: number, ref: number): number {
   const bruto = (value / ref) * 100;
   if (bruto > 0 && bruto < 1) return 1;
   return Math.round(bruto);
@@ -72,9 +99,11 @@ function porcentaje(value: number, ref: number): number {
 export function buildNutrientRows(
   values: Partial<Record<NutrientKey, number | null>>,
   persona: { sex?: string; age?: number } | null,
+  opciones?: NutrientRowsOptions,
 ): NutrientSection[] {
   const porGrupo = nutrientsByGroup();
   const refs = persona == null ? null : referencesFor(aPersona(persona));
+  const overrides = opciones?.refs;
 
   return (Object.keys(porGrupo) as NutrientGroup[]).map((group) => ({
     group,
@@ -83,7 +112,11 @@ export function buildNutrientRows(
       const key = def.key as NutrientKey;
       const crudo = values[key];
       const value = crudo == null || !Number.isFinite(crudo) ? null : crudo;
-      const referencia = refs?.[key] ?? null;
+      // `hasOwnProperty` y no `?? refs[key]`: un override en `null` tiene que BORRAR la
+      // referencia de EFSA, no dejarla pasar. Con `??` las saturadas sin meta de kcal
+      // heredarían silenciosamente cualquier valor que EFSA sumara mañana.
+      const hayOverride = overrides != null && Object.prototype.hasOwnProperty.call(overrides, key);
+      const referencia = hayOverride ? overrides![key] ?? null : refs?.[key] ?? null;
       const ref = referencia?.value ?? null;
       return {
         key,
@@ -93,6 +126,7 @@ export function buildNutrientRows(
         ref,
         pct: value == null || ref == null ? null : porcentaje(value, ref),
         kind: referencia?.kind ?? null,
+        partial: opciones?.partial?.[key] ?? false,
       };
     }),
   }));

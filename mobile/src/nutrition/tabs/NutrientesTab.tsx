@@ -1,47 +1,29 @@
-import { View, Text, Pressable } from "react-native";
+import { Text, Pressable } from "react-native";
 import { router } from "expo-router";
-import { NUTRIENT_REFERENCES, NUTRIENT_REFERENCE_KIND, saturatedFatRefG } from "@pulsia/shared";
 import type { GoalView } from "../goalView";
 import type { NutritionDaySummary } from "../daySummary";
+import { buildDayNutrientRows } from "../dayNutrientRows";
+import { NutrientList } from "../NutrientList";
 import { colors } from "../../theme/tokens";
-import { Card, SectionTitle, EmptyState, Bar } from "./ui";
+import { Card, SectionTitle, EmptyState } from "./ui";
 
 interface Props {
   summary: NutritionDaySummary;
   goalView: GoalView | null;
+  // Sexo y edad del perfil: las referencias EFSA dependen de eso (el hierro de una mujer en edad
+  // fértil es el doble que el de un varón). Sin ellos se cae al fallback conservador.
+  persona: { sex?: string; age?: number };
   offset: number;
 }
 
-type RowKey = keyof typeof NUTRIENT_REFERENCE_KIND;
-
-interface NutrRow {
-  key: RowKey;
-  label: string;
-  value: number | null;
-  ref: number | null; // null = sin referencia que mostrar (saturadas sin meta de kcal)
-  unit: string;
-}
-
-export function NutrientesTab({ summary, goalView, offset }: Props) {
-  const { dayTotals, cholesterolMg } = summary;
+export function NutrientesTab({ summary, goalView, persona, offset }: Props) {
+  // Las saturadas se acotan al 10% de la ENERGÍA, así que su referencia sale de la meta de kcal.
   const goalKcal = goalView?.status === "ok" ? goalView.kcal!.meta : null;
+  const secciones = buildDayNutrientRows(summary, persona, goalKcal);
+  const hayDatos = secciones.some((s) => s.rows.some((r) => r.value != null));
+  const perfilIncompleto = persona.sex == null || persona.age == null;
 
-  const rows: NutrRow[] = [
-    { key: "sugars_g", label: "Azúcares", value: dayTotals.sugars_g, ref: NUTRIENT_REFERENCES.sugars_g, unit: "g" },
-    { key: "fiber_g", label: "Fibra", value: dayTotals.fiber_g, ref: NUTRIENT_REFERENCES.fiber_g, unit: "g" },
-    {
-      key: "saturated_fat_g",
-      label: "Grasas saturadas",
-      value: dayTotals.saturated_fat_g,
-      // La OMS acota las saturadas al 10% de la ENERGÍA, así que sin meta de kcal no hay referencia.
-      ref: goalKcal != null ? saturatedFatRefG(goalKcal) : null,
-      unit: "g",
-    },
-    { key: "salt_g", label: "Sal", value: dayTotals.salt_g, ref: NUTRIENT_REFERENCES.salt_g, unit: "g" },
-    { key: "cholesterol_mg", label: "Colesterol", value: cholesterolMg, ref: NUTRIENT_REFERENCES.cholesterol_mg, unit: "mg" },
-  ];
-
-  if (rows.every((r) => r.value == null)) {
+  if (!hayDatos) {
     return (
       <Card>
         <SectionTitle>Nutrientes</SectionTitle>
@@ -54,39 +36,22 @@ export function NutrientesTab({ summary, goalView, offset }: Props) {
     <Card>
       <SectionTitle>Nutrientes</SectionTitle>
       <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18 }}>
-        La referencia es pública (OMS), no una meta calculada para vos. La fibra es un piso a alcanzar; el resto, límites a
-        no pasar. Tocá un nutriente para ver qué alimentos lo aportan.
+        Las referencias son públicas (EFSA según tu sexo y edad para vitaminas y minerales; OMS para azúcares, fibra,
+        saturadas, sal y colesterol), no metas calculadas para vos. Las vitaminas, los minerales y la fibra son pisos a
+        alcanzar; azúcares, saturadas, sal y colesterol, límites a no pasar. “≥” significa que algún alimento del día no
+        declara ese nutriente, así que el total es un piso. Tocá un nutriente para ver qué alimentos lo aportan.
       </Text>
-      {rows.map((r) => {
-        // `over` solo aplica a los límites: pasarse del piso de fibra es BUENO, no se avisa.
-        const over = r.value != null && r.ref != null && NUTRIENT_REFERENCE_KIND[r.key] === "max" && r.value > r.ref;
-        return (
-          <Pressable
-            key={r.key}
-            testID={`nutr-${r.key}-row`}
-            accessibilityRole="button"
-            // Sin dato no hay nada que desglosar: la fila se ve pero no navega a una lista vacía.
-            disabled={r.value == null}
-            onPress={() => router.push(`/nutricion/nutriente?key=${r.key}&offset=${offset}`)}
-            style={{ gap: 4, marginTop: 4 }}
-          >
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
-              <Text style={{ color: colors.text, fontSize: 14 }}>{r.label}</Text>
-              <Text style={{ color: over ? colors.warning : colors.textMuted, fontSize: 13 }}>
-                {r.value == null ? "—" : r.ref == null ? `${Math.round(r.value)} ${r.unit}` : `${Math.round(r.value)} / ${r.ref} ${r.unit}`}
-              </Text>
-            </View>
-            {r.value != null && r.ref != null && (
-              <Bar
-                value={r.value}
-                target={r.ref}
-                kind={NUTRIENT_REFERENCE_KIND[r.key] === "min" ? "floor" : "limit"}
-                testID={`nutr-${r.key}-bar`}
-              />
-            )}
-          </Pressable>
-        );
-      })}
+      {perfilIncompleto && (
+        <Pressable testID="nutrientes-aviso-perfil" onPress={() => router.push("/perfil")}>
+          <Text style={{ color: colors.accentText, fontSize: 12 }}>
+            Completá tu sexo y edad en el perfil para referencias más precisas →
+          </Text>
+        </Pressable>
+      )}
+      <NutrientList
+        sections={secciones}
+        onPressRow={(key) => router.push(`/nutricion/nutriente?key=${key}&offset=${offset}`)}
+      />
     </Card>
   );
 }

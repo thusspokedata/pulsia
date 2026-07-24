@@ -1,5 +1,6 @@
 import type { Meal, MealItem, MealType } from "../schemas/nutrition";
 import { saltGFromSodiumMg } from "./derived";
+import type { NutrientKey } from "./nutrients";
 
 // Criterio de redondeo de `pct`/`pctActual`/`pctTarget`, compartido por todas las tortas de este
 // archivo (comidas y macros): cada porcentaje se redondea por separado, así que pueden sumar 99 o
@@ -98,9 +99,11 @@ export function macroSplit(comido: MacroGrams, meta: MacroGrams | null): MacroSl
   }));
 }
 
-// Los micros que se pueden rankear. Son los del snapshot de MealItem que tienen referencia en la
-// UI; `water_ml` queda afuera a propósito (el líquido tiene su propia vista).
-export type RankNutrient = "sugars_g" | "fiber_g" | "saturated_fat_g" | "salt_g" | "cholesterol_mg";
+// Los micros que se pueden rankear: TODOS los del registro (el snapshot de MealItem los guarda a
+// todos) más `salt_g`, que no es una columna sino un derivado del sodio. Se abrió del puñado de 5
+// original porque la pestaña del día pasó a mostrar los 30 y cualquiera de ellos puede pedir su
+// desglose de "qué alimentos lo aportan"; limitar el ranking dejaría 25 filas mudas.
+export type RankNutrient = NutrientKey | "salt_g";
 
 // `salt_g` no es un campo del ítem: el snapshot guarda SODIO. El ranking sigue hablando en SAL
 // porque es la unidad que el usuario lee en el resto de la app (referencia OMS de 5 g/día).
