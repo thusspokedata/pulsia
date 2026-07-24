@@ -20,25 +20,25 @@ jest.mock("../src/api/nutrition", () => ({
 
 const PASAS = {
   id: "11111111-1111-4111-8111-111111111111",
-  name: "Pasas de uva", basis: "per_100g" as const, source: "estimate" as const,
+  name: "Pasas de uva", basis: "per_100g" as const, sourceMacros: "ai" as const, sourceMicros: null,
   kcal: 299, protein_g: 3, carbs_g: 79, fat_g: 0.5,
-  sugars_g: 59, fiber_g: 3.7, saturated_fat_g: 0.06, salt_g: 0.03,
+  sugars_g: 59, fiber_g: 3.7, saturated_fat_g: 0.06, sodium_mg: 12,
   cholesterol_mg: 0, water_ml: null, unitWeightG: null, createdAt: 0,
 };
 
 const QUESO_CREMA = {
   id: "22222222-2222-4222-8222-222222222222",
-  name: "Queso crema", basis: "per_100g" as const, source: "estimate" as const,
+  name: "Queso crema", basis: "per_100g" as const, sourceMacros: "ai" as const, sourceMicros: null,
   kcal: 350, protein_g: 6, carbs_g: 4, fat_g: 34,
-  sugars_g: 3.2, fiber_g: 0, saturated_fat_g: 20, salt_g: 0.8,
+  sugars_g: 3.2, fiber_g: 0, saturated_fat_g: 20, sodium_mg: 320,
   cholesterol_mg: 101, water_ml: null, unitWeightG: null, createdAt: 0,
 };
 
 const ALMENDRA = {
   id: "33333333-3333-4333-8333-333333333333",
-  name: "Almendra", basis: "per_100g" as const, source: "estimate" as const,
+  name: "Almendra", basis: "per_100g" as const, sourceMacros: "ai" as const, sourceMicros: null,
   kcal: 579, protein_g: 21, carbs_g: 22, fat_g: 50,
-  sugars_g: 4.4, fiber_g: 12.5, saturated_fat_g: 3.8, salt_g: 0.001,
+  sugars_g: 4.4, fiber_g: 12.5, saturated_fat_g: 3.8, sodium_mg: 0.4,
   cholesterol_mg: null, water_ml: null, unitWeightG: null, createdAt: 0,
 };
 

@@ -1,7 +1,9 @@
 import { buildMealInput, itemPreview, mealTotals, allowedUnits } from "../src/nutrition/mealForm";
 
-const banana = { id: "f1", name: "Banana", basis: "per_100g" as const, kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120, source: "estimate" as const, createdAt: 0, saturated_fat_g: 0.1, sugars_g: 12, fiber_g: 2.6, salt_g: 0, cholesterol_mg: 0, water_ml: 75 };
-const leche = { id: "f2", name: "Leche", basis: "per_100ml" as const, kcal: 42, protein_g: 3.4, carbs_g: 5, fat_g: 1, unitWeightG: null, source: "label" as const, createdAt: 0, saturated_fat_g: 0.6, sugars_g: 5, fiber_g: null, salt_g: 0.1, cholesterol_mg: 10, water_ml: 88 };
+// Los alimentos ya no guardan sal sino SODIO (factor 2,5: 0,1 g de sal = 40 mg de sodio). Las
+// aserciones de los tests siguen hablando en sal, que es lo que la app muestra.
+const banana = { id: "f1", name: "Banana", basis: "per_100g" as const, kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120, sourceMacros: "ai" as const, sourceMicros: "usda" as const, createdAt: 0, saturated_fat_g: 0.1, sugars_g: 12, fiber_g: 2.6, sodium_mg: 0, cholesterol_mg: 0, water_ml: 75 };
+const leche = { id: "f2", name: "Leche", basis: "per_100ml" as const, kcal: 42, protein_g: 3.4, carbs_g: 5, fat_g: 1, unitWeightG: null, sourceMacros: "label" as const, sourceMicros: null, createdAt: 0, saturated_fat_g: 0.6, sugars_g: 5, fiber_g: null, sodium_mg: 40, cholesterol_mg: 10, water_ml: 88 };
 
 test("allowedUnits: sólido con unitWeightG → g + unit", () => {
   expect(allowedUnits(banana)).toEqual(["g", "unit"]);
@@ -37,11 +39,27 @@ test("mealTotals suma kcal y macros de todos los ítems", () => {
 
 test("mealTotals suma los micros (null-safe)", () => {
   const t = mealTotals([{ food: banana, quantity: 1, unit: "unit" }, { food: leche, quantity: 200, unit: "ml" }]);
-  // banana 1u=120g: sugars 14.4, sat 0.1, fiber 3.1, salt 0 ; leche 200ml: sugars 10, sat 1.2, fiber null, salt 0.2
+  // banana 1u=120g: sugars 14.4, sat 0.1, fiber 3.1, sodio 0 ; leche 200ml: sugars 10, sat 1.2, fiber null, sodio 80 mg
   expect(t.sugars_g).toBeCloseTo(24.4, 1);
   expect(t.saturated_fat_g).toBeCloseTo(1.3, 1);
   expect(t.fiber_g).toBeCloseTo(3.1, 1); // leche fiber null → cuenta como 0, pero banana lo tiene → total presente
-  expect(t.salt_g).toBeCloseTo(0.2, 1);
+  expect(t.salt_g).toBeCloseTo(0.2, 1); // 80 mg de sodio = 0,2 g de sal
+});
+
+test("la sal del total se deriva del sodio SUMADO, no de convertir cada ítem", () => {
+  // Dos ítems de 50 mg de sodio: sumar y convertir da 100 mg → 0,25 → 0,3 g; convertir cada uno
+  // y sumar daría 0,1 + 0,1 = 0,2 g. Es el mismo criterio (y el mismo riesgo) que el total del día.
+  const saladito = { ...banana, sodium_mg: 50, unitWeightG: null };
+  const t = mealTotals([
+    { food: saladito, quantity: 100, unit: "g" },
+    { food: saladito, quantity: 100, unit: "g" },
+  ]);
+  expect(t.salt_g).toBe(0.3);
+});
+
+test("ningún ítem con sodio → la sal es null, no 0", () => {
+  const sinSodio = { ...banana, sodium_mg: null };
+  expect(mealTotals([{ food: sinSodio, quantity: 100, unit: "g" }]).salt_g).toBeNull();
 });
 
 test("mealTotals: un micro null en TODOS los ítems → total null", () => {

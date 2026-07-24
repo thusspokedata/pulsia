@@ -13,7 +13,18 @@ const meal = (eatenAt: number, cholesterols: (number | null)[]): Meal =>
     note: null,
     items: cholesterols.map((cholesterol_mg) => ({
       foodName: "x", grams: 100, kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0,
-      cholesterol_mg, sugars_g: null, fiber_g: null, saturated_fat_g: null, salt_g: null, water_ml: null,
+      cholesterol_mg, sugars_g: null, fiber_g: null, saturated_fat_g: null, sodium_mg: null, water_ml: null,
+    })),
+  }) as any;
+
+// Igual que `meal`, pero cargando SODIO: es lo que el ítem guarda cuando la curva pedida es la
+// de sal.
+const mealConSodio = (eatenAt: number, sodios: (number | null)[]): Meal =>
+  ({
+    id: "m", eatenAt, mealType: null, note: null,
+    items: sodios.map((sodium_mg) => ({
+      foodName: "x", grams: 100, kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0,
+      sodium_mg, cholesterol_mg: null, sugars_g: null, fiber_g: null, saturated_fat_g: null, water_ml: null,
     })),
   }) as any;
 
@@ -55,6 +66,23 @@ test("el promedio es sobre los días CON registro, no sobre el rango", () => {
   // 3 días registrados de un rango que podría ser de 30: 300/3 = 100, no 300/30.
   const meals = [meal(at(10, 8), [50]), meal(at(11, 8), [100]), meal(at(12, 8), [150])];
   expect(dailyNutrientSeries(meals, "cholesterol_mg").average).toBe(100);
+});
+
+test("la curva de sal se dibuja en gramos de SAL, derivados del sodio del ítem", () => {
+  // El ítem guarda sodio; la pantalla (y su línea de referencia OMS de 5 g) hablan en sal.
+  // 400 mg de sodio = 1 g de sal.
+  const { points } = dailyNutrientSeries([mealConSodio(at(10, 8), [400])], "salt_g");
+  expect(points).toEqual([{ x: noon(10), y: 1 }]);
+});
+
+test("la sal del día convierte el sodio SUMADO, no ítem por ítem", () => {
+  // 50 + 50 mg → 100 mg → 0,25 → 0,3 g. Convertir cada ítem y sumar daría 0,2 g.
+  const { points } = dailyNutrientSeries([mealConSodio(at(10, 8), [50, 50])], "salt_g");
+  expect(points.map((p) => p.y)).toEqual([0.3]);
+});
+
+test("un día sin sodio en ningún ítem no genera punto de sal", () => {
+  expect(dailyNutrientSeries([mealConSodio(at(10, 8), [null])], "salt_g").points).toEqual([]);
 });
 
 test("sin comidas, o sin ningún dato del nutriente: sin puntos y promedio null", () => {

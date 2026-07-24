@@ -26,7 +26,7 @@ function FoodRow({ food, onDelete }: { food: Food; onDelete: (f: Food) => void }
       <Pressable style={{ flex: 1 }} onPress={() => router.push(`/nutricion/agregar-alimento?foodId=${food.id}`)}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
           <Text style={{ color: colors.text, fontWeight: "600", flexShrink: 1 }}>{food.name}</Text>
-          <SourceChip source={food.source} />
+          <SourceChip sourceMacros={food.sourceMacros} sourceMicros={food.sourceMicros} />
         </View>
         <Text style={{ color: colors.textMuted, fontSize: 12 }}>
           {food.kcal} kcal · P{food.protein_g} C{food.carbs_g} G{food.fat_g} /100{food.basis === "per_100ml" ? "ml" : "g"}

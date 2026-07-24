@@ -3,7 +3,7 @@ import type { Meal, WaterLog } from "@pulsia/shared";
 
 const meal = (items: any[]): Meal => ({ id: "m", eatenAt: 1, mealType: null, note: null, items } as any);
 const item = (o: any) => ({ id: "i", foodId: null, foodName: "x", quantity: 1, quantityUnit: "g", grams: 100,
-  kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, saturated_fat_g: null, sugars_g: null, fiber_g: null, salt_g: null, cholesterol_mg: null, water_ml: null, ...o });
+  kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, saturated_fat_g: null, sugars_g: null, fiber_g: null, sodium_mg: null, cholesterol_mg: null, water_ml: null, ...o });
 
 test("suma kcal/macros y micros null-safe", () => {
   const meals = [meal([item({ kcal: 200, protein_g: 10, carbs_g: 20, fat_g: 5, sugars_g: 8, cholesterol_mg: 50, water_ml: 40 }), item({ kcal: 100, protein_g: 5, carbs_g: 10, fat_g: 2 })])];
@@ -20,6 +20,31 @@ test("líquido = agua tomada + aporte de alimentos", () => {
   const water: WaterLog[] = [{ id: "w1", ml: 250, loggedAt: 1 }, { id: "w2", ml: 250, loggedAt: 2 }];
   const s = buildNutritionDaySummary(meals, water);
   expect(s.liquid).toEqual({ total: 600, drank: 500, fromFood: 100 });
+});
+
+test("la sal del día se deriva del sodio de los ítems, no de un campo salt_g", () => {
+  // Los ítems ya NO guardan sal: guardan sodio. La app sigue hablando en sal (la referencia OMS
+  // de 5 g/día es la que el usuario reconoce), así que el total se deriva acá.
+  //
+  // Los 50 mg no son un valor cualquiera: el total tiene que salir de SUMAR el sodio y convertir
+  // UNA vez al final, no de convertir cada ítem y sumar los redondeos. Con 400 + 400 los dos
+  // caminos dan 2 g y el test no distinguiría nada; con 50 + 50 divergen:
+  //   sumar y convertir → 100 mg → 0,25 g → 0,3 g   (lo correcto)
+  //   convertir y sumar → 0,1 + 0,1 = 0,2 g          (deriva por redondear por ítem)
+  const meals = [meal([item({ sodium_mg: 50 }), item({ sodium_mg: 50 })])];
+  const s = buildNutritionDaySummary(meals, []);
+  expect(s.dayTotals.salt_g).toBe(0.3);
+});
+
+test("sin sodio en ningún ítem, la sal es null y no 0", () => {
+  // "no sé cuánta sal comiste" no es "comiste 0 g de sal".
+  const s = buildNutritionDaySummary([meal([item({})])], []);
+  expect(s.dayTotals.salt_g).toBeNull();
+});
+
+test("un ítem con sodio y otro sin: el que falta cuenta como 0, no anula el total", () => {
+  const s = buildNutritionDaySummary([meal([item({ sodium_mg: 400 }), item({})])], []);
+  expect(s.dayTotals.salt_g).toBe(1);
 });
 
 test("sin comidas: totales en 0 y micros null", () => {

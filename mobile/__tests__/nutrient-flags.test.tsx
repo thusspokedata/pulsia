@@ -8,7 +8,7 @@ test("cada flag destacable tiene una frase, ninguna queda vacía", () => {
   const todoAlto = {
     basis: "per_100g" as const,
     fat_g: 99, saturated_fat_g: 99, sugars_g: 99,
-    salt_g: 99, cholesterol_mg: 999, fiber_g: 99,
+    sodium_mg: 39600, cholesterol_mg: 999, fiber_g: 99,
   };
   for (const f of foodFlags(todoAlto).notable) {
     expect(flagText(f.nutrient, f.sentiment)).toBeTruthy();
@@ -17,7 +17,7 @@ test("cada flag destacable tiene una frase, ninguna queda vacía", () => {
   const todoMedio = {
     basis: "per_100g" as const,
     fat_g: 10, saturated_fat_g: 3, sugars_g: 10,
-    salt_g: 1, cholesterol_mg: 40, fiber_g: 0,
+    sodium_mg: 400, cholesterol_mg: 40, fiber_g: 0,
   };
   for (const f of foodFlags(todoMedio).notable) {
     expect(flagText(f.nutrient, f.sentiment)).toBeTruthy();
@@ -54,7 +54,7 @@ test("hay etiqueta para los seis nutrientes", () => {
 const quesoCrema = {
   basis: "per_100g" as const,
   fat_g: 34, saturated_fat_g: 20, sugars_g: 3.2,
-  salt_g: 0.8, cholesterol_mg: 101, fiber_g: 0,
+  sodium_mg: 320, cholesterol_mg: 101, fiber_g: 0,
 };
 
 test("compact capa en 3 chips y avisa cuántos quedaron afuera", async () => {
@@ -75,7 +75,7 @@ test("un alimento sin dato de azúcar NO dice que es bajo ni lo pinta verde", as
   const almendra = {
     basis: "per_100g" as const,
     fat_g: 50, saturated_fat_g: 3.8, sugars_g: null,
-    salt_g: null, cholesterol_mg: 0, fiber_g: 12.5,
+    sodium_mg: null, cholesterol_mg: 0, fiber_g: 12.5,
   };
   const { getByText, queryByText } = await render(<NutrientFlags food={almendra} />);
   // Ancla al INICIO: sin esto, /azúcar/ también matchea "sin datos de azúcar y sal" (la línea
@@ -87,7 +87,7 @@ test("un alimento sin dato de azúcar NO dice que es bajo ni lo pinta verde", as
 
 test("el aviso de faltantes NO compite por el cap de 3 chips", async () => {
   // tres alarmas + datos faltantes: el aviso tiene que sobrevivir igual
-  const conTodo = { ...quesoCrema, sugars_g: null, salt_g: null };
+  const conTodo = { ...quesoCrema, sugars_g: null, sodium_mg: null };
   const { getByText } = await render(<NutrientFlags food={conTodo} />);
   getByText("grasa alta");
   getByText("saturadas altas");
@@ -99,7 +99,7 @@ test("un alimento sin nada destacable no renderiza chips", async () => {
   const lechuga = {
     basis: "per_100g" as const,
     fat_g: 0.2, saturated_fat_g: 0, sugars_g: 0.8,
-    salt_g: 0.01, cholesterol_mg: 0, fiber_g: 1.3,
+    sodium_mg: 4, cholesterol_mg: 0, fiber_g: 1.3,
   };
   const { queryByTestId } = await render(<NutrientFlags food={lechuga} />);
   expect(queryByTestId("nutrient-flags")).toBeNull();
@@ -131,7 +131,7 @@ test("full: el fallback de un valor sin dato es 'sin dato', tanto en el chip com
   const conFaltantes = {
     basis: "per_100g" as const,
     fat_g: 34, saturated_fat_g: null, sugars_g: 3.2,
-    salt_g: 0.8, cholesterol_mg: null, fiber_g: 0,
+    sodium_mg: 320, cholesterol_mg: null, fiber_g: 0,
   };
   const { getAllByText, getAllByTestId } = await render(<NutrientFlags food={conFaltantes} variant="full" />);
   // saturadas y colesterol están sin dato: dos filas, cada una con "sin dato" en el valor Y en
@@ -148,7 +148,7 @@ test("full: un valor NaN se muestra como 'sin dato', nunca como 'NaN g'", async 
   const conNaN = {
     basis: "per_100g" as const,
     fat_g: NaN, saturated_fat_g: 3.8, sugars_g: 4.4,
-    salt_g: 0.001, cholesterol_mg: 0, fiber_g: 12.5,
+    sodium_mg: 0.4, cholesterol_mg: 0, fiber_g: 12.5,
   };
   const { getAllByText, queryByText } = await render(<NutrientFlags food={conNaN} variant="full" />);
   expect(queryByText(/NaN/)).toBeNull();

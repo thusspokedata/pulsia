@@ -9,21 +9,32 @@ jest.mock("expo-router", () => ({
 jest.mock("../src/storage/config", () => ({ getBackendUrl: jest.fn(async () => "http://x") }));
 jest.mock("../src/api/nutrition", () => ({ listFoods: jest.fn(async () => []), deleteFood: jest.fn() }));
 
-const food = (id: string, name: string, source: "label" | "estimate") => ({
+const food = (id: string, name: string, sourceMacros: "label" | "ai" | "manual", sourceMicros: "usda" | "ai" | null = null) => ({
   id, name, basis: "per_100g", kcal: 100, protein_g: 1, carbs_g: 1, fat_g: 1,
-  saturated_fat_g: null, sugars_g: null, fiber_g: null, salt_g: null, cholesterol_mg: null, water_ml: null,
-  unitWeightG: null, source, createdAt: 0,
+  saturated_fat_g: null, sugars_g: null, fiber_g: null, sodium_mg: null, cholesterol_mg: null, water_ml: null,
+  unitWeightG: null, sourceMacros, sourceMicros, createdAt: 0,
 });
 
 beforeEach(() => jest.clearAllMocks());
 
-test("cada alimento muestra de dónde salió su dato", async () => {
+test("cada alimento muestra de dónde salieron sus macros", async () => {
   (listFoods as jest.Mock).mockResolvedValue([
     food("1", "Muesli Lidl", "label"),
-    food("2", "Almendra", "estimate"),
+    food("2", "Almendra", "ai"),
   ]);
   await render(<CatalogoScreen />);
   await waitFor(() => expect(screen.getByText("Muesli Lidl")).toBeTruthy());
   expect(screen.getByTestId("source-chip-label")).toBeTruthy();
-  expect(screen.getByTestId("source-chip-estimate")).toBeTruthy();
+  expect(screen.getByTestId("source-chip-ai")).toBeTruthy();
+});
+
+test("el alimento con micros de USDA lo dice; el que no matcheó, no", async () => {
+  (listFoods as jest.Mock).mockResolvedValue([
+    food("1", "Muesli Lidl", "label", "usda"),
+    food("2", "Almendra", "ai", null),
+  ]);
+  await render(<CatalogoScreen />);
+  await waitFor(() => expect(screen.getByText("Muesli Lidl")).toBeTruthy());
+  // Un solo chip USDA: el de la almendra no existe porque no hubo match.
+  expect(screen.getAllByTestId("source-chip-micros-usda").length).toBe(1);
 });

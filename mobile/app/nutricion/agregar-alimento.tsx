@@ -4,7 +4,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { getBackendUrl } from "../../src/storage/config";
 import { extractFood, describeFood, createFood, getFood, updateFood } from "../../src/api/nutrition";
-import type { FoodBasis, FoodExtraction, FoodSource } from "@pulsia/shared";
+import { NUTRIENT_KEYS } from "@pulsia/shared";
+import type { FoodBasis, FoodExtraction, NutrientValues, SourceMacros, SourceMicros } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 import { SourceChip } from "../../src/nutrition/SourceChip";
@@ -13,18 +14,65 @@ import { NutrientFlags } from "../../src/nutrition/NutrientFlags";
 const num = (s: string) => Number(s.replace(",", "."));
 const optNum = (s: string) => (s.trim() === "" ? null : num(s));
 
+// El formulario habla en SAL: es lo que dice el envase, lo que el usuario reconoce y la unidad de
+// la referencia de la OMS. Lo que se persiste es SODIO (es lo que entrega USDA y es la fuente
+// única). Las dos puntas de la conversión viven acá, y las usan el campo, el aviso "Sodio ≈ …" y
+// el semáforo: una segunda cuenta escrita a mano en cualquiera de los tres es cómo la pantalla
+// termina mostrando un número y guardando otro.
+const SALT_TO_SODIUM = 2.5; // NaCl / Na, el mismo factor que saltGFromSodiumMg en shared
+
+// Sal (g) → sodio (mg), a partir del texto crudo del campo. null si está vacío o no es un número.
+function sodiumMgFromField(raw: string): number | null {
+  const v = optNum(raw);
+  if (v == null || !Number.isFinite(v)) return null;
+  return Math.round((v / SALT_TO_SODIUM) * 1000);
+}
+
+// Sodio (mg) → texto del campo de sal. NO usa `saltGFromSodiumMg` de shared a propósito: ese
+// redondea a 1 decimal porque es para MOSTRAR, y con esa precisión abrir y guardar un alimento de
+// 12 mg de sodio lo dejaría en 0 g de sal → 0 mg. Acá el número vuelve al backend, así que la ida
+// y vuelta se hace a 3 decimales (0,001 g de sal = 0,4 mg de sodio) y no pierde el dato.
+function saltFieldFromSodiumMg(mg: number | null | undefined): string {
+  if (mg == null || !Number.isFinite(mg)) return "";
+  return String(Math.round(mg * SALT_TO_SODIUM) / 1000);
+}
+
+// Los seis micros "de etiqueta" que el formulario edita. Los otros 24 (vitaminas y minerales) no
+// se cargan a mano: salen de USDA y viajan de largo (ver `carried`).
+const FORM_NUTRIENTS = ["saturated_fat_g", "sugars_g", "fiber_g", "sodium_mg", "cholesterol_mg", "water_ml"] as const;
+const CARRIED_KEYS = NUTRIENT_KEYS.filter((k) => !(FORM_NUTRIENTS as readonly string[]).includes(k));
+
+// Lo que el formulario NO edita pero tiene que devolver intacto al guardar. El PATCH del backend
+// REEMPLAZA la fila entera (nutrientsToColumns escribe null explícito en lo ausente, a propósito),
+// así que si esto no viaja de vuelta, corregirle una tilde al nombre de un alimento le borra las
+// vitaminas y minerales que trajo de USDA.
+type Carried = { sourceMicros: SourceMicros; usdaFdcId: number | null; micros: Partial<NutrientValues> };
+const NO_CARRIED: Carried = { sourceMicros: null, usdaFdcId: null, micros: {} };
+
+function carriedFrom(src: Partial<NutrientValues> & { sourceMicros?: SourceMicros; usdaFdcId?: number | null }): Carried {
+  const micros: Record<string, number | null> = {};
+  for (const k of CARRIED_KEYS) {
+    const v = (src as Record<string, number | null | undefined>)[k];
+    micros[k] = v ?? null;
+  }
+  return { sourceMicros: src.sourceMicros ?? null, usdaFdcId: src.usdaFdcId ?? null, micros };
+}
+
 type Form = {
   name: string; basis: FoodBasis; kcal: string; protein_g: string; carbs_g: string; fat_g: string;
   saturated_fat_g: string; sugars_g: string; fiber_g: string; salt_g: string;
   cholesterol_mg: string; water_ml: string;
-  unitWeightG: string; source: FoodSource;
+  unitWeightG: string; sourceMacros: SourceMacros;
 };
-const EMPTY: Form = { name: "", basis: "per_100g", kcal: "", protein_g: "", carbs_g: "", fat_g: "", saturated_fat_g: "", sugars_g: "", fiber_g: "", salt_g: "", cholesterol_mg: "", water_ml: "", unitWeightG: "", source: "estimate" };
+// El alta arranca en "manual": si el usuario no toca la IA, el dato lo está cargando él. Antes
+// arrancaba en "estimate", que era el mismo valor que dejaba la IA — no se podían distinguir.
+const EMPTY: Form = { name: "", basis: "per_100g", kcal: "", protein_g: "", carbs_g: "", fat_g: "", saturated_fat_g: "", sugars_g: "", fiber_g: "", salt_g: "", cholesterol_mg: "", water_ml: "", unitWeightG: "", sourceMacros: "manual" };
 
 export default function AgregarAlimentoScreen() {
   const screenPad = useScreenPadding(spacing.lg);
   const baseUrl = useRef<string | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
+  const [carried, setCarried] = useState<Carried>(NO_CARRIED);
   const [foodText, setFoodText] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -38,16 +86,10 @@ export default function AgregarAlimentoScreen() {
       baseUrl.current = url;
       if (foodId) {
         try {
-          const f = await getFood(url, foodId);
-          const numStr = (v: number | null | undefined) => (v == null ? "" : String(v));
-          setForm({
-            name: f.name, basis: f.basis, kcal: String(f.kcal), protein_g: String(f.protein_g),
-            carbs_g: String(f.carbs_g), fat_g: String(f.fat_g),
-            saturated_fat_g: numStr(f.saturated_fat_g), sugars_g: numStr(f.sugars_g),
-            fiber_g: numStr(f.fiber_g), salt_g: numStr(f.salt_g),
-            cholesterol_mg: numStr(f.cholesterol_mg), water_ml: numStr(f.water_ml),
-            unitWeightG: f.unitWeightG == null ? "" : String(f.unitWeightG), source: f.source,
-          });
+          // Un Food es un FoodExtraction con id y createdAt, así que el alimento guardado se carga
+          // por el MISMO camino que lo que devuelve la IA: dos mapeos paralelos son dos lugares
+          // donde olvidarse de un campo nuevo.
+          prefillFrom(await getFood(url, foodId));
         } catch (e) { setError((e as Error).message); }
       }
       setLoading(false);
@@ -62,10 +104,11 @@ export default function AgregarAlimentoScreen() {
       name: ex.name, basis: ex.basis, kcal: String(ex.kcal), protein_g: String(ex.protein_g),
       carbs_g: String(ex.carbs_g), fat_g: String(ex.fat_g),
       saturated_fat_g: numStr(ex.saturated_fat_g), sugars_g: numStr(ex.sugars_g),
-      fiber_g: numStr(ex.fiber_g), salt_g: numStr(ex.salt_g),
+      fiber_g: numStr(ex.fiber_g), salt_g: saltFieldFromSodiumMg(ex.sodium_mg),
       cholesterol_mg: numStr(ex.cholesterol_mg), water_ml: numStr(ex.water_ml),
-      unitWeightG: ex.unitWeightG == null ? "" : String(ex.unitWeightG), source: ex.source,
+      unitWeightG: ex.unitWeightG == null ? "" : String(ex.unitWeightG), sourceMacros: ex.sourceMacros,
     });
+    setCarried(carriedFrom(ex));
   }
 
   async function describeAndPrefill() {
@@ -111,19 +154,27 @@ export default function AgregarAlimentoScreen() {
 
   async function save() {
     setError(null);
+    const saltG = optNum(form.salt_g);
     const input = {
+      // Los 24 micros que el formulario no edita van PRIMERO: son los que vienen de USDA y el
+      // PATCH reemplaza la fila entera. Lo que sigue (los seis de etiqueta) es lo que el usuario
+      // sí puede tocar, y pisa cualquier coincidencia.
+      ...carried.micros,
       name: form.name.trim(), basis: form.basis, kcal: num(form.kcal), protein_g: num(form.protein_g),
       carbs_g: num(form.carbs_g), fat_g: num(form.fat_g),
       saturated_fat_g: optNum(form.saturated_fat_g), sugars_g: optNum(form.sugars_g),
-      fiber_g: optNum(form.fiber_g), salt_g: optNum(form.salt_g),
+      fiber_g: optNum(form.fiber_g), sodium_mg: sodiumMgFromField(form.salt_g),
       cholesterol_mg: optNum(form.cholesterol_mg), water_ml: optNum(form.water_ml),
-      unitWeightG: form.unitWeightG.trim() === "" ? null : num(form.unitWeightG), source: form.source,
+      unitWeightG: form.unitWeightG.trim() === "" ? null : num(form.unitWeightG),
+      sourceMacros: form.sourceMacros, sourceMicros: carried.sourceMicros, usdaFdcId: carried.usdaFdcId,
     };
     if (!input.name || [input.kcal, input.protein_g, input.carbs_g, input.fat_g].some((n) => Number.isNaN(n) || n < 0)) {
       setError("Completá nombre y macros (kcal/proteína/carbos/grasa) con números válidos."); return;
     }
     // Los micros son opcionales: si el usuario tipeó algo, tiene que ser un número >= 0.
-    for (const [label, v, raw] of [["saturadas", input.saturated_fat_g, form.saturated_fat_g], ["azúcares", input.sugars_g, form.sugars_g], ["fibra", input.fiber_g, form.fiber_g], ["sal", input.salt_g, form.salt_g], ["colesterol", input.cholesterol_mg, form.cholesterol_mg], ["agua", input.water_ml, form.water_ml]] as const) {
+    // La sal se valida en SAL, no en sodio: el mensaje de error tiene que hablar del campo que el
+    // usuario ve. `saltG` es el valor crudo del campo, antes de convertir.
+    for (const [label, v, raw] of [["saturadas", input.saturated_fat_g, form.saturated_fat_g], ["azúcares", input.sugars_g, form.sugars_g], ["fibra", input.fiber_g, form.fiber_g], ["sal", saltG, form.salt_g], ["colesterol", input.cholesterol_mg, form.cholesterol_mg], ["agua", input.water_ml, form.water_ml]] as const) {
       if (raw.trim() !== "" && (v == null || Number.isNaN(v) || v < 0)) { setError(`El valor de ${label} tiene que ser un número mayor o igual a 0.`); return; }
     }
     if (form.unitWeightG.trim() !== "" && (input.unitWeightG == null || Number.isNaN(input.unitWeightG) || input.unitWeightG <= 0)) {
@@ -139,6 +190,10 @@ export default function AgregarAlimentoScreen() {
       setError((e as Error).message); setSaving(false);
     }
   }
+
+  // El sodio que se va a guardar, derivado del campo de sal. Lo comparten el aviso "Sodio ≈ …" y
+  // el semáforo.
+  const sodiumMg = sodiumMgFromField(form.salt_g);
 
   const field = (label: string, key: keyof Form, keyboard: "default" | "numeric" = "default") => (
     <View style={{ gap: spacing.xs }}>
@@ -205,7 +260,7 @@ export default function AgregarAlimentoScreen() {
       )}
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
 
-      {form.name.trim() !== "" && <SourceChip source={form.source} />}
+      {form.name.trim() !== "" && <SourceChip sourceMacros={form.sourceMacros} sourceMicros={carried.sourceMicros} />}
       {field("Nombre", "name")}
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
         {chip("Sólido (100g)", form.basis === "per_100g", () => setForm((f) => ({ ...f, basis: "per_100g" })))}
@@ -219,9 +274,10 @@ export default function AgregarAlimentoScreen() {
       {field("Azúcares (g, opcional)", "sugars_g", "numeric")}
       {field("Fibra (g, opcional)", "fiber_g", "numeric")}
       {field("Sal (g, opcional)", "salt_g", "numeric")}
-      {form.salt_g.trim() !== "" && Number(form.salt_g.replace(",", ".")) >= 0 && (
+      {/* Lo que se guarda es este número, no los gramos de sal: por eso se muestra. */}
+      {sodiumMg != null && sodiumMg >= 0 && (
         <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-          Sodio ≈ {Math.round((Number(form.salt_g.replace(",", ".")) / 2.5) * 1000)} mg / 100{form.basis === "per_100ml" ? "ml" : "g"}
+          Sodio ≈ {sodiumMg} mg / 100{form.basis === "per_100ml" ? "ml" : "g"}
         </Text>
       )}
       {field(`Colesterol (mg, opcional)`, "cholesterol_mg", "numeric")}
@@ -245,7 +301,10 @@ export default function AgregarAlimentoScreen() {
               fat_g: form.fat_g.trim() === "" ? NaN : num(form.fat_g),
               saturated_fat_g: optNum(form.saturated_fat_g),
               sugars_g: optNum(form.sugars_g),
-              salt_g: optNum(form.salt_g),
+              // El semáforo razona en SAL pero pide SODIO (ver FoodFlagsInput): la conversión es
+              // la misma que la del guardado, así que el chip no puede juzgar un valor distinto
+              // del que se persiste.
+              sodium_mg: sodiumMg,
               cholesterol_mg: optNum(form.cholesterol_mg),
               fiber_g: optNum(form.fiber_g),
             }}
