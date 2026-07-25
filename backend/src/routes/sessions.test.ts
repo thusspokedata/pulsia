@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 import { createApp } from "../app";
-import { buildStrengthFitBase64, buildFitFixtureBase64 } from "../cardio/fitFixture";
-import { workoutSession } from "../db/schema";
+import { buildStrengthFitBase64, buildStrengthFitWithHrBase64, buildFitFixtureBase64 } from "../cardio/fitFixture";
+import { workoutSession, setLog } from "../db/schema";
 
 const KEY = "a".repeat(64);
 const SID = "11111111-1111-4111-8111-111111111111";
@@ -190,6 +190,7 @@ test("DELETE /sessions/:id inexistente devuelve 404", async () => {
 
 // ── Import de fuerza del .FIT ─────────────────────────────────────────────────────────────────
 const FIT_SID = "66666666-6666-4666-8666-666666666666";
+const FIT_SID2 = "77777777-7777-4777-8777-777777777777";
 const postJson = (app: any, path: string, body: any) =>
   app.request(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
@@ -219,6 +220,18 @@ test("POST /sessions/from-fit persiste el entrenamiento (borra + reinserta en wo
   expect((await res.json()).id).toBe(FIT_SID);
   expect(db._deletes.some((d: any) => d.table === workoutSession)).toBe(true);
   expect(db._inserts.some((i: any) => i.table === workoutSession)).toBe(true);
+});
+
+test("POST /sessions/from-fit guarda las series con FC y la sesión con hrSeries", async () => {
+  const db = fakeDb();
+  const app = createApp(deps(db) as any);
+  const res = await postJson(app, "/sessions/from-fit", { fitBase64: buildStrengthFitWithHrBase64(), id: FIT_SID2, location: "gym" });
+  expect(res.status).toBe(200);
+  // el insert de workout_session lleva hrSeries; algún set_log lleva hrAvg (la serie con FC en su intervalo)
+  const wsInsert = db._inserts.find((i: any) => i.table === workoutSession);
+  expect(wsInsert.rows[0].hrSeries).toBeTruthy();
+  const setInserts = db._inserts.filter((i: any) => i.table === setLog);
+  expect(setInserts.some((i: any) => i.rows[0].hrAvg != null)).toBe(true);
 });
 
 test("POST /sessions/from-fit con un id de otro usuario devuelve 409", async () => {

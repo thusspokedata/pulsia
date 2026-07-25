@@ -45,7 +45,7 @@ export interface FitFixtureOpts {
   strength?: {
     workoutName?: string;
     titles?: { messageIndex: number; exerciseCategory: string; exerciseName: number; wktStepName: string }[];
-    sets?: { setType: "active" | "rest"; category?: string; categorySubtype?: number; repetitions?: number; weight?: number; duration?: number }[];
+    sets?: { setType: "active" | "rest"; category?: string; categorySubtype?: number; repetitions?: number; weight?: number; duration?: number; startTimeMs?: number }[];
   };
 }
 
@@ -234,7 +234,7 @@ export function buildFitFixture(opts: FitFixtureOpts = {}): Uint8Array {
       });
     }
     for (const s of st.sets ?? []) {
-      const set: Record<string, unknown> = { mesgNum: Profile.MesgNum.SET, setType: s.setType, startTime: new Date(startTimeMs) };
+      const set: Record<string, unknown> = { mesgNum: Profile.MesgNum.SET, setType: s.setType, startTime: new Date(s.startTimeMs ?? startTimeMs) };
       if (s.category != null) set.category = [s.category];
       if (s.categorySubtype != null) set.categorySubtype = [s.categorySubtype];
       if (s.repetitions != null) set.repetitions = s.repetitions;
@@ -284,6 +284,37 @@ export function buildStrengthFitBase64(): string {
         { setType: "rest", duration: 60 },
         { setType: "active", category: "shoulderPress", categorySubtype: 8, repetitions: 8, weight: 22, duration: 28 },
         { setType: "active", category: "plank", categorySubtype: 43, duration: 60 }, // isométrico
+      ],
+    },
+  });
+}
+
+// .FIT de FUERZA sintético CON FC continua y series a tiempos distintos, para testear que la ruta
+// extrae la FC y la persiste (hrSeries de la sesión + hrAvg por serie). Los 2 records de FC caen
+// DENTRO del intervalo de la serie 1 ([base, base+30000]) → su promedio es 110.
+export function buildStrengthFitWithHrBase64(): string {
+  const base = 1_700_000_000_000;
+  return buildFitFixtureBase64({
+    sport: "training",
+    subSport: "strengthTraining",
+    includeExtras: false,
+    startTimeMs: base,
+    totalTimerTime: 1200,
+    hr: [
+      { atMs: base + 5_000, bpm: 100 },
+      { atMs: base + 10_000, bpm: 120 },
+    ],
+    strength: {
+      workoutName: "Push A",
+      titles: [
+        { messageIndex: 0, exerciseCategory: "shoulderPress", exerciseName: 8, wktStepName: "Dumbbell Push Press" },
+        { messageIndex: 1, exerciseCategory: "plank", exerciseName: 43, wktStepName: "Plank" },
+      ],
+      sets: [
+        { setType: "active", category: "shoulderPress", categorySubtype: 8, repetitions: 8, weight: 20, duration: 30, startTimeMs: base },
+        { setType: "rest", duration: 60, startTimeMs: base + 30_000 },
+        { setType: "active", category: "shoulderPress", categorySubtype: 8, repetitions: 8, weight: 22, duration: 28, startTimeMs: base + 100_000 },
+        { setType: "active", category: "plank", categorySubtype: 43, duration: 60, startTimeMs: base + 200_000 }, // isométrico
       ],
     },
   });
