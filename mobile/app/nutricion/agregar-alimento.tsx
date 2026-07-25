@@ -5,7 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { getBackendUrl } from "../../src/storage/config";
 import {
   extractFood, describeFood, createFood, getFood, updateFood,
-  getUsdaEntry, assembleUsdaFood, type UsdaEntry,
+  getUsdaEntry, assembleUsdaFood, aiMicrosForFood, type UsdaEntry,
 } from "../../src/api/nutrition";
 import { NUTRIENT_KEYS } from "@pulsia/shared";
 import type { FoodBasis, FoodExtraction, FoodIdentification, NutrientValues, SourceMacros, SourceMicros } from "@pulsia/shared";
@@ -96,6 +96,7 @@ export default function AgregarAlimentoScreen() {
   const [entradaUsda, setEntradaUsda] = useState<UsdaEntry | null>(null);
   const [corrigiendo, setCorrigiendo] = useState(false);
   const [remezclando, setRemezclando] = useState(false);
+  const [estimandoIA, setEstimandoIA] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -171,6 +172,23 @@ export default function AgregarAlimentoScreen() {
       setError((e as Error).message);
     } finally {
       setRemezclando(false);
+    }
+  }
+
+  /** El usuario dijo "ninguno, que la IA complete": estima los micros y recarga TODO el form. */
+  async function completarConIA() {
+    if (identification == null || !baseUrl.current) return;
+    setError(null);
+    setEstimandoIA(true);
+    try {
+      // prefillFrom setea también `carried` (sourceMicros "ai" + los micros del estimado), así que
+      // al guardar el alimento queda marcado como estimado por IA.
+      prefillFrom(await aiMicrosForFood(baseUrl.current, identification));
+      setCorrigiendo(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setEstimandoIA(false);
     }
   }
 
@@ -299,6 +317,13 @@ export default function AgregarAlimentoScreen() {
           <Pressable testID="usda-no-es-este" accessibilityRole="button" onPress={() => setCorrigiendo((v) => !v)}>
             <Text style={{ color: colors.accentText, fontSize: 12, fontWeight: "600" }}>
               {carried.usdaFdcId != null ? "¿no es este?" : "elegir a mano"}
+            </Text>
+          </Pressable>
+        )}
+        {puedeCorregir && (
+          <Pressable testID="ai-completar" accessibilityRole="button" disabled={estimandoIA} onPress={() => void completarConIA()}>
+            <Text style={{ color: colors.accentText, fontSize: 12, fontWeight: "600", opacity: estimandoIA ? 0.5 : 1 }}>
+              {estimandoIA ? "Estimando…" : "que la IA complete"}
             </Text>
           </Pressable>
         )}
