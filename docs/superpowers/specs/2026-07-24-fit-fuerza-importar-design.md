@@ -59,7 +59,15 @@ reloj. El modelo `workout_session` → `session_exercise` → `set_log` ya repre
 | B — tabla nueva `imported_strength_session` | Estructura de series propia. | Hay que **re-cablear** trends, informe, historial, resumen para que la miren. Duplica el modelo de series. |
 | C — extender `cardio_activity` con sets en jsonb | El .FIT ya cae ahí. | El jsonb no se integra con `set_log` que esperan las tendencias. Mezcla dos dominios. |
 
-### Recomendación y su costo
+### ✅ APROBADO por el owner (2026-07-24): Opción A — `workout_session` relajado
+
+Auditoría confirmada: **nada dereferencia `programId`** (no hay JOIN con `programs`), `weekNumber` no
+se lee, y el único uso de `dayLabel` es cosmético (`ai/history.ts:29`, se le pone fallback).
+`computePerformanceTrends` y el informe son program-independent. Relajar es seguro. Implementación en
+dos PRs: **backend** (migración + transformación + rutas, no rompe el móvil viejo) → **móvil** (UI de
+import de fuerza, OTA). Plan backend: `2026-07-24-fit-fuerza-persistencia-backend.md`.
+
+### Recomendación y su costo (registro de la decisión)
 
 **Opción A.** Es la que hace al import un ciudadano de primera clase igual que una sesión de la app,
 sin re-implementar nada downstream. El objetivo del owner (que alimente futuros planes) **requiere**
