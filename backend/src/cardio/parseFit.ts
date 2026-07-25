@@ -1,6 +1,7 @@
 import { Decoder, Stream, Utils } from "@garmin/fitsdk";
 import { CardioFitPreviewSchema } from "@pulsia/shared";
 import type { CardioType, CardioFitPreview, CardioSamples } from "@pulsia/shared";
+import { extractHrSamples } from "./hrSamples";
 
 // Traduce el `sport` (y a veces `subSport`) del .FIT a nuestro CardioType. Aproximado a propósito:
 // el usuario corrige el tipo en el preview. Garmin marca caminatas como "hiking" y la elíptica como
@@ -125,9 +126,9 @@ export function parseFit(buffer: Buffer): CardioFitPreview {
 
   const records = (messages.recordMesgs ?? []) as unknown as Array<Record<string, unknown>>;
   // Descartamos records anteriores al inicio (FC de preparación): darían t < 0, que viola el schema.
-  const hrSeries = records
-    .filter((r) => typeof r.heartRate === "number" && r.timestamp instanceof Date && (r.timestamp as Date).getTime() >= startedAt)
-    .map((r) => ({ t: (r.timestamp as Date).getTime() - startedAt, bpm: Math.round(r.heartRate as number) }));
+  const hrSeries = extractHrSamples(messages)
+    .filter((s) => s.tMs >= startedAt)
+    .map((s) => ({ t: s.tMs - startedAt, bpm: s.bpm }));
 
   const samples = buildSamples(records, startedAt);
 
