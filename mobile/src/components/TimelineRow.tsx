@@ -59,7 +59,7 @@ export function TimelineRow({ item, disabled, onOpenSession, onDeleteSession, on
       <Pressable testID={`hist-item-${s.id}`} onPress={() => onOpenSession(s)} disabled={disabled} style={rowStyle}>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={{ color: colors.text, fontSize: 15, fontWeight: "600" }} numberOfLines={1}>
-            {s.dayLabel}
+            {s.dayLabel ?? "Entreno"}
           </Text>
           <Text style={{ color: colors.textMuted, fontSize: 12 }}>{fmtDate(s.startedAt)}</Text>
         </View>

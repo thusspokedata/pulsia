@@ -191,7 +191,8 @@ export function summarize(session: WorkoutSession): SessionSummary {
   });
 
   return {
-    dayLabel: session.dayLabel,
+    // dayLabel es nullable desde que se admiten entrenamientos importados del .FIT (sin programa).
+    dayLabel: session.dayLabel ?? "Entreno",
     startedAt: session.startedAt,
     durationMs,
     workMs,
