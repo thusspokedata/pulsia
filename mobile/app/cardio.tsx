@@ -5,6 +5,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { CardioActivitySchema, CARDIO_TYPES, CARDIO_LABELS, type CardioActivity, type CardioType, type CardioFitPreview } from "@pulsia/shared";
 import { createCardio, getCardioById, updateCardio, deleteCardio, parseFitCardio } from "../src/api/cardio";
+import { previewFitStrength, importFitStrength, type FitStrengthPreviewView } from "../src/api/sessions";
 import { buildFitActivity } from "../src/cardio/buildFitActivity";
 import { getBackendUrl } from "../src/storage/config";
 import { newSessionId } from "../src/session/id";
@@ -55,6 +56,11 @@ export default function CardioScreen() {
   const [importing, setImporting] = useState(false);
   // El base64 del archivo elegido, para mandarlo al confirmar (POST /cardio) SIN releerlo del disco.
   const [fitBase64, setFitBase64] = useState<string | null>(null);
+  // Si el .FIT importado es un entrenamiento de FUERZA, su preview (ejercicios/series) va acá, y la
+  // pantalla muestra la vista de fuerza en vez de la de cardio.
+  const [strengthPreview, setStrengthPreview] = useState<FitStrengthPreviewView | null>(null);
+  const [strengthLocation, setStrengthLocation] = useState<"gym" | "home">("gym");
+  const [savingStrength, setSavingStrength] = useState(false);
 
   // En modo edición guardamos la actividad cargada para mostrar los campos NO
   // editables (fecha, FC media) como solo-lectura: updateCardio solo parchea
@@ -133,9 +139,16 @@ export default function CardioScreen() {
     setImporting(true);
     try {
       const base64 = await FileSystem.readAsStringAsync(picked.assets[0].uri, { encoding: "base64" });
+      // Primero probamos si es un entrenamiento de FUERZA. Si lo es, se guarda como entrenamiento
+      // (con ejercicios/series), no como cardio. Si no (null = 422), seguimos el flujo de cardio.
+      const strength = await previewFitStrength(url, base64);
+      setFitBase64(base64);
+      if (strength) {
+        setStrengthPreview(strength);
+        return;
+      }
       const preview = await parseFitCardio(url, base64);
       setFitPreview(preview);
-      setFitBase64(base64);
       // Prefill de los campos editables con lo que midió el reloj.
       setType(preview.type);
       setDurationText(numText(Math.round(preview.durationMs / 60000)));
@@ -145,6 +158,22 @@ export default function CardioScreen() {
       setError((e as Error).message || "No se pudo leer el archivo .FIT");
     } finally {
       setImporting(false);
+    }
+  }
+
+  // Guarda el .FIT de fuerza como entrenamiento (POST /sessions/from-fit).
+  async function onSaveStrength() {
+    const url = baseUrl.current;
+    if (!url || !fitBase64) return;
+    setError(null);
+    setSavingStrength(true);
+    try {
+      await importFitStrength(url, { fitBase64, id: newSessionId(), location: strengthLocation });
+      router.back();
+    } catch (e) {
+      setError((e as Error).message || "No se pudo guardar el entrenamiento");
+    } finally {
+      setSavingStrength(false);
     }
   }
 
@@ -259,6 +288,52 @@ export default function CardioScreen() {
       setError((e as Error).message || "No se pudo borrar la actividad");
       setSaving(false);
     }
+  }
+
+  // Vista de FUERZA: el .FIT importado trae ejercicios y series. Se guarda como entrenamiento, no
+  // como cardio, así que reemplaza toda la pantalla en vez de mezclarse con los campos de cardio.
+  if (strengthPreview) {
+    return (
+      <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.lg }}>
+        <Pressable onPress={() => router.back()} style={{ paddingVertical: spacing.xs }}>
+          <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: "600" }}>← Volver</Text>
+        </Pressable>
+        <Text style={{ fontSize: 20, fontWeight: "500", color: colors.text }}>Entrenamiento de fuerza</Text>
+        <Text testID="strength-workout-name" style={{ color: colors.textMuted, fontSize: 13 }}>
+          {strengthPreview.workoutName ?? "Importado del reloj"} · {strengthPreview.exercises.length} ejercicios · {strengthPreview.totalSets} series
+        </Text>
+
+        {strengthPreview.exercises.map((ex, i) => (
+          <View key={i} testID={`strength-exercise-${i}`} style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.xs }}>
+            <Text style={{ color: colors.text, fontWeight: "600" }}>{ex.displayName ?? ex.category}</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 13 }}>
+              {ex.sets.map((s) => (s.reps != null ? `${s.reps}×${s.weightKg ?? 0}kg` : `${Math.round(s.durationMs / 1000)}s`)).join("  ·  ")}
+            </Text>
+          </View>
+        ))}
+
+        <View style={{ gap: spacing.sm }}>
+          <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>Lugar</Text>
+          <ChipGroup
+            single
+            options={[{ value: "gym", label: "Gimnasio" }, { value: "home", label: "Casa" }]}
+            selected={[strengthLocation]}
+            onChange={(v) => setStrengthLocation((v[0] as "gym" | "home") ?? "gym")}
+          />
+        </View>
+
+        {error && <Text style={{ color: colors.danger }}>{error}</Text>}
+
+        <Pressable
+          testID="strength-save"
+          onPress={onSaveStrength}
+          disabled={savingStrength}
+          style={{ backgroundColor: colors.accent, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center", opacity: savingStrength ? 0.6 : 1 }}
+        >
+          {savingStrength ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "600" }}>Guardar entrenamiento</Text>}
+        </Pressable>
+      </ScrollView>
+    );
   }
 
   return (
