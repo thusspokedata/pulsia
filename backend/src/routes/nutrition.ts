@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { FoodInputSchema, FoodIdentificationSchema, MealInputSchema, WaterLogInputSchema, NutritionGoalInputSchema, ReportGenerateInputSchema, type ReportKind, type FoodExtraction, type FoodIdentification } from "@pulsia/shared";
+import { FoodInputSchema, FoodIdentificationSchema, MealInputSchema, WaterLogInputSchema, NutritionGoalInputSchema, ReportGenerateInputSchema, NUTRIENT_KEYS, type ReportKind, type FoodExtraction, type FoodIdentification, type FoodMicrosEstimate } from "@pulsia/shared";
 import { searchUsda, getUsdaFood, type UsdaCandidate } from "../usda/matcher";
 import { assembleFoodExtraction, assembleFoodWithAiMicros } from "../nutrition/assemble";
 import {
@@ -377,12 +377,13 @@ export function nutritionRoutes(deps: AppDeps) {
     }
   });
 
-  // Paso 2: aplicar. A diferencia de usda-apply (que re-deriva del fdcId), el estimado de IA no es
-  // determinístico: se persiste la propuesta APROBADA por el usuario, validada por FoodInputSchema.
-  // Es equivalente a una edición manual (PATCH /foods/:id), pero además re-snapshotea las comidas.
-  // Se FUERZAN server-side sourceMicros "ai" y usdaFdcId null, y se restaura el sourceMacros del
-  // alimento guardado: un body adulterado no puede marcar el estimado como USDA ni cambiar la
-  // procedencia de los macros.
+  // Paso 2: aplicar. Esta ruta APLICA MICROS, no edita el alimento entero: la identidad (nombre,
+  // basis, unitWeightG) y los macros salen del alimento GUARDADO (`f`), y del body se toman SOLO los
+  // 30 valores de micronutrientes de la propuesta aprobada (el estimado de IA no es determinístico,
+  // así que no se puede re-derivar server-side como el de USDA). Se re-usa `assembleFoodWithAiMicros`
+  // —la misma mezcla que la propuesta— sobre la identificación reconstruida desde `f`, así un body
+  // viejo/adulterado no puede pisar nombre/macros ni marcar el bloque como USDA. Se restaura el
+  // `sourceMacros` real del alimento (identificationFromFood mapea "manual"→"label"). Re-snapshotea.
   r.post("/foods/:id/ai-micros-apply", async (c) => {
     const userId = c.get("userId");
     const foodId = c.req.param("id");
@@ -390,7 +391,11 @@ export function nutritionRoutes(deps: AppDeps) {
     if (!parsed.success) return c.json({ error: "Body inválido", detail: parsed.error.issues }, 400);
     const f = await getFood(deps.db, userId, foodId);
     if (!f) return c.json({ error: "No encontrado" }, 404);
-    const paraGuardar = { ...parsed.data.food, sourceMacros: f.sourceMacros, sourceMicros: "ai" as const, usdaFdcId: null };
+    const bodyRec = parsed.data.food as unknown as Record<string, number | null | undefined>;
+    const micros: FoodMicrosEstimate = {};
+    for (const k of NUTRIENT_KEYS) (micros as Record<string, number | null>)[k] = bodyRec[k] ?? null;
+    const final = assembleFoodWithAiMicros(identificationFromFood(f, f.name), micros);
+    const paraGuardar = { ...final, sourceMacros: f.sourceMacros };
     try {
       return c.json(await deps.db.transaction(async (tx) => {
         const fila = await updateFoodRow(tx, userId, foodId, paraGuardar);

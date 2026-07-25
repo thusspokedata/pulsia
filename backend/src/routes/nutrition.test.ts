@@ -1088,10 +1088,12 @@ const postAiApply = (app: any, foodBody: unknown, id = FOOD_ID) =>
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ food: foodBody }),
   });
 
-// FoodInput (snake_case) válido para el apply; el body miente sourceMicros/usdaFdcId a propósito.
+// FoodInput (snake_case) para el apply; MIENTE en identidad, macros, sourceMicros y usdaFdcId a
+// propósito: el server debe ignorar todo eso (identidad+macros salen del alimento guardado) y tomar
+// SOLO los micros (vitamin_c_mg).
 const aiFoodBody = {
-  name: "Almendra", basis: "per_100g", kcal: 579, protein_g: 21, carbs_g: 22, fat_g: 50,
-  unitWeightG: 1.2, sourceMacros: "ai", sourceMicros: "usda", usdaFdcId: 123, vitamin_c_mg: 8,
+  name: "HACKEADO", basis: "per_100ml", kcal: 999, protein_g: 1, carbs_g: 1, fat_g: 1,
+  unitWeightG: 500, sourceMacros: "label", sourceMicros: "usda", usdaFdcId: 123, vitamin_c_mg: 8,
 };
 
 test("ai-micros-proposal estima y cuenta comidas, sin escribir", async () => {
@@ -1106,7 +1108,7 @@ test("ai-micros-proposal estima y cuenta comidas, sin escribir", async () => {
   expect(db._updates).toHaveLength(0); // NO escribió
 });
 
-test("ai-micros-apply fuerza sourceMicros ai/usdaFdcId null y re-snapshotea comidas", async () => {
+test("ai-micros-apply toma identidad+macros del guardado y SOLO los micros del body", async () => {
   const db = refreshDb();
   const res = await postAiApply(createApp(deps(db, refreshAi)), aiFoodBody);
   expect(res.status).toBe(200);
@@ -1114,4 +1116,22 @@ test("ai-micros-apply fuerza sourceMicros ai/usdaFdcId null y re-snapshotea comi
   const guardado = updatesDe(db, food)[0].values;
   expect(guardado.sourceMicros).toBe("ai");     // forzado, aunque el body dijo "usda"
   expect(guardado.usdaFdcId).toBeNull();         // forzado, aunque el body dijo 123
+  expect(guardado.vitaminCMg).toBe(8);           // el micro SÍ sale del body (la propuesta aprobada)
+  expect(guardado.name).toBe("Almendra");        // identidad del alimento guardado, NO "HACKEADO"
+  expect(guardado.basis).toBe("per_100g");       // del guardado, NO "per_100ml"
+  expect(guardado.kcal).toBe(579);               // macro del guardado, NO 999
+  expect(guardado.sourceMacros).toBe("ai");      // del guardado (almendraRow), NO "label"
+});
+
+test("ai-micros-proposal de un alimento de OTRO usuario → 404", async () => {
+  const db = refreshDb({ foodRow: { ...almendraRow, userId: OTRO_USUARIO } });
+  const res = await postAiProposal(createApp(deps(db, refreshAi)));
+  expect(res.status).toBe(404);
+});
+
+test("ai-micros-apply de un alimento de OTRO usuario → 404 y no escribe nada", async () => {
+  const db = refreshDb({ foodRow: { ...almendraRow, userId: OTRO_USUARIO } });
+  const res = await postAiApply(createApp(deps(db, refreshAi)), aiFoodBody);
+  expect(res.status).toBe(404);
+  expect(db._updates).toHaveLength(0);
 });
