@@ -90,6 +90,12 @@ test("sets con weightKg/rpe null no rompen", () => {
   expect(out.length).toBeGreaterThan(0);
 });
 
+test("dayLabel null (sesión importada) muestra 'Entreno', no 'null'", () => {
+  const out = buildTrainingHistorySummary([sess({ dayLabel: null })]);
+  expect(out).toContain("Entreno");
+  expect(out).not.toContain("null");
+});
+
 test("marca los ejercicios saltados como (saltado)", () => {
   const s = sess();
   s.exercises[0] = { ...s.exercises[0], skipped: true, sets: [] };
