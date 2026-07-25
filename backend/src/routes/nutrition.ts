@@ -39,6 +39,9 @@ const AssembleSchema = z.object({
 // Completar con IA: el usuario descartó USDA y quiere que la IA estime el bloque de micros.
 const AiMicrosSchema = z.object({ identification: FoodIdentificationSchema });
 
+// Completar con IA (alimento GUARDADO), paso 2: la propuesta ya aprobada por el usuario.
+const AiApplySchema = z.object({ food: FoodInputSchema });
+
 // El alimento existía cuando lo leímos, pero el UPDATE de la transacción ya no lo encontró: se
 // borró en esa ventana. Se señala con un error tipado —el mismo idioma que `MealValidationError`
 // en este archivo— en vez de devolver un resultado: además de mapearse a 404, tirar aborta la
@@ -347,6 +350,56 @@ export function nutritionRoutes(deps: AppDeps) {
     } catch (e) {
       if (e instanceof AlimentoDesaparecidoError) return c.json({ error: "No encontrado" }, 404);
       throw e; // cualquier otra falla sigue siendo un 500, como antes
+    }
+  });
+
+  // ---- Completar con IA (alimento guardado): propuesta + aplicar ----
+  // Paso 1: propuesta. Estima los micros del alimento GUARDADO. NO escribe. Devuelve la propuesta y
+  // cuántas comidas se tocarían al aplicar (mismo aviso que usda-proposal).
+  r.post("/foods/:id/ai-micros-proposal", async (c) => {
+    const userId = c.get("userId");
+    const foodId = c.req.param("id");
+    const f = await getFood(deps.db, userId, foodId);
+    if (!f) return c.json({ error: "No encontrado" }, 404);
+    if (!deps.aiClient.estimateFoodMicros) return c.json({ error: "El servidor no soporta estimación de micros." }, 500);
+    const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
+    const apiKey = resolveAiKey(settingsRow, deps.config);
+    if (!apiKey) return c.json({ error: "No hay API key de IA disponible." }, 400);
+    const mealsAffected = await countMealsWithFood(deps.db, userId, foodId);
+    // searchQuery no se usa en este camino (no hay USDA); el nombre alcanza para identificationFromFood.
+    const identification = identificationFromFood(f, f.name);
+    try {
+      const micros = await deps.aiClient.estimateFoodMicros({ name: f.name, basis: f.basis, apiKey });
+      return c.json({ identification, proposal: assembleFoodWithAiMicros(identification, micros), mealsAffected });
+    } catch (e) {
+      console.warn("ai-micros-proposal falló:", (e as Error).message);
+      return c.json({ error: "No se pudo estimar la información nutricional. Reintentá." }, 502);
+    }
+  });
+
+  // Paso 2: aplicar. A diferencia de usda-apply (que re-deriva del fdcId), el estimado de IA no es
+  // determinístico: se persiste la propuesta APROBADA por el usuario, validada por FoodInputSchema.
+  // Es equivalente a una edición manual (PATCH /foods/:id), pero además re-snapshotea las comidas.
+  // Se FUERZAN server-side sourceMicros "ai" y usdaFdcId null, y se restaura el sourceMacros del
+  // alimento guardado: un body adulterado no puede marcar el estimado como USDA ni cambiar la
+  // procedencia de los macros.
+  r.post("/foods/:id/ai-micros-apply", async (c) => {
+    const userId = c.get("userId");
+    const foodId = c.req.param("id");
+    const parsed = AiApplySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Body inválido", detail: parsed.error.issues }, 400);
+    const f = await getFood(deps.db, userId, foodId);
+    if (!f) return c.json({ error: "No encontrado" }, 404);
+    const paraGuardar = { ...parsed.data.food, sourceMacros: f.sourceMacros, sourceMicros: "ai" as const, usdaFdcId: null };
+    try {
+      return c.json(await deps.db.transaction(async (tx) => {
+        const fila = await updateFoodRow(tx, userId, foodId, paraGuardar);
+        if (!fila) throw new AlimentoDesaparecidoError();
+        return resnapshotItemsOfFood(tx, userId, foodId, fila);
+      }));
+    } catch (e) {
+      if (e instanceof AlimentoDesaparecidoError) return c.json({ error: "No encontrado" }, 404);
+      throw e;
     }
   });
 

@@ -1079,3 +1079,39 @@ test("POST /nutrition/foods/ai-micros con la IA rota devuelve 502 y no rompe", a
   });
   expect(res.status).toBe(502);
 });
+
+// ---- Completar con IA (alimento guardado): proposal + apply ----
+const postAiProposal = (app: any, id = FOOD_ID) =>
+  app.request(`/nutrition/foods/${id}/ai-micros-proposal`, { method: "POST" });
+const postAiApply = (app: any, foodBody: unknown, id = FOOD_ID) =>
+  app.request(`/nutrition/foods/${id}/ai-micros-apply`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ food: foodBody }),
+  });
+
+// FoodInput (snake_case) válido para el apply; el body miente sourceMicros/usdaFdcId a propósito.
+const aiFoodBody = {
+  name: "Almendra", basis: "per_100g", kcal: 579, protein_g: 21, carbs_g: 22, fat_g: 50,
+  unitWeightG: 1.2, sourceMacros: "ai", sourceMicros: "usda", usdaFdcId: 123, vitamin_c_mg: 8,
+};
+
+test("ai-micros-proposal estima y cuenta comidas, sin escribir", async () => {
+  const db = refreshDb();
+  const res = await postAiProposal(createApp(deps(db, refreshAi)));
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.proposal.sourceMicros).toBe("ai");
+  expect(body.proposal.vitamin_c_mg).toBe(8);
+  expect(body.proposal.usdaFdcId).toBeNull();
+  expect(body.mealsAffected).toBe(2);
+  expect(db._updates).toHaveLength(0); // NO escribió
+});
+
+test("ai-micros-apply fuerza sourceMicros ai/usdaFdcId null y re-snapshotea comidas", async () => {
+  const db = refreshDb();
+  const res = await postAiApply(createApp(deps(db, refreshAi)), aiFoodBody);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ mealsUpdated: 2, itemsUpdated: 3 });
+  const guardado = updatesDe(db, food)[0].values;
+  expect(guardado.sourceMicros).toBe("ai");     // forzado, aunque el body dijo "usda"
+  expect(guardado.usdaFdcId).toBeNull();         // forzado, aunque el body dijo 123
+});
