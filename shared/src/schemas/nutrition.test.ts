@@ -6,6 +6,7 @@ import {
   WaterLogInputSchema, WaterLogSchema,
   NutritionObjectiveSchema, NutritionGoalInputSchema,
   SourceMacrosSchema, SourceMicrosSchema,
+  FoodMicrosEstimateSchema,
 } from "./nutrition";
 import { NUTRIENT_KEYS } from "../nutrition/nutrients";
 
@@ -231,4 +232,19 @@ test("NutritionGoalInputSchema acepta objetivo + ritmo, rechaza objetivo inváli
   expect(NutritionGoalInputSchema.safeParse({ objective: "bulk", rateKgPerWeek: 0.5 }).success).toBe(false);
   expect(NutritionGoalInputSchema.safeParse({ objective: "gain", rateKgPerWeek: 5 }).success).toBe(false); // rate > 1
   expect(NutritionGoalInputSchema.safeParse({ objective: "lose", rateKgPerWeek: 0.25, manualKcal: -5 }).success).toBe(false);
+});
+
+test("FoodMicrosEstimateSchema acepta los 30 nutrientes nullable y omitidos", () => {
+  expect(FoodMicrosEstimateSchema.safeParse({}).success).toBe(true); // todos opcionales
+  expect(FoodMicrosEstimateSchema.safeParse({ vitamin_c_mg: 12, iron_mg: null }).success).toBe(true);
+});
+
+test("FoodMicrosEstimateSchema rechaza un valor negativo", () => {
+  expect(FoodMicrosEstimateSchema.safeParse({ iron_mg: -1 }).success).toBe(false);
+});
+
+test("FoodMicrosEstimateSchema NO incluye macros (kcal, protein_g, carbs_g, fat_g)", () => {
+  const shape = FoodMicrosEstimateSchema.shape as Record<string, unknown>;
+  for (const k of ["kcal", "protein_g", "carbs_g", "fat_g"]) expect(k in shape).toBe(false);
+  for (const k of NUTRIENT_KEYS) expect(k in shape).toBe(true);
 });

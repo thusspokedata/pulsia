@@ -80,6 +80,13 @@ export const FoodIdentificationSchema = z.object({
 });
 export type FoodIdentification = z.infer<typeof FoodIdentificationSchema>;
 
+// Lo que estima la IA cuando el usuario descarta USDA: SOLO el bloque de micronutrientes (los 30
+// del registro), por 100 g/ml, todos nullable/opcionales. NO incluye macros: esos ya existen en la
+// identificación/alimento y no se re-estiman. Se deriva de `nutrientFields` (misma fuente que el
+// resto del schema) para que un nutriente nuevo caiga solo.
+export const FoodMicrosEstimateSchema = z.object(nutrientFields);
+export type FoodMicrosEstimate = z.infer<typeof FoodMicrosEstimateSchema>;
+
 // Alta/edición de un alimento del catálogo (lo que confirma el usuario).
 export const FoodInputSchema = FoodExtractionSchema;
 export type FoodInput = z.infer<typeof FoodInputSchema>;
