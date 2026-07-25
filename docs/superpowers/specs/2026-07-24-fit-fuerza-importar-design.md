@@ -82,13 +82,19 @@ Estas dos piezas son sobre el **`.FIT`**, no sobre dónde se guarda. Valen igual
 C, así que son seguras de construir antes de que decidas §3. Funciones puras, con tests, sin DB, sin
 migración.
 
-> **⚠️ Estado real (2026-07-24, noche, owner ausente):** el `.FIT` de ejemplo del owner **ya no está
-> en disco** (fue transitorio). El **parser (4a)** necesita ese archivo para verificar cómo cada
-> `setMesg` referencia su ejercicio — la hipótesis es por `category`+`categorySubtype` (que casan con
-> `exerciseTitleMesg.exerciseCategory`+`exerciseName`), NO por `wktStepIndex` (que en el análisis
-> previo NO indexaba los títulos 1:1). **Esa relación no se adivina**: 4a queda **bloqueado** hasta
-> que el owner re-comparta un `.FIT` de fuerza. El **mapeo (4b)** NO depende del archivo (usa el SDK)
-> → se implementa esta noche.
+> **✅ Algoritmo serie→ejercicio VERIFICADO** contra dos `.FIT` de fuerza reales del owner
+> (2026-07-24), end-to-end: parser + mapeo producen los 5 ejercicios con sus series, 100% mapeados al
+> catálogo. Cada `setMesg` activa identifica su ejercicio por
+> **`category[0]` + `categorySubtype[0]`**, que casan con `exerciseCategory` + `exerciseName` del
+> `exerciseTitleMesg`. Confirmado: `wktStepIndex` **NO** indexa el diccionario (apunta al plan). Y
+> `categorySubtype[0]` **ES** el índice `exerciseName` que consume `mapFitExercise` (4b). `category` y
+> `categorySubtype` vienen como **arrays de 3 elementos idénticos** (Garmin admite hasta 3 categorías)
+> → se toma `[0]`.
+>
+> **Casos borde reales encontrados** (deben estar en los tests):
+> - **Isométrico** (Plank): `repetitions` y `weight` **ausentes** → `reps: null`, `weightKg: null`.
+>   Cuenta como serie (tiempo bajo tensión) pero no aporta a reps ni a volumen.
+> - **Peso corporal** (Dead Bug): `weight: 0` (no ausente) → `weightKg: 0`. Aporta reps, volumen 0.
 
 ### 4a — Parser de fuerza
 
