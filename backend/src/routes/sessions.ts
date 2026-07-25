@@ -7,6 +7,7 @@ import { lastWeightByExercise } from "../sessions/lastWeight";
 import { parseFitStrength } from "../cardio/parseFitStrength";
 import { catalogIdForFit } from "../cardio/fitExerciseMap";
 import { fitStrengthToSession } from "../cardio/fitStrengthToSession";
+import { extractHrSamples } from "../cardio/hrSamples";
 import type { AppDeps } from "../app";
 
 const MAX_FIT_B64 = 7_000_000; // ~5 MB, igual que /cardio/parse
@@ -73,11 +74,12 @@ export function sessionsRoutes(deps: AppDeps) {
       const durationSec = typeof session.totalTimerTime === "number" ? session.totalTimerTime
         : typeof session.totalElapsedTime === "number" ? session.totalElapsedTime : null;
       const totalDurationMs = durationSec != null ? Math.round(durationSec * 1000) : null;
+      const hrSamples = extractHrSamples(messages);
       const ws = fitStrengthToSession(parseFitStrength(messages), {
         id: body.id, startedAt,
         endedAt: totalDurationMs != null ? startedAt + totalDurationMs : null,
         totalDurationMs, location,
-      });
+      }, hrSamples);
       // Misma guarda que PUT /sessions: un .FIT de un device buggy podría traer valores fuera de
       // rango (peso negativo, etc.) que hay que rechazar antes de persistir, no dejar entrar por
       // ser binario en vez de JSON. Mantiene consistentes los dos caminos de ingesta.

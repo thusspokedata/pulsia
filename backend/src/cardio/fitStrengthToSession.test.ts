@@ -67,7 +67,7 @@ test("las series tienen startedAt/endedAt reales y quedan 'terminadas' (endedAt 
   const s = fitStrengthToSession(preview, meta, hrSamples);
   const set0 = s.exercises[0].sets[0];
   expect(set0.startedAt).toBe(preview.exercises[0].sets[0].startedAt);
-  expect(set0.endedAt).toBe(set0.startedAt + set0.durationMs);
+  expect(set0.endedAt).toBe(set0.startedAt! + set0.durationMs!);
   expect(set0.endedAt).not.toBeNull(); // la corrección de la causa raíz
 });
 
