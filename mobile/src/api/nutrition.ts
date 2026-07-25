@@ -175,6 +175,43 @@ export async function applyUsdaRefresh(
   return (await res.json()) as UsdaRefreshResult;
 }
 
+/**
+ * Completar con IA (alta): el usuario descartó USDA. Estima los micros y devuelve la extracción
+ * para recargar el form. No persiste. Timeout largo: la IA puede hacer una o más búsquedas web.
+ */
+export async function aiMicrosForFood(baseUrl: string, identification: FoodIdentification): Promise<FoodExtraction> {
+  const res = await apiFetch(baseUrl, "/nutrition/foods/ai-micros", {
+    method: "POST", body: JSON.stringify({ identification }), timeoutMs: 60000,
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo estimar la información nutricional."));
+  return (await res.json()) as FoodExtraction;
+}
+
+/** Lo que devuelve la propuesta de micros por IA de un alimento guardado. No escribe nada. */
+export interface AiMicrosProposal {
+  identification: FoodIdentification;
+  proposal: FoodExtraction;
+  mealsAffected: number;
+}
+
+export async function proposeAiMicros(baseUrl: string, foodId: string): Promise<AiMicrosProposal> {
+  const res = await apiFetch(baseUrl, `/nutrition/foods/${foodId}/ai-micros-proposal`, { method: "POST", timeoutMs: 60000 });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo estimar la información nutricional."));
+  return (await res.json()) as AiMicrosProposal;
+}
+
+/**
+ * Aplica la propuesta de IA: guarda el alimento y re-snapshotea sus comidas. Se manda el
+ * `FoodExtraction` propuesto como `food`; el backend fuerza sourceMicros "ai"/usdaFdcId null.
+ */
+export async function applyAiMicros(baseUrl: string, foodId: string, food: FoodExtraction): Promise<UsdaRefreshResult> {
+  const res = await apiFetch(baseUrl, `/nutrition/foods/${foodId}/ai-micros-apply`, {
+    method: "POST", body: JSON.stringify({ food }),
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo completar el alimento con IA."));
+  return (await res.json()) as UsdaRefreshResult;
+}
+
 export async function updateFood(baseUrl: string, id: string, input: FoodInput): Promise<Food> {
   const res = await apiFetch(baseUrl, `/nutrition/foods/${id}`, { method: "PATCH", body: JSON.stringify(input) });
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo actualizar el alimento."));
