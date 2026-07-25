@@ -1,6 +1,8 @@
 # Pulsia — Onboarding / Handoff
 
-> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: **2026-07-22** (sesión **EL CARDIO ENTRA A PROGRESO**: "Días entrenados" y "Tiempo por día" ignoraban las caminatas y los `.FIT` —la misma actividad existía en el Historial y no en Progreso—; ahora el color mide **gasto calórico** (fuerza + cardio) con escala por cuartiles del historial. De yapa se corrigió un **doble conteo del BMR**: las kcal del reloj son brutas y se contaban contra una meta que ya incluye el basal. [#181](https://github.com/thusspokedata/pulsia/pull/181), mergeado + backend deployado + **OTA a vc10 publicado** (runtime `784872cb` verificado). Detalle en **§0-CARDIO-PROGRESO**, incluidos **seis defectos del plan que ninguna lectura encontró** y una **verificación empírica que no servía**.)
+> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: **2026-07-25** (sesión **IMPORTAR FUERZA DEL `.FIT`**: ahora importás un `.FIT` de un entrenamiento de **fuerza** y se guarda como **`workout_session`** con sus ejercicios y series —no como cardio "otro"—, entrando solo a 1RM/volumen/PRs, al informe y a la memoria del atleta. Cierra la doble carga del owner (Pulsia genera → tipea en Garmin → entrena con el reloj → importa). Tres PRs, cada uno con ciclo completo review→merge→deploy/OTA: [#185](https://github.com/thusspokedata/pulsia/pull/185) el informe **cuenta** las actividades importadas (antes leía "0 sesiones"), [#186](https://github.com/thusspokedata/pulsia/pull/186) backend (**migración 0025** relaja `program_id`/`week_number`/`day_label` de `workout_session` a nullable — un import no cuelga de un programa) + [#187](https://github.com/thusspokedata/pulsia/pull/187) móvil con **OTA a vc10** (runtime `784872cb` verificado). El owner aprobó `workout_session` relajado. Detalle en **§0-FIT-FUERZA**, incluido el **algoritmo serie→ejercicio verificado contra `.FIT` reales** y un **call-site de tipo que el tsc no cazaba**.)
+>
+> Actualización previa: **2026-07-22** (sesión **EL CARDIO ENTRA A PROGRESO**: "Días entrenados" y "Tiempo por día" ignoraban las caminatas y los `.FIT` —la misma actividad existía en el Historial y no en Progreso—; ahora el color mide **gasto calórico** (fuerza + cardio) con escala por cuartiles del historial. De yapa se corrigió un **doble conteo del BMR**: las kcal del reloj son brutas y se contaban contra una meta que ya incluye el basal. [#181](https://github.com/thusspokedata/pulsia/pull/181), mergeado + backend deployado + **OTA a vc10 publicado** (runtime `784872cb` verificado). Detalle en **§0-CARDIO-PROGRESO**, incluidos **seis defectos del plan que ninguna lectura encontró** y una **verificación empírica que no servía**.)
 >
 > Actualización previa: **2026-07-22** (sesión **BARRAS EN DOS COLORES + EL EJERCICIO SUBE LA META DE CARBOS**: pasarte de un macro ya no borra cuánto llevabas —la barra se parte en la línea de la meta, turquesa hasta ahí y ámbar el excedente—, y las kcal quemadas entrenando ahora suben la meta de **carbos**, no solo el restante de kcal. El principio que ordena todo: **las metas de energía escalan con el gasto, los límites de salud no** — el colesterol sigue en 300 mg entrenes o no. [#179](https://github.com/thusspokedata/pulsia/pull/179), mergeado + backend deployado + **OTA a vc10 publicado** (runtime `784872cb` verificado). Detalle en **§0-BARRAS**, incluidos **tres bugs que ninguna lectura del diff encontró** y un **test falso que vino del propio plan**.)
 >
@@ -14,7 +16,93 @@
 
 ## 0. Estado en una línea
 
-**Pulsia está EN INTERNET, multi-usuario, con login.** Backend en **`https://pulsia.lahuelladelcaminante.de`** (VPS nginx → Wireguard → Pi:3011, HTTPS por certbot, rate-limit en `/auth/`). La app (Android, **APK vc10**; todo lo nuevo llega por **OTA** a vc10) tiene 3 dominios grandes: **(1) Entrenamiento** — genera programas async, registra/resume/revisa sesiones, HR por banda BLE, resumen con mapa corporal + FC, español+inglés, memoria del atleta, entreno puntual, **cardio/actividades** (manual o import `.FIT`, ya entra al balance de nutrición, con **pantalla de detalle** —tiles, gráficos de FC/cadencia/respiración/Body Battery y tiempo en zonas— y **reprocesamiento** del `.FIT` guardado), y un **catálogo de 273 ejercicios** (auto-generado del SDK de Garmin) con **demostraciones animadas + cues de técnica** en 86 de ellos, accesibles desde el Programa, la sesión, un buscador y el selector de alternativas; **(2) Nutrición** (tab "Nutrición", **COMPLETO** — ver §0-HOY-PREVIA): alta de alimentos por **foto + IA** (Opus visión) **o escribiendo el nombre** ("almendra") → catálogo personal (con chip **etiqueta/estimado** y **semáforo nutricional** por alimento: chips de alto/medio en grasa, saturadas, azúcar, sal y colesterol, fibra como positivo, con filtro "mostrame los altos en X" — ver §0-SEMAFORO) → registrar en gramos/ml/unidad con snapshot de macros/micros/colesterol/agua, **metas calóricas + de macros** desde el perfil (BMR Mifflin-St Jeor + objetivo + gasto de entrenamiento = **net calories**; el gasto además **sube la meta de carbos**, nunca la de proteína/grasa ni ningún límite de salud — ver §0-BARRAS), **barras que al pasarte muestran turquesa hasta la meta y ámbar solo el excedente**, **dashboard del día con 4 pestañas** (Resumen / Calorías con torta por comida / Nutrientes vs referencias OMS / Macros con dona), **qué alimentos aportan cada nutriente** + **su evolución en el tiempo**, **suplementos** (catálogo por foto + plan IA semanal + checklist + ajuste dinámico), tracker de líquido, y un **agente de informes** (diario/semanal/quincenal/mensual con consejos, opt-in); **(3) Progreso/Salud** — seguimiento cuantitativo (composición/presión/actividad/bienestar con backfill) + tendencias + heatmap, y **ECG (KardiaMobile)** (interpretación IA no-diagnóstica). **La IA observa** (progreso, ECG, y ahora los informes de nutrición → memoria del atleta). Owner: la cuenta principal. La familia baja el APK **vc10** desde **`pulsia.lahuelladelcaminante.de/download`** (QR) + se registra con el **`INVITE_CODE`** (valor real solo en `/home/kilo/pulsia/deploy/app.env` de la Pi). Un merge a `main` **auto-deploya el backend a la Pi**.
+**Pulsia está EN INTERNET, multi-usuario, con login.** Backend en **`https://pulsia.lahuelladelcaminante.de`** (VPS nginx → Wireguard → Pi:3011, HTTPS por certbot, rate-limit en `/auth/`). La app (Android, **APK vc10**; todo lo nuevo llega por **OTA** a vc10) tiene 3 dominios grandes: **(1) Entrenamiento** — genera programas async, registra/resume/revisa sesiones (a mano en la app **o importando un `.FIT` de fuerza del reloj**, que se guarda como `workout_session` con ejercicios/series y entra a 1RM/volumen/informe — ver §0-FIT-FUERZA), HR por banda BLE, resumen con mapa corporal + FC, español+inglés, memoria del atleta, entreno puntual, **cardio/actividades** (manual o import `.FIT`, ya entra al balance de nutrición, con **pantalla de detalle** —tiles, gráficos de FC/cadencia/respiración/Body Battery y tiempo en zonas— y **reprocesamiento** del `.FIT` guardado), y un **catálogo de 273 ejercicios** (auto-generado del SDK de Garmin) con **demostraciones animadas + cues de técnica** en 86 de ellos, accesibles desde el Programa, la sesión, un buscador y el selector de alternativas; **(2) Nutrición** (tab "Nutrición", **COMPLETO** — ver §0-HOY-PREVIA): alta de alimentos por **foto + IA** (Opus visión) **o escribiendo el nombre** ("almendra") → catálogo personal (con chip **etiqueta/estimado** y **semáforo nutricional** por alimento: chips de alto/medio en grasa, saturadas, azúcar, sal y colesterol, fibra como positivo, con filtro "mostrame los altos en X" — ver §0-SEMAFORO) → registrar en gramos/ml/unidad con snapshot de macros/micros/colesterol/agua, **metas calóricas + de macros** desde el perfil (BMR Mifflin-St Jeor + objetivo + gasto de entrenamiento = **net calories**; el gasto además **sube la meta de carbos**, nunca la de proteína/grasa ni ningún límite de salud — ver §0-BARRAS), **barras que al pasarte muestran turquesa hasta la meta y ámbar solo el excedente**, **dashboard del día con 4 pestañas** (Resumen / Calorías con torta por comida / Nutrientes vs referencias OMS / Macros con dona), **qué alimentos aportan cada nutriente** + **su evolución en el tiempo**, **suplementos** (catálogo por foto + plan IA semanal + checklist + ajuste dinámico), tracker de líquido, y un **agente de informes** (diario/semanal/quincenal/mensual con consejos, opt-in); **(3) Progreso/Salud** — seguimiento cuantitativo (composición/presión/actividad/bienestar con backfill) + tendencias + heatmap, y **ECG (KardiaMobile)** (interpretación IA no-diagnóstica). **La IA observa** (progreso, ECG, y ahora los informes de nutrición → memoria del atleta). Owner: la cuenta principal. La familia baja el APK **vc10** desde **`pulsia.lahuelladelcaminante.de/download`** (QR) + se registra con el **`INVITE_CODE`** (valor real solo en `/home/kilo/pulsia/deploy/app.env` de la Pi). Un merge a `main` **auto-deploya el backend a la Pi**.
+
+## 0-FIT-FUERZA. ✅ HECHO (2026-07-24/25): IMPORTAR ENTRENAMIENTOS DE FUERZA DEL `.FIT`
+
+Disparador del owner: *"lo q mas me interesa es poder cargar los entrenamientos a través de los
+`.FIT`, y q la IA se de cuenta q son los ejercicios q ella me dio y los datos se puedan ir guardando
+para q luego basandose en ellos me haga nuevos entrenamientos"*. Más un bug: *"importé ayer y hoy dos
+entrenamientos, la IA cuando hace el informe no los ha tenido en cuenta como entrenamientos"*.
+
+**Estado: COMPLETO y en prod.** Un `.FIT` de fuerza se importa desde la pantalla de cardio y se
+guarda como **`workout_session`** con sus ejercicios y series → entra a 1RM/volumen/PRs
+(`computePerformanceTrends`), al informe y a la memoria del atleta. Cierra la doble carga del owner
+(Pulsia genera → tipea a mano en Garmin → entrena con el reloj → importa el `.FIT`). Ver
+[[fit-fuerza-import-status]]. Spec `docs/superpowers/specs/2026-07-24-fit-fuerza-importar-design.md`,
+planes en `docs/superpowers/plans/2026-07-24-fit-fuerza-*`.
+
+Tres PRs, cada uno con ciclo completo review → merge → deploy/OTA:
+
+- **[#185](https://github.com/thusspokedata/pulsia/pull/185) — el informe cuenta las actividades
+  (Pieza 0).** El bug reportado: los `.FIT` de fuerza se importaban como cardio `type:"other"` (con
+  `sport_profile_name:"Fuerza"`) y el informe solo contaba `workout_session` → la IA leía *"0
+  sesión(es), 478 kcal"* y no lo interpretaba como entrenamiento. Fix: `collect.ts` expone el
+  desglose de actividades y `report.ts` se lo pasa a la IA (diario lista, periódico agrega por
+  nombre). **Seguridad:** `sportProfileName` viene del `.FIT` (texto externo) → `cleanProfileName`
+  colapsa newlines/whitespace (CWE-74) antes de interpolar en el prompt. Backend puro, sin OTA.
+
+- **[#186](https://github.com/thusspokedata/pulsia/pull/186) — backend de la persistencia (migración
+  0025).** Relaja `program_id`/`week_number`/`day_label` de `workout_session` a **nullable**.
+  Rutas `POST /sessions/from-fit/preview` (muestra, no persiste) y `/sessions/from-fit` (persiste,
+  idempotente por id, 422 si el `.FIT` no es de fuerza). **No tocan `/cardio/parse`** → el móvil
+  viejo sigue funcionando. Deployado + auto-migrado (verificado `program_id is_nullable = YES`).
+
+- **[#187](https://github.com/thusspokedata/pulsia/pull/187) — móvil + OTA.** Al importar un `.FIT`,
+  la pantalla prueba fuerza primero (`/from-fit/preview`); si es fuerza muestra ejercicios+series +
+  gimnasio/casa y guarda como entrenamiento; si 422 (no es fuerza) cae al flujo de cardio de
+  siempre. JS puro → **OTA a vc10** (runtime `784872cb` verificado).
+
+### 🧭 La decisión de arquitectura (del owner): `workout_session` relajado
+
+Un entrenamiento de fuerza es **ejercicios + series**, lo registres en la app o en el reloj. Todo lo
+que el owner quiere (1RM, volumen, informe, memoria) **ya consume `workout_session`/`WorkoutSession`**,
+así que meter el import ahí lo hace ciudadano de primera clase **sin re-cablear nada**. El costo:
+relajar los 3 campos de programa a nullable. **Auditoría (verificada):** nada dereferencia
+`programId` (no hay JOIN con `programs`), `weekNumber` no se lee, `dayLabel` solo se usa cosmético en
+`ai/history.ts`. La alternativa (tabla nueva) duplicaba el modelo de series y obligaba a re-cablear
+todo lo downstream. El owner dio el OK explícito.
+
+### El algoritmo serie→ejercicio (verificado contra `.FIT` reales, no adivinado)
+
+Cada `setMesg` activa identifica su ejercicio por **`category[0]` + `categorySubtype[0]`**, que casan
+con `exerciseCategory` + `exerciseName` del `exerciseTitleMesg`. **`wktStepIndex` NO indexa el
+diccionario** (apunta al plan). `categorySubtype[0]` es el índice `exerciseName` que consume
+`mapFitExercise`. Se verificó **end-to-end contra dos `.FIT` reales del owner** (el segundo mapeó los
+5 ejercicios al 100% del catálogo). El parser vive en `backend/src/cardio/parseFitStrength.ts`; el
+mapeo en `fitExerciseMap.ts` (`mapFitExercise`/`catalogIdForFit`, vía `Profile.types` del SDK — la
+misma fuente del catálogo; fuera del catálogo → `fit:<category>`). Casos borde reales: **isométricos**
+(plank: reps/peso null) y **peso corporal** (dead bug: weight 0). Fixtures **sintéticos** siempre
+([[nunca-datos-reales-en-el-repo]]).
+
+### ⚠️ Lecciones de esta sesión
+
+- **El `.FIT` de fuerza trae TODO lo rico, y lo estábamos tirando.** 17 series, reps, pesos, nombres
+  de ejercicio, y el plan (`wktName`) — el parser de cardio (`parseFit`) no tocaba `setMesgs`. Me
+  corregí en vivo: primero le dije al owner que el `.FIT` no traía los kilos; sí los trae.
+- **La verificación empírica del sesgo de fuerza NO servía** (queda para otro día): comparar las kcal
+  del reloj contra Keytel/MET dio resultados contradictorios. El `.FIT` trae `metabolic_kcal` (basal
+  medido por Garmin) y `total_calories` medidas → mandan sobre cualquier fórmula. Por eso el spec de
+  gasto de fuerza %HRR (`feat/gasto-fuerza-hrr`, sin PR) quedó **pausado** — menos urgente ahora.
+- **Un call-site de tipo que el `tsc` no cazaba.** Al relajar `SessionListItem.dayLabel` a
+  `string | null`, `TimelineRow` renderizaba `{s.dayLabel}` directo → un import mostraría título en
+  blanco. El `tsc` no se quejó porque `<Text>` acepta `null`. Lo cazó `@claude review` por inspección,
+  no el compilador. Regla: relajar un tipo shared **exige auditar los call-sites de render en el
+  móvil a mano**, no confiar solo en el `tsc`.
+- **Desacople para no romper el móvil viejo:** las rutas de fuerza son NUEVAS y no tocan
+  `/cardio/parse`, así que el backend se pudo mergear y deployar sin coordinar con el móvil (que llegó
+  en el PR siguiente, con OTA). El móvil viejo sigue guardando un `.FIT` de fuerza como cardio "otro"
+  hasta que baja el OTA.
+
+### Follow-ups (ninguno bloqueante)
+
+- **Dedupe** con sesiones registradas a mano en la app: pendiente (hoy el owner entrena con el reloj,
+  no se solapan).
+- **El import de cardio hace un request extra** (`previewFitStrength` → 422 → `parseFitCardio`); un
+  endpoint "sniff" combinado lo evitaría. Aceptable para v1.
+- **Verificar en device** el render de la vista de fuerza (ejercicios/series) — la lógica está
+  testeada, el render es visual.
+- Ejercicios fuera del catálogo curado (273) se guardan con id sintético `fit:<category>`.
 
 ## 0-CARDIO-PROGRESO. ✅ HECHO (2026-07-22): EL CARDIO ENTRA A PROGRESO + kcal del reloj NETAS
 
