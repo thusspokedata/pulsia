@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import { Decoder, Stream } from "@garmin/fitsdk";
 import { WorkoutSessionSchema } from "@pulsia/shared";
 import { upsertSession, getSession, listSessions, deleteSession, getRecentSessions, getSessionOwnerId } from "../sessions/repository";
@@ -62,7 +63,9 @@ export function sessionsRoutes(deps: AppDeps) {
     const body = await c.req.json().catch(() => ({}));
     if (typeof body.fitBase64 !== "string" || body.fitBase64.length > MAX_FIT_B64)
       return c.json({ error: "Archivo inválido" }, 400);
-    if (typeof body.id !== "string") return c.json({ error: "Falta el id" }, 400);
+    // El id se valida como UUID en el borde: un id malformado no debe llegar a la query de dueño
+    // ni reportarse como un fallo genérico de import. Mismo contrato que WorkoutSessionSchema.id.
+    if (!z.string().uuid().safeParse(body.id).success) return c.json({ error: "id inválido" }, 400);
     const location = body.location === "home" ? "home" : "gym";
     try {
       const { messages, startedAt } = decodeStrengthFit(body.fitBase64);
@@ -75,9 +78,14 @@ export function sessionsRoutes(deps: AppDeps) {
         endedAt: totalDurationMs != null ? startedAt + totalDurationMs : null,
         totalDurationMs, location,
       });
+      // Misma guarda que PUT /sessions: un .FIT de un device buggy podría traer valores fuera de
+      // rango (peso negativo, etc.) que hay que rechazar antes de persistir, no dejar entrar por
+      // ser binario en vez de JSON. Mantiene consistentes los dos caminos de ingesta.
+      const validated = WorkoutSessionSchema.safeParse(ws);
+      if (!validated.success) return c.json({ error: "El .FIT produjo una sesión inválida" }, 400);
       const owner = await getSessionOwnerId(deps.db, body.id);
       if (owner && owner !== userId) return c.json({ error: "esa sesión pertenece a otro usuario" }, 409);
-      await upsertSession(deps.db, userId, ws);
+      await upsertSession(deps.db, userId, validated.data);
       return c.json({ id: body.id }, 200);
     } catch (e) {
       if ((e as Error).message === "not-strength")

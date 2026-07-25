@@ -233,3 +233,12 @@ test("POST /sessions/from-fit sin id devuelve 400", async () => {
   const res = await postJson(app, "/sessions/from-fit", { fitBase64: buildStrengthFitBase64() });
   expect(res.status).toBe(400);
 });
+
+test("POST /sessions/from-fit con id no-UUID se rechaza en el borde (antes de decodificar)", async () => {
+  const app = createApp(deps(fakeDb()) as any);
+  const res = await postJson(app, "/sessions/from-fit", { fitBase64: buildStrengthFitBase64(), id: "no-es-uuid" });
+  expect(res.status).toBe(400);
+  // El mensaje distingue el rechazo en el borde del rechazo posterior por schema: sin el guard del
+  // borde, un id no-UUID caería al safeParse del ws ("...sesión inválida"), no acá.
+  expect((await res.json()).error).toBe("id inválido");
+});

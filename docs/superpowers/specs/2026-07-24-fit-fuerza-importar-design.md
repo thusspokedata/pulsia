@@ -125,8 +125,9 @@ interface FitStrengthPreview {
 }
 ```
 
-- Agrupa las `setMesgs` activas por ejercicio usando `wktStepIndex` + el diccionario
-  `exerciseTitleMesgs`. Los `setType: "rest"` se descartan (no son series de trabajo).
+- Agrupa las `setMesgs` activas por ejercicio usando `category[0]` + `categorySubtype[0]` (ver la
+  nota verificada arriba) contra el diccionario `exerciseTitleMesgs`. Los `setType: "rest"` se
+  descartan (no son series de trabajo).
 - **No decide dónde se guarda** — solo transforma el `.FIT` en una estructura de dominio.
 
 ### 4b — Mapeo de ejercicios al catálogo
