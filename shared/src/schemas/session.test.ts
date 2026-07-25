@@ -117,3 +117,27 @@ test("una sesión con pauseIntervals los conserva", () => {
   });
   expect(parsed.pauseIntervals).toEqual([{ startedAt: 100, endedAt: 200 }]);
 });
+
+const importBase = {
+  id: "11111111-1111-4111-8111-111111111111",
+  location: "gym",
+  startedAt: 1000,
+  endedAt: null,
+  totalDurationMs: null,
+  exercises: [],
+};
+
+test("una sesión sin programa (import) es válida: programId/weekNumber/dayLabel null", () => {
+  const r = WorkoutSessionSchema.safeParse({ ...importBase, programId: null, weekNumber: null, dayLabel: null });
+  expect(r.success).toBe(true);
+});
+
+test("una sesión de programa sigue siendo válida", () => {
+  const r = WorkoutSessionSchema.safeParse({
+    ...importBase,
+    programId: "22222222-2222-4222-8222-222222222222",
+    weekNumber: 1,
+    dayLabel: "Día 1",
+  });
+  expect(r.success).toBe(true);
+});

@@ -325,9 +325,9 @@ export const exerciseCatalog = pgTable("exercise_catalog", {
 export const workoutSession = pgTable("workout_session", {
   id: uuid("id").primaryKey(), // UUID generado en el cliente (no defaultRandom)
   userId: uuid("user_id").references(() => users.id).notNull(),
-  programId: uuid("program_id").references(() => programs.id).notNull(),
-  weekNumber: integer("week_number").notNull(),
-  dayLabel: text("day_label").notNull(),
+  programId: uuid("program_id").references(() => programs.id),
+  weekNumber: integer("week_number"),
+  dayLabel: text("day_label"),
   location: text("location").notNull(),
   startedAt: bigint("started_at", { mode: "number" }).notNull(),
   endedAt: bigint("ended_at", { mode: "number" }),

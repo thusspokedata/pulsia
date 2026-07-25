@@ -47,9 +47,9 @@ export const PauseIntervalSchema = z.object({
 
 export const WorkoutSessionSchema = z.object({
   id: z.string().uuid(),
-  programId: z.string().uuid(),
-  weekNumber: z.number().int().min(1),
-  dayLabel: z.string().min(1),
+  programId: z.string().uuid().nullable(),
+  weekNumber: z.number().int().min(1).nullable(),
+  dayLabel: z.string().min(1).nullable(),
   location: z.enum(["gym", "home"]),
   startedAt: z.number().int(),
   endedAt: z.number().int().nullable(),

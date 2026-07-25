@@ -26,7 +26,7 @@ export function buildTrainingHistorySummary(sessions: WorkoutSession[]): string 
   if (sessions.length === 0) return "";
   return sessions
     .map((s) => {
-      const head = `${fmtDate(s.startedAt)} — ${s.dayLabel} (${s.location})`;
+      const head = `${fmtDate(s.startedAt)} — ${s.dayLabel ?? "Entreno"} (${s.location})`;
       const exLines = s.exercises.map(exerciseLine).join("\n");
       const sNote = s.notes?.trim();
       const noteLine = sNote ? `  nota de sesión: ${sNote.slice(0, 300)}` : "";
