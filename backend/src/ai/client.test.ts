@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 import { z } from "zod";
 import type Anthropic from "@anthropic-ai/sdk";
-import { callStructuredTool } from "./client";
+import { callStructuredTool, callStructuredToolWithSearch } from "./client";
 
 const EsquemaTest = z.object({ nombre: z.string(), series: z.number() });
 
@@ -89,4 +89,41 @@ test("con un input de tool_use que no cumple el schema lanza ZodError", async ()
     content: [{ type: "tool_use", id: "tu_1", name: "return_test", input: { nombre: "sentadilla" } }],
   });
   await expect(callStructuredTool({ client, ...baseArgs })).rejects.toThrow(z.ZodError);
+});
+
+// --- callStructuredToolWithSearch ---
+
+function fakeClientWithSearch(content: any[], stop_reason = "tool_use") {
+  return { messages: { create: async () => ({ content, stop_reason }) } } as any;
+}
+const microsSchema = z.object({ vitamin_c_mg: z.number().nullable().optional() });
+
+test("callStructuredToolWithSearch extrae y parsea el bloque del tool aunque haya resultados de web_search antes", async () => {
+  const client = fakeClientWithSearch([
+    { type: "server_tool_use", name: "web_search", input: { query: "lemonade vitamin c" } },
+    { type: "web_search_tool_result", content: [{ type: "web_search_result", title: "x", url: "http://x" }] },
+    { type: "text", text: "Busqué y estimo:" },
+    { type: "tool_use", name: "return_food_micros", input: { vitamin_c_mg: 8 } },
+  ]);
+  const out = await callStructuredToolWithSearch({
+    client, model: "m", maxTokens: 100, schema: microsSchema, toolName: "return_food_micros",
+    description: "d", content: "prompt", truncatedMsg: "trunc", missingMsg: "missing",
+  });
+  expect(out.vitamin_c_mg).toBe(8);
+});
+
+test("callStructuredToolWithSearch tira si el modelo no llamó al tool", async () => {
+  const client = fakeClientWithSearch([{ type: "text", text: "no sé" }], "end_turn");
+  await expect(callStructuredToolWithSearch({
+    client, model: "m", maxTokens: 100, schema: microsSchema, toolName: "return_food_micros",
+    description: "d", content: "prompt", truncatedMsg: "trunc", missingMsg: "missing",
+  })).rejects.toThrow("missing");
+});
+
+test("callStructuredToolWithSearch tira 'trunc' si se cortó por max_tokens", async () => {
+  const client = fakeClientWithSearch([{ type: "text", text: "..." }], "max_tokens");
+  await expect(callStructuredToolWithSearch({
+    client, model: "m", maxTokens: 100, schema: microsSchema, toolName: "return_food_micros",
+    description: "d", content: "prompt", truncatedMsg: "trunc", missingMsg: "missing",
+  })).rejects.toThrow("trunc");
 });
