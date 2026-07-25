@@ -1,11 +1,90 @@
 import { Hono } from "hono";
+import { Decoder, Stream } from "@garmin/fitsdk";
 import { WorkoutSessionSchema } from "@pulsia/shared";
 import { upsertSession, getSession, listSessions, deleteSession, getRecentSessions, getSessionOwnerId } from "../sessions/repository";
 import { lastWeightByExercise } from "../sessions/lastWeight";
+import { parseFitStrength } from "../cardio/parseFitStrength";
+import { catalogIdForFit } from "../cardio/fitExerciseMap";
+import { fitStrengthToSession } from "../cardio/fitStrengthToSession";
 import type { AppDeps } from "../app";
+
+const MAX_FIT_B64 = 7_000_000; // ~5 MB, igual que /cardio/parse
+
+// Decodifica un .FIT y exige que sea un entrenamiento de FUERZA. Lanza "not-strength" si no lo es,
+// "no-fit" si el archivo no es válido. La ruta traduce cada caso a su status.
+function decodeStrengthFit(fitBase64: string): { messages: any; startedAt: number } {
+  const decoder = new Decoder(Stream.fromByteArray(Buffer.from(fitBase64, "base64")));
+  if (!decoder.isFIT()) throw new Error("no-fit");
+  const { messages } = decoder.read({
+    includeUnknownData: true, applyScaleAndOffset: true, expandSubFields: true,
+    convertTypesToStrings: true, convertDateTimesToDates: true,
+  });
+  const session = messages.sessionMesgs?.[0];
+  if (session?.subSport !== "strengthTraining") throw new Error("not-strength");
+  const startedAt = session.startTime instanceof Date ? session.startTime.getTime() : Number(session.startTime);
+  return { messages, startedAt };
+}
+
+// El preview que ve el móvil: los ejercicios/series del parser + el catalogId resuelto server-side
+// (el móvil no tiene el SDK ni el catálogo del lado del que se resuelve).
+function strengthPreviewWithCatalog(messages: any) {
+  const p = parseFitStrength(messages);
+  return {
+    ...p,
+    exercises: p.exercises.map((ex) => ({
+      ...ex,
+      catalogId: catalogIdForFit(ex.category, ex.exerciseNameIndex),
+    })),
+  };
+}
 
 export function sessionsRoutes(deps: AppDeps) {
   const r = new Hono<{ Variables: { userId: string } }>();
+
+  // Literales ANTES de /:id. Preview de un .FIT de fuerza (no persiste).
+  r.post("/from-fit/preview", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    if (typeof body.fitBase64 !== "string" || body.fitBase64.length > MAX_FIT_B64)
+      return c.json({ error: "Archivo inválido" }, 400);
+    try {
+      const { messages } = decodeStrengthFit(body.fitBase64);
+      return c.json(strengthPreviewWithCatalog(messages));
+    } catch (e) {
+      if ((e as Error).message === "not-strength")
+        return c.json({ error: "El .FIT no es un entrenamiento de fuerza" }, 422);
+      return c.json({ error: "No se pudo leer el .FIT" }, 400);
+    }
+  });
+
+  // Persiste un .FIT de fuerza como workout_session. Idempotente por id (como PUT /sessions).
+  r.post("/from-fit", async (c) => {
+    const userId = c.get("userId");
+    const body = await c.req.json().catch(() => ({}));
+    if (typeof body.fitBase64 !== "string" || body.fitBase64.length > MAX_FIT_B64)
+      return c.json({ error: "Archivo inválido" }, 400);
+    if (typeof body.id !== "string") return c.json({ error: "Falta el id" }, 400);
+    const location = body.location === "home" ? "home" : "gym";
+    try {
+      const { messages, startedAt } = decodeStrengthFit(body.fitBase64);
+      const session = messages.sessionMesgs[0];
+      const durationSec = typeof session.totalTimerTime === "number" ? session.totalTimerTime
+        : typeof session.totalElapsedTime === "number" ? session.totalElapsedTime : null;
+      const totalDurationMs = durationSec != null ? Math.round(durationSec * 1000) : null;
+      const ws = fitStrengthToSession(parseFitStrength(messages), {
+        id: body.id, startedAt,
+        endedAt: totalDurationMs != null ? startedAt + totalDurationMs : null,
+        totalDurationMs, location,
+      });
+      const owner = await getSessionOwnerId(deps.db, body.id);
+      if (owner && owner !== userId) return c.json({ error: "esa sesión pertenece a otro usuario" }, 409);
+      await upsertSession(deps.db, userId, ws);
+      return c.json({ id: body.id }, 200);
+    } catch (e) {
+      if ((e as Error).message === "not-strength")
+        return c.json({ error: "El .FIT no es un entrenamiento de fuerza" }, 422);
+      return c.json({ error: "No se pudo importar el .FIT" }, 400);
+    }
+  });
 
   r.put("/:id", async (c) => {
     const id = c.req.param("id");

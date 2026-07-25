@@ -26,3 +26,11 @@ export function mapFitExercise(category: string, exerciseNameIndex: number | nul
   const id = slug(camel);
   return CATALOG_IDS.has(id) ? id : null;
 }
+
+// Como mapFitExercise, pero NUNCA null: los ejercicios que no están en el catálogo caen a
+// `fit:<category>` (id sintético, no vacío — SessionExerciseSchema.catalogId exige min(1)). Es la
+// forma canónica de resolver el catalogId de una serie del .FIT; la usan la transformación a
+// WorkoutSession y el preview, para que el fallback viva en UN solo lugar.
+export function catalogIdForFit(category: string, exerciseNameIndex: number | null): string {
+  return mapFitExercise(category, exerciseNameIndex) ?? `fit:${category}`;
+}

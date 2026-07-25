@@ -37,6 +37,16 @@ export interface FitFixtureOpts {
   metabolicCalories?: number | null;
   sportProfileName?: string | null;
   numLaps?: number | null;
+
+  // ── Fuerza (strengthTraining) ───────────────────────────────────────────────────────────────
+  // subSport de la sesión (ej. "strengthTraining"). Presente → el .FIT es de fuerza.
+  subSport?: string;
+  // Diccionario de ejercicios + series, para testear el parser de fuerza SIN datos reales.
+  strength?: {
+    workoutName?: string;
+    titles?: { messageIndex: number; exerciseCategory: string; exerciseName: number; wktStepName: string }[];
+    sets?: { setType: "active" | "rest"; category?: string; categorySubtype?: number; repetitions?: number; weight?: number; duration?: number }[];
+  };
 }
 
 // Construye un ArrayBuffer con un .FIT válido (header + CRC correctos) para tests.
@@ -86,6 +96,7 @@ export function buildFitFixture(opts: FitFixtureOpts = {}): Uint8Array {
 
   if (withSession) {
     const session: Record<string, unknown> = { mesgNum: Profile.MesgNum.SESSION, startTime: new Date(startTimeMs), sport };
+    if (opts.subSport != null) session.subSport = opts.subSport;
     if (totalTimerTime != null) session.totalTimerTime = totalTimerTime;
     if (totalElapsedTime != null) session.totalElapsedTime = totalElapsedTime;
     if (totalDistance != null) session.totalDistance = totalDistance;
@@ -212,6 +223,27 @@ export function buildFitFixture(opts: FitFixtureOpts = {}): Uint8Array {
     });
   }
 
+  if (opts.strength) {
+    const st = opts.strength;
+    if (st.workoutName != null) writeMesg({ mesgNum: Profile.MesgNum.WORKOUT, wktName: st.workoutName });
+    for (const t of st.titles ?? []) {
+      writeMesg({
+        mesgNum: Profile.MesgNum.EXERCISE_TITLE,
+        messageIndex: t.messageIndex, exerciseCategory: t.exerciseCategory,
+        exerciseName: t.exerciseName, wktStepName: t.wktStepName,
+      });
+    }
+    for (const s of st.sets ?? []) {
+      const set: Record<string, unknown> = { mesgNum: Profile.MesgNum.SET, setType: s.setType, startTime: new Date(startTimeMs) };
+      if (s.category != null) set.category = [s.category];
+      if (s.categorySubtype != null) set.categorySubtype = [s.categorySubtype];
+      if (s.repetitions != null) set.repetitions = s.repetitions;
+      if (s.weight != null) set.weight = s.weight;
+      if (s.duration != null) set.duration = s.duration;
+      writeMesg(set);
+    }
+  }
+
   hr.forEach((p, i) => {
     const rec: Record<string, unknown> = { mesgNum: Profile.MesgNum.RECORD, timestamp: new Date(p.atMs), heartRate: p.bpm };
     if (includeExtras) {
@@ -226,4 +258,33 @@ export function buildFitFixture(opts: FitFixtureOpts = {}): Uint8Array {
   });
 
   return enc.close();
+}
+
+// .FIT sintético en base64, para los tests de las rutas de import (que reciben fitBase64).
+export function buildFitFixtureBase64(opts: FitFixtureOpts = {}): string {
+  return Buffer.from(buildFitFixture(opts)).toString("base64");
+}
+
+// .FIT de FUERZA sintético (subSport strengthTraining) con 2 ejercicios y series, en base64.
+// Valores inventados — nunca datos reales del owner ([[nunca-datos-reales-en-el-repo]]).
+export function buildStrengthFitBase64(): string {
+  return buildFitFixtureBase64({
+    sport: "training",
+    subSport: "strengthTraining",
+    includeExtras: false,
+    totalTimerTime: 1200,
+    strength: {
+      workoutName: "Push A",
+      titles: [
+        { messageIndex: 0, exerciseCategory: "shoulderPress", exerciseName: 8, wktStepName: "Dumbbell Push Press" },
+        { messageIndex: 1, exerciseCategory: "plank", exerciseName: 43, wktStepName: "Plank" },
+      ],
+      sets: [
+        { setType: "active", category: "shoulderPress", categorySubtype: 8, repetitions: 8, weight: 20, duration: 30 },
+        { setType: "rest", duration: 60 },
+        { setType: "active", category: "shoulderPress", categorySubtype: 8, repetitions: 8, weight: 22, duration: 28 },
+        { setType: "active", category: "plank", categorySubtype: 43, duration: 60 }, // isométrico
+      ],
+    },
+  });
 }

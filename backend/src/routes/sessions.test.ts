@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import { createApp } from "../app";
+import { buildStrengthFitBase64, buildFitFixtureBase64 } from "../cardio/fitFixture";
 import { workoutSession } from "../db/schema";
 
 const KEY = "a".repeat(64);
@@ -185,4 +186,50 @@ test("DELETE /sessions/:id inexistente devuelve 404", async () => {
   const app = createApp(deps(db) as any);
   const res = await app.request(`/sessions/${SID}`, { method: "DELETE" });
   expect(res.status).toBe(404);
+});
+
+// ── Import de fuerza del .FIT ─────────────────────────────────────────────────────────────────
+const FIT_SID = "66666666-6666-4666-8666-666666666666";
+const postJson = (app: any, path: string, body: any) =>
+  app.request(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+test("POST /sessions/from-fit/preview devuelve ejercicios y series con catalogId resuelto", async () => {
+  const app = createApp(deps(fakeDb()) as any);
+  const res = await postJson(app, "/sessions/from-fit/preview", { fitBase64: buildStrengthFitBase64() });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.workoutName).toBe("Push A");
+  expect(body.exercises).toHaveLength(2);
+  // shoulderPress#8 → dumbbell_push_press (resuelto server-side)
+  expect(body.exercises[0].catalogId).toBe("dumbbell_push_press");
+  expect(body.totalReps).toBe(16);
+});
+
+test("POST /sessions/from-fit/preview con un .FIT de CARDIO da 422", async () => {
+  const app = createApp(deps(fakeDb()) as any);
+  const res = await postJson(app, "/sessions/from-fit/preview", { fitBase64: buildFitFixtureBase64() }); // walking, sin subSport strength
+  expect(res.status).toBe(422);
+});
+
+test("POST /sessions/from-fit persiste el entrenamiento (borra + reinserta en workout_session)", async () => {
+  const db = fakeDb();
+  const app = createApp(deps(db) as any);
+  const res = await postJson(app, "/sessions/from-fit", { fitBase64: buildStrengthFitBase64(), id: FIT_SID, location: "home" });
+  expect(res.status).toBe(200);
+  expect((await res.json()).id).toBe(FIT_SID);
+  expect(db._deletes.some((d: any) => d.table === workoutSession)).toBe(true);
+  expect(db._inserts.some((i: any) => i.table === workoutSession)).toBe(true);
+});
+
+test("POST /sessions/from-fit con un id de otro usuario devuelve 409", async () => {
+  const db = fakeDb({ userId: "otro-usuario-distinto" }); // findFirst (getSessionOwnerId) → dueño distinto
+  const app = createApp(deps(db) as any);
+  const res = await postJson(app, "/sessions/from-fit", { fitBase64: buildStrengthFitBase64(), id: FIT_SID, location: "gym" });
+  expect(res.status).toBe(409);
+});
+
+test("POST /sessions/from-fit sin id devuelve 400", async () => {
+  const app = createApp(deps(fakeDb()) as any);
+  const res = await postJson(app, "/sessions/from-fit", { fitBase64: buildStrengthFitBase64() });
+  expect(res.status).toBe(400);
 });

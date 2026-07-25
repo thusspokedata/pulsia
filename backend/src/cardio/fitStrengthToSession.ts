@@ -1,6 +1,6 @@
 import type { WorkoutSession } from "@pulsia/shared";
 import type { FitStrengthPreview } from "./parseFitStrength";
-import { mapFitExercise } from "./fitExerciseMap";
+import { catalogIdForFit } from "./fitExerciseMap";
 
 export interface FitSessionMeta {
   id: string;
@@ -27,7 +27,7 @@ export function fitStrengthToSession(preview: FitStrengthPreview, meta: FitSessi
     totalDurationMs: meta.totalDurationMs,
     notes: "",
     exercises: preview.exercises.map((ex, i) => {
-      const catalogId = mapFitExercise(ex.category, ex.exerciseNameIndex) ?? `fit:${ex.category}`;
+      const catalogId = catalogIdForFit(ex.category, ex.exerciseNameIndex);
       return {
         catalogId,
         garminName: ex.displayName ?? ex.category,

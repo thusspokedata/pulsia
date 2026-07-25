@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { mapFitExercise } from "./fitExerciseMap";
+import { mapFitExercise, catalogIdForFit } from "./fitExerciseMap";
 
 // Casos verificados contra Profile.types del SDK + EXERCISE_CATALOG (no adivinados).
 // El catálogo es un subconjunto curado de 273: algunos ejercicios del SDK NO están, y para esos
@@ -33,4 +33,13 @@ test("un índice que no existe en la category da null", () => {
 
 test("índice null da null (una serie sin exerciseName)", () => {
   expect(mapFitExercise("flye", null)).toBeNull();
+});
+
+test("catalogIdForFit: un ejercicio del catálogo usa su id real", () => {
+  expect(catalogIdForFit("flye", 2)).toBe("dumbbell_flye");
+});
+
+test("catalogIdForFit: un ejercicio fuera del catálogo cae a fit:<category> (nunca vacío)", () => {
+  expect(catalogIdForFit("shoulderPress", 17)).toBe("fit:shoulderPress"); // existe en el SDK pero no en el catálogo
+  expect(catalogIdForFit("noSuch", 0)).toBe("fit:noSuch");
 });
