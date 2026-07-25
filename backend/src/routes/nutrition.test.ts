@@ -195,6 +195,7 @@ const aiClient = {
   }),
   // Por defecto no matchea ningún candidato (los tests que sí matchean pasan su propio mock).
   pickUsdaCandidate: async () => null,
+  estimateFoodMicros: async () => ({ vitamin_c_mg: 8, iron_mg: 0.3, calcium_mg: 12 }),
 };
 const deps = (db: any, aiClientOverride: any = aiClient): any => ({ db, config: baseConfig, aiClient: aiClientOverride });
 
@@ -1047,4 +1048,34 @@ test("aplicar con body inválido → 400 (no 500)", async () => {
   expect((await postApply(createApp(deps(db, refreshAi)), { identification: sinQuery, fdcId: ALMENDRA_FDC })).status).toBe(400);
   expect((await postApply(createApp(deps(db, refreshAi)), { identification: IDENT_ALMENDRA })).status).toBe(400);
   expect(db._updates).toHaveLength(0);
+});
+
+// ---- Completar con IA en el alta (POST /foods/ai-micros) ----
+
+test("POST /nutrition/foods/ai-micros arma la extracción con micros de IA (sourceMicros ai)", async () => {
+  const app = createApp(deps(fakeDb()));
+  const identification = {
+    name: "Limonada casera", basis: "per_100ml", kcal: 40, protein_g: 0, carbs_g: 10, fat_g: 0,
+    unitWeightG: null, sourceMacros: "ai", searchQuery: "lemonade homemade",
+  };
+  const res = await app.request("/nutrition/foods/ai-micros", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ identification }),
+  });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.vitamin_c_mg).toBe(8);
+  expect(body.sourceMicros).toBe("ai");
+  expect(body.usdaFdcId).toBeNull();
+  expect(body.kcal).toBe(40);
+});
+
+test("POST /nutrition/foods/ai-micros con la IA rota devuelve 502 y no rompe", async () => {
+  const roto = { ...aiClient, estimateFoodMicros: async () => { throw new Error("boom"); } };
+  const app = createApp(deps(fakeDb(), roto));
+  const res = await app.request("/nutrition/foods/ai-micros", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ identification: { name: "x", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, sourceMacros: "ai", searchQuery: "x" } }),
+  });
+  expect(res.status).toBe(502);
 });
