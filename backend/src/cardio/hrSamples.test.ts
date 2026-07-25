@@ -18,6 +18,16 @@ test("redondea la FC y tolera recordMesgs ausente", () => {
   expect(extractHrSamples({})).toEqual([]);
 });
 
+test("descarta FC no-finita (NaN/Infinity) y timestamps inválidos (new Date(NaN))", () => {
+  const messages = { recordMesgs: [
+    rec(1000, 120),                          // válido
+    { timestamp: new Date(2000), heartRate: NaN },       // FC NaN → fuera
+    { timestamp: new Date(3000), heartRate: Infinity },  // FC Infinity → fuera
+    { timestamp: new Date(NaN), heartRate: 130 },        // fecha inválida → fuera
+  ] };
+  expect(extractHrSamples(messages)).toEqual([{ tMs: 1000, bpm: 120 }]);
+});
+
 import { hrForInterval, downsampleHrSeries } from "./hrSamples";
 
 test("hrForInterval promedia y saca el máximo de los samples del intervalo [start,end]", () => {

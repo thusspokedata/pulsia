@@ -5,8 +5,12 @@ export interface HrSample { tMs: number; bpm: number }
 
 export function extractHrSamples(messages: any): HrSample[] {
   const records = (messages.recordMesgs ?? []) as Array<Record<string, unknown>>;
+  // `typeof x === "number"` acepta NaN/Infinity, y `new Date(NaN) instanceof Date` es true: un
+  // record con FC o timestamp no-finito colaría un NaN que después el schema de la sesión rechaza
+  // (y voltea un import por lo demás válido). Se exige finitud explícita en las dos puntas.
   return records
-    .filter((r) => typeof r.heartRate === "number" && r.timestamp instanceof Date)
+    .filter((r) => typeof r.heartRate === "number" && Number.isFinite(r.heartRate)
+      && r.timestamp instanceof Date && Number.isFinite((r.timestamp as Date).getTime()))
     .map((r) => ({ tMs: (r.timestamp as Date).getTime(), bpm: Math.round(r.heartRate as number) }));
 }
 

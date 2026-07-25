@@ -90,3 +90,22 @@ test("hrSeries se puebla (downsampleada, relativa a startedAt de la sesión)", (
   expect(s.hrSeries!.length).toBeGreaterThan(0);
   expect(s.hrSeries![0].t).toBe(0); // el primer bucket relativo al inicio
 });
+
+// Costura (lado backend): el transformador REAL —no un objeto armado a mano— debe producir una
+// WorkoutSession "lista para resumen": es lo que summarize (mobile/src/session/summary.ts) necesita
+// para no mostrar todo en 0. summarize solo cuenta las series con endedAt != null (doneSetsOf) y saca
+// reps/volumen de ahí; la FC media/curva vienen de hrAvg y hrSeries. Este test cierra el hueco que
+// dejaba tener la mitad de la costura (summarize) probada solo contra un WorkoutSession hecho a mano.
+test("la costura: fitStrengthToSession produce una sesión con reps/volumen/trabajo/FC no vacíos", () => {
+  const s = fitStrengthToSession(preview, meta, hrSamples);
+  const done = s.exercises.flatMap((ex) => ex.sets).filter((set) => set.endedAt != null);
+  expect(done.length).toBeGreaterThan(0); // hay series "terminadas" que summarize va a contar
+  const totalReps = done.reduce((acc, set) => acc + (set.reps ?? 0), 0);
+  const totalVolumeKg = done.reduce((acc, set) => acc + (set.reps ?? 0) * (set.weightKg ?? 0), 0);
+  const workMs = done.reduce((acc, set) => acc + (set.durationMs ?? 0), 0);
+  expect(totalReps).toBeGreaterThan(0);       // 8 + 8 (el plank aporta 0), no 0
+  expect(totalVolumeKg).toBeGreaterThan(0);   // 8*20 + 8*22, no 0
+  expect(workMs).toBeGreaterThan(0);          // trabajo real, no todo descanso
+  expect(done.some((set) => set.hrAvg != null)).toBe(true); // FC por serie
+  expect(s.hrSeries && s.hrSeries.length > 0).toBe(true);   // curva de FC de la sesión
+});
