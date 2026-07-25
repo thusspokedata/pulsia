@@ -41,3 +41,10 @@ test("micros estimados por la IA no se anuncian como USDA", async () => {
   await render(<SourceChip sourceMacros="ai" sourceMicros="ai" />);
   expect(screen.queryByText("USDA")).toBeNull();
 });
+
+test("micros estimados por la IA muestran su propio chip, no destacado", async () => {
+  await render(<SourceChip sourceMacros="ai" sourceMicros="ai" />);
+  expect(screen.getByTestId("source-chip-micros-ai")).toBeTruthy();
+  expect(screen.getByText("micros IA")).toBeTruthy();
+});
+

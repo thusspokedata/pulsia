@@ -10,7 +10,8 @@ import { colors, radius, spacing } from "../theme/tokens";
 //                 "ai"     = la IA lo estimó de memoria
 //                 "manual" = lo cargó el usuario a mano
 //   sourceMicros: "usda"   = las vitaminas y minerales salieron de la base de USDA
-//                 "ai"     = las estimó el modelo
+//                 "ai"     = las estimó el modelo → chip "micros IA", sin destacar (es una
+//                            estimación, no un dato de laboratorio)
 //                 null     = no hubo match: el bloque quedó vacío, y no hay nada que anunciar
 //
 // El chip de macros antes decía "estimado" para todo lo que no fuera etiqueta, porque el dato
@@ -59,6 +60,7 @@ export function SourceChip({
         testID={`source-chip-${sourceMacros}`}
       />
       {sourceMicros === "usda" && <Chip text="USDA" strong testID="source-chip-micros-usda" />}
+      {sourceMicros === "ai" && <Chip text="micros IA" strong={false} testID="source-chip-micros-ai" />}
     </View>
   );
 }
