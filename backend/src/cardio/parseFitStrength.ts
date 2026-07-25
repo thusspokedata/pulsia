@@ -9,6 +9,7 @@
 // `category`/`categorySubtype` vienen como arrays de hasta 3 elementos idénticos → se toma [0].
 
 export interface FitStrengthSet {
+  startedAt: number; // epoch ms del inicio de la serie (setMesg.startTime); 0 si el .FIT no lo trae.
   reps: number | null; // null en isométricos (plancha): la serie es tiempo bajo tensión, sin reps.
   weightKg: number | null; // 0 en peso corporal; null si el reloj no lo reportó.
   durationMs: number;
@@ -55,7 +56,9 @@ export function parseFitStrength(messages: any): FitStrengthPreview {
       byKey.set(key, ex);
       order.push(key);
     }
+    const startTime = s.startTime instanceof Date ? s.startTime.getTime() : numOrNull(s.startTime);
     ex.sets.push({
+      startedAt: startTime ?? 0,
       reps: numOrNull(s.repetitions),
       weightKg: numOrNull(s.weight),
       durationMs: Math.round((numOrNull(s.duration) ?? 0) * 1000),

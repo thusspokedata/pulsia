@@ -42,7 +42,7 @@ test("totalReps y totalVolumeKg suman solo las series con reps y peso", () => {
 test("un ejercicio isométrico (sin reps ni peso) da reps y weightKg null, no rompe", () => {
   const p = parseFitStrength(fixture());
   const plank = p.exercises[1];
-  expect(plank.sets[0]).toEqual({ reps: null, weightKg: null, durationMs: 60000 });
+  expect(plank.sets[0]).toEqual({ startedAt: 0, reps: null, weightKg: null, durationMs: 60000 });
 });
 
 test("un ejercicio de peso corporal (weight 0) conserva weightKg 0 y aporta volumen 0", () => {
@@ -51,7 +51,7 @@ test("un ejercicio de peso corporal (weight 0) conserva weightKg 0 y aporta volu
     setMesgs: [{ setType: "active", category: ["hipStability"], categorySubtype: [1], repetitions: 12, weight: 0, duration: 40 }],
     workoutMesgs: [],
   }));
-  expect(p.exercises[0].sets[0]).toEqual({ reps: 12, weightKg: 0, durationMs: 40000 });
+  expect(p.exercises[0].sets[0]).toEqual({ startedAt: 0, reps: 12, weightKg: 0, durationMs: 40000 });
   expect(p.totalReps).toBe(12);
   expect(p.totalVolumeKg).toBe(0); // 12 × 0
 });
@@ -80,4 +80,17 @@ test("workoutName sale del wktName; sin plan es null", () => {
 test("la duración pasa de segundos a milisegundos", () => {
   const p = parseFitStrength(fixture());
   expect(p.exercises[0].sets[0].durationMs).toBe(30000); // 30 s
+});
+
+test("cada serie expone su startedAt (epoch ms) desde el startTime del setMesg", () => {
+  const p = parseFitStrength({
+    exerciseTitleMesgs: [{ messageIndex: 0, exerciseCategory: "curl", exerciseName: 0, wktStepName: "Curl" }],
+    setMesgs: [
+      { setType: "active", category: ["curl"], categorySubtype: [0], repetitions: 10, weight: 15, duration: 30, startTime: new Date(1000) },
+      { setType: "active", category: ["curl"], categorySubtype: [0], repetitions: 8, weight: 15, duration: 25, startTime: new Date(120000) },
+    ],
+    workoutMesgs: [],
+  });
+  expect(p.exercises[0].sets[0].startedAt).toBe(1000);
+  expect(p.exercises[0].sets[1].startedAt).toBe(120000);
 });
