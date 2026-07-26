@@ -2,13 +2,13 @@ import { Hono, type Context } from "hono";
 import { z } from "zod";
 import {
   SupplementInputSchema, GeneratePlanInputSchema, PlanItemPatchSchema, TakeInputSchema,
-  resolveDayChecklist, detectComponentOverlaps, type Frequency, type TakeStatus, type AiPlanItem,
+  resolveDayChecklist, detectComponentOverlaps, supplementMicros, type Frequency, type TakeStatus, type AiPlanItem,
 } from "@pulsia/shared";
 import {
   insertSupplement, listSupplements, getSupplement,
   updateSupplement, deleteSupplement, setSupplementInfo,
   createPlan, getActivePlan, getOwnedPlanItem, updatePlanItem, upsertTake,
-  listTakesForDate, getAdjustmentItems, snapshotForTake,
+  listTakesForDate, getAdjustmentItems, snapshotForTake, takesWithComponents,
 } from "../supplements/repository";
 import { resolveAiKey } from "../ai/resolveKey";
 import { settings } from "../db/schema";
@@ -189,6 +189,29 @@ export function supplementsRoutes(deps: AppDeps) {
       console.warn("explainSupplement falló:", (e as Error).message);
       return c.json({ error: "No se pudo generar la explicación. Reintentá." }, 502);
     }
+  });
+
+  // --- Aporte cuantificado de micros de suplementos (día / rango) ---
+  r.get("/day-nutrients", async (c) => {
+    const date = c.req.query("date");
+    if (!date || !z.iso.date().safeParse(date).success) return c.json({ error: "Falta date (YYYY-MM-DD)" }, 400);
+    const takes = await takesWithComponents(deps.db, c.get("userId"), date);
+    return c.json(supplementMicros(takes));
+  });
+
+  r.get("/range-nutrients", async (c) => {
+    const from = c.req.query("from"), to = c.req.query("to");
+    if (!from || !to || !z.iso.date().safeParse(from).success || !z.iso.date().safeParse(to).success) {
+      return c.json({ error: "Faltan from/to (YYYY-MM-DD)" }, 400);
+    }
+    // Rango chico (máx 30 días desde el móvil): iterar por día reusa takesWithComponents sin una
+    // consulta nueva. Se acumulan todas las tomas del rango y se agregan de una.
+    const all: Awaited<ReturnType<typeof takesWithComponents>> = [];
+    for (let d = new Date(from + "T00:00:00Z"); d <= new Date(to + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 1)) {
+      const day = d.toISOString().slice(0, 10);
+      all.push(...await takesWithComponents(deps.db, c.get("userId"), day));
+    }
+    return c.json(supplementMicros(all));
   });
 
   // Declarada AL FINAL (carry-over PR1 §c): después de /plan/*, /day, /takes y /extract para no capturarlos.

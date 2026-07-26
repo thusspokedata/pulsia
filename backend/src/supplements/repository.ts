@@ -2,7 +2,7 @@ import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { supplement, supplementPlan, supplementPlanItem, supplementTake, supplementAdjustment } from "../db/schema";
 import type {
   Supplement, SupplementInput, PlanView, PlanItemPatch, TakeInput,
-  AdjustmentItem, Frequency, TakeSlot,
+  AdjustmentItem, Frequency, TakeSlot, TakeStatus, TakeForMicros,
 } from "@pulsia/shared";
 import type { Db } from "../db/client";
 
@@ -192,4 +192,31 @@ export async function upsertAdjustment(db: Db, userId: string, forDate: string, 
     target: [supplementAdjustment.userId, supplementAdjustment.forDate],
     set: { items: [...items], reportId },
   });
+}
+
+// Une las tomas de un día con los componentes ACTUALES del suplemento (vía plan_item → supplement).
+// Snapshot de dosis (plannedDose/actualDose) de la toma; componentes del catálogo vivo (donde vive
+// el mapeo). Si la toma perdió su plan_item (suplemento borrado), no hay componentes → se omite.
+export async function takesWithComponents(db: Db, userId: string, date: string): Promise<TakeForMicros[]> {
+  const takes = await listTakesForDate(db, userId, date);
+  const catalog = await listSupplements(db, userId);
+  const byId = new Map(catalog.map((s) => [s.id, s]));
+  const itemToSupp = new Map<string, string>(); // planItemId → supplementId
+  const plan = await getActivePlan(db, userId);
+  if (plan) for (const it of plan.items) itemToSupp.set(it.id, it.supplementId);
+  const out: TakeForMicros[] = [];
+  for (const t of takes) {
+    if (t.planItemId == null) continue;
+    const suppId = itemToSupp.get(t.planItemId);
+    const sup = suppId ? byId.get(suppId) : undefined;
+    if (!sup) continue;
+    out.push({
+      status: t.status as TakeStatus,
+      plannedDose: t.plannedDose,
+      actualDose: t.actualDose ?? null,
+      supplementName: sup.name,
+      components: sup.components,
+    });
+  }
+  return out;
 }
