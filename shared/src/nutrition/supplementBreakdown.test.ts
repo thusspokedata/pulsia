@@ -50,6 +50,14 @@ describe("supplementMicros", () => {
     ];
     expect(Object.keys(supplementMicros(takes).totals)).toHaveLength(0);
   });
+  it("saltea un componente con nutrientKey null aunque amountPerUnit sea positivo", () => {
+    const takes: TakeForMicros[] = [
+      { status: "taken", plannedDose: "1", actualDose: null, supplementName: "X",
+        components: [{ name: "Creatina", amount: 5, unit: "g", nutrientKey: null, amountPerUnit: 100 }] },
+    ];
+    const { totals } = supplementMicros(takes);
+    expect(Object.keys(totals)).toHaveLength(0);
+  });
   it("suma multi-slot del mismo suplemento y respeta decimales del nutriente", () => {
     const takes: TakeForMicros[] = [
       { status: "taken", plannedDose: "1", actualDose: null, supplementName: "Zinc",
