@@ -40,6 +40,7 @@ export * from "./nutrition/references.efsa";
 export * from "./nutrition/breakdown";
 export * from "./nutrition/nutrientLevel";
 export * from "./nutrition/nutrientFilter";
+export * from "./nutrition/parseDose";
 export * from "./schemas/report";
 export * from "./supplements/checklist";
 export * from "./supplements/overlap";
