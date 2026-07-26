@@ -23,8 +23,11 @@ export interface NutrientRow {
   label: string;
   unit: string;
   value: number | null; // null = SIN DATO (distinto de 0)
+  // Aporte del mismo nutriente que viene de suplementos (no de comida). null = esta superficie no
+  // trackea suplementos (detalle de comida, alimento del catálogo); 0 = trackea pero no hay toma.
+  supplement: number | null;
   ref: number | null; // null = EFSA no lo cubre, o modo "por 100 g"
-  pct: number | null; // null si no hay valor o no hay referencia
+  pct: number | null; // null si no hay dato real (ni comida ni suplemento) o no hay referencia
   kind: ReferenceKind | null;
   // true = algunos de los ítems que suman este total NO declaraban el nutriente. El total es un
   // piso, no el número exacto. Solo tiene sentido en un total de varios ítems (el día); en un
@@ -46,6 +49,8 @@ export interface NutrientRowsOptions {
   refs?: Partial<Record<NutrientKey, NutrientReference | null>>;
   /** Nutrientes cuyo total viene de una suma con agujeros. */
   partial?: Partial<Record<NutrientKey, boolean>>;
+  /** Aporte de suplementos por nutriente, del mismo día/rango que `values`. */
+  supplement?: Partial<Record<NutrientKey, number>>;
 }
 
 /**
@@ -143,13 +148,23 @@ export function buildNutrientRows(
       const hayOverride = overrides != null && Object.prototype.hasOwnProperty.call(overrides, key);
       const referencia = hayOverride ? overrides![key] ?? null : refs?.[key] ?? null;
       const ref = referencia?.value ?? null;
+      const supplement = opciones?.supplement?.[key] ?? null;
+      // "Hay suplemento" también es dato: un nutriente sin dato de COMIDA (value null, muy común,
+      // no todos los alimentos declaran cada micro) no puede esconder que sí se tomó un
+      // suplemento. El total consumido es (value ?? 0) + (supplement ?? 0), y se calcula en
+      // cuanto CUALQUIERA de los dos sea un dato real: `value` no nulo, o `supplement` > 0 (un
+      // supplement en null o en 0 explícito no cuenta como toma, así que sin comida tampoco hay
+      // total que mostrar).
+      const haySuplemento = supplement != null && supplement > 0;
+      const total = value != null || haySuplemento ? (value ?? 0) + (supplement ?? 0) : null;
       return {
         key,
         label: def.label,
         unit: def.unit,
         value,
+        supplement,
         ref,
-        pct: value == null || ref == null ? null : porcentaje(value, ref),
+        pct: total == null || ref == null ? null : porcentaje(total, ref),
         kind: referencia?.kind ?? null,
         partial: opciones?.partial?.[key] ?? false,
       };
@@ -170,15 +185,25 @@ export function buildNutrientRows(
  * `ref` en null = superficie sin referencia (los valores por 100 g del catálogo): ni la OMS ni
  * EFSA hablan de 100 g de comida, hablan de un día.
  */
-export function filaDeSal(sodiumMg: number | null, ref: number | null, partial = false): NutrientRow {
+export function filaDeSal(
+  sodiumMg: number | null,
+  ref: number | null,
+  partial = false,
+  supplementSaltG: number | null = null,
+): NutrientRow {
   const value = saltGFromSodiumMg(sodiumMg);
+  // Mismo criterio que buildNutrientRows: "hay suplemento" también es dato, y el % cuenta
+  // comida + suplemento aunque la comida no traiga sodio ese día.
+  const haySuplemento = supplementSaltG != null && supplementSaltG > 0;
+  const total = value != null || haySuplemento ? (value ?? 0) + (supplementSaltG ?? 0) : null;
   return {
     key: "salt_g",
     label: "Sal",
     unit: "g",
     value,
+    supplement: supplementSaltG,
     ref,
-    pct: value == null || ref == null ? null : porcentaje(value, ref),
+    pct: total == null || ref == null ? null : porcentaje(total, ref),
     // Sin referencia no hay techo que exceder: el `kind` solo se lee para pintar el aviso y la
     // barra, y las dos exigen `ref`.
     kind: ref == null ? null : NUTRIENT_REFERENCE_KIND.salt_g,

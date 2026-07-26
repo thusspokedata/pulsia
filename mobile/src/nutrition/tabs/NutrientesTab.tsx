@@ -1,11 +1,11 @@
-import { Text, Pressable } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { router } from "expo-router";
 import type { GoalView } from "../goalView";
 import type { NutritionDaySummary } from "../daySummary";
 import { buildDayNutrientRows } from "../dayNutrientRows";
 import { NutrientList } from "../NutrientList";
-import { colors } from "../../theme/tokens";
-import { Card, SectionTitle, EmptyState } from "./ui";
+import { colors, spacing } from "../../theme/tokens";
+import { Card, SectionTitle, EmptyState, LegendRow } from "./ui";
 
 interface Props {
   summary: NutritionDaySummary;
@@ -20,8 +20,13 @@ export function NutrientesTab({ summary, goalView, persona, offset }: Props) {
   // Las saturadas se acotan al 10% de la ENERGÍA, así que su referencia sale de la meta de kcal.
   const goalKcal = goalView?.status === "ok" ? goalView.kcal!.meta : null;
   const secciones = buildDayNutrientRows(summary, persona, goalKcal);
-  const hayDatos = secciones.some((s) => s.rows.some((r) => r.value != null));
+  // "Hay suplemento" también es dato: un día sin ningún alimento cargado pero con un suplemento
+  // tomado no puede caer en el EmptyState, aunque `r.value` (que es SOLO comida) esté en null.
+  const hayDatos = secciones.some((s) => s.rows.some((r) => r.value != null || (r.supplement != null && r.supplement > 0)));
   const perfilIncompleto = persona.sex == null || persona.age == null;
+  // Solo hay algo que distinguir con un color si algún nutriente trajo aporte de suplemento ese
+  // día: sin toma, la barra es de un solo segmento y la leyenda de tres puntitos sobraría.
+  const haySuplementos = Object.keys(summary.supplementNutrients).length > 0;
 
   if (!hayDatos) {
     return (
@@ -47,6 +52,13 @@ export function NutrientesTab({ summary, goalView, persona, offset }: Props) {
             Completá tu sexo y edad en el perfil para referencias más precisas →
           </Text>
         </Pressable>
+      )}
+      {haySuplementos && (
+        <View testID="nutrientes-leyenda" style={{ gap: 0, marginTop: spacing.xs }}>
+          <LegendRow color={colors.accent} label="Comida">{""}</LegendRow>
+          <LegendRow color={colors.supplement} label="Suplemento">{""}</LegendRow>
+          <LegendRow color={colors.warning} label="Excedente">{""}</LegendRow>
+        </View>
       )}
       <NutrientList
         sections={secciones}

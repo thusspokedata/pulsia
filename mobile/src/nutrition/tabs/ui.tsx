@@ -50,21 +50,63 @@ export function barSegments(value: number, target: number, kind: BarKind = "limi
   return { fillPct, overPct: 100 - fillPct }; // se derivan uno del otro: siempre suman 100
 }
 
-// Barra de progreso de dos segmentos: turquesa hasta la meta, ámbar el excedente. Recibe los
-// números crudos en vez de un `pct`/`over` ya calculados, para que el color no pueda contradecir
-// al texto de la fila.
+// Barra de progreso de hasta tres segmentos: turquesa (comida) hasta la meta, violeta (suplemento)
+// y ámbar el excedente. Recibe los números crudos en vez de un `pct`/`over` ya calculados, para
+// que el color no pueda contradecir al texto de la fila.
+// (`value` sigue siendo la comida; `supplement` es el aporte del suplemento. Los call-sites que no
+// pasan `supplement` se comportan igual que antes — retrocompatible.)
 export function Bar({
-  value, target, kind = "limit", height = 8, testID,
-}: { value: number; target: number; kind?: BarKind; height?: number; testID?: string }) {
-  const { fillPct, overPct } = barSegments(value, target, kind);
+  value, supplement = 0, target, kind = "limit", height = 8, testID,
+}: { value: number; supplement?: number; target: number; kind?: BarKind; height?: number; testID?: string }) {
+  const { foodPct, supplementPct, overPct } = barSegments3(value, supplement, target, kind);
   return (
     <View style={{ height, borderRadius: height / 2, backgroundColor: colors.surfaceMuted, overflow: "hidden", flexDirection: "row" }}>
-      <View testID={testID} style={{ width: `${fillPct}%`, height, backgroundColor: colors.accent }} />
+      <View testID={testID} style={{ width: `${foodPct}%`, height, backgroundColor: colors.accent }} />
+      {supplementPct > 0 && (
+        <View testID={testID ? `${testID}-supp` : undefined} style={{ width: `${supplementPct}%`, height, backgroundColor: colors.supplement }} />
+      )}
       {overPct > 0 && (
         <View testID={testID ? `${testID}-over` : undefined} style={{ width: `${overPct}%`, height, backgroundColor: colors.warning }} />
       )}
     </View>
   );
+}
+
+export interface BarSegments3 { foodPct: number; supplementPct: number; overPct: number; }
+
+// Generaliza barSegments a 3 vías: comida (teal) + suplemento (violeta) + excedente (ámbar). El
+// total consumido es food+supplement; se parte en la línea de la meta como el diseño de 2 colores.
+// Clamps simétricos: ningún segmento con valor > 0 puede redondear a 0% y desaparecer.
+export function barSegments3(food: number, supplement: number, target: number, kind: BarKind = "limit"): BarSegments3 {
+  const f = Math.max(0, Number.isFinite(food) ? food : 0);
+  const s = Math.max(0, Number.isFinite(supplement) ? supplement : 0);
+  const total = f + s;
+  if (!Number.isFinite(target) || target <= 0 || total <= 0) return { foodPct: 0, supplementPct: 0, overPct: 0 };
+  if (total <= target || kind === "floor") {
+    const rawFoodPct = f > 0 ? Math.max(1, Math.round((f / target) * 100)) : 0;
+    const suppPct = s > 0 ? Math.max(1, Math.round((s / target) * 100)) : 0;
+    // No dejar que la suma pase 100 por los clamps.
+    const capped = Math.min(100, rawFoodPct + suppPct);
+    // El propio foodPct también tiene que quedar adentro de `capped`: sin este min, un piso
+    // (fibra) o un límite sin pasarse pero con un solo valor ya >100% (p.ej. floor al 150%)
+    // dibujaba la barra más ancha que el contenedor en vez de quedar llena al 100%.
+    const foodPct = Math.min(rawFoodPct, capped);
+    return { foodPct, supplementPct: Math.max(0, capped - foodPct), overPct: 0 };
+  }
+  // Te pasaste: la barra se llena (100%); food/supp/over proporcionales al total, con clamps.
+  // `reserved` aparta 1% para CADA segmento no nulo (comida, suplemento) ANTES de fijar el
+  // excedente: sin esto, una meta chica frente al total (comida=1, suplemento=99, meta=1) dejaba
+  // `inTarget` en apenas 1%, justo lo que entra en el clamp mínimo de UN solo segmento, y el otro
+  // —el dominante— desaparecía en 0% pese a valer > 0. Restarle el reservado al tope de overPct en
+  // vez de a foodPct protege a los DOS segmentos, no solo al de comida.
+  const reserved = (f > 0 ? 1 : 0) + (s > 0 ? 1 : 0);
+  const maxOverPct = Math.max(1, 100 - reserved);
+  const overPct = Math.max(1, Math.min(maxOverPct, Math.round(((total - target) / total) * 100)));
+  const inTarget = 100 - overPct; // porción dentro de la meta, con lugar reservado para los dos
+  const rawFoodPct = f > 0 ? Math.round((f / total) * 100) : 0;
+  const foodPct = f > 0 ? Math.max(1, Math.min(inTarget - (s > 0 ? 1 : 0), rawFoodPct)) : 0;
+  const supplementPct = s > 0 ? Math.max(1, inTarget - foodPct) : 0;
+  return { foodPct, supplementPct, overPct };
 }
 
 export function EmptyState({ children }: { children: ReactNode }) {

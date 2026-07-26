@@ -118,6 +118,10 @@ export interface FoodRank {
   amount: number; // del nutriente, sumado en el rango
   grams: number; // cantidad comida, sumada — sin esto no se puede decidir si bajar la porción
   pctOfTotal: number; // 0–100
+  // De dónde sale la fila: comida (este archivo) o suplemento (agregado por la pantalla, que
+  // combina foodsHighestIn con el aporte de suplementos del rango). Vive acá y no solo en la
+  // pantalla porque el chip "suplemento" del render depende de este campo, no de un cast local.
+  source: "food" | "supplement";
 }
 
 // Qué alimentos aportaron un nutriente, de mayor a menor. Agrupa por nombre: el mismo alimento
@@ -142,6 +146,7 @@ export function foodsHighestIn(meals: Meal[], nutrient: RankNutrient): FoodRank[
       amount: Math.round(v.amount * 10) / 10, // 1 decimal, como el resto de los micros
       grams: Math.round(v.grams),
       pctOfTotal: pct(v.amount, total),
+      source: "food" as const,
     }))
     // Desempate por nombre: sin esto el orden depende del de inserción y la lista baila.
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));

@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react-native";
 import NutrienteScreen from "../app/nutricion/nutriente";
 import { listMeals } from "../src/api/nutrition";
+import { getRangeNutrients } from "../src/api/supplements";
 
 let mockKey = "cholesterol_mg";
 jest.mock("expo-router", () => ({
@@ -9,6 +10,10 @@ jest.mock("expo-router", () => ({
 }));
 jest.mock("../src/storage/config", () => ({ getBackendUrl: jest.fn(async () => "http://x") }));
 jest.mock("../src/api/nutrition", () => ({ listMeals: jest.fn(async () => []) }));
+// Por defecto sin suplementos: los tests de Task 14 pisan esto con un mockResolvedValue propio.
+jest.mock("../src/api/supplements", () => ({
+  getRangeNutrients: jest.fn(async () => ({ totals: {}, byNutrient: {} })),
+}));
 
 const meal = (items: any[], eatenAt = 1) => ({ id: "m", eatenAt, mealType: null, note: null, items });
 const item = (foodName: string, grams: number, cholesterol_mg: number | null, extra: any = {}) => ({
@@ -22,6 +27,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockKey = "cholesterol_mg";
   (listMeals as jest.Mock).mockResolvedValue([meal([item("Huevo", 120, 440), item("Queso", 60, 110)])]);
+  (getRangeNutrients as jest.Mock).mockResolvedValue({ totals: {}, byNutrient: {} });
 });
 
 test("rankea los alimentos por aporte, con la cantidad comida y el %", async () => {
@@ -191,4 +197,61 @@ test("varios días con el nutriente en 0 declarado: muestra la curva, no 'no hay
   await fireEvent.press(screen.getByText("7 días"));
   await waitFor(() => expect(screen.getByTestId("linechart-refline")).toBeTruthy());
   expect(screen.getByText(/2 de 7 días con registro/)).toBeTruthy();
+});
+
+// --- Task 14: ranking combinado con el aporte de suplementos del rango ---
+
+test("un suplemento que aporta el nutriente se suma al ranking, con el chip y sin gramos", async () => {
+  mockKey = "magnesium_mg";
+  (listMeals as jest.Mock).mockResolvedValue([meal([item("Espinaca", 100, null, { magnesium_mg: 30 })])]);
+  (getRangeNutrients as jest.Mock).mockResolvedValue({
+    totals: {},
+    byNutrient: { magnesium_mg: [{ supplementName: "Magnesio Citrato", amount: 90 }] },
+  });
+  await render(<NutrienteScreen />);
+  await waitFor(() => expect(screen.getByText("Magnesio Citrato")).toBeTruthy());
+  expect(screen.getByText("Espinaca")).toBeTruthy();
+  expect(screen.getByText("suplemento")).toBeTruthy();
+  // Total combinado 120 mg: el suplemento (90) es 75%, la espinaca (30) es 25%.
+  expect(screen.getByText("90 mg · 75%")).toBeTruthy();
+  expect(screen.getByText("30 mg · 25%")).toBeTruthy();
+  expect(screen.getByText("100 g")).toBeTruthy(); // la fila de comida sigue mostrando gramos
+  expect(screen.queryByText("0 g")).toBeNull(); // el suplemento NO muestra gramos (no "0 g")
+});
+
+test("el ranking combinado ordena por aporte, sin importar si es comida o suplemento", async () => {
+  mockKey = "magnesium_mg";
+  (listMeals as jest.Mock).mockResolvedValue([meal([item("Espinaca", 100, null, { magnesium_mg: 200 })])]);
+  (getRangeNutrients as jest.Mock).mockResolvedValue({
+    totals: {},
+    byNutrient: { magnesium_mg: [{ supplementName: "Magnesio Citrato", amount: 50 }] },
+  });
+  await render(<NutrienteScreen />);
+  await waitFor(() => expect(screen.getByText("Espinaca")).toBeTruthy());
+  const texts = screen.getAllByText(/mg ·/).map((n) => n.props.children.join(""));
+  expect(texts[0]).toContain("200"); // Espinaca primero: aporta más
+  expect(texts[1]).toContain("50");
+});
+
+test("sal: el aporte de suplementos llega como sodio y se convierte a gramos de sal", async () => {
+  mockKey = "salt_g";
+  (listMeals as jest.Mock).mockResolvedValue([meal([item("Jamón", 100, null, { sodium_mg: 800 })])]); // 2 g sal
+  (getRangeNutrients as jest.Mock).mockResolvedValue({
+    totals: {},
+    byNutrient: { sodium_mg: [{ supplementName: "Sal Rosa", amount: 400 }] }, // 1 g sal
+  });
+  await render(<NutrienteScreen />);
+  await waitFor(() => expect(screen.getByText("Sal Rosa")).toBeTruthy());
+  expect(screen.getByText("1 g · 33%")).toBeTruthy();
+  expect(screen.getByText("2 g · 67%")).toBeTruthy();
+});
+
+test("si falla la carga de suplementos, degrada limpio: muestra solo la comida", async () => {
+  mockKey = "magnesium_mg";
+  (listMeals as jest.Mock).mockResolvedValue([meal([item("Espinaca", 100, null, { magnesium_mg: 30 })])]);
+  (getRangeNutrients as jest.Mock).mockRejectedValue(new Error("sin red"));
+  await render(<NutrienteScreen />);
+  await waitFor(() => expect(screen.getByText("Espinaca")).toBeTruthy());
+  expect(screen.getByText("30 mg · 100%")).toBeTruthy();
+  expect(screen.queryByText("suplemento")).toBeNull();
 });
