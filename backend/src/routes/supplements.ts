@@ -204,6 +204,9 @@ export function supplementsRoutes(deps: AppDeps) {
     if (!from || !to || !z.iso.date().safeParse(from).success || !z.iso.date().safeParse(to).success) {
       return c.json({ error: "Faltan from/to (YYYY-MM-DD)" }, 400);
     }
+    if (from > to) return c.json({ error: "from no puede ser posterior a to" }, 400);
+    const rangeDays = (new Date(to + "T00:00:00Z").getTime() - new Date(from + "T00:00:00Z").getTime()) / 86_400_000;
+    if (rangeDays > 366) return c.json({ error: "El rango entre from y to no puede superar 366 días" }, 400);
     // Rango chico (máx 30 días desde el móvil): iterar por día reusa takesWithComponents sin una
     // consulta nueva. Se acumulan todas las tomas del rango y se agregan de una.
     const all: Awaited<ReturnType<typeof takesWithComponents>> = [];

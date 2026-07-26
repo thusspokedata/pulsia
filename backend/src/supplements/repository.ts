@@ -215,6 +215,18 @@ export async function upsertAdjustment(db: Db, userId: string, forDate: string, 
   });
 }
 
+// Todos los plan_item de un usuario, de CUALQUIER plan (activo o archivado). Regenerar el plan
+// (createPlan) archiva el activo y crea ítems con IDs nuevos; una toma grabada contra un
+// planItemId de un plan ya archivado necesita seguir resolviéndose (ver takesWithComponents).
+export async function listAllPlanItemsForUser(db: Db, userId: string): Promise<{ id: string; supplementId: string }[]> {
+  return db.select({
+    id: supplementPlanItem.id,
+    supplementId: supplementPlanItem.supplementId,
+  }).from(supplementPlanItem)
+    .innerJoin(supplementPlan, eq(supplementPlanItem.planId, supplementPlan.id))
+    .where(eq(supplementPlan.userId, userId));
+}
+
 // Une las tomas de un día con los componentes ACTUALES del suplemento (vía plan_item → supplement).
 // Snapshot de dosis (plannedDose/actualDose) de la toma; componentes del catálogo vivo (donde vive
 // el mapeo). Si la toma perdió su plan_item (suplemento borrado), no hay componentes → se omite.
@@ -223,8 +235,8 @@ export async function takesWithComponents(db: Db, userId: string, date: string):
   const catalog = await listSupplements(db, userId);
   const byId = new Map(catalog.map((s) => [s.id, s]));
   const itemToSupp = new Map<string, string>(); // planItemId → supplementId
-  const plan = await getActivePlan(db, userId);
-  if (plan) for (const it of plan.items) itemToSupp.set(it.id, it.supplementId);
+  const items = await listAllPlanItemsForUser(db, userId);
+  for (const it of items) itemToSupp.set(it.id, it.supplementId);
   const out: TakeForMicros[] = [];
   for (const t of takes) {
     if (t.planItemId == null) continue;

@@ -498,6 +498,20 @@ test("GET /nutrition/supplements/day-nutrients devuelve vacío sin plan", async 
   expect(body.totals).toEqual({});
 });
 
+test("GET /nutrition/supplements/range-nutrients → 400 si from es posterior a to", async () => {
+  const app = createApp(deps(fakeDb()));
+  const res = await app.request("/nutrition/supplements/range-nutrients?from=2026-07-20&to=2026-07-10");
+  expect(res.status).toBe(400);
+  expect(await res.json()).toMatchObject({ error: expect.any(String) });
+});
+
+test("GET /nutrition/supplements/range-nutrients → 400 si el rango supera 366 días", async () => {
+  const app = createApp(deps(fakeDb()));
+  const res = await app.request("/nutrition/supplements/range-nutrients?from=2025-01-01&to=2026-06-01");
+  expect(res.status).toBe(400);
+  expect(await res.json()).toMatchObject({ error: expect.any(String) });
+});
+
 test("GET/PATCH/DELETE/explain de PR1 → 400 con id no-UUID (carry-over de familia completa)", async () => {
   const app = createApp(deps(fakeDb()));
   expect((await app.request("/nutrition/supplements/not-a-uuid")).status).toBe(400);
