@@ -59,6 +59,27 @@ export async function setSupplementInfo(db: Db, userId: string, id: string, info
   return rows[0] ? toSupplement(rows[0]) : null;
 }
 
+// Aplica SOLO el mapeo (unitLabel + nutrientKey/amountPerUnit por componente). No toca name/amount/
+// unit/macros: identidad y valores de etiqueta salen del suplemento GUARDADO, no del body (lección #190).
+export async function setSupplementMapping(
+  db: Db, userId: string, id: string,
+  mapping: { unitLabel: string | null; components: { nutrientKey: string | null; amountPerUnit: number | null }[] },
+): Promise<boolean> {
+  const sup = await getSupplement(db, userId, id);
+  if (!sup) return false;
+  // Mapeo posicional: la IA devuelve el mismo orden. Si la longitud no coincide, no se toca (defensivo).
+  if (mapping.components.length !== sup.components.length) return false;
+  const merged = sup.components.map((c, i) => ({
+    ...c,
+    nutrientKey: mapping.components[i].nutrientKey as any,
+    amountPerUnit: mapping.components[i].amountPerUnit,
+  }));
+  await db.update(supplement)
+    .set({ unitLabel: mapping.unitLabel, components: merged })
+    .where(and(eq(supplement.id, id), eq(supplement.userId, userId)));
+  return true;
+}
+
 export async function deleteSupplement(db: Db, userId: string, id: string): Promise<boolean> {
   const rows = await db.delete(supplement)
     .where(and(eq(supplement.id, id), eq(supplement.userId, userId))).returning({ id: supplement.id });

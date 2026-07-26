@@ -529,3 +529,42 @@ test("GET /nutrition/supplements/:id → 404 si es ajeno o no existe", async () 
   const res = await app.request(`/nutrition/supplements/${SUP_ID}`);
   expect(res.status).toBe(404);
 });
+
+// ---- Backfill de mapeo IA (T8) ----
+
+test("POST /nutrition/supplements/backfill-micros mapea los suplementos sin mapear y es idempotente", async () => {
+  const mgSup = {
+    ...supRow, id: SUP_ID, name: "Mg", servingLabel: "2 cápsulas",
+    components: [{ name: "Magnesio", amount: 375, unit: "mg" }], // sin nutrientKey: "pending"
+  };
+  const aiClient = makeAiClient({
+    mapSupplementComponents: async () => ({
+      unitLabel: "cápsula",
+      components: [{ nutrientKey: "magnesium_mg", amountPerUnit: 187.5 }],
+    }),
+  });
+  const db = fakeDb({ supplements: [mgSup], supRow: mgSup });
+  const app = createApp(deps(db, aiClient));
+  const res = await app.request("/nutrition/supplements/backfill-micros", { method: "POST" });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body).toMatchObject({ ok: true, mapped: 1, pending: 1 });
+
+  // segunda corrida: el suplemento ya mapeado (nutrientKey definido) → no vuelve a llamar a la IA
+  const mappedSup = {
+    ...mgSup,
+    unitLabel: "cápsula",
+    components: [{ name: "Magnesio", amount: 375, unit: "mg", nutrientKey: "magnesium_mg", amountPerUnit: 187.5 }],
+  };
+  const db2 = fakeDb({ supplements: [mappedSup], supRow: mappedSup });
+  const app2 = createApp(deps(db2, aiClient));
+  const res2 = await app2.request("/nutrition/supplements/backfill-micros", { method: "POST" });
+  expect(res2.status).toBe(200);
+  expect(await res2.json()).toMatchObject({ ok: true, mapped: 0, pending: 0 });
+});
+
+test("POST /nutrition/supplements/backfill-micros → 500 si el servidor no soporta el mapeo", async () => {
+  const app = createApp(deps(fakeDb({ supplements: [] }))); // sin mapSupplementComponents
+  const res = await app.request("/nutrition/supplements/backfill-micros", { method: "POST" });
+  expect(res.status).toBe(500);
+});

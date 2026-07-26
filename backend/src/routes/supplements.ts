@@ -6,7 +6,7 @@ import {
 } from "@pulsia/shared";
 import {
   insertSupplement, listSupplements, getSupplement,
-  updateSupplement, deleteSupplement, setSupplementInfo,
+  updateSupplement, deleteSupplement, setSupplementInfo, setSupplementMapping,
   createPlan, getActivePlan, getOwnedPlanItem, updatePlanItem, upsertTake,
   listTakesForDate, getAdjustmentItems, snapshotForTake, takesWithComponents,
 } from "../supplements/repository";
@@ -212,6 +212,33 @@ export function supplementsRoutes(deps: AppDeps) {
       all.push(...await takesWithComponents(deps.db, c.get("userId"), day));
     }
     return c.json(supplementMicros(all));
+  });
+
+  // Backfill: mapea con IA los suplementos del catálogo que todavía no tienen nutrientKey (alta previa
+  // a T6/T7, o el mapeo automático del alta falló). Idempotente: solo procesa los pendientes.
+  r.post("/backfill-micros", async (c) => {
+    const userId = c.get("userId");
+    if (!deps.aiClient.mapSupplementComponents) return c.json({ error: "El servidor no soporta el mapeo." }, 500);
+    const apiKey = await apiKeyFor(deps, userId);
+    if (!apiKey) return c.json({ error: "No hay API key de IA disponible." }, 400);
+    const catalog = await listSupplements(deps.db, userId);
+    // Solo los que NO están mapeados aún: idempotente. "Mapeado" = todos sus componentes tienen
+    // nutrientKey definido (undefined = nunca se corrió; null = se corrió y no aplica).
+    const pending = catalog.filter((s) => s.components.some((comp) => comp.nutrientKey === undefined));
+    let mapped = 0;
+    for (const s of pending) {
+      try {
+        const out = await deps.aiClient.mapSupplementComponents({
+          name: s.name, servingLabel: s.servingLabel,
+          components: s.components.map((comp) => ({ name: comp.name, amount: comp.amount, unit: comp.unit })), apiKey,
+        });
+        const ok = await setSupplementMapping(deps.db, userId, s.id, out);
+        if (ok) mapped++;
+      } catch (e) {
+        console.warn("backfill-micros falló para", s.id, (e as Error).message);
+      }
+    }
+    return c.json({ ok: true, mapped, pending: pending.length });
   });
 
   // Declarada AL FINAL (carry-over PR1 §c): después de /plan/*, /day, /takes y /extract para no capturarlos.
