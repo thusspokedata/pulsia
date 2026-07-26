@@ -39,7 +39,9 @@ function unitsOf(t: TakeForMicros): number {
 // vive donde ya vive (filaDeSal en el móvil), sobre el sodio ya sumado.
 export function supplementMicros(takes: TakeForMicros[]): SupplementMicrosResult {
   const acc = new Map<NutrientKey, number>();
-  const ranks = new Map<NutrientKey, SupplementNutrientRank[]>();
+  // Por nutriente, aporte acumulado POR suplemento (agrega multi-slot / multi-componente antes de
+  // rankear — dos tomas del mismo suplemento deben sumar en una sola fila, no duplicarse).
+  const ranks = new Map<NutrientKey, Map<string, number>>();
   for (const t of takes) {
     const units = unitsOf(t);
     if (units <= 0) continue;
@@ -49,18 +51,19 @@ export function supplementMicros(takes: TakeForMicros[]): SupplementMicrosResult
       const amount = c.amountPerUnit * units;
       if (amount <= 0) continue;
       acc.set(key, (acc.get(key) ?? 0) + amount);
-      const list = ranks.get(key) ?? [];
-      list.push({ supplementName: t.supplementName, amount });
-      ranks.set(key, list);
+      const bySupp = ranks.get(key) ?? new Map<string, number>();
+      bySupp.set(t.supplementName, (bySupp.get(t.supplementName) ?? 0) + amount);
+      ranks.set(key, bySupp);
     }
   }
   const totals: Partial<Record<NutrientKey, number>> = {};
   for (const [key, sum] of acc) totals[key] = roundTo(sum, DECIMALS.get(key) ?? 1);
   const byNutrient: Partial<Record<NutrientKey, SupplementNutrientRank[]>> = {};
-  for (const [key, list] of ranks) {
-    byNutrient[key] = list
-      .map((r) => ({ supplementName: r.supplementName, amount: roundTo(r.amount, DECIMALS.get(key) ?? 1) }))
-      .sort((a, b) => b.amount - a.amount || a.supplementName.localeCompare(b.supplementName));
+  for (const [key, bySupp] of ranks) {
+    byNutrient[key] = Array.from(bySupp, ([supplementName, amount]) => ({
+      supplementName,
+      amount: roundTo(amount, DECIMALS.get(key) ?? 1),
+    })).sort((a, b) => b.amount - a.amount || a.supplementName.localeCompare(b.supplementName));
   }
   return { totals, byNutrient };
 }

@@ -75,4 +75,24 @@ describe("supplementMicros", () => {
     ];
     expect(supplementMicros(takes).byNutrient.magnesium_mg).toEqual([{ supplementName: "Mg", amount: 300 }]);
   });
+  it("byNutrient agrega por suplemento en vez de duplicar filas (multi-slot mañana+noche)", () => {
+    const takes: TakeForMicros[] = [
+      { status: "taken", plannedDose: "1", actualDose: null, supplementName: "Mg",
+        components: [mg("magnesium_mg", 100)] },
+      { status: "taken", plannedDose: "1", actualDose: null, supplementName: "Mg",
+        components: [mg("magnesium_mg", 100)] },
+    ];
+    const rows = supplementMicros(takes).byNutrient.magnesium_mg;
+    expect(rows).toHaveLength(1);
+    expect(rows).toEqual([{ supplementName: "Mg", amount: 200 }]);
+  });
+  it("byNutrient agrega por suplemento cuando dos componentes mapean al mismo nutriente", () => {
+    const takes: TakeForMicros[] = [
+      { status: "taken", plannedDose: "1", actualDose: null, supplementName: "Multi",
+        components: [mg("magnesium_mg", 50), mg("magnesium_mg", 25)] },
+    ];
+    const rows = supplementMicros(takes).byNutrient.magnesium_mg;
+    expect(rows).toHaveLength(1);
+    expect(rows).toEqual([{ supplementName: "Multi", amount: 75 }]);
+  });
 });

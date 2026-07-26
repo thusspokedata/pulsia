@@ -19,4 +19,8 @@ describe("parseLeadingNumber", () => {
   it("clampa negativos a 0", () => {
     expect(parseLeadingNumber("-2 caps")).toBe(0);
   });
+  it("acepta decimales sin cero inicial (punto o coma)", () => {
+    expect(parseLeadingNumber(".5 cápsula")).toBe(0.5);
+    expect(parseLeadingNumber(",5 g")).toBe(0.5);
+  });
 });

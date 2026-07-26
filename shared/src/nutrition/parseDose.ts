@@ -3,7 +3,7 @@
 // decide el fallback. Clampa a >= 0 — una dosis negativa no tiene sentido.
 export function parseLeadingNumber(s: string | null | undefined): number | null {
   if (s == null) return null;
-  const m = s.match(/-?\d+(?:[.,]\d+)?/);
+  const m = s.match(/-?(?:\d+(?:[.,]\d+)?|[.,]\d+)/);
   if (!m) return null;
   const n = Number(m[0].replace(",", "."));
   if (!Number.isFinite(n)) return null;

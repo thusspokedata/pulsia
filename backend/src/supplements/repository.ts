@@ -231,11 +231,13 @@ export async function listAllPlanItemsForUser(db: Db, userId: string): Promise<{
 // Snapshot de dosis (plannedDose/actualDose) de la toma; componentes del catálogo vivo (donde vive
 // el mapeo). Si la toma perdió su plan_item (suplemento borrado), no hay componentes → se omite.
 export async function takesWithComponents(db: Db, userId: string, date: string): Promise<TakeForMicros[]> {
-  const takes = await listTakesForDate(db, userId, date);
-  const catalog = await listSupplements(db, userId);
+  const [takes, catalog, items] = await Promise.all([
+    listTakesForDate(db, userId, date),
+    listSupplements(db, userId),
+    listAllPlanItemsForUser(db, userId),
+  ]);
   const byId = new Map(catalog.map((s) => [s.id, s]));
   const itemToSupp = new Map<string, string>(); // planItemId → supplementId
-  const items = await listAllPlanItemsForUser(db, userId);
   for (const it of items) itemToSupp.set(it.id, it.supplementId);
   const out: TakeForMicros[] = [];
   for (const t of takes) {

@@ -1,5 +1,5 @@
 import { sumNullableMicro, dayExerciseBurn, saltGFromSodiumMg, CARDIO_LABELS, supplementMicros } from "@pulsia/shared";
-import type { AthleteContext, Meal, WaterLog, PlanView, CardioActivity, SupplementComponent, TakeForMicros } from "@pulsia/shared";
+import type { AthleteContext, Meal, WaterLog, PlanView, CardioActivity, SupplementComponent, TakeForMicros, NutrientKey } from "@pulsia/shared";
 import { listMeals as listMealsImpl, listWater as listWaterImpl } from "../nutrition/repository";
 import { listSessions as listSessionsImpl } from "../sessions/repository";
 import { listCardio as listCardioImpl } from "../cardio/repository";
@@ -38,7 +38,7 @@ export interface ReportData {
   } | null; // null si no hay plan activo
   // Aporte cuantificado de los suplementos TOMADOS en el período, por nutriente (misma agregación
   // que usa el diario). null si no hay plan activo — igual que `supplements`.
-  supplementMicros: Partial<Record<string, number>> | null;
+  supplementMicros: Partial<Record<NutrientKey, number>> | null;
 }
 
 // Deps inyectables para testear sin DB real.
@@ -102,7 +102,7 @@ export async function collectReportData(
   // Los `takes` del rango (TakeRow, arriba) traen supplementName pero no supplementId, así que la
   // unión con el catálogo (para sacar los `components` mapeados) es por NOMBRE, no por id — el
   // snapshot de la toma guarda el nombre del suplemento tal como se llamaba al tomarlo.
-  let supplementMicrosOut: Partial<Record<string, number>> | null = null;
+  let supplementMicrosOut: Partial<Record<NutrientKey, number>> | null = null;
   if (activePlan) {
     const byName = new Map(catalog.map((s) => [s.name, s.components]));
     const forMicros: TakeForMicros[] = takes.map((t) => ({
