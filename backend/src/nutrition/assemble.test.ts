@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { FoodExtractionSchema, NUTRIENT_KEYS, type FoodIdentification } from "@pulsia/shared";
-import { assembleFoodExtraction, AI_PROVIDED_KEYS, VITAMIN_MINERAL_KEYS } from "./assemble";
+import { FoodExtractionSchema, NUTRIENT_KEYS, type FoodIdentification, type FoodMicrosEstimate } from "@pulsia/shared";
+import { assembleFoodExtraction, assembleFoodWithAiMicros, AI_PROVIDED_KEYS, VITAMIN_MINERAL_KEYS } from "./assemble";
 import { nutrientColumn } from "./columns";
 import type { UsdaFoodRow } from "../usda/matcher";
 
@@ -112,4 +112,31 @@ test("AI_PROVIDED_KEYS y vitaminas/minerales particionan el registro sin huecos 
   const union = new Set([...labelMicros, ...VITAMIN_MINERAL_KEYS]);
   expect(union.size).toBe(NUTRIENT_KEYS.length);
   expect(VITAMIN_MINERAL_KEYS.some((k) => AI_PROVIDED_KEYS.includes(k as (typeof AI_PROVIDED_KEYS)[number]))).toBe(false);
+});
+
+test("assembleFoodWithAiMicros: los 30 nutrientes salen del estimado, sourceMicros ai, usdaFdcId null", () => {
+  const micros: FoodMicrosEstimate = { vitamin_c_mg: 12, iron_mg: 1.9, calcium_mg: 62, selenium_mcg: null };
+  const out = assembleFoodWithAiMicros(baseId({ kcal: 200, saturated_fat_g: 4 }), micros);
+  expect(out.vitamin_c_mg).toBe(12);
+  expect(out.iron_mg).toBe(1.9);
+  expect(out.calcium_mg).toBe(62);
+  expect(out.selenium_mcg).toBeNull();          // el estimado dijo null explícito
+  expect(out.zinc_mg).toBeNull();               // el estimado lo omitió → null, no 0
+  expect(out.saturated_fat_g).toBeNull();       // los 6 micros de etiqueta TAMBIÉN salen del estimado (acá omitido)
+  expect(out.sourceMicros).toBe("ai");
+  expect(out.usdaFdcId).toBeNull();
+});
+
+test("assembleFoodWithAiMicros: los macros salen de la identificación, intactos", () => {
+  const out = assembleFoodWithAiMicros(baseId({ kcal: 200, protein_g: 14, carbs_g: 1, fat_g: 15 }), {});
+  expect(out.kcal).toBe(200);
+  expect(out.protein_g).toBe(14);
+  expect(out.carbs_g).toBe(1);
+  expect(out.fat_g).toBe(15);
+  expect(out.sourceMacros).toBe("ai"); // el de la identificación
+});
+
+test("assembleFoodWithAiMicros valida contra FoodExtractionSchema", () => {
+  const out = assembleFoodWithAiMicros(baseId(), { vitamin_c_mg: 5 });
+  expect(FoodExtractionSchema.safeParse(out).success).toBe(true);
 });

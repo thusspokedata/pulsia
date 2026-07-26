@@ -5,6 +5,7 @@ import {
   ProgramSchema,
   EcgAnalysisSchema,
   FoodIdentificationSchema,
+  FoodMicrosEstimateSchema,
   ReportOutputSchema,
   SupplementExtractionSchema,
   AiPlanOutputSchema,
@@ -13,7 +14,7 @@ import { buildGenerationPrompt } from "./prompt";
 import { buildOneOffPrompt, type OneOffArgs } from "./oneoff";
 import { buildMemoryUpdatePrompt } from "./memory";
 import { buildEcgPrompt } from "./ecg";
-import { buildFoodPrompt, buildPickCandidatePrompt, buildSearchQueryPrompt } from "./nutrition";
+import { buildFoodPrompt, buildPickCandidatePrompt, buildSearchQueryPrompt, buildFoodMicrosPrompt } from "./nutrition";
 import { buildReportPrompt } from "./report";
 import { buildSupplementExtractPrompt, buildSupplementExplainPrompt, buildSupplementPlanPrompt } from "./supplements";
 import type { ReportData } from "../reports/collect";
@@ -57,6 +58,12 @@ export interface AiClient {
   // Refresh de un alimento YA guardado: reconstruye la frase de búsqueda a partir del nombre. En el
   // alta esa frase viene dentro de la identificación; acá no hay identificación que pedir.
   usdaSearchQuery?(input: { foodName: string; apiKey: string }): Promise<string>;
+  // Estima el bloque de micros de un alimento cuando USDA no sirve. Usa conocimiento + web_search.
+  estimateFoodMicros?(input: {
+    name: string;
+    basis: import("@pulsia/shared").FoodBasis;
+    apiKey: string;
+  }): Promise<import("@pulsia/shared").FoodMicrosEstimate>;
   extractSupplement?(input: {
     imageBase64: string;
     mediaType: string;
@@ -103,6 +110,41 @@ export async function callStructuredTool<S extends z.ZodType>({
   });
   if (res.stop_reason === "max_tokens") throw new Error(truncatedMsg);
   const block = res.content.find((b) => b.type === "tool_use");
+  if (!block || block.type !== "tool_use") throw new Error(missingMsg);
+  return schema.parse(block.input);
+}
+
+// Variante de callStructuredTool que HABILITA la herramienta server-side web_search. No se puede
+// forzar `tool_choice` al tool custom (forzarlo bloquea la búsqueda), así que se deja en auto y se
+// instruye en el prompt "buscá y DESPUÉS llamá al tool". Del content final se toma el bloque
+// tool_use del tool custom por NOMBRE (el web_search deja bloques server_tool_use/web_search_tool_result
+// que no son ese tool). max_tokens más alto porque los resultados de búsqueda ocupan tokens.
+export async function callStructuredToolWithSearch<S extends z.ZodType>({
+  client, model, maxTokens, schema, toolName, description, content, truncatedMsg, missingMsg, maxSearches = 3,
+}: {
+  client: Anthropic;
+  model: string;
+  maxTokens: number;
+  schema: S;
+  toolName: string;
+  description: string;
+  content: string | Anthropic.MessageParam["content"];
+  truncatedMsg: string;
+  missingMsg: string;
+  maxSearches?: number;
+}): Promise<z.output<S>> {
+  const { $schema, ...inputSchema } = z.toJSONSchema(schema) as Record<string, unknown>;
+  const res = await client.messages.create({
+    model,
+    max_tokens: maxTokens,
+    tools: [
+      { type: "web_search_20250305", name: "web_search", max_uses: maxSearches } as any,
+      { name: toolName, description, input_schema: inputSchema as any },
+    ],
+    messages: [{ role: "user", content }],
+  });
+  if (res.stop_reason === "max_tokens") throw new Error(truncatedMsg);
+  const block = res.content.find((b: any) => b.type === "tool_use" && b.name === toolName);
   if (!block || block.type !== "tool_use") throw new Error(missingMsg);
   return schema.parse(block.input);
 }
@@ -259,6 +301,28 @@ export class AnthropicAiClient implements AiClient {
       missingMsg: "La IA no devolvió la frase de búsqueda.",
     });
     return out.searchQuery;
+  }
+
+  // Estima los micronutrientes de un alimento que USDA no cubre. Usa web_search + conocimiento; los
+  // resultados de búsqueda se tratan como datos no confiables (ver buildFoodMicrosPrompt). No estima
+  // macros (ya existen).
+  async estimateFoodMicros({ name, basis, apiKey }: {
+    name: string;
+    basis: import("@pulsia/shared").FoodBasis;
+    apiKey: string;
+  }) {
+    const client = new Anthropic({ apiKey });
+    return callStructuredToolWithSearch({
+      client,
+      model: "claude-opus-4-8",
+      maxTokens: 2048,
+      schema: FoodMicrosEstimateSchema,
+      toolName: "return_food_micros",
+      description: "Devuelve las vitaminas, minerales y micros de etiqueta estimados del alimento.",
+      content: [{ type: "text", text: buildFoodMicrosPrompt(name, basis) }],
+      truncatedMsg: "La respuesta se truncó al estimar los micronutrientes.",
+      missingMsg: "La IA no devolvió los micronutrientes.",
+    });
   }
 
   async extractSupplement({ imageBase64, mediaType, apiKey }: {

@@ -41,3 +41,15 @@ test("micros estimados por la IA no se anuncian como USDA", async () => {
   await render(<SourceChip sourceMacros="ai" sourceMicros="ai" />);
   expect(screen.queryByText("USDA")).toBeNull();
 });
+
+test("micros estimados por la IA muestran su propio chip, no destacado", async () => {
+  await render(<SourceChip sourceMacros="ai" sourceMicros="ai" />);
+  const chip = screen.getByTestId("source-chip-micros-ai");
+  expect(chip).toBeTruthy();
+  expect(screen.getByText("micros IA")).toBeTruthy();
+  // NO destacado: el fondo es `surfaceMuted` (el de una estimación), no el `accentSoft` de un dato
+  // de fuente real (etiqueta/USDA). Sin esto, `strong={true}` pasaría el test igual.
+  expect(chip.props.style.backgroundColor).toBe(colors.surfaceMuted);
+  expect(chip.props.style.backgroundColor).not.toBe(colors.accentSoft);
+});
+

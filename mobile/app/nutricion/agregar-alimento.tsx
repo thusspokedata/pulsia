@@ -5,7 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { getBackendUrl } from "../../src/storage/config";
 import {
   extractFood, describeFood, createFood, getFood, updateFood,
-  getUsdaEntry, assembleUsdaFood, type UsdaEntry,
+  getUsdaEntry, assembleUsdaFood, aiMicrosForFood, type UsdaEntry,
 } from "../../src/api/nutrition";
 import { NUTRIENT_KEYS } from "@pulsia/shared";
 import type { FoodBasis, FoodExtraction, FoodIdentification, NutrientValues, SourceMacros, SourceMicros } from "@pulsia/shared";
@@ -96,6 +96,7 @@ export default function AgregarAlimentoScreen() {
   const [entradaUsda, setEntradaUsda] = useState<UsdaEntry | null>(null);
   const [corrigiendo, setCorrigiendo] = useState(false);
   const [remezclando, setRemezclando] = useState(false);
+  const [estimandoIA, setEstimandoIA] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -171,6 +172,46 @@ export default function AgregarAlimentoScreen() {
       setError((e as Error).message);
     } finally {
       setRemezclando(false);
+    }
+  }
+
+  /**
+   * El usuario dijo "ninguno, que la IA complete": estima los micros y los mergea en el form,
+   * SIN pisar lo que el usuario ya tiene cargado (nombre, basis, macros, peso por unidad, procedencia
+   * de los macros). Por eso NO usa `prefillFrom` (que reemplaza todo): el request se arma con el
+   * form ACTUAL —así la IA estima para el alimento que el usuario ve, aunque haya editado el nombre—
+   * conservando el `searchQuery`, y de la respuesta se toman solo los micros (los 6 de etiqueta al
+   * form, los 24 restantes + `sourceMicros: "ai"` a `carried`).
+   */
+  async function completarConIA() {
+    if (identification == null || !baseUrl.current) return;
+    setError(null);
+    setEstimandoIA(true);
+    try {
+      const idReq: FoodIdentification = {
+        name: form.name.trim(), basis: form.basis,
+        kcal: num(form.kcal), protein_g: num(form.protein_g), carbs_g: num(form.carbs_g), fat_g: num(form.fat_g),
+        saturated_fat_g: optNum(form.saturated_fat_g), sugars_g: optNum(form.sugars_g), fiber_g: optNum(form.fiber_g),
+        sodium_mg: sodiumMgFromField(form.salt_g), cholesterol_mg: optNum(form.cholesterol_mg), water_ml: optNum(form.water_ml),
+        unitWeightG: form.unitWeightG.trim() === "" ? null : num(form.unitWeightG),
+        // El sourceMacros del request no importa (la respuesta solo se usa por sus micros), pero el
+        // schema no admite "manual": se manda "ai" y NO se toca `form.sourceMacros`.
+        sourceMacros: form.sourceMacros === "label" ? "label" : "ai",
+        searchQuery: identification.searchQuery,
+      };
+      const ex = await aiMicrosForFood(baseUrl.current, idReq);
+      setCarried(carriedFrom(ex)); // los 24 micros no editables + sourceMicros "ai" + usdaFdcId null
+      const numStr = (v: number | null | undefined) => (v == null ? "" : String(v));
+      setForm((f) => ({
+        ...f, // conserva nombre, basis, macros, unitWeightG y sourceMacros del usuario
+        saturated_fat_g: numStr(ex.saturated_fat_g), sugars_g: numStr(ex.sugars_g), fiber_g: numStr(ex.fiber_g),
+        salt_g: saltFieldFromSodiumMg(ex.sodium_mg), cholesterol_mg: numStr(ex.cholesterol_mg), water_ml: numStr(ex.water_ml),
+      }));
+      setCorrigiendo(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setEstimandoIA(false);
     }
   }
 
@@ -290,6 +331,12 @@ export default function AgregarAlimentoScreen() {
           <Text testID="usda-chip" style={{ color: colors.icon, fontSize: 12, flexShrink: 1 }}>
             {`USDA · ${entradaUsda?.description ?? `entrada ${carried.usdaFdcId}`}`}
           </Text>
+        ) : carried.sourceMicros === "ai" ? (
+          // Tras "que la IA complete": usdaFdcId es null pero los micros SÍ están (estimados). Decir
+          // "sin vitaminas ni minerales" acá contradiría el chip "micros IA" de arriba.
+          <Text testID="micros-ia-info" style={{ color: colors.icon, fontSize: 12, flexShrink: 1 }}>
+            Vitaminas y minerales estimados por IA
+          </Text>
         ) : (
           <Text testID="usda-sin-match" style={{ color: colors.icon, fontSize: 12, flexShrink: 1 }}>
             Sin vitaminas ni minerales de USDA
@@ -299,6 +346,13 @@ export default function AgregarAlimentoScreen() {
           <Pressable testID="usda-no-es-este" accessibilityRole="button" onPress={() => setCorrigiendo((v) => !v)}>
             <Text style={{ color: colors.accentText, fontSize: 12, fontWeight: "600" }}>
               {carried.usdaFdcId != null ? "¿no es este?" : "elegir a mano"}
+            </Text>
+          </Pressable>
+        )}
+        {puedeCorregir && (
+          <Pressable testID="ai-completar" accessibilityRole="button" disabled={estimandoIA} onPress={() => void completarConIA()}>
+            <Text style={{ color: colors.accentText, fontSize: 12, fontWeight: "600", opacity: estimandoIA ? 0.5 : 1 }}>
+              {estimandoIA ? "Estimando…" : "que la IA complete"}
             </Text>
           </Pressable>
         )}

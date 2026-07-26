@@ -4,7 +4,8 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import type { Food } from "@pulsia/shared";
 import {
   getFood, getUsdaEntry, proposeUsdaRefresh, applyUsdaRefresh, assembleUsdaFood,
-  type UsdaEntry, type UsdaRefreshProposal,
+  proposeAiMicros, applyAiMicros,
+  type UsdaEntry, type UsdaRefreshProposal, type AiMicrosProposal,
 } from "../../src/api/nutrition";
 import { getBackendUrl } from "../../src/storage/config";
 import { buildNutrientRows, filaDeSal, sustituirSodioPorSal } from "../../src/nutrition/nutrientRows";
@@ -52,6 +53,11 @@ export default function AlimentoDetalleScreen() {
   const [remezclando, setRemezclando] = useState(false);
   // Separado del `error` de la carga: que falle actualizar contra USDA no es que falle la pantalla.
   const [errorRefresh, setErrorRefresh] = useState<string | null>(null);
+
+  // ---- Estado del "Completar con IA" ----
+  const [propuestaIA, setPropuestaIA] = useState<AiMicrosProposal | null>(null);
+  const [cargandoIA, setCargandoIA] = useState(false);
+  const [aplicandoIA, setAplicandoIA] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -138,6 +144,36 @@ export default function AlimentoDetalleScreen() {
     setPropuesta(null); setElegida(null); setCorrigiendo(false);
   }
 
+  /** Completar con IA (paso 1): estima los micros del alimento guardado. NO escribe. */
+  async function pedirPropuestaIA() {
+    if (!id || !baseUrl || cargandoIA) return;
+    setErrorRefresh(null);
+    setCargandoIA(true);
+    try {
+      setPropuestaIA(await proposeAiMicros(baseUrl, id));
+    } catch (e) {
+      setErrorRefresh((e as Error).message);
+    } finally {
+      setCargandoIA(false);
+    }
+  }
+
+  /** Completar con IA (paso 2): aplica el estimado y re-snapshotea las comidas. */
+  async function aplicarIA() {
+    if (!id || propuestaIA == null || !baseUrl || aplicandoIA) return;
+    setErrorRefresh(null);
+    setAplicandoIA(true);
+    try {
+      await applyAiMicros(baseUrl, id, propuestaIA.proposal);
+      setPropuestaIA(null);
+      await load(); // se relee de la base: lo guardado es lo que el backend escribió
+    } catch (e) {
+      setErrorRefresh((e as Error).message);
+    } finally {
+      setAplicandoIA(false);
+    }
+  }
+
   // `persona` en null = modo catálogo. Un alimento del catálogo son valores POR 100 g: compararlos
   // contra una referencia DIARIA diría "el 30 % de tu hierro del día" de algo que nadie come en
   // porciones de 100 g necesariamente. La referencia personal aparece en el detalle de la comida,
@@ -168,6 +204,15 @@ export default function AlimentoDetalleScreen() {
               style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, opacity: cargandoPropuesta ? 0.6 : 1 }}
             >
               <Text style={{ color: colors.accentText, fontWeight: "600" }}>{cargandoPropuesta ? "Buscando…" : "Actualizar"}</Text>
+            </Pressable>
+            <Pressable
+              testID="alimento-completar-ia"
+              accessibilityRole="button"
+              onPress={() => void pedirPropuestaIA()}
+              disabled={cargandoIA}
+              style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, opacity: cargandoIA ? 0.6 : 1 }}
+            >
+              <Text style={{ color: colors.accentText, fontWeight: "600" }}>{cargandoIA ? "Estimando…" : "Completar con IA"}</Text>
             </Pressable>
             <Pressable
               onPress={() => router.push(`/nutricion/agregar-alimento?foodId=${food.id}`)}
@@ -245,6 +290,30 @@ export default function AlimentoDetalleScreen() {
                   </Pressable>
                 )}
                 <Pressable testID="refresh-cancelar" accessibilityRole="button" onPress={cerrarPanel} disabled={aplicando}>
+                  <Text style={{ color: colors.accentText, fontSize: 13, fontWeight: "600" }}>Cancelar</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {propuestaIA && (
+            <View testID="ia-panel" style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.sm }}>
+              <Text style={{ color: colors.text, fontSize: 13, fontWeight: "600" }}>Micronutrientes estimados por IA</Text>
+              <Text testID="ia-cambios" style={{ color: colors.textMuted, fontSize: 12 }}>
+                {`Calorías por ${baseLabel(food)}: ${food.kcal} → ${propuestaIA.proposal.kcal}`}
+              </Text>
+              <Text testID="ia-comidas" style={{ color: colors.textMuted, fontSize: 12 }}>{avisoComidas(propuestaIA.mealsAffected)}</Text>
+              <Text style={{ color: colors.icon, fontSize: 12 }}>
+                Son estimaciones del modelo, no valores de laboratorio de USDA. Quedan marcados como «estimado por IA».
+              </Text>
+              <View style={{ flexDirection: "row", gap: spacing.sm, alignItems: "center" }}>
+                <Pressable
+                  testID="ia-aplicar" accessibilityRole="button" onPress={() => void aplicarIA()} disabled={aplicandoIA}
+                  style={{ backgroundColor: colors.accent, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, opacity: aplicandoIA ? 0.6 : 1 }}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>{aplicandoIA ? "Aplicando…" : "Aplicar"}</Text>
+                </Pressable>
+                <Pressable testID="ia-cancelar" accessibilityRole="button" onPress={() => setPropuestaIA(null)} disabled={aplicandoIA}>
                   <Text style={{ color: colors.accentText, fontSize: 13, fontWeight: "600" }}>Cancelar</Text>
                 </Pressable>
               </View>

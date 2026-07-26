@@ -6,7 +6,7 @@
 // se escriben a mano: un nutriente nuevo cae solo en el conjunto correcto (USDA) en vez de
 // perderse en silencio (el bug de buildFitActivity).
 
-import { NUTRIENT_KEYS, type FoodExtraction, type FoodIdentification } from "@pulsia/shared";
+import { NUTRIENT_KEYS, type FoodExtraction, type FoodIdentification, type FoodMicrosEstimate } from "@pulsia/shared";
 import type { UsdaFoodRow } from "../usda/matcher";
 import { nutrientColumn } from "./columns";
 
@@ -82,5 +82,27 @@ export function assembleFoodExtraction(id: FoodIdentification, usda: UsdaFoodRow
   for (const key of VITAMIN_MINERAL_KEYS) {
     out[key] = usdaValue(usda, key);
   }
+  return out as unknown as FoodExtraction;
+}
+
+/**
+ * Mezcla PURA para el camino "que la IA complete": el usuario descartó USDA, así que TODO el bloque
+ * de micros (los 30 del registro, incluidos los 6 de etiqueta) sale del estimado de la IA — fuente
+ * única y coherente. Los macros salen de la identificación, intactos (no se re-estiman). Marca
+ * `sourceMicros: "ai"` y `usdaFdcId: null` para no mentir sobre la procedencia.
+ */
+export function assembleFoodWithAiMicros(id: FoodIdentification, micros: FoodMicrosEstimate): FoodExtraction {
+  const idRec = id as unknown as Record<string, number | null | undefined>;
+  const microsRec = micros as unknown as Record<string, number | null | undefined>;
+  const out: Record<string, unknown> = {
+    name: id.name,
+    basis: id.basis,
+    unitWeightG: id.unitWeightG,
+    sourceMacros: id.sourceMacros,
+    sourceMicros: "ai",
+    usdaFdcId: null,
+  };
+  for (const key of MACRO_KEYS) out[key] = idRec[key] ?? 0;
+  for (const key of NUTRIENT_KEYS) out[key] = microsRec[key] ?? null;
   return out as unknown as FoodExtraction;
 }
