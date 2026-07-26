@@ -94,10 +94,18 @@ export function barSegments3(food: number, supplement: number, target: number, k
     return { foodPct, supplementPct: Math.max(0, capped - foodPct), overPct: 0 };
   }
   // Te pasaste: la barra se llena (100%); food/supp/over proporcionales al total, con clamps.
-  const overPct = Math.max(1, Math.min(99, Math.round(((total - target) / total) * 100)));
-  const inTarget = 100 - overPct; // porción dentro de la meta
-  const foodPct = f > 0 ? Math.max(1, Math.min(inTarget - (s > 0 ? 1 : 0), Math.round((f / total) * (100)))) : 0;
-  const supplementPct = Math.max(0, inTarget - foodPct);
+  // `reserved` aparta 1% para CADA segmento no nulo (comida, suplemento) ANTES de fijar el
+  // excedente: sin esto, una meta chica frente al total (comida=1, suplemento=99, meta=1) dejaba
+  // `inTarget` en apenas 1%, justo lo que entra en el clamp mínimo de UN solo segmento, y el otro
+  // —el dominante— desaparecía en 0% pese a valer > 0. Restarle el reservado al tope de overPct en
+  // vez de a foodPct protege a los DOS segmentos, no solo al de comida.
+  const reserved = (f > 0 ? 1 : 0) + (s > 0 ? 1 : 0);
+  const maxOverPct = Math.max(1, 100 - reserved);
+  const overPct = Math.max(1, Math.min(maxOverPct, Math.round(((total - target) / total) * 100)));
+  const inTarget = 100 - overPct; // porción dentro de la meta, con lugar reservado para los dos
+  const rawFoodPct = f > 0 ? Math.round((f / total) * 100) : 0;
+  const foodPct = f > 0 ? Math.max(1, Math.min(inTarget - (s > 0 ? 1 : 0), rawFoodPct)) : 0;
+  const supplementPct = s > 0 ? Math.max(1, inTarget - foodPct) : 0;
   return { foodPct, supplementPct, overPct };
 }
 

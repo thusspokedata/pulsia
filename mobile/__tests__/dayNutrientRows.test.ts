@@ -194,3 +194,24 @@ test("sin sodio de suplemento, la fila de sal queda con supplement: null", () =>
   const f = fila([item({ sodium_mg: 1600 })], "salt_g");
   expect(f.supplement).toBeNull();
 });
+
+// ---------------------------------------------------------------------------------------------
+// Fix 1: un día SIN comida pero con suplemento tomado no puede quedar en "sin dato". El total
+// consumido es (value ?? 0) + (supplement ?? 0), y el pct se calcula sobre eso, no solo la comida.
+// ---------------------------------------------------------------------------------------------
+
+test("un día sin comida pero con suplemento: el pct se calcula sobre el suplemento (Fix 1)", () => {
+  const summary = { ...buildNutritionDaySummary([], []), supplementNutrients: { magnesium_mg: 300 } };
+  const f = buildDayNutrientRows(summary, persona, 2200).flatMap((s) => s.rows).find((r) => r.key === "magnesium_mg")!;
+  expect(f.value).toBeNull(); // sigue sin comida
+  expect(f.supplement).toBe(300);
+  expect(f.pct).not.toBeNull();
+});
+
+test("sal: un día sin sodio de comida pero con sodio de suplemento también calcula pct (Fix 1)", () => {
+  const summary = { ...buildNutritionDaySummary([], []), supplementNutrients: { sodium_mg: 800 } };
+  const f = buildDayNutrientRows(summary, persona, 2200).flatMap((s) => s.rows).find((r) => r.key === "salt_g")!;
+  expect(f.value).toBeNull();
+  expect(f.supplement).toBe(2); // 800 mg de sodio = 2 g de sal
+  expect(f.pct).not.toBeNull();
+});

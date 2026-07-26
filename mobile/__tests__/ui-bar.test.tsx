@@ -23,4 +23,12 @@ describe("barSegments3", () => {
     expect(s.overPct).toBeGreaterThan(0);
     expect(s.foodPct + s.supplementPct + s.overPct).toBeLessThanOrEqual(100);
   });
+  it("Fix 2: roles invertidos — comida chica, suplemento dominante, muy sobre la meta", () => {
+    // Comida=1, suplemento=99, meta=1: el segmento dominante (suplemento) no puede desaparecer.
+    const s = barSegments3(1, 99, 1, "limit");
+    expect(s.supplementPct).toBeGreaterThanOrEqual(1);
+    expect(s.foodPct).toBeGreaterThanOrEqual(1);
+    expect(s.overPct).toBeGreaterThanOrEqual(1);
+    expect(s.foodPct + s.supplementPct + s.overPct).toBeLessThanOrEqual(100);
+  });
 });

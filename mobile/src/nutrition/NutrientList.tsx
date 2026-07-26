@@ -38,8 +38,13 @@ function fmt(n: number): string {
 // pueden mirar solo la comida cuando el mismo nutriente también entró por un suplemento, porque
 // el cuerpo no distingue el origen. `supplement` en null (comida/catálogo, superficies que no
 // trackean suplementos) se comporta como 0: sin cambio de comportamiento ahí.
+// "Hay suplemento" también es dato acá: sin esto, un suplemento tomado sin ningún alimento que
+// declare el nutriente (`value: null`) nunca dispararía el aviso de excedente, aunque el
+// suplemento solo ya se haya pasado del límite.
 function totalConsumido(r: NutrientRow): number | null {
-  return r.value == null ? null : r.value + (r.supplement ?? 0);
+  const haySuplemento = r.supplement != null && r.supplement > 0;
+  if (r.value == null && !haySuplemento) return null;
+  return (r.value ?? 0) + (r.supplement ?? 0);
 }
 
 // `over` solo aplica a los techos: pasarse de un piso (fibra, hierro) es BUENO y no se avisa.
@@ -48,14 +53,21 @@ function seExcedio(r: NutrientRow): boolean {
   return total != null && r.ref != null && r.kind === "max" && total > r.ref;
 }
 
+// Una fila "tiene dato" con comida (value != null) O con un suplemento efectivamente tomado
+// (supplement > 0): "hay suplemento" también es dato, aunque esa comida no haya declarado nada.
+function tieneDato(r: NutrientRow): boolean {
+  return r.value != null || (r.supplement != null && r.supplement > 0);
+}
+
 function textoConteo(rows: NutrientRow[]): string {
-  const conDato = rows.filter((r) => r.value != null).length;
+  const conDato = rows.filter(tieneDato).length;
   return conDato === 0 ? "sin datos" : `${conDato} de ${rows.length} con dato`;
 }
 
 function Fila({ row, onPress }: { row: NutrientRow; onPress?: (key: NutrientRowKey) => void }) {
   const over = seExcedio(row);
-  const sinDato = row.value == null;
+  const haySuplemento = row.supplement != null && row.supplement > 0;
+  const sinDato = row.value == null && !haySuplemento;
   return (
     // Pressable siempre (no un View cuando no hay `onPress`) para que el testID y la estructura
     // no cambien según la pantalla: sin dato queda deshabilitado igual, porque no hay nada que
@@ -73,8 +85,15 @@ function Fila({ row, onPress }: { row: NutrientRow; onPress?: (key: NutrientRowK
           testID={`nutr-${row.key}-amount`}
           style={{ color: over ? colors.warning : colors.textMuted, fontSize: 13 }}
         >
-          {row.value == null ? (
+          {row.value == null && !haySuplemento ? (
             "sin dato"
+          ) : row.value == null ? (
+            // Sin comida pero con suplemento: se muestra SOLO el aporte del suplemento, sin un
+            // número de comida que no existe (sería mostrar un 0 que nadie midió).
+            <>
+              <Text style={{ color: colors.supplement }}>+{fmt(row.supplement!)}</Text>
+              {row.ref != null ? ` / ${fmt(row.ref)} ${row.unit}` : ` ${row.unit}`}
+            </>
           ) : (
             <>
               {row.partial ? "≥ " : ""}
@@ -95,9 +114,9 @@ function Fila({ row, onPress }: { row: NutrientRow; onPress?: (key: NutrientRowK
           </Text>
         )}
       </View>
-      {row.value != null && row.ref != null && (
+      {(row.value != null || haySuplemento) && row.ref != null && (
         <Bar
-          value={row.value}
+          value={row.value ?? 0}
           supplement={row.supplement ?? 0}
           target={row.ref}
           kind={row.kind === "min" ? "floor" : "limit"}

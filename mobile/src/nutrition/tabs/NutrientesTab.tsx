@@ -20,7 +20,9 @@ export function NutrientesTab({ summary, goalView, persona, offset }: Props) {
   // Las saturadas se acotan al 10% de la ENERGÍA, así que su referencia sale de la meta de kcal.
   const goalKcal = goalView?.status === "ok" ? goalView.kcal!.meta : null;
   const secciones = buildDayNutrientRows(summary, persona, goalKcal);
-  const hayDatos = secciones.some((s) => s.rows.some((r) => r.value != null));
+  // "Hay suplemento" también es dato: un día sin ningún alimento cargado pero con un suplemento
+  // tomado no puede caer en el EmptyState, aunque `r.value` (que es SOLO comida) esté en null.
+  const hayDatos = secciones.some((s) => s.rows.some((r) => r.value != null || (r.supplement != null && r.supplement > 0)));
   const perfilIncompleto = persona.sex == null || persona.age == null;
   // Solo hay algo que distinguir con un color si algún nutriente trajo aporte de suplemento ese
   // día: sin toma, la barra es de un solo segmento y la leyenda de tres puntitos sobraría.

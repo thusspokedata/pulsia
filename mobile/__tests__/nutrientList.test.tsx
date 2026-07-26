@@ -199,3 +199,53 @@ test("sin suplemento (null) no hay segmento violeta ni +N: comportamiento sin ca
   expect(screen.getByTestId("nutr-iron_mg-amount")).toHaveTextContent(/^5 \/ 11 mg$/);
   expect(screen.queryByTestId("nutr-iron_mg-bar-supp")).toBeNull();
 });
+
+// ---------------------------------------------------------------------------------------------
+// Fix 1: "hay suplemento" también es dato. Una fila SIN dato de comida pero con suplemento > 0 no
+// puede quedar como "sin dato": tiene que mostrar barra, pct y ser pressable.
+// ---------------------------------------------------------------------------------------------
+
+test("fila SIN dato de comida pero con suplemento: barra con segmento violeta, pct sobre el suplemento, texto solo con +N", async () => {
+  const rows = [
+    fila({ key: "magnesium_mg", label: "Magnesio", unit: "mg", value: null, supplement: 300, ref: 350, pct: 86, kind: "max" }),
+  ];
+  // Minerales arranca colapsado: hay que desplegarlo para ver la fila.
+  await render(<NutrientList sections={secciones({ minerales: rows })} />);
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+  // Sin número de comida: solo el aporte del suplemento.
+  expect(screen.getByTestId("nutr-magnesium_mg-amount")).toHaveTextContent(/^\+300 \/ 350 mg$/);
+  expect(screen.getByTestId("nutr-magnesium_mg-pct")).toHaveTextContent(/^86 %$/);
+  expect(screen.getByTestId("nutr-magnesium_mg-bar")).toBeTruthy();
+  expect(screen.getByTestId("nutr-magnesium_mg-bar-supp")).toBeTruthy();
+});
+
+test("fila SIN dato de comida pero con suplemento SÍ es pressable (hay algo que desglosar)", async () => {
+  const onPressRow = jest.fn();
+  const rows = [
+    fila({ key: "magnesium_mg", label: "Magnesio", unit: "mg", value: null, supplement: 300, ref: 350, pct: 86, kind: "max" }),
+  ];
+  await render(<NutrientList sections={secciones({ minerales: rows })} onPressRow={onPressRow} />);
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+  await fireEvent.press(screen.getByTestId("nutr-magnesium_mg-row"));
+  expect(onPressRow).toHaveBeenCalledWith("magnesium_mg");
+});
+
+test("fila SIN dato de comida y SIN suplemento (o supplement: 0) sigue 'sin dato' y no pressable", async () => {
+  const onPressRow = jest.fn();
+  const rows = [fila({ key: "magnesium_mg", label: "Magnesio", unit: "mg", value: null, supplement: 0, ref: 350 })];
+  await render(<NutrientList sections={secciones({ minerales: rows })} onPressRow={onPressRow} />);
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+  expect(screen.getByTestId("nutr-magnesium_mg-amount")).toHaveTextContent(/^sin dato$/);
+  expect(screen.queryByTestId("nutr-magnesium_mg-bar")).toBeNull();
+  await fireEvent.press(screen.getByTestId("nutr-magnesium_mg-row"));
+  expect(onPressRow).not.toHaveBeenCalled();
+});
+
+test("el conteo del encabezado también cuenta las filas solo-suplemento", async () => {
+  const min = [
+    fila({ key: "magnesium_mg", label: "Magnesio", unit: "mg", value: null, supplement: 300, ref: 350 }),
+    fila({ key: "iron_mg", label: "Hierro", unit: "mg" }),
+  ];
+  await render(<NutrientList sections={secciones({ minerales: min })} />);
+  expect(screen.getByTestId("nutr-grupo-minerales-conteo")).toHaveTextContent(/^1 de 2 con dato$/);
+});

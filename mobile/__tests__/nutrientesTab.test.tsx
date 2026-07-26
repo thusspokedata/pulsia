@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react-native";
+import { render, screen, fireEvent } from "@testing-library/react-native";
 import { NutrientesTab } from "../src/nutrition/tabs/NutrientesTab";
 import { buildNutritionDaySummary } from "../src/nutrition/daySummary";
 import type { NutritionDaySummary } from "../src/nutrition/daySummary";
@@ -29,4 +29,20 @@ test("con algún nutriente de suplemento se muestra la leyenda con sus tres punt
   expect(screen.getByText("Comida")).toBeTruthy();
   expect(screen.getByText("Suplemento")).toBeTruthy();
   expect(screen.getByText("Excedente")).toBeTruthy();
+});
+
+// ---------------------------------------------------------------------------------------------
+// Fix 1: "hay suplemento" también es dato. Un día SIN NINGUNA comida pero con un suplemento
+// tomado no puede caer en el EmptyState: hay algo que mostrar.
+// ---------------------------------------------------------------------------------------------
+
+test("con supplementNutrients pero CERO comida (sin el workaround de iron_mg) no cae en EmptyState", async () => {
+  const base = buildNutritionDaySummary([], []); // día real y totalmente vacío, sin comida alguna
+  const summary = { ...base, supplementNutrients: { magnesium_mg: 300 } };
+  await render(<NutrientesTab summary={summary} goalView={null} persona={persona} offset={0} />);
+  expect(screen.queryByText("Todavía no hay datos de nutrientes para este día.")).toBeNull();
+  expect(screen.getByTestId("nutrientes-leyenda")).toBeTruthy();
+  // Magnesio vive en Minerales, que arranca colapsado: se despliega para ver la fila.
+  await fireEvent.press(screen.getByTestId("nutr-grupo-minerales"));
+  expect(screen.getByTestId("nutr-magnesium_mg-amount")).toHaveTextContent(/^\+300/);
 });

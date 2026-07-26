@@ -27,7 +27,7 @@ export interface NutrientRow {
   // trackea suplementos (detalle de comida, alimento del catálogo); 0 = trackea pero no hay toma.
   supplement: number | null;
   ref: number | null; // null = EFSA no lo cubre, o modo "por 100 g"
-  pct: number | null; // null si no hay valor o no hay referencia
+  pct: number | null; // null si no hay dato real (ni comida ni suplemento) o no hay referencia
   kind: ReferenceKind | null;
   // true = algunos de los ítems que suman este total NO declaraban el nutriente. El total es un
   // piso, no el número exacto. Solo tiene sentido en un total de varios ítems (el día); en un
@@ -149,10 +149,14 @@ export function buildNutrientRows(
       const referencia = hayOverride ? overrides![key] ?? null : refs?.[key] ?? null;
       const ref = referencia?.value ?? null;
       const supplement = opciones?.supplement?.[key] ?? null;
-      // El % "cuenta en todo": el total consumido es comida + suplemento, no solo la comida.
-      // `supplement` en null (comida/alimento del catálogo, superficies que no trackean
-      // suplementos) se comporta como 0, así que el detalle de comida no cambia.
-      const total = value == null ? null : value + (supplement ?? 0);
+      // "Hay suplemento" también es dato: un nutriente sin dato de COMIDA (value null, muy común,
+      // no todos los alimentos declaran cada micro) no puede esconder que sí se tomó un
+      // suplemento. El total consumido es (value ?? 0) + (supplement ?? 0), y se calcula en
+      // cuanto CUALQUIERA de los dos sea un dato real: `value` no nulo, o `supplement` > 0 (un
+      // supplement en null o en 0 explícito no cuenta como toma, así que sin comida tampoco hay
+      // total que mostrar).
+      const haySuplemento = supplement != null && supplement > 0;
+      const total = value != null || haySuplemento ? (value ?? 0) + (supplement ?? 0) : null;
       return {
         key,
         label: def.label,
@@ -188,8 +192,10 @@ export function filaDeSal(
   supplementSaltG: number | null = null,
 ): NutrientRow {
   const value = saltGFromSodiumMg(sodiumMg);
-  // Mismo criterio que buildNutrientRows: el % cuenta comida + suplemento.
-  const total = value == null ? null : value + (supplementSaltG ?? 0);
+  // Mismo criterio que buildNutrientRows: "hay suplemento" también es dato, y el % cuenta
+  // comida + suplemento aunque la comida no traiga sodio ese día.
+  const haySuplemento = supplementSaltG != null && supplementSaltG > 0;
+  const total = value != null || haySuplemento ? (value ?? 0) + (supplementSaltG ?? 0) : null;
   return {
     key: "salt_g",
     label: "Sal",
