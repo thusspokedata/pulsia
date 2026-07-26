@@ -87,3 +87,30 @@ export async function putTake(baseUrl: string, input: TakeInput): Promise<void> 
   const res = await apiFetch(baseUrl, "/nutrition/supplements/takes", { method: "PUT", body: JSON.stringify(input) });
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo registrar la toma."));
 }
+
+export interface SupplementNutrients {
+  totals: Partial<Record<string, number>>;
+  byNutrient: Partial<Record<string, { supplementName: string; amount: number }[]>>;
+}
+
+// Aporte de los suplementos tomados en un día/rango, por nutriente. Degradación limpia: si la
+// request falla (red, timeout, 5xx) no se corta el diario — se devuelve vacío y listo.
+export async function getDayNutrients(baseUrl: string, date: string): Promise<SupplementNutrients> {
+  try {
+    const res = await apiFetch(baseUrl, `/nutrition/supplements/day-nutrients?date=${date}`);
+    if (!res.ok) return { totals: {}, byNutrient: {} };
+    return (await res.json()) as SupplementNutrients;
+  } catch {
+    return { totals: {}, byNutrient: {} };
+  }
+}
+
+export async function getRangeNutrients(baseUrl: string, from: string, to: string): Promise<SupplementNutrients> {
+  try {
+    const res = await apiFetch(baseUrl, `/nutrition/supplements/range-nutrients?from=${from}&to=${to}`);
+    if (!res.ok) return { totals: {}, byNutrient: {} };
+    return (await res.json()) as SupplementNutrients;
+  } catch {
+    return { totals: {}, byNutrient: {} };
+  }
+}

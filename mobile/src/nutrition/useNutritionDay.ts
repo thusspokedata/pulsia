@@ -4,12 +4,14 @@ import { getBackendUrl } from "../storage/config";
 import { listMeals, listWater } from "../api/nutrition";
 import { getSessions, type SessionListItem } from "../api/sessions";
 import { dayExerciseBurn } from "@pulsia/shared";
-import type { Meal, WaterLog, NutritionGoalResult, CardioBurnInput, TrainingProfile } from "@pulsia/shared";
+import type { Meal, WaterLog, NutritionGoalResult, CardioBurnInput, TrainingProfile, NutrientKey } from "@pulsia/shared";
 import { listCardio } from "../api/cardio";
+import { getDayNutrients } from "../api/supplements";
 import { loadDailyGoalContext, type DailyGoalContext } from "./dailyGoal";
 import { buildGoalView, type GoalView } from "./goalView";
 import { buildNutritionDaySummary, type NutritionDaySummary } from "./daySummary";
 import { dayBounds } from "./dayBounds";
+import { dateKey } from "../session/dateKey";
 
 export interface NutritionDay {
   error: string | null;
@@ -35,25 +37,29 @@ export function useNutritionDay(offset: number): NutritionDay {
   const [goalCtx, setGoalCtx] = useState<DailyGoalContext>({ profile: null, goalResult: null });
   const [daySessions, setDaySessions] = useState<SessionListItem[]>([]);
   const [dayCardio, setDayCardio] = useState<CardioBurnInput[]>([]);
+  const [supplementNutrients, setSupplementNutrients] = useState<Partial<Record<NutrientKey, number>>>({});
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     const url = await getBackendUrl(); baseUrl.current = url;
-    const { from, to } = dayBounds(offset);
+    const { from, to, noon } = dayBounds(offset);
+    const dateStr = dateKey(noon);
     try {
-      const [ms, ws, ctx, ss, cardio] = await Promise.all([
+      const [ms, ws, ctx, ss, cardio, supplementNutrientsRes] = await Promise.all([
         listMeals(url, from, to), listWater(url, from, to), loadDailyGoalContext(url), getSessions(url), listCardio(url, from, to),
+        getDayNutrients(url, dateStr),
       ]);
       setMeals(ms); setWater(ws); setGoalCtx(ctx);
       setDaySessions(ss.filter((s) => s.startedAt >= from && s.startedAt <= to));
       setDayCardio(cardio.map((a) => ({ type: a.type, durationMs: a.durationMs, avgHr: a.avgHr, kcal: a.kcal })));
+      setSupplementNutrients(supplementNutrientsRes.totals as Partial<Record<NutrientKey, number>>);
       setError(null);
     } catch (e) { setError((e as Error).message); }
   }, [offset]);
 
   useFocusEffect(useCallback(() => { void reload(); }, [reload]));
 
-  const summary = buildNutritionDaySummary(meals, water);
+  const summary = { ...buildNutritionDaySummary(meals, water), supplementNutrients };
   const { profile, weightKg, goalResult } = goalCtx;
   const bmrForBurn = goalResult?.status === "ok" ? goalResult.bmr : null; // narrowing: la variante incomplete no tiene bmr
   const exercise = dayExerciseBurn(daySessions, dayCardio, { weightKg, age: profile?.age, sex: profile?.sex, bmr: bmrForBurn });

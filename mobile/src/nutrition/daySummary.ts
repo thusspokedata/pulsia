@@ -12,6 +12,10 @@ export interface NutritionDaySummary {
   // card del resumen podrían mostrar dos números distintos del mismo día.
   nutrients: Record<NutrientKey, NutrientSum>;
   liquid: { total: number; drank: number; fromFood: number };
+  // Aporte de los suplementos TOMADOS ese día, por nutriente (viene del backend, calculado con la
+  // misma supplementMicros que el informe). Vacío si no hay plan/tomas. NO se mezcla en `nutrients`
+  // (que es comida): el diario los muestra como segmento aparte.
+  supplementNutrients: Partial<Record<NutrientKey, number>>;
 }
 
 /**
@@ -54,5 +58,5 @@ export function buildNutritionDaySummary(meals: Meal[], water: WaterLog[]): Nutr
   const cholesterolMg = nutrients.cholesterol_mg.value;
   const fromFood = nutrients.water_ml.value ?? 0;
   const drank = water.reduce((a, w) => a + w.ml, 0);
-  return { dayTotals, cholesterolMg, nutrients, liquid: { total: Math.round(fromFood + drank), drank, fromFood } };
+  return { dayTotals, cholesterolMg, nutrients, liquid: { total: Math.round(fromFood + drank), drank, fromFood }, supplementNutrients: {} };
 }

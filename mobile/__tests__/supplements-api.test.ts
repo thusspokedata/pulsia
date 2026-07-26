@@ -10,6 +10,8 @@ import {
   getDayChecklist,
   putTake,
   getSupplement,
+  getDayNutrients,
+  getRangeNutrients,
 } from "../src/api/supplements";
 
 const extraction = {
@@ -88,4 +90,28 @@ test("getPlan / generatePlan / updatePlanItem / getDayChecklist / putTake / getS
   expect(String(calls[4][0])).toContain("/nutrition/supplements/takes");
   expect(calls[4][1].method).toBe("PUT");
   expect(String(calls[5][0])).toContain("/nutrition/supplements/abc");
+});
+
+test("getDayNutrients / getRangeNutrients pegan al prefijo /nutrition/supplements con los query params", async () => {
+  const nutrients = { totals: { zinc_mg: 10 }, byNutrient: { zinc_mg: [{ supplementName: "ZMA", amount: 10 }] } };
+  global.fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => nutrients })) as any;
+  const day = await getDayNutrients("http://x", "2026-07-16");
+  const range = await getRangeNutrients("http://x", "2026-07-01", "2026-07-16");
+  expect(day).toEqual(nutrients);
+  expect(range).toEqual(nutrients);
+  const calls = (global.fetch as jest.Mock).mock.calls;
+  expect(String(calls[0][0])).toContain("/nutrition/supplements/day-nutrients?date=2026-07-16");
+  expect(String(calls[1][0])).toContain("/nutrition/supplements/range-nutrients?from=2026-07-01&to=2026-07-16");
+});
+
+test("getDayNutrients / getRangeNutrients degradan limpio (no rompen el día) si la respuesta falla", async () => {
+  global.fetch = jest.fn(async () => ({ ok: false, status: 500, json: async () => ({}) })) as any;
+  expect(await getDayNutrients("http://x", "2026-07-16")).toEqual({ totals: {}, byNutrient: {} });
+  expect(await getRangeNutrients("http://x", "2026-07-01", "2026-07-16")).toEqual({ totals: {}, byNutrient: {} });
+});
+
+test("getDayNutrients / getRangeNutrients degradan limpio si el fetch tira (red/timeout)", async () => {
+  global.fetch = jest.fn(async () => { throw new Error("network down"); }) as any;
+  expect(await getDayNutrients("http://x", "2026-07-16")).toEqual({ totals: {}, byNutrient: {} });
+  expect(await getRangeNutrients("http://x", "2026-07-01", "2026-07-16")).toEqual({ totals: {}, byNutrient: {} });
 });

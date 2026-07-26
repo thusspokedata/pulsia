@@ -86,3 +86,8 @@ test("sin comidas: totales en 0 y micros null", () => {
   expect(s.dayTotals.sugars_g).toBeNull();
   expect(s.liquid).toEqual({ total: 0, drank: 0, fromFood: 0 });
 });
+
+test("supplementNutrients arranca vacío: lo rellena el hook con lo que trae el backend, no el summary", () => {
+  const s = buildNutritionDaySummary([], []);
+  expect(s.supplementNutrients).toEqual({});
+});
