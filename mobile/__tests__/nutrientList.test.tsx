@@ -169,3 +169,33 @@ test("sin excedentes no hay alerta en el encabezado", async () => {
   await render(<NutrientList sections={secciones({ minerales: min })} />);
   expect(screen.queryByTestId("nutr-grupo-minerales-alerta")).toBeNull();
 });
+
+test("una fila con suplemento muestra el aporte en +N y el segmento violeta de la barra", async () => {
+  // 180 mg de comida + 300 mg de suplemento = 480, sobre una referencia de 350: el % y el
+  // excedente tienen que reflejar el TOTAL (480/350), no solo la comida (180/350).
+  const rows = [
+    fila({ key: "omega3_g", label: "Omega-3", unit: "mg", value: 180, supplement: 300, ref: 350, pct: 137, kind: "max" }),
+  ];
+  await render(<NutrientList sections={secciones({ grasas: rows })} />);
+  const cantidad = screen.getByTestId("nutr-omega3_g-amount");
+  expect(cantidad).toHaveTextContent(/^180\+300 \/ 350 mg$/);
+  expect(screen.getByText("+300")).toBeTruthy();
+  expect(screen.getByTestId("nutr-omega3_g-bar-supp")).toBeTruthy();
+});
+
+test("el excedente y la alerta del encabezado cuentan comida + suplemento, no solo la comida", async () => {
+  // Comida sola (180) no supera la referencia (350), pero comida + suplemento (480) sí: la
+  // alerta de "te pasaste" tiene que salir igual, aunque el grupo esté colapsado.
+  const min = [
+    fila({ key: "magnesium_mg", label: "Magnesio", unit: "mg", value: 180, supplement: 300, ref: 350, pct: 137, kind: "max" }),
+  ];
+  await render(<NutrientList sections={secciones({ minerales: min })} />);
+  expect(screen.getByTestId("nutr-grupo-minerales-alerta")).toBeTruthy();
+});
+
+test("sin suplemento (null) no hay segmento violeta ni +N: comportamiento sin cambios", async () => {
+  const rows = [fila({ key: "iron_mg", label: "Hierro", unit: "mg", value: 5, ref: 11, pct: 45, kind: "min" })];
+  await render(<NutrientList sections={secciones({ grasas: rows })} />);
+  expect(screen.getByTestId("nutr-iron_mg-amount")).toHaveTextContent(/^5 \/ 11 mg$/);
+  expect(screen.queryByTestId("nutr-iron_mg-bar-supp")).toBeNull();
+});

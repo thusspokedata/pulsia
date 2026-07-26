@@ -148,14 +148,19 @@ export function buildNutrientRows(
       const hayOverride = overrides != null && Object.prototype.hasOwnProperty.call(overrides, key);
       const referencia = hayOverride ? overrides![key] ?? null : refs?.[key] ?? null;
       const ref = referencia?.value ?? null;
+      const supplement = opciones?.supplement?.[key] ?? null;
+      // El % "cuenta en todo": el total consumido es comida + suplemento, no solo la comida.
+      // `supplement` en null (comida/alimento del catálogo, superficies que no trackean
+      // suplementos) se comporta como 0, así que el detalle de comida no cambia.
+      const total = value == null ? null : value + (supplement ?? 0);
       return {
         key,
         label: def.label,
         unit: def.unit,
         value,
-        supplement: opciones?.supplement?.[key] ?? null,
+        supplement,
         ref,
-        pct: value == null || ref == null ? null : porcentaje(value, ref),
+        pct: total == null || ref == null ? null : porcentaje(total, ref),
         kind: referencia?.kind ?? null,
         partial: opciones?.partial?.[key] ?? false,
       };
@@ -183,6 +188,8 @@ export function filaDeSal(
   supplementSaltG: number | null = null,
 ): NutrientRow {
   const value = saltGFromSodiumMg(sodiumMg);
+  // Mismo criterio que buildNutrientRows: el % cuenta comida + suplemento.
+  const total = value == null ? null : value + (supplementSaltG ?? 0);
   return {
     key: "salt_g",
     label: "Sal",
@@ -190,7 +197,7 @@ export function filaDeSal(
     value,
     supplement: supplementSaltG,
     ref,
-    pct: value == null || ref == null ? null : porcentaje(value, ref),
+    pct: total == null || ref == null ? null : porcentaje(total, ref),
     // Sin referencia no hay techo que exceder: el `kind` solo se lee para pintar el aviso y la
     // barra, y las dos exigen `ref`.
     kind: ref == null ? null : NUTRIENT_REFERENCE_KIND.salt_g,

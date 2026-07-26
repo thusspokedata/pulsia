@@ -34,19 +34,18 @@ function fmt(n: number): string {
   return String(Number(n.toFixed(decimales)));
 }
 
-function textoCantidad(r: NutrientRow): string {
-  if (r.value == null) return "sin dato";
-  // "≥": algunos de los ítems que suman este total no declaraban el nutriente, así que lo que se
-  // muestra es un PISO, no el número exacto. Sin la marca, "0,8 mg de zinc" afirmaría un dato que
-  // no tenemos. Sin valor no hay piso de nada, así que "sin dato" no la lleva.
-  const marca = r.partial ? "≥ " : "";
-  if (r.ref == null) return `${marca}${fmt(r.value)} ${r.unit}`;
-  return `${marca}${fmt(r.value)} / ${fmt(r.ref)} ${r.unit}`;
+// Total REALMENTE consumido: comida + suplemento. "Cuenta en todo" — el excedente y el % no
+// pueden mirar solo la comida cuando el mismo nutriente también entró por un suplemento, porque
+// el cuerpo no distingue el origen. `supplement` en null (comida/catálogo, superficies que no
+// trackean suplementos) se comporta como 0: sin cambio de comportamiento ahí.
+function totalConsumido(r: NutrientRow): number | null {
+  return r.value == null ? null : r.value + (r.supplement ?? 0);
 }
 
 // `over` solo aplica a los techos: pasarse de un piso (fibra, hierro) es BUENO y no se avisa.
 function seExcedio(r: NutrientRow): boolean {
-  return r.value != null && r.ref != null && r.kind === "max" && r.value > r.ref;
+  const total = totalConsumido(r);
+  return total != null && r.ref != null && r.kind === "max" && total > r.ref;
 }
 
 function textoConteo(rows: NutrientRow[]): string {
@@ -74,7 +73,18 @@ function Fila({ row, onPress }: { row: NutrientRow; onPress?: (key: NutrientRowK
           testID={`nutr-${row.key}-amount`}
           style={{ color: over ? colors.warning : colors.textMuted, fontSize: 13 }}
         >
-          {textoCantidad(row)}
+          {row.value == null ? (
+            "sin dato"
+          ) : (
+            <>
+              {row.partial ? "≥ " : ""}
+              {fmt(row.value)}
+              {row.supplement != null && row.supplement > 0 && (
+                <Text style={{ color: colors.supplement }}>+{fmt(row.supplement)}</Text>
+              )}
+              {row.ref != null ? ` / ${fmt(row.ref)} ${row.unit}` : ` ${row.unit}`}
+            </>
+          )}
         </Text>
         {row.pct != null && (
           <Text
@@ -88,6 +98,7 @@ function Fila({ row, onPress }: { row: NutrientRow; onPress?: (key: NutrientRowK
       {row.value != null && row.ref != null && (
         <Bar
           value={row.value}
+          supplement={row.supplement ?? 0}
           target={row.ref}
           kind={row.kind === "min" ? "floor" : "limit"}
           testID={`nutr-${row.key}-bar`}
