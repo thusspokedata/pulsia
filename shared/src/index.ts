@@ -41,6 +41,7 @@ export * from "./nutrition/breakdown";
 export * from "./nutrition/nutrientLevel";
 export * from "./nutrition/nutrientFilter";
 export * from "./nutrition/parseDose";
+export * from "./nutrition/supplementBreakdown";
 export * from "./schemas/report";
 export * from "./supplements/checklist";
 export * from "./supplements/overlap";
