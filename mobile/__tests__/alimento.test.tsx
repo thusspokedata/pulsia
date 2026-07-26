@@ -27,6 +27,8 @@ jest.mock("../src/api/nutrition", () => ({
   applyUsdaRefresh: jest.fn(),
   assembleUsdaFood: jest.fn(),
   searchUsdaFoods: jest.fn(async () => []),
+  proposeAiMicros: jest.fn(),
+  applyAiMicros: jest.fn(),
 }));
 
 import AlimentoDetalleScreen from "../app/nutricion/alimento";
@@ -34,6 +36,7 @@ import CatalogoScreen from "../app/nutricion/catalogo";
 import {
   getFood, getUsdaEntry, listFoods,
   proposeUsdaRefresh, applyUsdaRefresh, assembleUsdaFood,
+  proposeAiMicros, applyAiMicros,
 } from "../src/api/nutrition";
 
 const alimento = (over: Partial<Food> = {}): Food => ({
@@ -72,6 +75,33 @@ beforeEach(() => {
   (getUsdaEntry as jest.Mock).mockResolvedValue(ENTRADA_USDA);
   (proposeUsdaRefresh as jest.Mock).mockResolvedValue(propuesta());
   (applyUsdaRefresh as jest.Mock).mockResolvedValue({ mealsUpdated: 2, itemsUpdated: 3 });
+  (proposeAiMicros as jest.Mock).mockResolvedValue({
+    identification: IDENTIFICACION,
+    proposal: { ...IDENTIFICACION, kcal: 116, sourceMicros: "ai", usdaFdcId: null, vitamin_c_mg: 8 },
+    mealsAffected: 2,
+  });
+  (applyAiMicros as jest.Mock).mockResolvedValue({ mealsUpdated: 2, itemsUpdated: 3 });
+});
+
+test("'Completar con IA' propone (con aviso de comidas) y al aplicar recarga desde la base", async () => {
+  await render(<AlimentoDetalleScreen />);
+  await waitFor(() => expect(screen.getByTestId("alimento-completar-ia")).toBeTruthy());
+  await fireEvent.press(screen.getByTestId("alimento-completar-ia"));
+
+  // Panel de confirmación: el aviso de comidas afectadas es la condición del diseño.
+  await waitFor(() => expect(screen.getByTestId("ia-panel")).toBeTruthy());
+  expect(screen.getByTestId("ia-comidas")).toHaveTextContent(/2 comidas/);
+  expect(proposeAiMicros).toHaveBeenCalledWith("http://x", FOOD_ID);
+
+  await fireEvent.press(screen.getByTestId("ia-aplicar"));
+  await waitFor(() => expect(applyAiMicros).toHaveBeenCalled());
+  const [url, id, food] = (applyAiMicros as jest.Mock).mock.calls[0];
+  expect(url).toBe("http://x");
+  expect(id).toBe(FOOD_ID);
+  expect(food.sourceMicros).toBe("ai"); // se aplica la propuesta estimada
+  // Se recarga de la base (getFood: 1 del load inicial + 1 tras aplicar) y el panel se cierra.
+  await waitFor(() => expect(screen.queryByTestId("ia-panel")).toBeNull());
+  expect((getFood as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2);
 });
 
 test("desde el catálogo se llega al detalle del alimento", async () => {

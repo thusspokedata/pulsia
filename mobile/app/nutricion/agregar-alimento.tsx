@@ -175,15 +175,38 @@ export default function AgregarAlimentoScreen() {
     }
   }
 
-  /** El usuario dijo "ninguno, que la IA complete": estima los micros y recarga TODO el form. */
+  /**
+   * El usuario dijo "ninguno, que la IA complete": estima los micros y los mergea en el form,
+   * SIN pisar lo que el usuario ya tiene cargado (nombre, basis, macros, peso por unidad, procedencia
+   * de los macros). Por eso NO usa `prefillFrom` (que reemplaza todo): el request se arma con el
+   * form ACTUAL —así la IA estima para el alimento que el usuario ve, aunque haya editado el nombre—
+   * conservando el `searchQuery`, y de la respuesta se toman solo los micros (los 6 de etiqueta al
+   * form, los 24 restantes + `sourceMicros: "ai"` a `carried`).
+   */
   async function completarConIA() {
     if (identification == null || !baseUrl.current) return;
     setError(null);
     setEstimandoIA(true);
     try {
-      // prefillFrom setea también `carried` (sourceMicros "ai" + los micros del estimado), así que
-      // al guardar el alimento queda marcado como estimado por IA.
-      prefillFrom(await aiMicrosForFood(baseUrl.current, identification));
+      const idReq: FoodIdentification = {
+        name: form.name.trim(), basis: form.basis,
+        kcal: num(form.kcal), protein_g: num(form.protein_g), carbs_g: num(form.carbs_g), fat_g: num(form.fat_g),
+        saturated_fat_g: optNum(form.saturated_fat_g), sugars_g: optNum(form.sugars_g), fiber_g: optNum(form.fiber_g),
+        sodium_mg: sodiumMgFromField(form.salt_g), cholesterol_mg: optNum(form.cholesterol_mg), water_ml: optNum(form.water_ml),
+        unitWeightG: form.unitWeightG.trim() === "" ? null : num(form.unitWeightG),
+        // El sourceMacros del request no importa (la respuesta solo se usa por sus micros), pero el
+        // schema no admite "manual": se manda "ai" y NO se toca `form.sourceMacros`.
+        sourceMacros: form.sourceMacros === "label" ? "label" : "ai",
+        searchQuery: identification.searchQuery,
+      };
+      const ex = await aiMicrosForFood(baseUrl.current, idReq);
+      setCarried(carriedFrom(ex)); // los 24 micros no editables + sourceMicros "ai" + usdaFdcId null
+      const numStr = (v: number | null | undefined) => (v == null ? "" : String(v));
+      setForm((f) => ({
+        ...f, // conserva nombre, basis, macros, unitWeightG y sourceMacros del usuario
+        saturated_fat_g: numStr(ex.saturated_fat_g), sugars_g: numStr(ex.sugars_g), fiber_g: numStr(ex.fiber_g),
+        salt_g: saltFieldFromSodiumMg(ex.sodium_mg), cholesterol_mg: numStr(ex.cholesterol_mg), water_ml: numStr(ex.water_ml),
+      }));
       setCorrigiendo(false);
     } catch (e) {
       setError((e as Error).message);
@@ -307,6 +330,12 @@ export default function AgregarAlimentoScreen() {
         {carried.usdaFdcId != null ? (
           <Text testID="usda-chip" style={{ color: colors.icon, fontSize: 12, flexShrink: 1 }}>
             {`USDA · ${entradaUsda?.description ?? `entrada ${carried.usdaFdcId}`}`}
+          </Text>
+        ) : carried.sourceMicros === "ai" ? (
+          // Tras "que la IA complete": usdaFdcId es null pero los micros SÍ están (estimados). Decir
+          // "sin vitaminas ni minerales" acá contradiría el chip "micros IA" de arriba.
+          <Text testID="micros-ia-info" style={{ color: colors.icon, fontSize: 12, flexShrink: 1 }}>
+            Vitaminas y minerales estimados por IA
           </Text>
         ) : (
           <Text testID="usda-sin-match" style={{ color: colors.icon, fontSize: 12, flexShrink: 1 }}>

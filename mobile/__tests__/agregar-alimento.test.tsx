@@ -3,6 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import AgregarAlimentoScreen from "../app/nutricion/agregar-alimento";
 import {
   assembleUsdaFood, createFood, describeFood, extractFood, getFood, getUsdaEntry, searchUsdaFoods,
+  aiMicrosForFood,
 } from "../src/api/nutrition";
 import { useLocalSearchParams } from "expo-router";
 
@@ -26,6 +27,7 @@ jest.mock("../src/api/nutrition", () => ({
   getUsdaEntry: jest.fn(),
   searchUsdaFoods: jest.fn(),
   assembleUsdaFood: jest.fn(),
+  aiMicrosForFood: jest.fn(),
 }));
 
 // Los candidatos que el backend devolvió junto con la extracción. El primero es el que eligió la
@@ -86,6 +88,38 @@ test("escribir el alimento precarga el formulario, sin foto", async () => {
   await waitFor(() => expect(screen.getByDisplayValue("Almendra")).toBeTruthy());
   expect(screen.getByDisplayValue("579")).toBeTruthy(); // kcal
   expect(describeFood).toHaveBeenCalledWith("http://x", "almendra");
+});
+
+// Lo que devuelve "que la IA complete": micros estimados. El nombre/macros vienen en 0/basura a
+// propósito — el form NO debe adoptarlos (solo mergea micros).
+const AI_MICROS_RESP = {
+  name: "NO USAR", basis: "per_100g", kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null,
+  sourceMacros: "ai", sourceMicros: "ai", usdaFdcId: null,
+  saturated_fat_g: 1.1, sugars_g: 2.2, fiber_g: 3.3, sodium_mg: 40, cholesterol_mg: 0, water_ml: 5,
+  vitamin_c_mg: 8, vitamin_e_mg: 9,
+};
+
+test("'que la IA complete' mergea SOLO los micros y conserva las ediciones del usuario", async () => {
+  (aiMicrosForFood as jest.Mock).mockResolvedValue(AI_MICROS_RESP);
+  await altaConMatch();
+  // El usuario edita nombre y kcal ANTES de tocar el botón: no se deben perder.
+  await fireEvent.changeText(screen.getByPlaceholderText("Nombre"), "Mi mezcla");
+  await fireEvent.press(screen.getByTestId("ai-completar"));
+
+  // La request se armó con el form ACTUAL (nombre editado), conservando el searchQuery.
+  await waitFor(() => expect(aiMicrosForFood).toHaveBeenCalled());
+  const idEnviada = (aiMicrosForFood as jest.Mock).mock.calls[0][1];
+  expect(idEnviada.name).toBe("Mi mezcla");
+  expect(idEnviada.kcal).toBe(579);                 // el macro del form, no el de la IA
+  expect(idEnviada.searchQuery).toBe(IDENTIFICACION.searchQuery);
+
+  // El form conserva nombre y macros; solo cambian los micros (y la procedencia pasa a IA).
+  await waitFor(() => expect(screen.getByTestId("source-chip-micros-ai")).toBeTruthy());
+  expect(screen.getByDisplayValue("Mi mezcla")).toBeTruthy();   // NO "NO USAR"
+  expect(screen.getByDisplayValue("579")).toBeTruthy();          // kcal conservada
+  expect(screen.getByDisplayValue("3.3")).toBeTruthy();          // fibra mergeada del estimado
+  expect(screen.getByTestId("micros-ia-info")).toBeTruthy();     // ya NO dice "sin vitaminas de USDA"
+  expect(screen.queryByTestId("source-chip-micros-usda")).toBeNull();
 });
 
 test("el botón no hace nada con menos de 2 caracteres", async () => {
