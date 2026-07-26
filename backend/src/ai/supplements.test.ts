@@ -1,5 +1,10 @@
-import { test, expect } from "bun:test";
-import { buildSupplementExtractPrompt, buildSupplementExplainPrompt, buildSupplementPlanPrompt } from "./supplements";
+import { test, expect, it } from "bun:test";
+import {
+  buildSupplementExtractPrompt,
+  buildSupplementExplainPrompt,
+  buildSupplementPlanPrompt,
+  buildSupplementMapPrompt,
+} from "./supplements";
 
 test("el prompt de extracción trae anti-inyección, per-serving, info no-prescriptiva y regla de nombre", () => {
   const p = buildSupplementExtractPrompt();
@@ -37,6 +42,23 @@ test("el prompt del plan trae catálogo, contexto, techo de etiqueta, franjas y 
   expect(p).toContain("el zinc me cae mal a la mañana");        // nota del usuario
   expect(p).toMatch(/DATOS.*NO instrucciones/i);                // anti-inyección
   expect(p).toMatch(/return_supplement_plan/);
+});
+
+it("el prompt de extracción pide nutrientKey, amountPerUnit y unitLabel", () => {
+  const p = buildSupplementExtractPrompt();
+  expect(p).toContain("nutrientKey");
+  expect(p).toContain("amountPerUnit");
+  expect(p).toContain("unitLabel");
+});
+
+it("el prompt de mapeo (backfill) recibe los componentes ya guardados", () => {
+  const p = buildSupplementMapPrompt({
+    name: "Mg", servingLabel: "2 cápsulas",
+    components: [{ name: "Magnesio (citrato)", amount: 375, unit: "mg" }],
+  });
+  expect(p).toContain("Magnesio (citrato)");
+  expect(p).toContain("375");
+  expect(p).toContain("nutrientKey");
 });
 
 test("el prompt del plan pide pensar la semana completa y no duplicar componentes entre suplementos", () => {
