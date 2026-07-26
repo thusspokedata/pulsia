@@ -160,9 +160,10 @@ taken/deviated/skipped se toca.
 Los suplementos ya guardados no tienen `nutrientKey`/`amountPerUnit`/`unitLabel` → **no aportan** hasta
 backfillearlos (degradación limpia: `null` se saltea, el diario simplemente no los cuenta todavía).
 
-- Rutina one-time (endpoint admin `POST /supplements/backfill-micros` bajo auth del owner, o script)
-  que, por cada suplemento sin mapear, corre un mapeo **IA text-only** sobre el `{name, amount, unit}`
-  ya guardado (no necesita la foto: es normalización texto→clave) y completa los campos.
+- **Endpoint admin** `POST /supplements/backfill-micros` bajo auth del owner (decidido: reusa auth +
+  cliente de IA existentes, se dispara con un curl tras el deploy, sin acceso a la DB de la Pi). Por
+  cada suplemento sin mapear, corre un mapeo **IA text-only** sobre el `{name, amount, unit}` ya
+  guardado (no necesita la foto: es normalización texto→clave) y completa los campos.
 - Idempotente: solo toca componentes con `nutrientKey === undefined` (nunca pisa un mapeo existente ni
   una edición del usuario — lección del #190: identidad/valores del alimento guardado, no del body).
 
