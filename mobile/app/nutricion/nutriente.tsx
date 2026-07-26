@@ -206,7 +206,7 @@ export default function NutrienteScreen() {
                         paddingVertical: 2,
                       }}
                     >
-                      <Text style={{ color: colors.supplement, fontSize: 11, fontWeight: "600" }}>suplemento</Text>
+                      <Text style={{ color: colors.supplementText, fontSize: 11, fontWeight: "600" }}>suplemento</Text>
                     </View>
                   )}
                 </View>

@@ -91,7 +91,7 @@ function Fila({ row, onPress }: { row: NutrientRow; onPress?: (key: NutrientRowK
             // Sin comida pero con suplemento: se muestra SOLO el aporte del suplemento, sin un
             // número de comida que no existe (sería mostrar un 0 que nadie midió).
             <>
-              <Text style={{ color: colors.supplement }}>+{fmt(row.supplement!)}</Text>
+              <Text style={{ color: colors.supplementText }}>+{fmt(row.supplement!)}</Text>
               {row.ref != null ? ` / ${fmt(row.ref)} ${row.unit}` : ` ${row.unit}`}
             </>
           ) : (
@@ -99,7 +99,7 @@ function Fila({ row, onPress }: { row: NutrientRow; onPress?: (key: NutrientRowK
               {row.partial ? "≥ " : ""}
               {fmt(row.value)}
               {row.supplement != null && row.supplement > 0 && (
-                <Text style={{ color: colors.supplement }}>+{fmt(row.supplement)}</Text>
+                <Text style={{ color: colors.supplementText }}>+{fmt(row.supplement)}</Text>
               )}
               {row.ref != null ? ` / ${fmt(row.ref)} ${row.unit}` : ` ${row.unit}`}
             </>
