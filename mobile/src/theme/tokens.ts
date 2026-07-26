@@ -20,6 +20,9 @@ export const colors = {
   successText: "#1E8A6E", // texto/íconos sobre successSoft
   surfaceMuted: "#E8EEF3", // superficies hundidas (track de segmented, inputs)
   icon: "#94A3B0", // íconos inactivos (barra de navegación)
+
+  supplement: "#7F77DD", // violeta — aporte de suplementos en el diario (distinto de comida/excedente)
+  supplementSoft: "#EEEDFE", // fondo del chip "suplemento"
 };
 
 export const radius = { sm: 8, md: 12, lg: 16, pill: 20 };
