@@ -1,5 +1,9 @@
 import { test, expect } from "bun:test";
-import { toSupplement, toPlanView, snapshotForTake } from "./repository";
+import { toSupplement, toPlanView, snapshotForTake, insertSupplement, getSupplement, deleteSupplement } from "./repository";
+import { createDb } from "../db/client";
+
+// Usuario por defecto del entorno de desarrollo single-user (ver seed.ts).
+const DEV_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 const row = {
   id: "11111111-1111-4111-8111-111111111111", userId: "u",
@@ -43,4 +47,24 @@ test("toPlanView arma el PlanView con ítems y nombres", () => {
 test("snapshotForTake congela nombre/dosis/franja del ítem", () => {
   const s = snapshotForTake(itemRows[0] as any);
   expect(s).toEqual({ supplementName: "Zink", plannedDose: "1 tableta", slot: "desayuno" });
+});
+
+test("persiste y devuelve unitLabel y los componentes con mapeo canónico", async () => {
+  const { db, sql } = createDb(process.env.DATABASE_URL ?? "postgres://pulsia:pulsia@localhost:5432/pulsia");
+  try {
+    const s = await insertSupplement(db, DEV_USER_ID, {
+      name: "Mg", servingLabel: "2 cápsulas", unitLabel: "cápsula", source: "label", info: "x",
+      components: [{ name: "Magnesio", amount: 375, unit: "mg", nutrientKey: "magnesium_mg", amountPerUnit: 187.5 }],
+    } as any);
+    try {
+      const got = await getSupplement(db, DEV_USER_ID, s.id);
+      expect(got?.unitLabel).toBe("cápsula");
+      expect(got?.components[0].nutrientKey).toBe("magnesium_mg");
+      expect(got?.components[0].amountPerUnit).toBe(187.5);
+    } finally {
+      await deleteSupplement(db, DEV_USER_ID, s.id);
+    }
+  } finally {
+    await sql.end();
+  }
 });

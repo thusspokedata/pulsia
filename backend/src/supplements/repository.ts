@@ -12,6 +12,7 @@ export function toSupplement(row: SupplementRow): Supplement {
   return {
     id: row.id, name: row.name, brand: row.brand ?? null,
     servingLabel: row.servingLabel,
+    unitLabel: row.unitLabel ?? null,
     components: row.components,
     labelMaxPerDay: row.labelMaxPerDay ?? null,
     source: row.source as Supplement["source"],
@@ -23,7 +24,7 @@ export function toSupplement(row: SupplementRow): Supplement {
 export async function insertSupplement(db: Db, userId: string, input: SupplementInput): Promise<Supplement> {
   const rows = await db.insert(supplement).values({
     userId, name: input.name, brand: input.brand ?? null,
-    servingLabel: input.servingLabel, components: [...input.components],
+    servingLabel: input.servingLabel, unitLabel: input.unitLabel ?? null, components: [...input.components],
     labelMaxPerDay: input.labelMaxPerDay ?? null, source: input.source,
     info: input.info ?? null, notes: input.notes ?? null,
   }).returning();
@@ -45,7 +46,7 @@ export async function getSupplement(db: Db, userId: string, id: string): Promise
 export async function updateSupplement(db: Db, userId: string, id: string, input: SupplementInput): Promise<Supplement | null> {
   const rows = await db.update(supplement).set({
     name: input.name, brand: input.brand ?? null,
-    servingLabel: input.servingLabel, components: [...input.components],
+    servingLabel: input.servingLabel, unitLabel: input.unitLabel ?? null, components: [...input.components],
     labelMaxPerDay: input.labelMaxPerDay ?? null, source: input.source,
     info: input.info ?? null, notes: input.notes ?? null,
   }).where(and(eq(supplement.id, id), eq(supplement.userId, userId))).returning();
