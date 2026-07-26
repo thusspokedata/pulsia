@@ -103,7 +103,7 @@ test("suma el mismo alimento comido varias veces (aporte y gramos)", () => {
     itemsMeal([it("Queso", 50, { cholesterol_mg: 45 })]),
   ];
   expect(foodsHighestIn(meals, "cholesterol_mg")).toEqual([
-    { name: "Queso", amount: 135, grams: 150, pctOfTotal: 100 },
+    { name: "Queso", amount: 135, grams: 150, pctOfTotal: 100, source: "food" },
   ]);
 });
 
@@ -140,12 +140,22 @@ test("el ranking de SAL sale del sodio del ítem, y en gramos de sal", () => {
   // 800 mg → 2 g de sal; 200 mg → 0,5 g.
   const meals = [itemsMeal([it("Jamón", 100, { sodium_mg: 800 }), it("Pan", 80, { sodium_mg: 200 })])];
   expect(foodsHighestIn(meals, "salt_g")).toEqual([
-    { name: "Jamón", amount: 2, grams: 100, pctOfTotal: 80 },
-    { name: "Pan", amount: 0.5, grams: 80, pctOfTotal: 20 },
+    { name: "Jamón", amount: 2, grams: 100, pctOfTotal: 80, source: "food" },
+    { name: "Pan", amount: 0.5, grams: 80, pctOfTotal: 20, source: "food" },
   ]);
 });
 
 test("un ítem sin sodio no entra al ranking de sal (ni como 0)", () => {
   const meals = [itemsMeal([it("Jamón", 100, { sodium_mg: 800 }), it("Lechuga", 50)])];
   expect(foodsHighestIn(meals, "salt_g").map((f) => f.name)).toEqual(["Jamón"]);
+});
+
+// Task 14: la pantalla de "alimentos con más X" combina esto con el aporte de suplementos, y
+// distingue las filas por `source`. Sin este campo en TODAS las filas de comida, la pantalla no
+// tiene forma de saber cuáles NO llevan el chip "suplemento".
+test("todas las filas de foodsHighestIn llevan source 'food'", () => {
+  const meals = [itemsMeal([it("Queso", 100, { cholesterol_mg: 90 }), it("Huevo", 60, { cholesterol_mg: 220 })])];
+  const ranked = foodsHighestIn(meals, "cholesterol_mg");
+  expect(ranked.length).toBeGreaterThan(0);
+  expect(ranked.every((f) => f.source === "food")).toBe(true);
 });
