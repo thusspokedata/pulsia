@@ -2,6 +2,8 @@
 // cantidad, las sumas, las referencias diarias y el agrupado de la UI. Agregar un nutriente es
 // agregar una línea acá: si se escribiera a mano en cada lugar, olvidarse de uno lo perdería en
 // silencio (es el bug de buildFitActivity, que ningún test veía).
+import { z } from "zod";
+
 export type NutrientGroup = "grasas" | "carbohidratos" | "vitaminas" | "minerales";
 export type NutrientUnit = "g" | "mg" | "mcg" | "ml";
 
@@ -55,6 +57,10 @@ export const NUTRIENTS = [
 
 export type NutrientKey = (typeof NUTRIENTS)[number]["key"];
 export const NUTRIENT_KEYS = NUTRIENTS.map((n) => n.key) as NutrientKey[];
+
+// Enum Zod de las claves canónicas. `NUTRIENT_KEYS` es un array runtime; el cast a tupla es lo que
+// z.enum necesita, y el tipo resultante sigue siendo NutrientKey.
+export const NutrientKeySchema = z.enum(NUTRIENT_KEYS as [NutrientKey, ...NutrientKey[]]);
 
 // Valores de nutrientes de un alimento o ítem. Todos opcionales y nullable: `null` es "no
 // sabemos", que NO es lo mismo que 0.

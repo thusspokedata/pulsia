@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { NUTRIENTS, NUTRIENT_KEYS, nutrientsByGroup } from "./nutrients";
+import { NUTRIENTS, NUTRIENT_KEYS, NutrientKeySchema, nutrientsByGroup } from "./nutrients";
 
 test("hay 30 micronutrientes", () => {
   expect(NUTRIENTS.length).toBe(30);
@@ -34,4 +34,12 @@ test("cada grupo tiene la cantidad esperada", () => {
 
 test("toda unidad es una de las conocidas", () => {
   for (const n of NUTRIENTS) expect(["g", "mg", "mcg", "ml"]).toContain(n.unit);
+});
+
+test("NutrientKeySchema acepta cada clave del registro", () => {
+  for (const k of NUTRIENT_KEYS) expect(NutrientKeySchema.parse(k)).toBe(k);
+});
+
+test("NutrientKeySchema rechaza una clave que no existe", () => {
+  expect(NutrientKeySchema.safeParse("magnesio").success).toBe(false);
 });
