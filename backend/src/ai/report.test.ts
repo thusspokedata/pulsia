@@ -117,6 +117,22 @@ test("periódico con suplementos: menciona adherencia como conteos, no día por 
   expect(p).toMatch(/conteos por suplemento/i);
 });
 
+test("con supplementMicros: el prompt incluye el aporte de micros de los suplementos tomados", () => {
+  const p = buildReportPrompt("daily", {
+    ...data, supplements, foodNames: [], foodNamesTotal: 0,
+    supplementMicros: { magnesium_mg: 300 },
+  });
+  expect(p).toMatch(/[Aa]porte de micros de suplementos tomados/);
+  expect(p).toMatch(/300/);
+});
+
+test("sin supplementMicros (o vacío): NO aparece la línea de aporte de micros", () => {
+  const pNull = buildReportPrompt("daily", { ...data, supplements, foodNames: [], foodNamesTotal: 0, supplementMicros: null });
+  expect(pNull).not.toMatch(/[Aa]porte de micros de suplementos tomados/);
+  const pEmpty = buildReportPrompt("daily", { ...data, supplements, foodNames: [], foodNamesTotal: 0, supplementMicros: {} });
+  expect(pEmpty).not.toMatch(/[Aa]porte de micros de suplementos tomados/);
+});
+
 test("anti-inyección: extiende la mención a datos de suplementos", () => {
   const p = buildReportPrompt("daily", { ...data, supplements, foodNames: [], foodNamesTotal: 0 });
   // Ancla a la frase anti-inyección: "suplement" a secas lo ecoa el encabezado "SUPLEMENTOS:".

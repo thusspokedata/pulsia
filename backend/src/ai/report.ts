@@ -1,4 +1,7 @@
+import { NUTRIENTS } from "@pulsia/shared";
 import type { ReportKind } from "@pulsia/shared";
+
+const NUTRIENT_LABEL = new Map<string, string>(NUTRIENTS.map((n) => [n.key, `${n.label} (${n.unit})`]));
 import type { ReportData } from "../reports/collect";
 
 const KIND_ES: Record<ReportKind, string> = {
@@ -65,6 +68,13 @@ function supplementsBlock(kind: ReportKind, data: ReportData): string | null {
   const catalogLines = s.catalog.length
     ? s.catalog.map((c) => `  - id ${c.id} — ${c.name}: ${c.components.map((comp) => `${comp.name} ${comp.amount}${comp.unit}`).join(", ")}`).join("\n")
     : "  (catálogo vacío)";
+  // Aporte YA CUANTIFICADO (mismo cálculo que el diario, supplementMicros de shared) de los
+  // suplementos tomados en el período, para que la IA no tenga que estimarlo de memoria a partir
+  // del catálogo. Es un DATO más del bloque: no cambia la defensa anti-inyección de arriba.
+  const microsEntries = Object.entries(data.supplementMicros ?? {});
+  const microsLine = microsEntries.length > 0
+    ? `Aporte de micros de suplementos tomados (además de la comida): ${microsEntries.map(([k, v]) => `${NUTRIENT_LABEL.get(k) ?? k} ${v}`).join(", ")}`
+    : null;
   const adherenceInstruction = kind === "daily"
     ? "Mencioná en el informe la ADHERENCIA de hoy a los suplementos: qué se tomó, qué se tomó con desvío (dosis distinta a la planeada) y qué se salteó."
     : `Mencioná en el informe la ADHERENCIA del período a los suplementos: conteos por suplemento (ej. "tomaste zinc X de Y días"), SIN reconstruir el plan día por día.`;
@@ -85,9 +95,10 @@ function supplementsBlock(kind: ReportKind, data: ReportData): string | null {
     takeLines,
     "Catálogo (componentes de cada suplemento, para tu referencia):",
     catalogLines,
+    microsLine,
     adherenceInstruction,
     adjustmentInstruction,
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 export function buildReportPrompt(kind: ReportKind, data: ReportData): string {

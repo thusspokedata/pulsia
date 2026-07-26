@@ -1,5 +1,5 @@
-import { sumNullableMicro, dayExerciseBurn, saltGFromSodiumMg, CARDIO_LABELS } from "@pulsia/shared";
-import type { AthleteContext, Meal, WaterLog, PlanView, CardioActivity } from "@pulsia/shared";
+import { sumNullableMicro, dayExerciseBurn, saltGFromSodiumMg, CARDIO_LABELS, supplementMicros } from "@pulsia/shared";
+import type { AthleteContext, Meal, WaterLog, PlanView, CardioActivity, SupplementComponent, TakeForMicros } from "@pulsia/shared";
 import { listMeals as listMealsImpl, listWater as listWaterImpl } from "../nutrition/repository";
 import { listSessions as listSessionsImpl } from "../sessions/repository";
 import { listCardio as listCardioImpl } from "../cardio/repository";
@@ -14,7 +14,7 @@ import type { Db } from "../db/client";
 interface TakeRow {
   supplementName: string; status: string; plannedDose: string; actualDose: string | null; date: string;
 }
-interface SupplementRow { id: string; name: string; components: { name: string; amount: number; unit: string }[] }
+interface SupplementRow { id: string; name: string; components: SupplementComponent[] }
 
 export interface ReportData {
   totals: { kcal: number; protein_g: number; carbs_g: number; fat_g: number; sugars_g: number | null; fiber_g: number | null; saturated_fat_g: number | null; salt_g: number | null };
@@ -34,8 +34,11 @@ export interface ReportData {
     takes: { supplementName: string; status: string; plannedDose: string; actualDose: string | null; date: string }[];
     // id incluido: es la referencia que el prompt le da a la IA para `supplementAdjustment.supplementId`
     // (el ajuste se valida por id EXACTO del catálogo, ver ai/report.ts).
-    catalog: { id: string; name: string; components: { name: string; amount: number; unit: string }[] }[];
+    catalog: { id: string; name: string; components: SupplementComponent[] }[];
   } | null; // null si no hay plan activo
+  // Aporte cuantificado de los suplementos TOMADOS en el período, por nutriente (misma agregación
+  // que usa el diario). null si no hay plan activo — igual que `supplements`.
+  supplementMicros: Partial<Record<string, number>> | null;
 }
 
 // Deps inyectables para testear sin DB real.
@@ -96,6 +99,18 @@ export async function collectReportData(
     takes: takes.map((t) => ({ supplementName: t.supplementName, status: t.status, plannedDose: t.plannedDose, actualDose: t.actualDose ?? null, date: t.date })),
     catalog: catalog.map((s) => ({ id: s.id, name: s.name, components: s.components })),
   } : null;
+  // Los `takes` del rango (TakeRow, arriba) traen supplementName pero no supplementId, así que la
+  // unión con el catálogo (para sacar los `components` mapeados) es por NOMBRE, no por id — el
+  // snapshot de la toma guarda el nombre del suplemento tal como se llamaba al tomarlo.
+  let supplementMicrosOut: Partial<Record<string, number>> | null = null;
+  if (activePlan) {
+    const byName = new Map(catalog.map((s) => [s.name, s.components]));
+    const forMicros: TakeForMicros[] = takes.map((t) => ({
+      status: t.status as TakeForMicros["status"], plannedDose: t.plannedDose, actualDose: t.actualDose ?? null,
+      supplementName: t.supplementName, components: byName.get(t.supplementName) ?? [],
+    }));
+    supplementMicrosOut = supplementMicros(forMicros).totals;
+  }
   const micro = (k: "sugars_g" | "fiber_g" | "saturated_fat_g") => sumNullableMicro(items.map((it) => it[k]));
   const totals = {
     kcal: items.reduce((a, it) => a + it.kcal, 0),
@@ -135,7 +150,7 @@ export async function collectReportData(
   return {
     totals, cholesterolMg, liquid: { total: Math.round(fromFood + drank), drank, fromFood },
     exercise, sessionsCount: daySessions.length, activities, metrics: metricsByType, athlete, periodDays, weightTrend,
-    foodNames, foodNamesTotal, supplements,
+    foodNames, foodNamesTotal, supplements, supplementMicros: supplementMicrosOut,
   };
 }
 
