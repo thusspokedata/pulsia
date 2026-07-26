@@ -1,6 +1,10 @@
 # Pulsia — Onboarding / Handoff
 
-> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: **2026-07-25** (sesión **IMPORTAR FUERZA DEL `.FIT`**: ahora importás un `.FIT` de un entrenamiento de **fuerza** y se guarda como **`workout_session`** con sus ejercicios y series —no como cardio "otro"—, entrando solo a 1RM/volumen/PRs, al informe y a la memoria del atleta. Cierra la doble carga del owner (Pulsia genera → tipea en Garmin → entrena con el reloj → importa). Tres PRs, cada uno con ciclo completo review→merge→deploy/OTA: [#185](https://github.com/thusspokedata/pulsia/pull/185) el informe **cuenta** las actividades importadas (antes leía "0 sesiones"), [#186](https://github.com/thusspokedata/pulsia/pull/186) backend (**migración 0025** relaja `program_id`/`week_number`/`day_label` de `workout_session` a nullable — un import no cuelga de un programa) + [#187](https://github.com/thusspokedata/pulsia/pull/187) móvil con **OTA a vc10** (runtime `784872cb` verificado). El owner aprobó `workout_session` relajado. Detalle en **§0-FIT-FUERZA**, incluido el **algoritmo serie→ejercicio verificado contra `.FIT` reales** y un **call-site de tipo que el tsc no cazaba**.)
+> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: **2026-07-26** (sesión **LA IA COMPLETA LOS MICROS SIN USDA**: al agregar/actualizar un alimento, si no está en la copia local de **USDA** —o el match es malo, como una limonada casera que matcheaba una limonada de Coca-Cola—, un botón **"que la IA complete"** estima las vitaminas y minerales con conocimiento + **web search** (herramienta `web_search` de Anthropic), marcados como **`sourceMicros: "ai"`** (chip **"micros IA"**, distinto de los valores de laboratorio de USDA). Sin migración (`sourceMicros: "ai"` ya existía en el schema). [#190](https://github.com/thusspokedata/pulsia/pull/190), mergeado + backend deployado + **OTA a vc10 publicado** (runtime `784872cb` verificado). Detalle en **§0-IA-MICROS**, incluidos los **6 hallazgos de la review** —dos "Major": el apply confiaba de más en el body, y el alta pisaba las ediciones del usuario— corregidos antes de mergear.)
+>
+> Actualización previa: **2026-07-26** (sesión **EL RESUMEN DEL IMPORT DE FUERZA SE VE COMPLETO**: un `.FIT` de fuerza importado se veía pobre —Cumplimiento 0%, Volumen 0 kg, Reps 0, todo Descanso— porque `fitStrengthToSession` ponía `endedAt: null` y `summarize` solo cuenta las series terminadas. Ahora el import puebla **timestamps reales por serie, FC media/máx por serie y la curva de FC de la sesión**, y el resumen se ve igual a una sesión registrada en la app (tiles, trabajo/descanso, detalle por serie, mapa corporal). [#189](https://github.com/thusspokedata/pulsia/pull/189), mergeado + backend deployado (**sin migración, sin OTA** — el móvil ya consumía esos campos, reusa `SessionSummary`). El owner lo vio en vivo (import vacío) y lo confirmó tras re-importar. CodeRabbit cazó un **bug real**: `extractHrSamples` dejaba pasar FC no-finita (`NaN`/`Infinity`/`new Date(NaN)`) que volteaba un import por lo demás válido. Detalle en **§0-FIT-RESUMEN**.)
+>
+> Actualización previa: **2026-07-25** (sesión **IMPORTAR FUERZA DEL `.FIT`**: ahora importás un `.FIT` de un entrenamiento de **fuerza** y se guarda como **`workout_session`** con sus ejercicios y series —no como cardio "otro"—, entrando solo a 1RM/volumen/PRs, al informe y a la memoria del atleta. Cierra la doble carga del owner (Pulsia genera → tipea en Garmin → entrena con el reloj → importa). Tres PRs, cada uno con ciclo completo review→merge→deploy/OTA: [#185](https://github.com/thusspokedata/pulsia/pull/185) el informe **cuenta** las actividades importadas (antes leía "0 sesiones"), [#186](https://github.com/thusspokedata/pulsia/pull/186) backend (**migración 0025** relaja `program_id`/`week_number`/`day_label` de `workout_session` a nullable — un import no cuelga de un programa) + [#187](https://github.com/thusspokedata/pulsia/pull/187) móvil con **OTA a vc10** (runtime `784872cb` verificado). El owner aprobó `workout_session` relajado. Detalle en **§0-FIT-FUERZA**, incluido el **algoritmo serie→ejercicio verificado contra `.FIT` reales** y un **call-site de tipo que el tsc no cazaba**.)
 >
 > Actualización previa: **2026-07-22** (sesión **EL CARDIO ENTRA A PROGRESO**: "Días entrenados" y "Tiempo por día" ignoraban las caminatas y los `.FIT` —la misma actividad existía en el Historial y no en Progreso—; ahora el color mide **gasto calórico** (fuerza + cardio) con escala por cuartiles del historial. De yapa se corrigió un **doble conteo del BMR**: las kcal del reloj son brutas y se contaban contra una meta que ya incluye el basal. [#181](https://github.com/thusspokedata/pulsia/pull/181), mergeado + backend deployado + **OTA a vc10 publicado** (runtime `784872cb` verificado). Detalle en **§0-CARDIO-PROGRESO**, incluidos **seis defectos del plan que ninguna lectura encontró** y una **verificación empírica que no servía**.)
 >
@@ -16,7 +20,102 @@
 
 ## 0. Estado en una línea
 
-**Pulsia está EN INTERNET, multi-usuario, con login.** Backend en **`https://pulsia.lahuelladelcaminante.de`** (VPS nginx → Wireguard → Pi:3011, HTTPS por certbot, rate-limit en `/auth/`). La app (Android, **APK vc10**; todo lo nuevo llega por **OTA** a vc10) tiene 3 dominios grandes: **(1) Entrenamiento** — genera programas async, registra/resume/revisa sesiones (a mano en la app **o importando un `.FIT` de fuerza del reloj**, que se guarda como `workout_session` con ejercicios/series y entra a 1RM/volumen/informe — ver §0-FIT-FUERZA), HR por banda BLE, resumen con mapa corporal + FC, español+inglés, memoria del atleta, entreno puntual, **cardio/actividades** (manual o import `.FIT`, ya entra al balance de nutrición, con **pantalla de detalle** —tiles, gráficos de FC/cadencia/respiración/Body Battery y tiempo en zonas— y **reprocesamiento** del `.FIT` guardado), y un **catálogo de 273 ejercicios** (auto-generado del SDK de Garmin) con **demostraciones animadas + cues de técnica** en 86 de ellos, accesibles desde el Programa, la sesión, un buscador y el selector de alternativas; **(2) Nutrición** (tab "Nutrición", **COMPLETO** — ver §0-HOY-PREVIA): alta de alimentos por **foto + IA** (Opus visión) **o escribiendo el nombre** ("almendra") → catálogo personal (con chip **etiqueta/estimado** y **semáforo nutricional** por alimento: chips de alto/medio en grasa, saturadas, azúcar, sal y colesterol, fibra como positivo, con filtro "mostrame los altos en X" — ver §0-SEMAFORO) → registrar en gramos/ml/unidad con snapshot de macros/micros/colesterol/agua, **metas calóricas + de macros** desde el perfil (BMR Mifflin-St Jeor + objetivo + gasto de entrenamiento = **net calories**; el gasto además **sube la meta de carbos**, nunca la de proteína/grasa ni ningún límite de salud — ver §0-BARRAS), **barras que al pasarte muestran turquesa hasta la meta y ámbar solo el excedente**, **dashboard del día con 4 pestañas** (Resumen / Calorías con torta por comida / Nutrientes vs referencias OMS / Macros con dona), **qué alimentos aportan cada nutriente** + **su evolución en el tiempo**, **suplementos** (catálogo por foto + plan IA semanal + checklist + ajuste dinámico), tracker de líquido, y un **agente de informes** (diario/semanal/quincenal/mensual con consejos, opt-in); **(3) Progreso/Salud** — seguimiento cuantitativo (composición/presión/actividad/bienestar con backfill) + tendencias + heatmap, y **ECG (KardiaMobile)** (interpretación IA no-diagnóstica). **La IA observa** (progreso, ECG, y ahora los informes de nutrición → memoria del atleta). Owner: la cuenta principal. La familia baja el APK **vc10** desde **`pulsia.lahuelladelcaminante.de/download`** (QR) + se registra con el **`INVITE_CODE`** (valor real solo en `/home/kilo/pulsia/deploy/app.env` de la Pi). Un merge a `main` **auto-deploya el backend a la Pi**.
+**Pulsia está EN INTERNET, multi-usuario, con login.** Backend en **`https://pulsia.lahuelladelcaminante.de`** (VPS nginx → Wireguard → Pi:3011, HTTPS por certbot, rate-limit en `/auth/`). La app (Android, **APK vc10**; todo lo nuevo llega por **OTA** a vc10) tiene 3 dominios grandes: **(1) Entrenamiento** — genera programas async, registra/resume/revisa sesiones (a mano en la app **o importando un `.FIT` de fuerza del reloj**, que se guarda como `workout_session` con ejercicios/series y entra a 1RM/volumen/informe — ver §0-FIT-FUERZA; un import ya muestra el **resumen completo** —tiempo, volumen, reps, FC media/máx, curva de FC, detalle por serie y mapa corporal— igual que una sesión registrada en la app, ver §0-FIT-RESUMEN), HR por banda BLE, resumen con mapa corporal + FC, español+inglés, memoria del atleta, entreno puntual, **cardio/actividades** (manual o import `.FIT`, ya entra al balance de nutrición, con **pantalla de detalle** —tiles, gráficos de FC/cadencia/respiración/Body Battery y tiempo en zonas— y **reprocesamiento** del `.FIT` guardado), y un **catálogo de 273 ejercicios** (auto-generado del SDK de Garmin) con **demostraciones animadas + cues de técnica** en 86 de ellos, accesibles desde el Programa, la sesión, un buscador y el selector de alternativas; **(2) Nutrición** (tab "Nutrición", **COMPLETO** — ver §0-HOY-PREVIA): alta de alimentos por **foto + IA** (Opus visión) **o escribiendo el nombre** ("almendra") → catálogo personal (con chip **etiqueta/estimado** y **semáforo nutricional** por alimento: chips de alto/medio en grasa, saturadas, azúcar, sal y colesterol, fibra como positivo, con filtro "mostrame los altos en X" — ver §0-SEMAFORO; y si el alimento **no está en USDA o el match es malo**, un botón **"que la IA complete"** estima las vitaminas/minerales con **web search**, marcados como **micros IA** — ver §0-IA-MICROS) → registrar en gramos/ml/unidad con snapshot de macros/micros/colesterol/agua, **metas calóricas + de macros** desde el perfil (BMR Mifflin-St Jeor + objetivo + gasto de entrenamiento = **net calories**; el gasto además **sube la meta de carbos**, nunca la de proteína/grasa ni ningún límite de salud — ver §0-BARRAS), **barras que al pasarte muestran turquesa hasta la meta y ámbar solo el excedente**, **dashboard del día con 4 pestañas** (Resumen / Calorías con torta por comida / Nutrientes vs referencias OMS / Macros con dona), **qué alimentos aportan cada nutriente** + **su evolución en el tiempo**, **suplementos** (catálogo por foto + plan IA semanal + checklist + ajuste dinámico), tracker de líquido, y un **agente de informes** (diario/semanal/quincenal/mensual con consejos, opt-in); **(3) Progreso/Salud** — seguimiento cuantitativo (composición/presión/actividad/bienestar con backfill) + tendencias + heatmap, y **ECG (KardiaMobile)** (interpretación IA no-diagnóstica). **La IA observa** (progreso, ECG, y ahora los informes de nutrición → memoria del atleta). Owner: la cuenta principal. La familia baja el APK **vc10** desde **`pulsia.lahuelladelcaminante.de/download`** (QR) + se registra con el **`INVITE_CODE`** (valor real solo en `/home/kilo/pulsia/deploy/app.env` de la Pi). Un merge a `main` **auto-deploya el backend a la Pi**.
+
+## 0-IA-MICROS. ✅ HECHO (2026-07-26): LA IA COMPLETA LOS MICROS CUANDO USDA NO SIRVE
+
+Disparador del usuario: *"cuando agrego un alimento (o lo actualizo) la app busca la info en la base
+de USDA, el problema es que a veces no está… por ejemplo, para una limonada me da una limonada de
+Coca-Cola. Entonces cuando no está en USDA, debería haber un botón para que la IA complete la info"*.
+
+**LIVE**: [#190](https://github.com/thusspokedata/pulsia/pull/190) mergeado (`c47b4e3`), backend
+deployado (`/health` OK), **OTA a vc10 publicado** (runtime android `784872cb` verificado; PR JS-only,
+el fingerprint no cambió). Spec/plan en `docs/superpowers/{specs,plans}/2026-07-25-nutricion-ia-micros*`.
+
+### El problema y por qué encaja limpio
+
+Hasta acá, las ~24 vitaminas/minerales de un alimento salían **solo** de la copia local de USDA
+(`attachUsdaMicros`); la IA tenía **prohibido** estimarlas en el camino de USDA. Sin match (o con un
+match malo) quedaban en `null`. **Hallazgo clave:** `SourceMicrosSchema` (`shared`) **ya** incluía
+`"ai"` — el modelo de datos anticipaba esto. **Sin migración.**
+
+### Cómo
+
+- **`estimateFoodMicros`** (`backend/src/ai/client.ts`) estima los 30 nutrientes del registro con
+  conocimiento + la herramienta server-side **`web_search`** de Anthropic (tipo/versión
+`web_search_20250305`). Como forzar `tool_choice`
+  al tool custom **bloquea** la búsqueda, se usa una variante **`callStructuredToolWithSearch`** que
+  deja `tool_choice` en auto e instruye "buscá y **después** llamá a `return_food_micros`", y toma ese
+  bloque del resultado **por nombre** (hay `server_tool_use`/`web_search_tool_result` intercalados).
+  Los resultados de búsqueda se tratan como **datos no confiables** (anti-inyección en el prompt).
+- **`assembleFoodWithAiMicros`** (mezcla pura, hermana de `assembleFoodExtraction`): macros de la
+  identificación intactos, micros del estimado, `sourceMicros: "ai"`, `usdaFdcId: null`.
+- Endpoints: `POST /foods/ai-micros` (alta, no persiste) y `/foods/:id/ai-micros-proposal` +
+  `/foods/:id/ai-micros-apply` (guardado; re-snapshotea comidas). El **apply aplica SOLO micros**:
+  identidad y macros salen del alimento guardado, no del body.
+- Móvil: chip **"micros IA"** (no destacado) en `SourceChip`; botón **"que la IA complete"** en el
+  alta y **"Completar con IA"** con panel de confirmación en el detalle.
+
+### ⚠️ Los 6 hallazgos de la review (dos "Major"), corregidos antes de mergear
+
+CodeRabbit + `@claude` la revisaron. **Ninguna lectura del diff los habría dado por sentados:**
+1. **(Major) El apply confiaba de más:** hacía spread de TODO el body → una propuesta vieja/adulterada
+   podía pisar `name`/`basis`/macros. Fix: identidad+macros del alimento **guardado**, solo micros del
+   body (vía `assembleFoodWithAiMicros(identificationFromFood(f), micros)`).
+2. **(Major) El alta pisaba las ediciones del usuario:** armaba el request desde el `identification`
+   viejo y `prefillFrom` reemplazaba todo el form. Fix: request desde el **form actual** (conservando
+   `searchQuery`), y se mergean **solo** los micros — nombre/basis/macros/`sourceMacros` intactos.
+3. Texto engañoso: tras completar con IA decía "Sin vitaminas ni minerales de USDA" (contradecía el
+   chip "micros IA"); ahora dice "estimados por IA".
+4. El test de `SourceChip` no verificaba que el chip IA fuera **no** destacado (color) — solo que existía.
+5. Faltaban tests de **pantalla** del cableado (los handlers/botones), no solo del cliente API.
+6. Faltaban tests de **404 "otro usuario"** en las rutas `ai-micros-*` (paridad con las de USDA).
+
+Todo con verificación por mutación. Suite final: backend/shared 897, móvil 814, tsc limpio en ambos.
+
+### Pendiente del owner
+
+Probar en el teléfono con la **limonada casera**: descartar el match de USDA → "que la IA complete" →
+confirmar que los micros aparecen marcados como estimados. Futuro: decidir si conviene **cachear** las
+estimaciones (hoy estima en cada alta). Ver [[nutrition-ia-micros-status]], [[nutrition-comidas-status]].
+
+## 0-FIT-RESUMEN. ✅ HECHO (2026-07-26): EL RESUMEN DEL IMPORT DE FUERZA SE VE COMPLETO
+
+Disparador del usuario: *"necesito que al importar un `.FIT` de una rutina este se vea lo más parecido
+a las imágenes"* (capturas del `SessionSummary` completo), y en vivo: *"acabo de subir un `.FIT` y la
+app no me tomó nada"* (Cumplimiento 0%, Volumen 0 kg, todo Descanso).
+
+**LIVE**: [#189](https://github.com/thusspokedata/pulsia/pull/189) mergeado (`404ebed`), backend
+deployado (`/health` OK). **Sin migración, sin OTA** — el móvil ya consumía estos campos, reusa el
+`SessionSummary` del Historial. Spec/plan en `docs/superpowers/{specs,plans}/2026-07-25-fit-fuerza-resumen*`.
+
+### Causa raíz
+
+`fitStrengthToSession` (#186) ponía **`endedAt: null`** en todas las series, y `summarize`
+(`mobile/src/session/summary.ts`) **solo cuenta las series terminadas** (`doneSetsOf`, `endedAt != null`).
+Con `endedAt` null: reps/volumen 0, detalle por serie vacío, trabajo/descanso mal repartido, sin FC,
+sin curva. El `.FIT` tenía todo lo necesario; el transformador no lo poblaba.
+
+### Cómo
+
+- `parseFitStrength` expone el **`startedAt` real de cada serie** (del `setMesg.startTime`).
+- `extractHrSamples` (refactor DRY de `parseFit`, en `hrSamples.ts`) + `hrForInterval` /
+  `downsampleHrSeries` derivan la FC por serie y la curva de la sesión (buckets de ~5 s).
+- `fitStrengthToSession` puebla `startedAt`/`endedAt` reales, `hrAvg`/`hrMax` por serie y `hrSeries`.
+- La ruta `/sessions/from-fit` extrae la FC y la pasa al transformador. Idempotente por id → **re-subir
+  el mismo `.FIT` pisa la sesión vacía** con la versión completa (así el owner arregló el import viejo).
+
+### ⚠️ Bug real que cazó CodeRabbit
+
+`extractHrSamples` filtraba con `typeof x === "number"` (acepta `NaN`/`Infinity`) y
+`timestamp instanceof Date` (`new Date(NaN)` pasa): un record de FC roto colaba un `NaN` que el schema
+de la sesión **rechazaba**, volteando un import por lo demás válido. Fix: exigir finitud explícita
+(`Number.isFinite`) en las dos puntas. + un test de "la costura" que corre el transformador **real** y
+verifica que su salida es lista-para-resumen (no un objeto armado a mano).
+
+**Pieza 2 pendiente** (lo que el reloj mide de más y `workout_session` no modela: kcal medidas, zonas
+de FC, cadencia, respiración): necesita migración + UI nueva y **re-importar** el `.FIT` (no se guarda
+el crudo). Ver [[fit-fuerza-import-status]].
 
 ## 0-FIT-FUERZA. ✅ HECHO (2026-07-24/25): IMPORTAR ENTRENAMIENTOS DE FUERZA DEL `.FIT`
 
