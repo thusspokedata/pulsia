@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AthleteContextSchema } from "./athlete";
+import { NutrientKeySchema } from "../nutrition/nutrients";
 
 // Franjas del día, en orden canónico (el checklist agrupa en este orden).
 export const TAKE_SLOTS = ["desayuno", "almuerzo", "cena", "post_entreno", "antes_de_dormir"] as const;
@@ -16,9 +17,15 @@ export const TakeStatusSchema = z.enum(["taken", "deviated", "skipped"]);
 export type TakeStatus = z.infer<typeof TakeStatusSchema>;
 
 export const SupplementComponentSchema = z.object({
-  name: z.string().trim().min(1),   // "Magnesio (citrato)"
-  amount: z.number().positive(),    // 375
-  unit: z.string().trim().min(1),   // "mg"
+  name: z.string().trim().min(1),   // "Magnesio (citrato)" (texto de etiqueta, para mostrar)
+  amount: z.number().positive(),    // 375 (por PORCIÓN, texto de etiqueta)
+  unit: z.string().trim().min(1),   // "mg" (texto de etiqueta)
+  // Mapeo canónico para el diario (lo emite la IA en el alta). null = no aporta a ningún nutriente
+  // del registro (creatina, CoQ10…) o alta vieja sin backfillear → se saltea en la suma.
+  nutrientKey: NutrientKeySchema.nullish(),
+  // El `amount` normalizado a la unidad canónica del nutriente, POR UNIDAD CONTABLE (cápsula/
+  // comprimido/scoop), no por porción. micro = amountPerUnit × unidades tomadas.
+  amountPerUnit: z.number().nonnegative().nullish(),
 });
 export type SupplementComponent = z.infer<typeof SupplementComponentSchema>;
 
@@ -29,6 +36,7 @@ export const SupplementExtractionSchema = z.object({
   servingLabel: z.string().trim().min(1),           // "2 cápsulas", "5 g de polvo"
   components: z.array(SupplementComponentSchema).min(1),
   labelMaxPerDay: z.string().trim().min(1).nullish(), // texto de etiqueta
+  unitLabel: z.string().trim().min(1).nullish(),   // "cápsula" — la unidad que habla el dose
   source: SupplementSourceSchema,
   info: z.string().trim().min(1),                   // qué es y para qué sirve cada componente
 });

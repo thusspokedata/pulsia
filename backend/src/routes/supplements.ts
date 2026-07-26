@@ -2,13 +2,13 @@ import { Hono, type Context } from "hono";
 import { z } from "zod";
 import {
   SupplementInputSchema, GeneratePlanInputSchema, PlanItemPatchSchema, TakeInputSchema,
-  resolveDayChecklist, detectComponentOverlaps, type Frequency, type TakeStatus, type AiPlanItem,
+  resolveDayChecklist, detectComponentOverlaps, supplementMicros, type Frequency, type TakeStatus, type AiPlanItem,
 } from "@pulsia/shared";
 import {
   insertSupplement, listSupplements, getSupplement,
-  updateSupplement, deleteSupplement, setSupplementInfo,
+  updateSupplement, deleteSupplement, setSupplementInfo, setSupplementMapping,
   createPlan, getActivePlan, getOwnedPlanItem, updatePlanItem, upsertTake,
-  listTakesForDate, getAdjustmentItems, snapshotForTake,
+  listTakesForDate, getAdjustmentItems, snapshotForTake, takesWithComponents,
 } from "../supplements/repository";
 import { resolveAiKey } from "../ai/resolveKey";
 import { settings } from "../db/schema";
@@ -189,6 +189,59 @@ export function supplementsRoutes(deps: AppDeps) {
       console.warn("explainSupplement falló:", (e as Error).message);
       return c.json({ error: "No se pudo generar la explicación. Reintentá." }, 502);
     }
+  });
+
+  // --- Aporte cuantificado de micros de suplementos (día / rango) ---
+  r.get("/day-nutrients", async (c) => {
+    const date = c.req.query("date");
+    if (!date || !z.iso.date().safeParse(date).success) return c.json({ error: "Falta date (YYYY-MM-DD)" }, 400);
+    const takes = await takesWithComponents(deps.db, c.get("userId"), date);
+    return c.json(supplementMicros(takes));
+  });
+
+  r.get("/range-nutrients", async (c) => {
+    const from = c.req.query("from"), to = c.req.query("to");
+    if (!from || !to || !z.iso.date().safeParse(from).success || !z.iso.date().safeParse(to).success) {
+      return c.json({ error: "Faltan from/to (YYYY-MM-DD)" }, 400);
+    }
+    if (from > to) return c.json({ error: "from no puede ser posterior a to" }, 400);
+    const rangeDays = (new Date(to + "T00:00:00Z").getTime() - new Date(from + "T00:00:00Z").getTime()) / 86_400_000;
+    if (rangeDays > 366) return c.json({ error: "El rango entre from y to no puede superar 366 días" }, 400);
+    // Rango chico (máx 30 días desde el móvil): iterar por día reusa takesWithComponents sin una
+    // consulta nueva. Se acumulan todas las tomas del rango y se agregan de una.
+    const all: Awaited<ReturnType<typeof takesWithComponents>> = [];
+    for (let d = new Date(from + "T00:00:00Z"); d <= new Date(to + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 1)) {
+      const day = d.toISOString().slice(0, 10);
+      all.push(...await takesWithComponents(deps.db, c.get("userId"), day));
+    }
+    return c.json(supplementMicros(all));
+  });
+
+  // Backfill: mapea con IA los suplementos del catálogo que todavía no tienen nutrientKey (alta previa
+  // a T6/T7, o el mapeo automático del alta falló). Idempotente: solo procesa los pendientes.
+  r.post("/backfill-micros", async (c) => {
+    const userId = c.get("userId");
+    if (!deps.aiClient.mapSupplementComponents) return c.json({ error: "El servidor no soporta el mapeo." }, 500);
+    const apiKey = await apiKeyFor(deps, userId);
+    if (!apiKey) return c.json({ error: "No hay API key de IA disponible." }, 400);
+    const catalog = await listSupplements(deps.db, userId);
+    // Solo los que NO están mapeados aún: idempotente. "Mapeado" = todos sus componentes tienen
+    // nutrientKey definido (undefined = nunca se corrió; null = se corrió y no aplica).
+    const pending = catalog.filter((s) => s.components.some((comp) => comp.nutrientKey === undefined));
+    let mapped = 0;
+    for (const s of pending) {
+      try {
+        const out = await deps.aiClient.mapSupplementComponents({
+          name: s.name, servingLabel: s.servingLabel,
+          components: s.components.map((comp) => ({ name: comp.name, amount: comp.amount, unit: comp.unit })), apiKey,
+        });
+        const ok = await setSupplementMapping(deps.db, userId, s.id, out);
+        if (ok) mapped++;
+      } catch (e) {
+        console.warn("backfill-micros falló para", s.id, (e as Error).message);
+      }
+    }
+    return c.json({ ok: true, mapped, pending: pending.length });
   });
 
   // Declarada AL FINAL (carry-over PR1 §c): después de /plan/*, /day, /takes y /extract para no capturarlos.

@@ -469,6 +469,49 @@ test("PUT /nutrition/supplements/takes → 200 feliz, el insert lleva el snapsho
   });
 });
 
+test("GET /nutrition/supplements/day-nutrients suma el aporte de las tomas del día", async () => {
+  const magSup = {
+    ...supRow, id: SUP_ID, name: "Magnesio", unitLabel: "cápsula",
+    components: [{ name: "Magnesio", amount: 100, unit: "mg", nutrientKey: "magnesium_mg", amountPerUnit: 100 }],
+  };
+  const planRow = { id: PLAN_ID, userNote: null, createdAt: new Date(0) };
+  const magItem = { ...joinedItem, dose: "3 cápsulas", supplementName: "Magnesio" };
+  const takeRow = {
+    id: "t1", userId: "single-user", date: "2026-07-26", planItemId: ITEM_ID,
+    status: "taken", actualDose: null, note: null,
+    supplementName: "Magnesio", plannedDose: "3 cápsulas", slot: "desayuno",
+  };
+  const app = createApp(deps(fakeDb({
+    supplements: [magSup], planRow, planItemRows: [magItem], takes: [takeRow],
+  })));
+  const res = await app.request("/nutrition/supplements/day-nutrients?date=2026-07-26");
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.totals.magnesium_mg).toBe(300);
+  expect(body.byNutrient.magnesium_mg[0].supplementName).toBeDefined();
+});
+
+test("GET /nutrition/supplements/day-nutrients devuelve vacío sin plan", async () => {
+  const app = createApp(deps(fakeDb({ planRow: null })));
+  const res = await app.request("/nutrition/supplements/day-nutrients?date=2026-07-26");
+  const body = await res.json();
+  expect(body.totals).toEqual({});
+});
+
+test("GET /nutrition/supplements/range-nutrients → 400 si from es posterior a to", async () => {
+  const app = createApp(deps(fakeDb()));
+  const res = await app.request("/nutrition/supplements/range-nutrients?from=2026-07-20&to=2026-07-10");
+  expect(res.status).toBe(400);
+  expect(await res.json()).toMatchObject({ error: expect.any(String) });
+});
+
+test("GET /nutrition/supplements/range-nutrients → 400 si el rango supera 366 días", async () => {
+  const app = createApp(deps(fakeDb()));
+  const res = await app.request("/nutrition/supplements/range-nutrients?from=2025-01-01&to=2026-06-01");
+  expect(res.status).toBe(400);
+  expect(await res.json()).toMatchObject({ error: expect.any(String) });
+});
+
 test("GET/PATCH/DELETE/explain de PR1 → 400 con id no-UUID (carry-over de familia completa)", async () => {
   const app = createApp(deps(fakeDb()));
   expect((await app.request("/nutrition/supplements/not-a-uuid")).status).toBe(400);
@@ -499,4 +542,43 @@ test("GET /nutrition/supplements/:id → 404 si es ajeno o no existe", async () 
   const app = createApp(deps(fakeDb({ supRow: null })));
   const res = await app.request(`/nutrition/supplements/${SUP_ID}`);
   expect(res.status).toBe(404);
+});
+
+// ---- Backfill de mapeo IA (T8) ----
+
+test("POST /nutrition/supplements/backfill-micros mapea los suplementos sin mapear y es idempotente", async () => {
+  const mgSup = {
+    ...supRow, id: SUP_ID, name: "Mg", servingLabel: "2 cápsulas",
+    components: [{ name: "Magnesio", amount: 375, unit: "mg" }], // sin nutrientKey: "pending"
+  };
+  const aiClient = makeAiClient({
+    mapSupplementComponents: async () => ({
+      unitLabel: "cápsula",
+      components: [{ nutrientKey: "magnesium_mg", amountPerUnit: 187.5 }],
+    }),
+  });
+  const db = fakeDb({ supplements: [mgSup], supRow: mgSup });
+  const app = createApp(deps(db, aiClient));
+  const res = await app.request("/nutrition/supplements/backfill-micros", { method: "POST" });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body).toMatchObject({ ok: true, mapped: 1, pending: 1 });
+
+  // segunda corrida: el suplemento ya mapeado (nutrientKey definido) → no vuelve a llamar a la IA
+  const mappedSup = {
+    ...mgSup,
+    unitLabel: "cápsula",
+    components: [{ name: "Magnesio", amount: 375, unit: "mg", nutrientKey: "magnesium_mg", amountPerUnit: 187.5 }],
+  };
+  const db2 = fakeDb({ supplements: [mappedSup], supRow: mappedSup });
+  const app2 = createApp(deps(db2, aiClient));
+  const res2 = await app2.request("/nutrition/supplements/backfill-micros", { method: "POST" });
+  expect(res2.status).toBe(200);
+  expect(await res2.json()).toMatchObject({ ok: true, mapped: 0, pending: 0 });
+});
+
+test("POST /nutrition/supplements/backfill-micros → 500 si el servidor no soporta el mapeo", async () => {
+  const app = createApp(deps(fakeDb({ supplements: [] }))); // sin mapSupplementComponents
+  const res = await app.request("/nutrition/supplements/backfill-micros", { method: "POST" });
+  expect(res.status).toBe(500);
 });

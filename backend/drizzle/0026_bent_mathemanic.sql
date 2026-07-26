@@ -1,0 +1,1 @@
+ALTER TABLE "supplement" ADD COLUMN "unit_label" text;

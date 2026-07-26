@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import {
-  SupplementExtractionSchema, SupplementInputSchema, SupplementSchema,
+  SupplementComponentSchema, SupplementExtractionSchema, SupplementInputSchema, SupplementSchema,
   TakeSlotSchema, AdjustmentItemSchema, FrequencySchema, TAKE_SLOTS,
   GeneratePlanInputSchema, PlanItemPatchSchema, AiPlanFrequencySchema,
 } from "./supplements";
@@ -107,4 +107,32 @@ test("PlanItemPatchSchema rechaza el objeto vacío", () => {
 
 test("AiPlanFrequencySchema acepta every_other_day SIN anchorDate (lo ancla el server)", () => {
   expect(AiPlanFrequencySchema.safeParse({ type: "every_other_day" }).success).toBe(true);
+});
+
+test("SupplementComponentSchema acepta nutrientKey + amountPerUnit y por defecto son opcionales/null", () => {
+  const c = SupplementComponentSchema.parse({ name: "Magnesio (citrato)", amount: 375, unit: "mg" });
+  expect(c.nutrientKey ?? null).toBeNull();
+  const mapped = SupplementComponentSchema.parse({
+    name: "Magnesio (citrato)", amount: 375, unit: "mg", nutrientKey: "magnesium_mg", amountPerUnit: 187.5,
+  });
+  expect(mapped.nutrientKey).toBe("magnesium_mg");
+  expect(mapped.amountPerUnit).toBe(187.5);
+});
+
+test("SupplementComponentSchema rechaza un nutrientKey que no existe", () => {
+  const r = SupplementComponentSchema.safeParse({ name: "X", amount: 1, unit: "mg", nutrientKey: "no_existe" });
+  expect(r.success).toBe(false);
+});
+
+test("SupplementComponentSchema: amountPerUnit no puede ser negativo", () => {
+  const r = SupplementComponentSchema.safeParse({ name: "X", amount: 1, unit: "mg", amountPerUnit: -1 });
+  expect(r.success).toBe(false);
+});
+
+test("SupplementExtractionSchema acepta unitLabel opcional", () => {
+  const e = SupplementExtractionSchema.parse({
+    name: "Mg", servingLabel: "2 cápsulas", components: [{ name: "Magnesio", amount: 375, unit: "mg" }],
+    source: "label", info: "x", unitLabel: "cápsula",
+  });
+  expect(e.unitLabel).toBe("cápsula");
 });

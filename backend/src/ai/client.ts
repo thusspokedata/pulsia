@@ -9,6 +9,7 @@ import {
   ReportOutputSchema,
   SupplementExtractionSchema,
   AiPlanOutputSchema,
+  NutrientKeySchema,
 } from "@pulsia/shared";
 import { buildGenerationPrompt } from "./prompt";
 import { buildOneOffPrompt, type OneOffArgs } from "./oneoff";
@@ -16,7 +17,12 @@ import { buildMemoryUpdatePrompt } from "./memory";
 import { buildEcgPrompt } from "./ecg";
 import { buildFoodPrompt, buildPickCandidatePrompt, buildSearchQueryPrompt, buildFoodMicrosPrompt } from "./nutrition";
 import { buildReportPrompt } from "./report";
-import { buildSupplementExtractPrompt, buildSupplementExplainPrompt, buildSupplementPlanPrompt } from "./supplements";
+import {
+  buildSupplementExtractPrompt,
+  buildSupplementExplainPrompt,
+  buildSupplementPlanPrompt,
+  buildSupplementMapPrompt,
+} from "./supplements";
 import type { ReportData } from "../reports/collect";
 
 export interface AiClient {
@@ -69,6 +75,12 @@ export interface AiClient {
     mediaType: string;
     apiKey: string;
   }): Promise<import("@pulsia/shared").SupplementExtraction>;
+  mapSupplementComponents?(input: {
+    name: string;
+    servingLabel: string;
+    components: { name: string; amount: number; unit: string }[];
+    apiKey: string;
+  }): Promise<{ unitLabel: string | null; components: { nutrientKey: string | null; amountPerUnit: number | null }[] }>;
   explainSupplement?(input: {
     supplement: { name: string; servingLabel: string; components: import("@pulsia/shared").SupplementComponent[] };
     apiKey: string;
@@ -85,6 +97,14 @@ export interface AiClient {
     apiKey: string;
   }): Promise<import("@pulsia/shared").AiPlanItem[]>;
 }
+
+const SupplementMapSchema = z.object({
+  unitLabel: z.string().trim().min(1).nullable(),
+  components: z.array(z.object({
+    nutrientKey: NutrientKeySchema.nullable(),
+    amountPerUnit: z.number().nonnegative().nullable(),
+  })),
+});
 
 export async function callStructuredTool<S extends z.ZodType>({
   client, model, maxTokens, schema, toolName, description, content, truncatedMsg, missingMsg,
@@ -345,6 +365,24 @@ export class AnthropicAiClient implements AiClient {
       truncatedMsg: "La respuesta se truncó (etiqueta demasiado compleja).",
       missingMsg: "La IA no devolvió los datos del suplemento.",
     });
+  }
+
+  async mapSupplementComponents({ name, servingLabel, components, apiKey }: {
+    name: string; servingLabel: string; components: { name: string; amount: number; unit: string }[]; apiKey: string;
+  }) {
+    const client = new Anthropic({ apiKey });
+    const out = await callStructuredTool({
+      client,
+      model: "claude-opus-4-8",
+      maxTokens: 2048,
+      schema: SupplementMapSchema,
+      toolName: "return_supplement_map",
+      description: "Devuelve el mapeo canónico de cada componente del suplemento.",
+      content: [{ type: "text", text: buildSupplementMapPrompt({ name, servingLabel, components }) }],
+      truncatedMsg: "La respuesta se truncó al mapear los componentes.",
+      missingMsg: "La IA no devolvió el mapeo de componentes.",
+    });
+    return out;
   }
 
   async explainSupplement({ supplement, apiKey }: {

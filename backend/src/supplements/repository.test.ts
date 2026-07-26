@@ -1,5 +1,14 @@
 import { test, expect } from "bun:test";
-import { toSupplement, toPlanView, snapshotForTake } from "./repository";
+import { eq } from "drizzle-orm";
+import {
+  toSupplement, toPlanView, snapshotForTake, insertSupplement, getSupplement, deleteSupplement,
+  createPlan, upsertTake, takesWithComponents,
+} from "./repository";
+import { supplementPlan, supplementPlanItem, supplementTake } from "../db/schema";
+import { createDb } from "../db/client";
+
+// Usuario por defecto del entorno de desarrollo single-user (ver seed.ts).
+const DEV_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 const row = {
   id: "11111111-1111-4111-8111-111111111111", userId: "u",
@@ -43,4 +52,76 @@ test("toPlanView arma el PlanView con ítems y nombres", () => {
 test("snapshotForTake congela nombre/dosis/franja del ítem", () => {
   const s = snapshotForTake(itemRows[0] as any);
   expect(s).toEqual({ supplementName: "Zink", plannedDose: "1 tableta", slot: "desayuno" });
+});
+
+test("persiste y devuelve unitLabel y los componentes con mapeo canónico", async () => {
+  const { db, sql } = createDb(process.env.DATABASE_URL ?? "postgres://pulsia:pulsia@localhost:5432/pulsia");
+  try {
+    const s = await insertSupplement(db, DEV_USER_ID, {
+      name: "Mg", servingLabel: "2 cápsulas", unitLabel: "cápsula", source: "label", info: "x",
+      components: [{ name: "Magnesio", amount: 375, unit: "mg", nutrientKey: "magnesium_mg", amountPerUnit: 187.5 }],
+    } as any);
+    try {
+      const got = await getSupplement(db, DEV_USER_ID, s.id);
+      expect(got?.unitLabel).toBe("cápsula");
+      expect(got?.components[0].nutrientKey).toBe("magnesium_mg");
+      expect(got?.components[0].amountPerUnit).toBe(187.5);
+    } finally {
+      await deleteSupplement(db, DEV_USER_ID, s.id);
+    }
+  } finally {
+    await sql.end();
+  }
+});
+
+test("takesWithComponents sigue resolviendo tomas de un plan ya archivado (regenerar el plan no las pierde)", async () => {
+  const { db, sql } = createDb(process.env.DATABASE_URL ?? "postgres://pulsia:pulsia@localhost:5432/pulsia");
+  let supId: string | undefined;
+  let planIdA: string | undefined;
+  let planIdB: string | undefined;
+  let planItemIdA: string | undefined;
+  try {
+    const sup = await insertSupplement(db, DEV_USER_ID, {
+      name: "Mg Archivado", servingLabel: "1 cápsula", unitLabel: "cápsula", source: "label", info: "x",
+      components: [{ name: "Magnesio", amount: 375, unit: "mg", nutrientKey: "magnesium_mg", amountPerUnit: 375 }],
+    } as any);
+    supId = sup.id;
+
+    const planA = await createPlan(db, DEV_USER_ID, null, [
+      { supplementId: sup.id, slot: "desayuno", frequency: { type: "daily" }, dose: "1 cápsula", reason: null },
+    ]);
+    planIdA = planA.id;
+    planItemIdA = planA.items[0].id;
+
+    await upsertTake(
+      db, DEV_USER_ID,
+      { date: "2026-07-20", planItemId: planItemIdA, status: "taken" } as any,
+      { supplementName: sup.name, plannedDose: "1 cápsula", slot: "desayuno" },
+    );
+
+    // Regenerar el plan archiva A y crea B con ítems de IDs nuevos.
+    const planB = await createPlan(db, DEV_USER_ID, null, [
+      { supplementId: sup.id, slot: "desayuno", frequency: { type: "daily" }, dose: "1 cápsula", reason: null },
+    ]);
+    planIdB = planB.id;
+
+    const result = await takesWithComponents(db, DEV_USER_ID, "2026-07-20");
+    expect(result).toHaveLength(1);
+    expect(result[0].supplementName).toBe("Mg Archivado");
+    expect(result[0].components).toEqual([
+      { name: "Magnesio", amount: 375, unit: "mg", nutrientKey: "magnesium_mg", amountPerUnit: 375 },
+    ]);
+  } finally {
+    if (planItemIdA) await db.delete(supplementTake).where(eq(supplementTake.planItemId, planItemIdA));
+    if (planIdA) {
+      await db.delete(supplementPlanItem).where(eq(supplementPlanItem.planId, planIdA));
+      await db.delete(supplementPlan).where(eq(supplementPlan.id, planIdA));
+    }
+    if (planIdB) {
+      await db.delete(supplementPlanItem).where(eq(supplementPlanItem.planId, planIdB));
+      await db.delete(supplementPlan).where(eq(supplementPlan.id, planIdB));
+    }
+    if (supId) await deleteSupplement(db, DEV_USER_ID, supId);
+    await sql.end();
+  }
 });

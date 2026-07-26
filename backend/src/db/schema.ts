@@ -236,6 +236,7 @@ export const supplement = pgTable("supplement", {
   name: text("name").notNull(),
   brand: text("brand"),
   servingLabel: text("serving_label").notNull(),
+  unitLabel: text("unit_label"),
   components: jsonb("components").$type<SupplementComponent[]>().notNull(),
   labelMaxPerDay: text("label_max_per_day"),
   source: text("source").notNull(), // 'label' | 'estimate'

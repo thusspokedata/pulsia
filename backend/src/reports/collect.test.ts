@@ -122,6 +122,31 @@ test("supplements poblado con plan activo: planItems, takes y catálogo mapeados
   expect(data.supplements!.catalog).toEqual([{ id: "s1", name: "Zinc", components: [{ name: "Zinc", amount: 10, unit: "mg" }] }]);
 });
 
+test("supplementMicros es null si no hay plan activo", async () => {
+  const data = await collectReportData({} as any, "u", 0, 10, athleteIncomplete, baseDeps as any);
+  expect(data.supplementMicros).toBeNull();
+});
+
+test("supplementMicros expone el aporte cuantificado de los suplementos tomados", async () => {
+  // Los takes del rango traen supplementName pero no supplementId: la unión con el catálogo es por
+  // nombre (ver comentario en collect.ts). "3 cápsulas" parsea a 3 unidades × amountPerUnit 100 = 300.
+  const deps = {
+    ...baseDeps,
+    getActivePlan: async () => ({
+      id: "p", userNote: null, createdAt: 0,
+      items: [{ id: "it1", supplementId: "mg-id", slot: "desayuno", frequency: { type: "daily" }, dose: "3 cápsulas", reason: null, supplementName: "Mg" }],
+    }),
+    listTakesForRange: async () => [
+      { id: "t1", userId: "u", date: "2026-07-26", planItemId: "it1", supplementName: "Mg", plannedDose: "3 cápsulas", slot: "desayuno", status: "taken", actualDose: null, note: null, createdAt: new Date(0) },
+    ],
+    listSupplements: async () => [
+      { id: "mg-id", name: "Mg", brand: null, servingLabel: "3 cápsulas", components: [{ name: "Magnesio", amount: 375, unit: "mg", nutrientKey: "magnesium_mg", amountPerUnit: 100 }], labelMaxPerDay: null, source: "label", info: null, notes: null, createdAt: 0 },
+    ],
+  };
+  const data = await collectReportData({} as any, "u", 0, 10, athleteIncomplete, deps as any);
+  expect(data.supplementMicros?.magnesium_mg).toBe(300);
+});
+
 test("hasAnyData false si SOLO hay datos de suplementos (no justifican un informe solos)", async () => {
   const deps = {
     ...baseDeps,

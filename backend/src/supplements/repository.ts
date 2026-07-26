@@ -2,7 +2,7 @@ import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { supplement, supplementPlan, supplementPlanItem, supplementTake, supplementAdjustment } from "../db/schema";
 import type {
   Supplement, SupplementInput, PlanView, PlanItemPatch, TakeInput,
-  AdjustmentItem, Frequency, TakeSlot,
+  AdjustmentItem, Frequency, TakeSlot, TakeStatus, TakeForMicros,
 } from "@pulsia/shared";
 import type { Db } from "../db/client";
 
@@ -12,6 +12,7 @@ export function toSupplement(row: SupplementRow): Supplement {
   return {
     id: row.id, name: row.name, brand: row.brand ?? null,
     servingLabel: row.servingLabel,
+    unitLabel: row.unitLabel ?? null,
     components: row.components,
     labelMaxPerDay: row.labelMaxPerDay ?? null,
     source: row.source as Supplement["source"],
@@ -23,7 +24,7 @@ export function toSupplement(row: SupplementRow): Supplement {
 export async function insertSupplement(db: Db, userId: string, input: SupplementInput): Promise<Supplement> {
   const rows = await db.insert(supplement).values({
     userId, name: input.name, brand: input.brand ?? null,
-    servingLabel: input.servingLabel, components: [...input.components],
+    servingLabel: input.servingLabel, unitLabel: input.unitLabel ?? null, components: [...input.components],
     labelMaxPerDay: input.labelMaxPerDay ?? null, source: input.source,
     info: input.info ?? null, notes: input.notes ?? null,
   }).returning();
@@ -45,7 +46,7 @@ export async function getSupplement(db: Db, userId: string, id: string): Promise
 export async function updateSupplement(db: Db, userId: string, id: string, input: SupplementInput): Promise<Supplement | null> {
   const rows = await db.update(supplement).set({
     name: input.name, brand: input.brand ?? null,
-    servingLabel: input.servingLabel, components: [...input.components],
+    servingLabel: input.servingLabel, unitLabel: input.unitLabel ?? null, components: [...input.components],
     labelMaxPerDay: input.labelMaxPerDay ?? null, source: input.source,
     info: input.info ?? null, notes: input.notes ?? null,
   }).where(and(eq(supplement.id, id), eq(supplement.userId, userId))).returning();
@@ -56,6 +57,27 @@ export async function setSupplementInfo(db: Db, userId: string, id: string, info
   const rows = await db.update(supplement).set({ info })
     .where(and(eq(supplement.id, id), eq(supplement.userId, userId))).returning();
   return rows[0] ? toSupplement(rows[0]) : null;
+}
+
+// Aplica SOLO el mapeo (unitLabel + nutrientKey/amountPerUnit por componente). No toca name/amount/
+// unit/macros: identidad y valores de etiqueta salen del suplemento GUARDADO, no del body (lección #190).
+export async function setSupplementMapping(
+  db: Db, userId: string, id: string,
+  mapping: { unitLabel: string | null; components: { nutrientKey: string | null; amountPerUnit: number | null }[] },
+): Promise<boolean> {
+  const sup = await getSupplement(db, userId, id);
+  if (!sup) return false;
+  // Mapeo posicional: la IA devuelve el mismo orden. Si la longitud no coincide, no se toca (defensivo).
+  if (mapping.components.length !== sup.components.length) return false;
+  const merged = sup.components.map((c, i) => ({
+    ...c,
+    nutrientKey: mapping.components[i].nutrientKey as any,
+    amountPerUnit: mapping.components[i].amountPerUnit,
+  }));
+  await db.update(supplement)
+    .set({ unitLabel: mapping.unitLabel, components: merged })
+    .where(and(eq(supplement.id, id), eq(supplement.userId, userId)));
+  return true;
 }
 
 export async function deleteSupplement(db: Db, userId: string, id: string): Promise<boolean> {
@@ -191,4 +213,45 @@ export async function upsertAdjustment(db: Db, userId: string, forDate: string, 
     target: [supplementAdjustment.userId, supplementAdjustment.forDate],
     set: { items: [...items], reportId },
   });
+}
+
+// Todos los plan_item de un usuario, de CUALQUIER plan (activo o archivado). Regenerar el plan
+// (createPlan) archiva el activo y crea ítems con IDs nuevos; una toma grabada contra un
+// planItemId de un plan ya archivado necesita seguir resolviéndose (ver takesWithComponents).
+export async function listAllPlanItemsForUser(db: Db, userId: string): Promise<{ id: string; supplementId: string }[]> {
+  return db.select({
+    id: supplementPlanItem.id,
+    supplementId: supplementPlanItem.supplementId,
+  }).from(supplementPlanItem)
+    .innerJoin(supplementPlan, eq(supplementPlanItem.planId, supplementPlan.id))
+    .where(eq(supplementPlan.userId, userId));
+}
+
+// Une las tomas de un día con los componentes ACTUALES del suplemento (vía plan_item → supplement).
+// Snapshot de dosis (plannedDose/actualDose) de la toma; componentes del catálogo vivo (donde vive
+// el mapeo). Si la toma perdió su plan_item (suplemento borrado), no hay componentes → se omite.
+export async function takesWithComponents(db: Db, userId: string, date: string): Promise<TakeForMicros[]> {
+  const [takes, catalog, items] = await Promise.all([
+    listTakesForDate(db, userId, date),
+    listSupplements(db, userId),
+    listAllPlanItemsForUser(db, userId),
+  ]);
+  const byId = new Map(catalog.map((s) => [s.id, s]));
+  const itemToSupp = new Map<string, string>(); // planItemId → supplementId
+  for (const it of items) itemToSupp.set(it.id, it.supplementId);
+  const out: TakeForMicros[] = [];
+  for (const t of takes) {
+    if (t.planItemId == null) continue;
+    const suppId = itemToSupp.get(t.planItemId);
+    const sup = suppId ? byId.get(suppId) : undefined;
+    if (!sup) continue;
+    out.push({
+      status: t.status as TakeStatus,
+      plannedDose: t.plannedDose,
+      actualDose: t.actualDose ?? null,
+      supplementName: sup.name,
+      components: sup.components,
+    });
+  }
+  return out;
 }
