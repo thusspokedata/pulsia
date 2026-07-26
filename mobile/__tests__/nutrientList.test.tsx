@@ -6,6 +6,7 @@ const fila = (over: Partial<NutrientRow> & Pick<NutrientRow, "key">): NutrientRo
   label: "X",
   unit: "mg",
   value: null,
+  supplement: null,
   ref: null,
   pct: null,
   kind: null,

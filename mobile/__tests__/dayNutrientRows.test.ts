@@ -164,3 +164,33 @@ test("un día vacío no rompe: todas las filas sin dato y sin porcentaje", () =>
   expect(filas.length).toBe(30);
   expect(filas.every((r) => r.value === null && r.pct === null)).toBe(true);
 });
+
+// ---------------------------------------------------------------------------------------------
+// Aporte de suplementos (Task 12): la fila del día muestra comida + suplemento por separado.
+// ---------------------------------------------------------------------------------------------
+
+test("una fila refleja el aporte de suplemento cuando summary.supplementNutrients lo trae", () => {
+  const summary = { ...dia([item({ magnesium_mg: 50 })]), supplementNutrients: { magnesium_mg: 100 } };
+  const f = buildDayNutrientRows(summary, persona, 2200).flatMap((s) => s.rows).find((r) => r.key === "magnesium_mg")!;
+  expect(f.value).toBe(50);
+  expect(f.supplement).toBe(100);
+});
+
+test("una fila sin aporte de suplemento en el mapa queda en supplement: null", () => {
+  const summary = { ...dia([item({ magnesium_mg: 50 })]), supplementNutrients: { iron_mg: 5 } };
+  const f = buildDayNutrientRows(summary, persona, 2200).flatMap((s) => s.rows).find((r) => r.key === "magnesium_mg")!;
+  expect(f.supplement).toBeNull();
+});
+
+test("la fila de sal toma el sodio de suplemento convertido a sal", () => {
+  // 800 mg de sodio de suplemento = 2 g de sal.
+  const summary = { ...dia([item({ sodium_mg: 1600 })]), supplementNutrients: { sodium_mg: 800 } };
+  const f = buildDayNutrientRows(summary, persona, 2200).flatMap((s) => s.rows).find((r) => r.key === "salt_g")!;
+  expect(f.value).toBe(4); // sal de la comida, sin cambios
+  expect(f.supplement).toBe(2);
+});
+
+test("sin sodio de suplemento, la fila de sal queda con supplement: null", () => {
+  const f = fila([item({ sodium_mg: 1600 })], "salt_g");
+  expect(f.supplement).toBeNull();
+});

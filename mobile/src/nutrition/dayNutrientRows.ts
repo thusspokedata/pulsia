@@ -1,6 +1,7 @@
 import {
   NUTRIENT_REFERENCES,
   NUTRIENT_REFERENCE_KIND,
+  saltGFromSodiumMg,
   saturatedFatRefG,
 } from "@pulsia/shared";
 import type { NutrientKey, NutrientReference } from "@pulsia/shared";
@@ -68,11 +69,20 @@ export function buildDayNutrientRows(
   const hayLiquido = summary.liquid.drank > 0 || summary.nutrients.water_ml.value != null;
   values.water_ml = hayLiquido ? summary.liquid.total : null;
 
-  const secciones = buildNutrientRows(values, persona, { refs: referenciasOms(goalKcal), partial });
+  const secciones = buildNutrientRows(values, persona, {
+    refs: referenciasOms(goalKcal),
+    partial,
+    supplement: summary.supplementNutrients,
+  });
 
   // La sal se convierte sobre el sodio YA SUMADO del día, no ítem por ítem (ver daySummary.ts), y
   // hereda el `partial`: es el sodio en otra unidad, así que si el sodio del día tenía agujeros,
-  // la sal también.
+  // la sal también. El aporte de suplemento en sal se deriva del sodio de suplemento, igual que la
+  // comida: son el mismo hecho en otra unidad.
   const sodio = summary.nutrients.sodium_mg;
-  return sustituirSodioPorSal(secciones, filaDeSal(sodio.value, NUTRIENT_REFERENCES.salt_g, sodio.partial));
+  const supplementSaltG = saltGFromSodiumMg(summary.supplementNutrients.sodium_mg ?? null);
+  return sustituirSodioPorSal(
+    secciones,
+    filaDeSal(sodio.value, NUTRIENT_REFERENCES.salt_g, sodio.partial, supplementSaltG),
+  );
 }

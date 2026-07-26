@@ -23,6 +23,9 @@ export interface NutrientRow {
   label: string;
   unit: string;
   value: number | null; // null = SIN DATO (distinto de 0)
+  // Aporte del mismo nutriente que viene de suplementos (no de comida). null = esta superficie no
+  // trackea suplementos (detalle de comida, alimento del catálogo); 0 = trackea pero no hay toma.
+  supplement: number | null;
   ref: number | null; // null = EFSA no lo cubre, o modo "por 100 g"
   pct: number | null; // null si no hay valor o no hay referencia
   kind: ReferenceKind | null;
@@ -46,6 +49,8 @@ export interface NutrientRowsOptions {
   refs?: Partial<Record<NutrientKey, NutrientReference | null>>;
   /** Nutrientes cuyo total viene de una suma con agujeros. */
   partial?: Partial<Record<NutrientKey, boolean>>;
+  /** Aporte de suplementos por nutriente, del mismo día/rango que `values`. */
+  supplement?: Partial<Record<NutrientKey, number>>;
 }
 
 /**
@@ -148,6 +153,7 @@ export function buildNutrientRows(
         label: def.label,
         unit: def.unit,
         value,
+        supplement: opciones?.supplement?.[key] ?? null,
         ref,
         pct: value == null || ref == null ? null : porcentaje(value, ref),
         kind: referencia?.kind ?? null,
@@ -170,13 +176,19 @@ export function buildNutrientRows(
  * `ref` en null = superficie sin referencia (los valores por 100 g del catálogo): ni la OMS ni
  * EFSA hablan de 100 g de comida, hablan de un día.
  */
-export function filaDeSal(sodiumMg: number | null, ref: number | null, partial = false): NutrientRow {
+export function filaDeSal(
+  sodiumMg: number | null,
+  ref: number | null,
+  partial = false,
+  supplementSaltG: number | null = null,
+): NutrientRow {
   const value = saltGFromSodiumMg(sodiumMg);
   return {
     key: "salt_g",
     label: "Sal",
     unit: "g",
     value,
+    supplement: supplementSaltG,
     ref,
     pct: value == null || ref == null ? null : porcentaje(value, ref),
     // Sin referencia no hay techo que exceder: el `kind` solo se lee para pintar el aviso y la
