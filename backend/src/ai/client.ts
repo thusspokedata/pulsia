@@ -353,8 +353,12 @@ export class AnthropicAiClient implements AiClient {
     const client = new Anthropic({ apiKey });
     return callStructuredTool({
       client,
+      // 8000 (no 2048): el response ahora trae, además del `info` (explicación libre de cada
+      // componente), el mapeo por componente (nutrientKey + amountPerUnit) y el unitLabel. En una
+      // etiqueta multi-componente eso supera 2048 → stop_reason max_tokens → truncado. Verificado
+      // en los logs de prod ("La respuesta se truncó (etiqueta demasiado compleja)").
       model: "claude-opus-4-8",
-      maxTokens: 2048,
+      maxTokens: 8000,
       schema: SupplementExtractionSchema,
       toolName: "return_supplement",
       description: "Devuelve los datos del suplemento de la foto.",
