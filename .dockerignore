@@ -1,5 +1,7 @@
 # El backend no necesita el workspace mobile ni artefactos locales.
 **/node_modules
+# El build de la SPA se genera dentro de la imagen; ignorar el dist local.
+web/dist
 mobile
 .git
 .github

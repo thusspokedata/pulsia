@@ -25,7 +25,7 @@ const { databaseUrl, config } = loadServerEnv();
 const { db } = createDb(databaseUrl);
 const app = createApp({
   db,
-  config,
+  config: { ...config, webDistDir: process.env.WEB_DIST_DIR ?? "/app/web/dist" },
   aiClient: new AnthropicAiClient(),
 });
 

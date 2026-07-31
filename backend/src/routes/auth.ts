@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { users } from "../db/schema";
 import { hashPassword, verifyPassword } from "../auth/passwords";
 import { createSession, deleteSession } from "../auth/sessions";
+import { setSessionCookie, clearSessionCookie, readSessionCookie } from "../auth/cookie";
 import type { AppDeps } from "../app";
 
 const RegisterSchema = z.object({
@@ -25,6 +26,7 @@ export function authRoutes(deps: AppDeps) {
     const passwordHash = await hashPassword(parsed.data.password);
     const inserted = await deps.db.insert(users).values({ email: parsed.data.email, passwordHash }).returning();
     const token = await createSession(deps.db, inserted[0].id, deps.config.sessionTtlDays);
+    setSessionCookie(c, token);
     return c.json({ token });
   });
 
@@ -36,13 +38,16 @@ export function authRoutes(deps: AppDeps) {
       return c.json({ error: "Email o contraseña incorrectos" }, 401);
     }
     const token = await createSession(deps.db, user.id, deps.config.sessionTtlDays);
+    setSessionCookie(c, token);
     return c.json({ token });
   });
 
   r.post("/logout", async (c) => {
     const header = c.req.header("Authorization") ?? "";
-    const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+    const bearer = header.startsWith("Bearer ") ? header.slice(7) : "";
+    const token = bearer || readSessionCookie(c) || "";
     if (token) await deleteSession(deps.db, token);
+    clearSessionCookie(c);
     return c.json({ ok: true });
   });
 
