@@ -54,9 +54,11 @@ function Legend({ c, t }: { c: string; t: string }) {
 
 function MicroRow({ n, offset }: { n: NutrientCoverage; offset: number }) {
   const p = pct(n);
+  // La barra se llena hasta el piso (100%): comida (teal) y, encima, suplemento (violeta). El
+  // excedente NO se pinta —para un piso, pasarse es bueno, no un límite que avisar (a diferencia de
+  // sodio/azúcar)—; el número real ("2500%") ya lo dice el texto de la fila.
   const foodW = Math.min(100, ((n.foodAvg ?? 0) / n.ref) * 100);
   const suppW = Math.min(100 - foodW, (n.suppAvg / n.ref) * 100);
-  const overW = Math.max(0, Math.min(100, p) - foodW - suppW);
   return (
     <Pressable
       onPress={() => router.push({ pathname: "/nutricion/nutriente", params: { key: n.key, offset: String(offset) } })}
@@ -69,7 +71,6 @@ function MicroRow({ n, offset }: { n: NutrientCoverage; offset: number }) {
       <View style={{ height: 9, borderRadius: 5, overflow: "hidden", backgroundColor: colors.surfaceMuted, flexDirection: "row", opacity: n.state === "few_data" ? 0.5 : 1 }}>
         <View style={{ width: `${foodW}%`, backgroundColor: colors.accent }} />
         <View style={{ width: `${suppW}%`, backgroundColor: colors.supplement }} />
-        <View style={{ width: `${overW}%`, backgroundColor: colors.warning }} />
       </View>
     </Pressable>
   );
@@ -108,8 +109,8 @@ export function CoverageView({
         <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" }}>
           <Text style={{ color: colors.accent, fontSize: 26, fontWeight: "800" }}>{current.onlyFoodPct}%</Text>
           {delta != null && (
-            <Text style={{ color: delta >= 0 ? colors.accentText : colors.danger, fontSize: 13, fontWeight: "700" }}>
-              {delta >= 0 ? "▲" : "▼"} {Math.abs(delta)} pts
+            <Text style={{ color: delta > 0 ? colors.accentText : delta < 0 ? colors.danger : colors.textMuted, fontSize: 13, fontWeight: "700" }}>
+              {delta > 0 ? "▲" : delta < 0 ? "▼" : "→"} {Math.abs(delta)} pts
             </Text>
           )}
         </View>
@@ -142,11 +143,15 @@ export function CoverageView({
 }
 
 // Wrapper con fetch. Se monta en informes.tsx.
-export function CoverageBlock({ kind, offset, now = Date.now() }: { kind: ReportKind; offset: number; now?: number }) {
-  const { current, evolution, loading } = useCoverage(kind, offset, now);
+export function CoverageBlock({ kind, offset, now }: { kind: ReportKind; offset: number; now?: number }) {
+  // `now` se CONGELA al montar: como default de parámetro (`now = Date.now()`) se re-evaluaba en
+  // cada render → cambiaba las deps del useEffect de useCoverage → loop infinito de fetch. El
+  // período depende de offset+now y no necesita "tickear" mientras el bloque está en pantalla.
+  const [fixedNow] = useState(() => now ?? Date.now());
+  const { current, evolution, loading } = useCoverage(kind, offset, fixedNow);
   if (loading) return <ActivityIndicator color={colors.accent} />;
   if (!current) return null;
-  const period = periodFor(kind, offset, now);
+  const period = periodFor(kind, offset, fixedNow);
   const daysInPeriod = Math.round((period.end - period.start) / 86_400_000);
   return <CoverageView current={current} evolution={evolution} daysInPeriod={daysInPeriod} offset={offset} />;
 }

@@ -3,8 +3,11 @@ import type { CoverageResult } from "@pulsia/shared";
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
 
+const mockUseCoverage = jest.fn();
+jest.mock("../src/nutrition/useCoverage", () => ({ useCoverage: (...args: unknown[]) => mockUseCoverage(...args) }));
+
 // eslint-disable-next-line import/first
-import { CoverageView } from "../src/nutrition/CoverageBlock";
+import { CoverageView, CoverageBlock } from "../src/nutrition/CoverageBlock";
 
 const result: CoverageResult = {
   byNutrient: [
@@ -17,17 +20,17 @@ const result: CoverageResult = {
   daysRegistered: 26,
 };
 
-test("muestra la métrica del norte y los 3 estados", async () => {
+test("CoverageView: muestra la métrica del norte y los 3 estados", async () => {
   await render(
     <CoverageView current={result} evolution={[{ x: 1, y: 27 }, { x: 2, y: 33 }]} daysInPeriod={31} offset={0} expanded />,
   );
   expect(screen.getByText("33%")).toBeTruthy();
   expect(screen.getByText(/26 de 31 días/)).toBeTruthy();
   expect(screen.getByText("Vitamina C")).toBeTruthy(); // detalle expandido
-  expect(screen.queryByText("Calcio")).toBeTruthy();
+  expect(screen.getByText("Calcio")).toBeTruthy();
 });
 
-test("EmptyState cuando no hay clasificables", async () => {
+test("CoverageView: EmptyState cuando no hay clasificables", async () => {
   const empty: CoverageResult = {
     byNutrient: [],
     counts: { food: 0, supplement: 0, uncovered: 0, fewData: 0 },
@@ -36,4 +39,20 @@ test("EmptyState cuando no hay clasificables", async () => {
   };
   await render(<CoverageView current={empty} evolution={[]} daysInPeriod={31} offset={0} expanded />);
   expect(screen.getByText(/Sin datos suficientes/)).toBeTruthy();
+});
+
+test("CoverageBlock: delega a CoverageView cuando hay datos", async () => {
+  mockUseCoverage.mockReturnValue({ current: result, evolution: [], loading: false });
+  await render(<CoverageBlock kind="monthly" offset={0} />);
+  expect(screen.getByText("33%")).toBeTruthy();
+});
+
+test("CoverageBlock: sin métrica en loading ni con current null", async () => {
+  mockUseCoverage.mockReturnValueOnce({ current: null, evolution: [], loading: true });
+  await render(<CoverageBlock kind="monthly" offset={0} />);
+  expect(screen.queryByText("33%")).toBeNull();
+
+  mockUseCoverage.mockReturnValueOnce({ current: null, evolution: [], loading: false });
+  await render(<CoverageBlock kind="monthly" offset={0} />);
+  expect(screen.queryByText("33%")).toBeNull();
 });
