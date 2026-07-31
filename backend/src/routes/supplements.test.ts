@@ -512,6 +512,42 @@ test("GET /nutrition/supplements/range-nutrients → 400 si el rango supera 366 
   expect(await res.json()).toMatchObject({ error: expect.any(String) });
 });
 
+test("GET /nutrition/supplements/range-nutrients-daily devuelve el aporte por día", async () => {
+  const vitDSup = {
+    ...supRow, id: SUP_ID, name: "Vitamina D", unitLabel: "cápsula",
+    components: [{ name: "Vitamina D", amount: 25, unit: "mcg", nutrientKey: "vitamin_d_mcg", amountPerUnit: 25 }],
+  };
+  const planRow = { id: PLAN_ID, userNote: null, createdAt: new Date(0) };
+  const vitDItem = { ...joinedItem, dose: "1 cápsula", supplementName: "Vitamina D" };
+  const takeRow = {
+    id: "t1", userId: "single-user", date: "2026-07-26", planItemId: ITEM_ID,
+    status: "taken", actualDose: null, note: null,
+    supplementName: "Vitamina D", plannedDose: "1 cápsula", slot: "desayuno",
+  };
+  const app = createApp(deps(fakeDb({ supplements: [vitDSup], planRow, planItemRows: [vitDItem], takes: [takeRow] })));
+  const res = await app.request("/nutrition/supplements/range-nutrients-daily?from=2026-07-25&to=2026-07-27");
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  // Una entrada por cada día del rango (inclusive), en orden.
+  expect(Object.keys(body.perDay)).toEqual(["2026-07-25", "2026-07-26", "2026-07-27"]);
+  // El día con toma trae el aporte cuantificado (el fakeDb no filtra por fecha, así que basta con
+  // comprobar la forma: cada día es un resultado de supplementMicros con `totals`).
+  expect(body.perDay["2026-07-26"].totals.vitamin_d_mcg).toBeGreaterThan(0);
+  expect(body.perDay["2026-07-25"]).toHaveProperty("totals");
+});
+
+test("range-nutrients-daily → 400 si from es posterior a to", async () => {
+  const app = createApp(deps(fakeDb()));
+  const res = await app.request("/nutrition/supplements/range-nutrients-daily?from=2026-07-20&to=2026-07-10");
+  expect(res.status).toBe(400);
+});
+
+test("range-nutrients-daily → 400 si el rango supera 366 días", async () => {
+  const app = createApp(deps(fakeDb()));
+  const res = await app.request("/nutrition/supplements/range-nutrients-daily?from=2025-01-01&to=2026-06-01");
+  expect(res.status).toBe(400);
+});
+
 test("GET/PATCH/DELETE/explain de PR1 → 400 con id no-UUID (carry-over de familia completa)", async () => {
   const app = createApp(deps(fakeDb()));
   expect((await app.request("/nutrition/supplements/not-a-uuid")).status).toBe(400);

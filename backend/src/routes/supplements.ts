@@ -217,6 +217,25 @@ export function supplementsRoutes(deps: AppDeps) {
     return c.json(supplementMicros(all));
   });
 
+  r.get("/range-nutrients-daily", async (c) => {
+    const from = c.req.query("from"), to = c.req.query("to");
+    if (!from || !to || !z.iso.date().safeParse(from).success || !z.iso.date().safeParse(to).success) {
+      return c.json({ error: "Faltan from/to (YYYY-MM-DD)" }, 400);
+    }
+    if (from > to) return c.json({ error: "from no puede ser posterior a to" }, 400);
+    const rangeDays = (new Date(to + "T00:00:00Z").getTime() - new Date(from + "T00:00:00Z").getTime()) / 86_400_000;
+    if (rangeDays > 366) return c.json({ error: "El rango entre from y to no puede superar 366 días" }, 400);
+    // Igual que range-nutrients, pero SIN agregar: se guarda el aporte de cada día por separado,
+    // que es lo que el móvil necesita para el promedio diario y la evolución por período.
+    const perDay: Record<string, ReturnType<typeof supplementMicros>> = {};
+    for (let d = new Date(from + "T00:00:00Z"); d <= new Date(to + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 1)) {
+      const day = d.toISOString().slice(0, 10);
+      const takes = await takesWithComponents(deps.db, c.get("userId"), day);
+      perDay[day] = supplementMicros(takes);
+    }
+    return c.json({ perDay });
+  });
+
   // Backfill: mapea con IA los suplementos del catálogo que todavía no tienen nutrientKey (alta previa
   // a T6/T7, o el mapeo automático del alta falló). Idempotente: solo procesa los pendientes.
   r.post("/backfill-micros", async (c) => {
