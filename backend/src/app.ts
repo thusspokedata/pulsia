@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { serveStatic } from "hono/bun";
 import type { Db } from "./db/client";
 import type { AiClient } from "./ai/client";
 import { settingsRoutes } from "./routes/settings";
@@ -28,6 +29,9 @@ export interface AppConfig {
   // rechaza (fail-closed). Se setea en app.env de la Pi tras cada build.
   adminToken?: string;
   defaultAiApiKey?: string;
+  // Dir del build de la SPA (web/dist). Si está seteado, se sirve como estáticos con
+  // fallback a index.html. En dev suele estar ausente (la web corre con `vite dev`).
+  webDistDir?: string;
 }
 
 export interface AppDeps {
@@ -82,5 +86,16 @@ export function createApp(deps: AppDeps) {
   app.route("/progress", progressRoutes(deps));
   app.route("/nutrition", nutritionRoutes(deps));
   app.route("/cardio", cardioRoutes(deps));
+  if (deps.config.webDistDir) {
+    const root = deps.config.webDistDir;
+    // Estáticos (assets con extensión) y fallback SPA a index.html para el resto.
+    app.get("/assets/*", serveStatic({ root }));
+    app.get("*", async (c, next) => {
+      // No tapar las rutas de API ya registradas: si el método no es GET o ya hubo match, seguir.
+      const html = Bun.file(`${root}/index.html`);
+      if (await html.exists()) return c.html(await html.text());
+      return next();
+    });
+  }
   return app;
 }
