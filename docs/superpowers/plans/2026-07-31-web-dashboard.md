@@ -2116,7 +2116,7 @@ proceso corra con `WEB_DIST_DIR=/app/web/dist` (default ya puesto en index.ts).
 
 - [ ] **Step 3: Verificar el `.dockerignore`.** Run: `cat .dockerignore`. Asegurar que NO excluya `web/` (se necesita para buildear) pero SÍ ignore `web/node_modules` y `web/dist` locales (se generan en la imagen). Agregar si falta:
 
-```
+```text
 web/node_modules
 web/dist
 ```

@@ -14,7 +14,9 @@ entrenos).
 
 El backend (Hono + Bun + Postgres en la Pi) **ya sabe** recibir y parsear estos archivos:
 
-- `.fit` → `POST /cardio` con `{ fitBase64 }` (cardio + fuerza; tope 5 MB).
+- `.fit` → según el tipo: **fuerza** por `POST /sessions/from-fit` (toma el `.fit` crudo) y
+  **cardio** por `POST /cardio/parse` → `POST /cardio` (tope 5 MB). No hay un único endpoint; el
+  detalle del ruteo cliente está en §4.
 - `.csv` → endpoints de métricas por tipo (peso/pasos/sueño) con `{ csvBase64 }` (tope ~2,2 MB),
   con deduplicación idempotente que devuelve `{ imported, duplicates }`.
 
@@ -53,13 +55,14 @@ web (sigue por la app con `INVITE_CODE`), edición/borrado de datos desde la web
 
 ### Flujo de datos
 
-```
+```text
 login (web) ──► cookie de sesión httpOnly (same-origin)
                      │
    toda llamada al mismo origen lleva la cookie automáticamente
                      │
-   ├─ uploads ──► POST /cardio (.fit) · POST /metrics/<tipo> (.csv)   [YA EXISTEN]
-   └─ charts  ──► GET /metrics · /sessions · /cardio                   [YA EXISTEN]
+   ├─ uploads ──► .fit: /sessions/from-fit (fuerza) | /cardio/parse→/cardio   [YA EXISTEN]
+   │              .csv: /metrics/import/<tipo>                                 [YA EXISTEN]
+   └─ charts  ──► GET /metrics · /sessions · /cardio                          [YA EXISTEN]
 ```
 
 ## 4. Subida batch (drag-and-drop)
