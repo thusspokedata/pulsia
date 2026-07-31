@@ -14,7 +14,10 @@ function color(count: number): string {
 export function ConsistencyCard() {
   const { data, isLoading, isError } = useSessions();
   const years = Array.from(new Set((data ?? []).map((s) => yearOf(s.startedAt)))).sort((a, b) => b - a);
-  const [year, setYear] = useState<number>(new Date().getFullYear());
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  // Por defecto se muestra el año más reciente CON datos (no necesariamente el actual); una vez
+  // que el usuario elige, esa elección manda.
+  const year = selectedYear ?? years[0] ?? new Date().getFullYear();
   const counts = countByLocalDay((data ?? []).map((s) => s.startedAt));
 
   // Grilla de todos los días del año elegido.
@@ -30,7 +33,7 @@ export function ConsistencyCard() {
     <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h3>Constancia de entrenos</h3>
-        <select value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label="Año">
+        <select value={year} onChange={(e) => setSelectedYear(Number(e.target.value))} aria-label="Año">
           {(years.length ? years : [year]).map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
       </div>
