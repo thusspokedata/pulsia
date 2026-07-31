@@ -255,3 +255,36 @@ export async function takesWithComponents(db: Db, userId: string, date: string):
   }
   return out;
 }
+
+// Igual que takesWithComponents pero para un RANGO, con UNA sola tanda de queries: el catálogo y
+// los plan items se leen una vez (no por día), y las tomas del rango en una query. Devuelve las
+// tomas mapeadas agrupadas por fecha. Evita el N×3 de iterar takesWithComponents día por día.
+export async function takesWithComponentsByDay(
+  db: Db, userId: string, fromDate: string, toDate: string,
+): Promise<Map<string, TakeForMicros[]>> {
+  const [takes, catalog, items] = await Promise.all([
+    listTakesForRange(db, userId, fromDate, toDate),
+    listSupplements(db, userId),
+    listAllPlanItemsForUser(db, userId),
+  ]);
+  const byId = new Map(catalog.map((s) => [s.id, s]));
+  const itemToSupp = new Map<string, string>();
+  for (const it of items) itemToSupp.set(it.id, it.supplementId);
+  const out = new Map<string, TakeForMicros[]>();
+  for (const t of takes) {
+    if (t.planItemId == null) continue;
+    const suppId = itemToSupp.get(t.planItemId);
+    const sup = suppId ? byId.get(suppId) : undefined;
+    if (!sup) continue;
+    const arr = out.get(t.date) ?? [];
+    arr.push({
+      status: t.status as TakeStatus,
+      plannedDose: t.plannedDose,
+      actualDose: t.actualDose ?? null,
+      supplementName: sup.name,
+      components: sup.components,
+    });
+    out.set(t.date, arr);
+  }
+  return out;
+}

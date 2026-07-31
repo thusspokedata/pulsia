@@ -8,13 +8,27 @@ import {
   insertSupplement, listSupplements, getSupplement,
   updateSupplement, deleteSupplement, setSupplementInfo, setSupplementMapping,
   createPlan, getActivePlan, getOwnedPlanItem, updatePlanItem, upsertTake,
-  listTakesForDate, getAdjustmentItems, snapshotForTake, takesWithComponents,
+  listTakesForDate, getAdjustmentItems, snapshotForTake, takesWithComponents, takesWithComponentsByDay,
 } from "../supplements/repository";
 import { resolveAiKey } from "../ai/resolveKey";
 import { settings } from "../db/schema";
 import { eq } from "drizzle-orm";
 import type { AppDeps } from "../app";
 import { epochToUtcDateStr } from "../lib/dateUtc";
+
+// Valida el rango from/to (YYYY-MM-DD) de los endpoints de nutrientes por rango. Devuelve el rango
+// normalizado o un mensaje de error (mismo criterio para range-nutrients y range-nutrients-daily).
+function validateNutrientRange(
+  from: string | undefined, to: string | undefined,
+): { from: string; to: string } | { error: string } {
+  if (!from || !to || !z.iso.date().safeParse(from).success || !z.iso.date().safeParse(to).success) {
+    return { error: "Faltan from/to (YYYY-MM-DD)" };
+  }
+  if (from > to) return { error: "from no puede ser posterior a to" };
+  const rangeDays = (new Date(to + "T00:00:00Z").getTime() - new Date(from + "T00:00:00Z").getTime()) / 86_400_000;
+  if (rangeDays > 366) return { error: "El rango entre from y to no puede superar 366 días" };
+  return { from, to };
+}
 
 const ExtractSchema = z.object({
   imageBase64: z.string().min(10),
@@ -200,21 +214,28 @@ export function supplementsRoutes(deps: AppDeps) {
   });
 
   r.get("/range-nutrients", async (c) => {
-    const from = c.req.query("from"), to = c.req.query("to");
-    if (!from || !to || !z.iso.date().safeParse(from).success || !z.iso.date().safeParse(to).success) {
-      return c.json({ error: "Faltan from/to (YYYY-MM-DD)" }, 400);
-    }
-    if (from > to) return c.json({ error: "from no puede ser posterior a to" }, 400);
-    const rangeDays = (new Date(to + "T00:00:00Z").getTime() - new Date(from + "T00:00:00Z").getTime()) / 86_400_000;
-    if (rangeDays > 366) return c.json({ error: "El rango entre from y to no puede superar 366 días" }, 400);
-    // Rango chico (máx 30 días desde el móvil): iterar por día reusa takesWithComponents sin una
-    // consulta nueva. Se acumulan todas las tomas del rango y se agregan de una.
-    const all: Awaited<ReturnType<typeof takesWithComponents>> = [];
+    const range = validateNutrientRange(c.req.query("from"), c.req.query("to"));
+    if ("error" in range) return c.json({ error: range.error }, 400);
+    // Una sola tanda de queries (catálogo/plan items una vez, tomas del rango en una query), luego
+    // se aplana y se agrega de una.
+    const byDay = await takesWithComponentsByDay(deps.db, c.get("userId"), range.from, range.to);
+    const all = [...byDay.values()].flat();
+    return c.json(supplementMicros(all));
+  });
+
+  r.get("/range-nutrients-daily", async (c) => {
+    const range = validateNutrientRange(c.req.query("from"), c.req.query("to"));
+    if ("error" in range) return c.json({ error: range.error }, 400);
+    const { from, to } = range;
+    // SIN agregar: el aporte de cada día por separado (lo que el móvil necesita para el promedio
+    // diario y la evolución por período). Una sola tanda de queries vía takesWithComponentsByDay.
+    const byDay = await takesWithComponentsByDay(deps.db, c.get("userId"), from, to);
+    const perDay: Record<string, ReturnType<typeof supplementMicros>> = {};
     for (let d = new Date(from + "T00:00:00Z"); d <= new Date(to + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 1)) {
       const day = d.toISOString().slice(0, 10);
-      all.push(...await takesWithComponents(deps.db, c.get("userId"), day));
+      perDay[day] = supplementMicros(byDay.get(day) ?? []);
     }
-    return c.json(supplementMicros(all));
+    return c.json({ perDay });
   });
 
   // Backfill: mapea con IA los suplementos del catálogo que todavía no tienen nutrientKey (alta previa
