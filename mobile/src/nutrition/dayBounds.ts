@@ -6,3 +6,12 @@ export function dayBounds(offset: number): { from: number; to: number; noon: num
   const end = start + 24 * 3600_000 - 1; // 23:59:59.999
   return { from: start, to: end, noon };
 }
+
+// Bounds en ms (00:00 → 23:59:59.999 LOCAL) de un día dado por su clave `YYYY-MM-DD`. Mismo
+// criterio de mediodía local ±12 h que `dayBounds`, pero anclado a una fecha concreta en vez de un
+// offset. Lo usa la cobertura para traducir el rango (from/to en fechas) a bounds para listMeals.
+export function dayBoundsFromKey(key: string): { from: number; to: number } {
+  const [y, m, d] = key.split("-").map(Number);
+  const noon = new Date(y, m - 1, d, 12).getTime();
+  return { from: noon - 12 * 3600_000, to: noon + 12 * 3600_000 - 1 };
+}
