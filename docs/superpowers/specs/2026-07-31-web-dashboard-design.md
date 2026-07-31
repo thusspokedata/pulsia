@@ -68,7 +68,9 @@ login (web) ──► cookie de sesión httpOnly (same-origin)
 
 **Clasificación por archivo (en el cliente):**
 
-- Extensión `.fit` → import de cardio/fuerza (`POST /cardio`).
+- Extensión `.fit` → import de cardio/fuerza. No hay un único endpoint: la web intenta primero
+  fuerza (`POST /sessions/from-fit`, que toma el `.fit` crudo) y, si el backend responde 422
+  ("no es fuerza"), cae a cardio (`POST /cardio/parse` → `POST /cardio`). Sin endpoints nuevos.
 - Extensión `.csv` → se lee la **fila de cabecera** y se matchea contra las firmas conocidas:
   - peso/grasa/músculo/agua/hueso → CSV de **peso**.
   - cabeceras de **pasos**.
