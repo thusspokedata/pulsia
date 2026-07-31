@@ -15,7 +15,7 @@ export function AppLayout() {
           <NavLink to="/">Dashboard</NavLink>
           <NavLink to="/subir">Subir archivos</NavLink>
         </nav>
-        <button onClick={logout} style={{ marginTop: 24 }}>Salir</button>
+        <button onClick={() => { logout().catch(() => {}); }} style={{ marginTop: 24 }}>Salir</button>
       </aside>
       <main style={{ flex: 1, padding: 24 }}>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 16 }}>
