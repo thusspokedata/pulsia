@@ -10,6 +10,18 @@
 
 **Spec:** `docs/superpowers/specs/2026-07-31-cobertura-micros-periodo-design.md`
 
+> **Desviaciones durante la ejecución (2026-07-31), ya aplicadas en el código:**
+> 1. **Guard de dato-cero en `coveragePeriod`** (Task 1): el sample de Step 3 clasificaba los ~21
+>    nutrientes-piso como `few_data` aunque no tuvieran NINGÚN dato (inflaba el conteo y rompía el
+>    test de `onlyFoodPct`). El código real omite del todo un nutriente con 0 días de dato en comida
+>    Y suplemento (`if (daysWithData === 0 && suppDaysWithData === 0) continue;`).
+> 2. **Convención de tests del móvil**: NO es `bun:test` co-locado sino **jest** con los tests en
+>    `mobile/__tests__/` (globals `test`/`expect` sin import, source vía `../src/...`), y los tests de
+>    componente mockean `expo-router` y usan `screen.getByText` (no destructuran `render`). Los tres
+>    tests del móvil viven como `__tests__/coverage-{data,evolution,block}.test.ts(x)`.
+> 3. **`fakeDb` del backend no filtra tomas por fecha** → el test de `range-nutrients-daily` verifica
+>    la FORMA (`perDay` con las claves correctas + `totals` por día), no días vacíos.
+
 ---
 
 ## Estructura de archivos
