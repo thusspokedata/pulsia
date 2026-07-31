@@ -28,7 +28,14 @@ export function UploadPage() {
   }
 
   return (
-    <section>
+    <section
+      data-testid="dropzone"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        onFiles(e.dataTransfer.files);
+      }}
+    >
       <h2>Subir archivos</h2>
       <p>Arrastrá o elegí varios <code>.fit</code> y <code>.csv</code> (peso, pasos, sueño).</p>
       <label>
