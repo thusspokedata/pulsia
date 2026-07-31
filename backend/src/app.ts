@@ -90,6 +90,9 @@ export function createApp(deps: AppDeps) {
     const root = deps.config.webDistDir;
     // Estáticos (assets con extensión) y fallback SPA a index.html para el resto.
     app.get("/assets/*", serveStatic({ root }));
+    // serveStatic hace next() cuando el archivo no existe; sin esto, un asset inexistente
+    // caía al catch-all de abajo y devolvía index.html con 200 en vez de 404.
+    app.get("/assets/*", (c) => c.text("Not found", 404));
     app.get("*", async (c, next) => {
       // No tapar las rutas de API ya registradas: si el método no es GET o ya hubo match, seguir.
       const html = Bun.file(`${root}/index.html`);

@@ -17,3 +17,10 @@ test("el /health sigue respondiendo JSON (no lo tapa la SPA)", async () => {
   const res = await app.request("/health");
   expect(await res.json()).toEqual({ status: "ok" });
 });
+
+test("un asset inexistente da 404, no cae al index.html de la SPA", async () => {
+  const { deps } = await makeTestDeps();
+  const app = createApp({ ...deps, config: { ...deps.config, webDistDir: "backend/src/test/fixtures/webdist" } });
+  const res = await app.request("/assets/no-existe.js");
+  expect(res.status).toBe(404);
+});
