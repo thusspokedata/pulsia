@@ -3,7 +3,7 @@
   "private": true,
   "license": "AGPL-3.0-only",
   "type": "module",
-  "workspaces": ["shared", "backend", "mobile"],
+  "workspaces": ["shared", "backend", "mobile", "web"],
   "scripts": {
     "test": "bun test shared backend",
     "test:mobile": "bun run --filter @pulsia/mobile test",
