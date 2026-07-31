@@ -5,16 +5,23 @@ FROM oven/bun:1
 WORKDIR /app
 
 # Manifiestos primero (cache de capas). Escribimos un package.json raíz SIN "mobile"
-# para no instalar Expo/React Native en la imagen del backend.
+# para no instalar Expo/React Native en la imagen del backend. Sí incluye "web": la SPA
+# (React+Vite) se buildea acá y el backend Hono la sirve desde /app/web/dist.
 COPY shared/package.json shared/package.json
 COPY backend/package.json backend/package.json
+COPY web/package.json web/package.json
 COPY tsconfig.base.json ./
-RUN printf '{"name":"pulsia","private":true,"type":"module","workspaces":["shared","backend"]}\n' > package.json
+RUN printf '{"name":"pulsia","private":true,"type":"module","workspaces":["shared","backend","web"]}\n' > package.json
 RUN bun install
 
 # Código
 COPY shared shared
 COPY backend backend
+COPY web web
+
+# Build de la SPA (web/dist). El monorepo ya está copiado y las deps instaladas.
+# El backend la sirve desde WEB_DIST_DIR=/app/web/dist (default en index.ts).
+RUN cd web && bun run build
 
 # qpdf para descifrar PDFs de ECG protegidos con contraseña.
 RUN apt-get update && apt-get install -y --no-install-recommends qpdf && rm -rf /var/lib/apt/lists/*
