@@ -8,6 +8,7 @@ import { buildAthleteContext } from "../../src/nutrition/athleteContext";
 import { adjustmentDateForReport } from "../../src/nutrition/adjustmentDate";
 import type { ReportKind } from "@pulsia/shared";
 import { ChipGroup } from "../../src/components/ChipGroup";
+import { CoverageBlock } from "../../src/nutrition/CoverageBlock";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 
@@ -67,6 +68,10 @@ export default function InformesScreen() {
         <Text style={{ color: colors.text, fontWeight: "600" }}>{period.label}</Text>
         <Pressable onPress={() => setOffset((o) => Math.max(0, o - 1))} disabled={offset <= 0}><Text style={{ color: offset <= 0 ? colors.icon : colors.accent, fontSize: 18 }}>▶</Text></Pressable>
       </View>
+
+      {/* Cobertura de micros: instantánea y determinística (sin IA), arriba del informe del agente.
+          En modo diario NO va: la cobertura es de período (spec §6). */}
+      {kind !== "daily" && <CoverageBlock kind={kind} offset={offset} />}
 
       {loading && <ActivityIndicator color={colors.accent} />}
       {error && (
