@@ -88,6 +88,11 @@ export function coveragePeriod(
     let state: CoverageState;
     if (effFood >= threshold) state = "food";
     else if (effFood + suppAvg >= threshold) state = "supplement";
+    // El gate es por los días CON dato de COMIDA (`daysWithData`), NO por los del suplemento: es
+    // deliberado (spec §4.1). Si la comida no declara el nutriente (foodAvg null), su aporte es
+    // DESCONOCIDO, así que no podemos afirmar "sin cubrir" aunque haya mucho suplemento por debajo
+    // del piso — sería confundir falta de dato con falta de ingesta. El estado honesto es
+    // "few_data", y persiste hasta que haya dato de comida (o el suplemento solo cruce el piso).
     else if (daysWithData < opts.minDataDays) state = "few_data";
     else state = "uncovered";
 

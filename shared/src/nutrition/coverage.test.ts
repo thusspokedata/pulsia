@@ -26,6 +26,24 @@ test("clasifica food / supplement / uncovered con banda del 10%", () => {
   expect(byKey["vitamin_d_mcg"]).toBe("supplement");
   expect(byKey["calcium_mg"]).toBe("uncovered");
   expect(r.daysRegistered).toBe(2);
+  // Fija el denominador de suppAvg = daysRegistered (40 en 2 días → 20), no el nº de tomas.
+  const dRow = r.byNutrient.find((n) => n.key === "vitamin_d_mcg")!;
+  expect(dRow.suppAvg).toBe(20);
+});
+
+test("food desconocida + suplemento insuficiente y con muchos días → few_data, no uncovered", () => {
+  // calcium ref(male,40)=950. Comida nunca declara calcio (null); suplemento aporta 100/día por 5
+  // días (muy por debajo del piso). Como la comida es DESCONOCIDA, no podemos afirmar "sin cubrir":
+  // el estado honesto es "pocos datos", no "uncovered" (spec §4.1).
+  const supp: PerDayNutrients = {
+    "2026-07-01": { calcium_mg: 100 }, "2026-07-02": { calcium_mg: 100 },
+    "2026-07-03": { calcium_mg: 100 }, "2026-07-04": { calcium_mg: 100 }, "2026-07-05": { calcium_mg: 100 },
+  };
+  const r = coveragePeriod({}, supp, MALE, { minDataDays: 3 });
+  const cal = r.byNutrient.find((n) => n.key === "calcium_mg")!;
+  expect(cal.foodAvg).toBeNull();
+  expect(cal.daysWithData).toBe(0);
+  expect(cal.state).toBe("few_data");
 });
 
 test("pocos datos: bajo minDataDays y sin cubrir → few_data (no uncovered)", () => {
