@@ -48,7 +48,13 @@ export function coveragePeriod(
 ): CoverageResult {
   const foodDays = Object.keys(perDayFood);
   const suppDays = Object.keys(perDaySupp);
-  const daysRegistered = new Set([...foodDays, ...suppDays]).size;
+  // Un día cuenta como "registrado" si hay COMIDA (una comida cargada ya es un registro) o un
+  // aporte REAL de suplemento. El endpoint range-nutrients-daily devuelve una entrada por cada día
+  // del rango, incluso los días SIN toma (`totals` vacío): esos placeholders NO son registros y no
+  // deben inflar `daysRegistered` (ni el denominador de `suppAvg`). Se cuentan solo los días de
+  // suplemento con al menos un valor real.
+  const suppDaysReal = suppDays.filter((d) => Object.values(perDaySupp[d]).some((v) => v != null));
+  const daysRegistered = new Set([...foodDays, ...suppDaysReal]).size;
 
   const byNutrient: NutrientCoverage[] = [];
   const counts = { food: 0, supplement: 0, uncovered: 0, fewData: 0 };

@@ -31,6 +31,17 @@ test("clasifica food / supplement / uncovered con banda del 10%", () => {
   expect(dRow.suppAvg).toBe(20);
 });
 
+test("días vacíos de suplemento (placeholders del endpoint) no cuentan como registrados", () => {
+  // range-nutrients-daily devuelve una entrada por CADA día del rango, incluso los sin toma
+  // (`totals` vacío). Esos {} no son registros: daysRegistered debe contar solo el día con comida.
+  const food: PerDayNutrients = { "2026-07-10": { vitamin_c_mg: 200 } };
+  const supp: PerDayNutrients = {
+    "2026-07-08": {}, "2026-07-09": {}, "2026-07-10": {}, "2026-07-11": {}, "2026-07-12": {},
+  };
+  const r = coveragePeriod(food, supp, MALE, { minDataDays: 1 });
+  expect(r.daysRegistered).toBe(1);
+});
+
 test("food desconocida + suplemento insuficiente y con muchos días → few_data, no uncovered", () => {
   // calcium ref(male,40)=950. Comida nunca declara calcio (null); suplemento aporta 100/día por 5
   // días (muy por debajo del piso). Como la comida es DESCONOCIDA, no podemos afirmar "sin cubrir":
