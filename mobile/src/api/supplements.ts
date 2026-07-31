@@ -114,3 +114,19 @@ export async function getRangeNutrients(baseUrl: string, from: string, to: strin
     return { totals: {}, byNutrient: {} };
   }
 }
+
+// Aporte por nutriente de CADA día del rango (sin agregar). Lo consume la cobertura por período,
+// que necesita el promedio diario y bucketear por período. Misma degradación limpia: vacío si falla.
+export interface RangeNutrientsDaily {
+  perDay: Record<string, SupplementNutrients>;
+}
+
+export async function getRangeNutrientsDaily(baseUrl: string, from: string, to: string): Promise<RangeNutrientsDaily> {
+  try {
+    const res = await apiFetch(baseUrl, `/nutrition/supplements/range-nutrients-daily?from=${from}&to=${to}`);
+    if (!res.ok) return { perDay: {} };
+    return (await res.json()) as RangeNutrientsDaily;
+  } catch {
+    return { perDay: {} };
+  }
+}
