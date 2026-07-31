@@ -1,6 +1,6 @@
 # Pulsia — Onboarding / Handoff
 
-> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: **2026-07-26** (sesión **LA IA COMPLETA LOS MICROS SIN USDA**: al agregar/actualizar un alimento, si no está en la copia local de **USDA** —o el match es malo, como una limonada casera que matcheaba una limonada de Coca-Cola—, un botón **"que la IA complete"** estima las vitaminas y minerales con conocimiento + **web search** (herramienta `web_search` de Anthropic), marcados como **`sourceMicros: "ai"`** (chip **"micros IA"**, distinto de los valores de laboratorio de USDA). Sin migración (`sourceMicros: "ai"` ya existía en el schema). [#190](https://github.com/thusspokedata/pulsia/pull/190), mergeado + backend deployado + **OTA a vc10 publicado** (runtime `784872cb` verificado). Detalle en **§0-IA-MICROS**, incluidos los **6 hallazgos de la review** —dos "Major": el apply confiaba de más en el body, y el alta pisaba las ediciones del usuario— corregidos antes de mergear.)
+> Documento de contexto para retomar el proyecto en una sesión nueva. Última actualización: **2026-07-27** (sesión **MICROS DE SUPLEMENTOS EN EL DIARIO**: los suplementos **tomados** un día ahora suman sus vitaminas/minerales al total de cada nutriente del diario, en un **segmento violeta** distinto de la comida (teal) y el excedente (ámbar), contando en pisos y límites por igual; y "alimentos con más X" distingue el origen (chip "suplemento"). El mapeo componente→nutriente lo emite la **IA en el alta** (`nutrientKey` + `amountPerUnit` por unidad, dentro del JSONB `components`); la cantidad tomada se **deriva** del `dose`/`actualDose` ya guardado —**sin tocar el modelo de tomas** `taken`/`deviated`/`skipped`— con `parseLeadingNumber`; una única `supplementMicros` en shared la usan el diario móvil y el informe. Dos PRs: [#192](https://github.com/thusspokedata/pulsia/pull/192) backend+shared (migración **0026** `unit_label`) + [#193](https://github.com/thusspokedata/pulsia/pull/193) móvil con **OTA a vc10** (runtime `784872cb` verificado), más el hotfix [#194](https://github.com/thusspokedata/pulsia/pull/194). Reviews de @claude + CodeRabbit cazaron bugs reales: el aporte del suplemento **desaparecía sin dato de comida**, las tomas de **planes archivados** se perdían, y la barra **desbordaba**; y el alta por foto se **truncaba** por `max_tokens`. Detalle en **§0-SUPLEMENTOS-MICROS**.) Actualización previa: **2026-07-26** (sesión **BACKLOG EN FIZZY**: el backlog de tareas ya NO se gestiona en este documento sino en **Fizzy** —kanban self-hosted corriendo en la Pi, un contenedor + SQLite—; este onboarding queda como memoria narrativa y **Fizzy es el tablero operativo**. Cómo operarlo —acceso, buscar/crear/mover cards por la REST API, el gotcha del `.json`, login sin SMTP— en **§0-BACKLOG-FIZZY**; la IP/puerto/board-id concretos viven en la memoria persistente [[fizzy-kanban-pi]], fuera del repo público.) Actualización previa: **2026-07-26** (sesión **LA IA COMPLETA LOS MICROS SIN USDA**: al agregar/actualizar un alimento, si no está en la copia local de **USDA** —o el match es malo, como una limonada casera que matcheaba una limonada de Coca-Cola—, un botón **"que la IA complete"** estima las vitaminas y minerales con conocimiento + **web search** (herramienta `web_search` de Anthropic), marcados como **`sourceMicros: "ai"`** (chip **"micros IA"**, distinto de los valores de laboratorio de USDA). Sin migración (`sourceMicros: "ai"` ya existía en el schema). [#190](https://github.com/thusspokedata/pulsia/pull/190), mergeado + backend deployado + **OTA a vc10 publicado** (runtime `784872cb` verificado). Detalle en **§0-IA-MICROS**, incluidos los **6 hallazgos de la review** —dos "Major": el apply confiaba de más en el body, y el alta pisaba las ediciones del usuario— corregidos antes de mergear.)
 >
 > Actualización previa: **2026-07-26** (sesión **EL RESUMEN DEL IMPORT DE FUERZA SE VE COMPLETO**: un `.FIT` de fuerza importado se veía pobre —Cumplimiento 0%, Volumen 0 kg, Reps 0, todo Descanso— porque `fitStrengthToSession` ponía `endedAt: null` y `summarize` solo cuenta las series terminadas. Ahora el import puebla **timestamps reales por serie, FC media/máx por serie y la curva de FC de la sesión**, y el resumen se ve igual a una sesión registrada en la app (tiles, trabajo/descanso, detalle por serie, mapa corporal). [#189](https://github.com/thusspokedata/pulsia/pull/189), mergeado + backend deployado (**sin migración, sin OTA** — el móvil ya consumía esos campos, reusa `SessionSummary`). El owner lo vio en vivo (import vacío) y lo confirmó tras re-importar. CodeRabbit cazó un **bug real**: `extractHrSamples` dejaba pasar FC no-finita (`NaN`/`Infinity`/`new Date(NaN)`) que volteaba un import por lo demás válido. Detalle en **§0-FIT-RESUMEN**.)
 >
@@ -20,7 +20,129 @@
 
 ## 0. Estado en una línea
 
-**Pulsia está EN INTERNET, multi-usuario, con login.** Backend en **`https://pulsia.lahuelladelcaminante.de`** (VPS nginx → Wireguard → Pi:3011, HTTPS por certbot, rate-limit en `/auth/`). La app (Android, **APK vc10**; todo lo nuevo llega por **OTA** a vc10) tiene 3 dominios grandes: **(1) Entrenamiento** — genera programas async, registra/resume/revisa sesiones (a mano en la app **o importando un `.FIT` de fuerza del reloj**, que se guarda como `workout_session` con ejercicios/series y entra a 1RM/volumen/informe — ver §0-FIT-FUERZA; un import ya muestra el **resumen completo** —tiempo, volumen, reps, FC media/máx, curva de FC, detalle por serie y mapa corporal— igual que una sesión registrada en la app, ver §0-FIT-RESUMEN), HR por banda BLE, resumen con mapa corporal + FC, español+inglés, memoria del atleta, entreno puntual, **cardio/actividades** (manual o import `.FIT`, ya entra al balance de nutrición, con **pantalla de detalle** —tiles, gráficos de FC/cadencia/respiración/Body Battery y tiempo en zonas— y **reprocesamiento** del `.FIT` guardado), y un **catálogo de 273 ejercicios** (auto-generado del SDK de Garmin) con **demostraciones animadas + cues de técnica** en 86 de ellos, accesibles desde el Programa, la sesión, un buscador y el selector de alternativas; **(2) Nutrición** (tab "Nutrición", **COMPLETO** — ver §0-HOY-PREVIA): alta de alimentos por **foto + IA** (Opus visión) **o escribiendo el nombre** ("almendra") → catálogo personal (con chip **etiqueta/estimado** y **semáforo nutricional** por alimento: chips de alto/medio en grasa, saturadas, azúcar, sal y colesterol, fibra como positivo, con filtro "mostrame los altos en X" — ver §0-SEMAFORO; y si el alimento **no está en USDA o el match es malo**, un botón **"que la IA complete"** estima las vitaminas/minerales con **web search**, marcados como **micros IA** — ver §0-IA-MICROS) → registrar en gramos/ml/unidad con snapshot de macros/micros/colesterol/agua, **metas calóricas + de macros** desde el perfil (BMR Mifflin-St Jeor + objetivo + gasto de entrenamiento = **net calories**; el gasto además **sube la meta de carbos**, nunca la de proteína/grasa ni ningún límite de salud — ver §0-BARRAS), **barras que al pasarte muestran turquesa hasta la meta y ámbar solo el excedente**, **dashboard del día con 4 pestañas** (Resumen / Calorías con torta por comida / Nutrientes vs referencias OMS / Macros con dona), **qué alimentos aportan cada nutriente** + **su evolución en el tiempo**, **suplementos** (catálogo por foto + plan IA semanal + checklist + ajuste dinámico), tracker de líquido, y un **agente de informes** (diario/semanal/quincenal/mensual con consejos, opt-in); **(3) Progreso/Salud** — seguimiento cuantitativo (composición/presión/actividad/bienestar con backfill) + tendencias + heatmap, y **ECG (KardiaMobile)** (interpretación IA no-diagnóstica). **La IA observa** (progreso, ECG, y ahora los informes de nutrición → memoria del atleta). Owner: la cuenta principal. La familia baja el APK **vc10** desde **`pulsia.lahuelladelcaminante.de/download`** (QR) + se registra con el **`INVITE_CODE`** (valor real solo en `/home/kilo/pulsia/deploy/app.env` de la Pi). Un merge a `main` **auto-deploya el backend a la Pi**.
+**Pulsia está EN INTERNET, multi-usuario, con login.** Backend en **`https://pulsia.lahuelladelcaminante.de`** (VPS nginx → Wireguard → Pi:3011, HTTPS por certbot, rate-limit en `/auth/`). La app (Android, **APK vc10**; todo lo nuevo llega por **OTA** a vc10) tiene 3 dominios grandes: **(1) Entrenamiento** — genera programas async, registra/resume/revisa sesiones (a mano en la app **o importando un `.FIT` de fuerza del reloj**, que se guarda como `workout_session` con ejercicios/series y entra a 1RM/volumen/informe — ver §0-FIT-FUERZA; un import ya muestra el **resumen completo** —tiempo, volumen, reps, FC media/máx, curva de FC, detalle por serie y mapa corporal— igual que una sesión registrada en la app, ver §0-FIT-RESUMEN), HR por banda BLE, resumen con mapa corporal + FC, español+inglés, memoria del atleta, entreno puntual, **cardio/actividades** (manual o import `.FIT`, ya entra al balance de nutrición, con **pantalla de detalle** —tiles, gráficos de FC/cadencia/respiración/Body Battery y tiempo en zonas— y **reprocesamiento** del `.FIT` guardado), y un **catálogo de 273 ejercicios** (auto-generado del SDK de Garmin) con **demostraciones animadas + cues de técnica** en 86 de ellos, accesibles desde el Programa, la sesión, un buscador y el selector de alternativas; **(2) Nutrición** (tab "Nutrición", **COMPLETO** — ver §0-HOY-PREVIA): alta de alimentos por **foto + IA** (Opus visión) **o escribiendo el nombre** ("almendra") → catálogo personal (con chip **etiqueta/estimado** y **semáforo nutricional** por alimento: chips de alto/medio en grasa, saturadas, azúcar, sal y colesterol, fibra como positivo, con filtro "mostrame los altos en X" — ver §0-SEMAFORO; y si el alimento **no está en USDA o el match es malo**, un botón **"que la IA complete"** estima las vitaminas/minerales con **web search**, marcados como **micros IA** — ver §0-IA-MICROS) → registrar en gramos/ml/unidad con snapshot de macros/micros/colesterol/agua, **metas calóricas + de macros** desde el perfil (BMR Mifflin-St Jeor + objetivo + gasto de entrenamiento = **net calories**; el gasto además **sube la meta de carbos**, nunca la de proteína/grasa ni ningún límite de salud — ver §0-BARRAS), **barras que al pasarte muestran turquesa hasta la meta y ámbar solo el excedente**, **dashboard del día con 4 pestañas** (Resumen / Calorías con torta por comida / Nutrientes vs referencias OMS / Macros con dona), **qué alimentos aportan cada nutriente** + **su evolución en el tiempo**, **suplementos** (catálogo por foto + plan IA semanal + checklist + ajuste dinámico; **los micros de los suplementos tomados ahora suman al diario de nutrientes en un segmento violeta**, distinto de la comida — ver §0-SUPLEMENTOS-MICROS), tracker de líquido, y un **agente de informes** (diario/semanal/quincenal/mensual con consejos, opt-in); **(3) Progreso/Salud** — seguimiento cuantitativo (composición/presión/actividad/bienestar con backfill) + tendencias + heatmap, y **ECG (KardiaMobile)** (interpretación IA no-diagnóstica). **La IA observa** (progreso, ECG, y ahora los informes de nutrición → memoria del atleta). Owner: la cuenta principal. La familia baja el APK **vc10** desde **`pulsia.lahuelladelcaminante.de/download`** (QR) + se registra con el **`INVITE_CODE`** (valor real solo en `/home/kilo/pulsia/deploy/app.env` de la Pi). Un merge a `main` **auto-deploya el backend a la Pi**.
+
+## 0-SUPLEMENTOS-MICROS. ✅ HECHO (2026-07-27): LOS MICROS DE LOS SUPLEMENTOS SUMAN AL DIARIO
+
+Disparador del owner: *"Micros de suplementos en el diario, en otro color"*. Hasta acá el diario de
+nutrientes sumaba **solo comida**; los suplementos eran un dominio aparte (checklist tomado/salteado) y
+solo aparecían **descriptivamente** en el informe de la IA, nunca en el conteo de vitaminas/minerales.
+
+**LIVE**: [#192](https://github.com/thusspokedata/pulsia/pull/192) backend+shared (`eb2bdfd`, migración
+0026 auto-aplicada) + [#193](https://github.com/thusspokedata/pulsia/pull/193) móvil (**OTA a vc10**,
+runtime `784872cb` verificado) + hotfix [#194](https://github.com/thusspokedata/pulsia/pull/194)
+(`7f073b1`). Spec/plan en `docs/superpowers/{specs,plans}/2026-07-26-suplementos-micros-diario*`. Estado
+vivo en [[suplementos-micros-diario-status]].
+
+### Corrección de premisa
+El backlog decía que los suplementos "no guardan cantidades cuantificadas". **No era exacto:**
+`SupplementComponentSchema` YA guardaba `{name, amount, unit}` por componente. Lo que faltaba de verdad
+era **mapear el `name` (texto libre, "Magnesio (citrato)") a una de las 30 claves de `NUTRIENTS`
+(`magnesium_mg`…) + normalizar la unidad**. No existía ningún mapeo componente→`NutrientKey` en el repo.
+
+### Decisiones del owner (brainstorming)
+- **Mapeo**: la **IA en el alta** emite por componente `nutrientKey` + `amountPerUnit` (cantidad canónica
+  **por unidad contable** — cápsula/comprimido) + el `unitLabel` del suplemento, todo dentro del JSONB
+  `components` → **sin migración de datos** (la migración 0026 solo agrega la columna `unit_label`).
+- **NO se toca el modelo de tomas**: el owner entendió que **`deviated` + `actualDose` ES** el mecanismo
+  que pedía para ajustar dosis ("me dijo 3 pastillas de magnesio, tomé 1"). El diario **deriva** las
+  unidades del `dose`/`actualDose` ya guardado con `parseLeadingNumber` (tomado→`plannedDose`,
+  desviado→`actualDose`, salteado→0, sin número parseable→1 unidad).
+- **Cuenta en TODO** (pisos y límites por igual): el sodio de un efervescente cuenta contra su límite —
+  el diario refleja lo que entró al cuerpo, el color violeta ya deja claro el origen. Los suplementos
+  suman **solo en los 30 nutrientes** de `NUTRIENTS`; proteína/carbos/kcal no son mapeables (una
+  proteína en polvo se registra como **alimento**, no como suplemento).
+
+### Cómo
+- **shared**: `supplementMicros` (aporte del día por nutriente + desglose por suplemento) es la **única
+  fuente**, la consumen el diario móvil y el informe. `parseLeadingNumber`, `NutrientKeySchema`,
+  `barSegments3` (barra de 3 segmentos: comida teal / suplemento violeta / excedente ámbar).
+- **backend**: rutas `GET /nutrition/supplements/day-nutrients`, `/range-nutrients` (guard ≤366 días),
+  `POST /nutrition/supplements/backfill-micros` (mapea con IA los suplementos ya cargados, idempotente).
+  `takesWithComponents` resuelve `planItemId→supplementId` sobre **todos** los planes (activos +
+  archivados). El informe (`collect.ts`/`report.ts`) suma el aporte cuantificado.
+- **móvil**: `useNutritionDay` trae `supplementNutrients` del backend → barra de 3 segmentos + texto
+  "+N" violeta + leyenda; ranking "alimentos con más X" con chip "suplemento" (token `supplementText`
+  para el contraste). El % y el excedente cuentan el **total** comida + suplemento.
+
+### ⚠️ Lecciones (bugs que ninguna lectura del diff dio por sentados)
+1. **El aporte del suplemento desaparecía sin dato de comida** (@claude, High): todo el código gateaba
+   en `value != null` (comida). Un nutriente sin comida (`value: null` = "sin dato", común: muchos
+   alimentos no traen cada micro) escondía el aporte del suplemento aunque fuera > 0 — y un día con
+   **cero comida + un suplemento tomado** caía en el EmptyState, escondiendo el 100%. Fix: "hay
+   suplemento" también es dato.
+2. **Tomas de planes archivados perdidas** (@claude, 🔴): `takesWithComponents` mapeaba solo desde
+   `getActivePlan`; **regenerar el plan** (flujo normal, archiva el activo con ids nuevos) huerfanaba
+   las tomas de días previos y las descartaba en silencio. Fix: mapear sobre todos los planes.
+3. **La barra desbordaba >100% sobre un piso** (fibra al 150%): un bug en el código de **mi propio
+   plan** (`barSegments3` devolvía el `foodPct` sin clampear) lo cazaron **tests preexistentes** de
+   `detalle.test.tsx` — la costura otra vez ([[testear-la-costura]]).
+4. **El alta por foto se truncaba** (hotfix #194): meter el mapeo por componente en el response de
+   `extractSupplement`, **encima del `info` libre**, superaba los **2048 tokens** → `stop_reason
+   max_tokens` → 502 *"No se pudo analizar la foto"*. Causa raíz **confirmada en los logs de prod**
+   (`docker compose logs` del backend en la Pi; el acceso concreto —host/usuario— vive en la memoria
+   persistente, **fuera de este archivo público**). Fix: techo a **8000** (solo `extractSupplement`).
+5. **Contraste**: `colors.supplement` (violeta) como **texto chico** no pasaba WCAG → token
+   `supplementText` más oscuro para el "+N" y el chip (CodeRabbit).
+
+### Pendiente
+- **Backfill**: el owner lo corrió y dio `mapped:0, pending:0` porque sus 9 suplementos **ya estaban
+  mapeados al alta**. **Agregar un suplemento nuevo NO requiere ninguna curl** — la IA lo mapea sola en
+  la app; la curl de login era solo para el backfill de una vez.
+- **Follow-ups (no bloqueantes):** el informe (`collect.ts`) une tomas↔catálogo **por nombre** →
+  renombrar un suplemento rompe el aporte histórico (arreglarlo = pasar `planItemId` por el camino del
+  informe); un **`400` de media-type** (la app manda `image/png` pero los bytes son `image/jpeg` → el
+  picker mal-etiqueta) que conviene resolver **sniffeando el tipo real** en el backend; y la Task 15
+  (placeholder del Desvío con `unitLabel`) que quedó salteada.
+
+## 0-BACKLOG-FIZZY. ✅ HECHO (2026-07-26): EL BACKLOG AHORA VIVE EN FIZZY (kanban self-hosted)
+
+**El backlog de tareas ya no se lleva en este documento.** Vive en **Fizzy** (kanban self-hosted de
+37signals, un contenedor + SQLite) corriendo en la Pi. Este onboarding queda como **memoria
+narrativa** (por qué se hicieron las cosas, lecciones); **Fizzy es el tablero operativo** (qué falta
+hacer). Toda tarea nueva va a Fizzy, no acá.
+
+> ⚠️ **Este archivo es PÚBLICO** (`thusspokedata/pulsia` en GitHub). Por eso la **IP/puerto/board-id
+> concretos NO están acá** — viven en la memoria persistente **[[fizzy-kanban-pi]]** (fuera del repo).
+> Un chat con esa memoria cargada tiene los valores reales; acá va solo el "cómo se hace".
+
+### El board
+- **Board:** "Pulsia — Backlog". **Columnas = prioridad**: `P0 · Ahora` / `P1 · Features (spec)` /
+  `P1.5 · Device checks` / `P2 · Quick wins` / `P2 · Tests` / `P3 · Grande` / `✅ Hecho / Verificado`.
+- **Cards:** salieron del backlog de este onboarding + los TODOs del owner. Cada una con **ID**
+  (`NUT-`, `EJ-`, `PROG-`, `DEC-`, `INFRA-`, `TEST-`, `FIT-`, `GARMIN-`, `DOM-`), **tamaño** (S/M/L) y
+  el contexto/alcance en la descripción. Las `DEC-` son decisiones del owner (bloqueantes).
+
+### Cómo se opera (REST API de Fizzy)
+Base `http://<pi-lan>:3012` (valor real en [[fizzy-kanban-pi]]). Auth por **`Authorization: Bearer
+<PAT>`** + **`Accept: application/json`**; el PAT se genera en Fizzy (**Perfil → Developer →** personal
+access token, permiso **Read + Write**). Endpoints **a nivel raíz, NO bajo `/api`**:
+- `GET /my/identity` → `accounts[].slug` (el slug de la cuenta; hay una sola).
+- `GET /{slug}/boards` → listar/buscar el board por `name`. `POST /{slug}/boards {"board":{"name":…}}` crea.
+- `POST /{slug}/boards/{id}/columns {"column":{"name":…,"color":"var(--color-card-N)"}}` → columnas
+  (N = 1..8; `default` = azul).
+- `POST /{slug}/boards/{id}/cards {"card":{"title":…,"description":…}}` → crea la card **pero NO la
+  mete en una columna** (queda en el limbo "Maybe?").
+- `POST /{slug}/cards/{num}/triage {"column_id":…}` → **recién esto** la ubica en una columna. Siempre
+  hace falta el triage después de crear.
+- Buscar/mover: `GET /{slug}/cards?board_ids[]={id}`, `PUT /{slug}/cards/{num}` (editar título/desc),
+  `POST /{slug}/cards/{num}/closure` (mandar a Done).
+
+**⚠️ Gotcha del `.json`:** el header `Location` de las respuestas `201 Created` trae sufijo **`.json`**
+(p.ej. `…/boards/abc.json`). Hay que **sacárselo** al parsear el id/número, o la llamada siguiente da
+404. Para poblar/actualizar el board conviene un script **idempotente** (reusa el board por `name`,
+salta columnas/cards ya existentes por nombre/título).
+
+### Operación / gotchas de infra
+- **Login sin SMTP:** no hay servidor de mail configurado, así que el email nunca llega. El **código de
+  6 chars** sale en `docker compose logs` del contenedor, o vía
+  `docker compose exec web bin/rails runner "puts MagicLink.last.code"`.
+- **Deploy** (patrón Pulsia): `/home/kilo/fizzy/` con `docker-compose.yml` + `.env` (`SECRET_KEY_BASE`),
+  imagen `ghcr.io/basecamp/fizzy:main` (**arm64**), volumen SQLite `fizzy:/rails/storage`,
+  `DISABLE_SSL=true`, **LAN-only** (no expuesto a internet). El volumen **no está en el backup de la Pi
+  todavía** (pendiente).
+- **Por qué Fizzy y no Jotty:** el Jotty previo corría detrás del gateway de **Umbrel**, que rebota la
+  API key (redirect al portal) → inservible para scripting. Fizzy limpio en la Pi no tiene ese problema.
 
 ## 0-IA-MICROS. ✅ HECHO (2026-07-26): LA IA COMPLETA LOS MICROS CUANDO USDA NO SIRVE
 
@@ -821,7 +943,7 @@ El usuario quiere a futuro (a) que los nombres coincidan con Coros cuando use Co
 
 ## 0b. Estado de la sesión 2026-07-09 (leer primero)
 
-Arranque: la app era single-user (`SINGLE_USER_MODE=true`), solo LAN (`http://192.168.178.47:3011`), sin login. Esta sesión la llevó a **producción multi-usuario en internet**. Todo mergeado en `main` (con review CodeRabbit; `@claude` si throttled) y deployado.
+Arranque: la app era single-user (`SINGLE_USER_MODE=true`), solo LAN (`http://<pi-lan>:3011`), sin login. Esta sesión la llevó a **producción multi-usuario en internet**. Todo mergeado en `main` (con review CodeRabbit; `@claude` si throttled) y deployado.
 
 **Mergeado esta sesión, en orden:**
 - **Entreno puntual expandido** (#71 backend + #72 mobile): el one-off pasó de 1 músculo + gym/casa a **multi-músculo + tiempo elegible (chips+custom) + equipo explícito (multi-select sembrado por lugar) + notas libres** ("me duele la cintura"). `OneOffRequestSchema` tolerante a version-skew; `buildOneOffPrompt` expandido. Spec/plan `2026-07-06-oneoff-expanded-*`.
@@ -857,7 +979,7 @@ Arranque: la app era single-user (`SINGLE_USER_MODE=true`), solo LAN (`http://19
   "buscar actualización" → el usuario **cierra/reabre la app 2 veces** (chequeo nativo al abrir: 1ra baja,
   2da aplica). Ver [[update-feature-status]].
 - **usesCleartextTraffic ahora FALSE** (vc7): la app habla **HTTPS** a `pulsia.lahuelladelcaminante.de`.
-  Al upgradear desde un APK viejo puede quedar una URL LAN `http://192.168.178.47:3011` guardada en
+  Al upgradear desde un APK viejo puede quedar una URL LAN `http://<pi-lan>:3011` guardada en
   AsyncStorage → error "CLEARTEXT communication not permitted" y no se puede cambiar (login bloquea
   Configuración) → **borrar datos de la app** (o reinstalar). Instalación fresca no lo sufre.
 - **Generaciones largas de la IA:** ya NO se hacen síncronas desde la app (async con polling). El límite
@@ -869,7 +991,7 @@ Arranque: la app era single-user (`SINGLE_USER_MODE=true`), solo LAN (`http://19
   deja el marcador "Actionable comments posted".
 - **Deploy:** un merge a `main` **auto-deploya el backend a la Pi** (workflow `deploy.yml`; el contenedor
   auto-migra: CMD `db:migrate && db:seed && start`). Tras mergear un PR de backend, verificar la salud del
-  deploy (`ssh nextcloud 'curl -s localhost:3011/health'` o por el VPS: `ssh vps 'curl -s http://10.8.0.2:3011/health'`).
+  deploy (`ssh nextcloud 'curl -s localhost:3011/health'` o por el VPS: `ssh vps 'curl -s http://<pi-wg>:3011/health'`).
   La Pi (`ssh nextcloud`) a veces da "Host is down" transitorio → reintentar. Ver [[autonomous-deploy-boundary]].
 - **Firma de la app:** todos los builds (vc4/vc6/vc7) usan el **mismo keystore de EAS** (cert SHA-256
   `0470…769f7`) → instalan como update uno sobre otro. Mantenerlo.
@@ -1112,13 +1234,18 @@ self-hosted runner (`/home/kilo/actions-runner`).
 - La DB es **separada de la de Nextcloud** (esa es MariaDB `nextcloud-db-1`); Pulsia usa su propia Postgres.
 
 **Exposición a internet (2026-07-09, HECHO):** el backend es público en
-`https://pulsia.lahuelladelcaminante.de`. Patrón (reusa el de las otras apps de la Pi): **VPS** (`ssh vps`,
-`187.33.155.194`, Ubuntu) corre **nginx** público (:80/:443) que hace `proxy_pass http://10.8.0.2:3011`
-(la Pi por **Wireguard**) + **HTTPS por certbot** (Let's Encrypt, auto-renueva) + `limit_req` en `/auth/`.
-Site en `/etc/nginx/sites-available/pulsia.lahuelladelcaminante.de` en el VPS. **Firewall de la Pi**:
-`/usr/local/sbin/wg0-firewall.sh` (systemd `wg0-firewall.service`) permite wireguard solo a los puertos
-`3006:3011` (se extendió de `3006:3010` para incluir el 3011 de Pulsia; persiste en reboot). DNS:
-`pulsia.lahuelladelcaminante.de` → `187.33.155.194` (en clouding.io). La app usa esa URL HTTPS por default.
+el dominio público del backend. Patrón (reusa el de las otras apps de la Pi): un **VPS** (alias `ssh vps`,
+Ubuntu) corre **nginx** público (:80/:443) que hace `proxy_pass` a la Pi por **Wireguard**
++ **HTTPS por certbot** (Let's Encrypt, auto-renueva) + `limit_req` en `/auth/`.
+El site de nginx vive en el VPS. **Firewall de la Pi**: un script de firewall (systemd) permite
+wireguard solo a un **rango acotado de puertos** (incluido el de Pulsia; persiste en reboot). DNS:
+el dominio resuelve a la IP del VPS (en el proveedor de DNS). La app usa esa URL HTTPS por default.
+
+<!-- NOTA (repo público): IPs/paths/topología concretos scrubbeados a propósito — valores reales en la memoria persistente fuera del repo. -->
+<!-- Ver §0-BACKLOG-FIZZY sobre por qué este archivo NO debería llevar infra sensible. -->
+
+Detalles concretos (IP del VPS, IP wireguard de la Pi, path del site nginx y del script de firewall,
+rango de puertos, proveedor) están **fuera del repo**, en la memoria persistente.
 (Quedó `so_keepalive=20s` en el listen 443 y un `pulsia_timed.log` — instrumentación de diagnóstico, inofensivos.)
 
 ## 10. Índice de docs
