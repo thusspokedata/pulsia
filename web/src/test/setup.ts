@@ -13,3 +13,14 @@ if (typeof Blob !== "undefined" && typeof Blob.prototype.arrayBuffer !== "functi
     });
   };
 }
+
+// jsdom no implementa ResizeObserver. Recharts (ResponsiveContainer) lo usa para medir el
+// contenedor; sin este stub, montar cualquier gráfico con datos revienta con un ReferenceError
+// no capturado. El stub es un no-op: el tamaño real no importa para los tests, solo que no explote.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
