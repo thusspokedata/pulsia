@@ -36,12 +36,18 @@ jobs:
         run: |
           set -euo pipefail
           # rsync SIN --delete (no borra nada en la Pi) y SIN pisar deploy/app.env (secretos,
-          # solo en la Pi). Excluye mobile/node_modules/.git para que sea liviano.
+          # solo en la Pi). Excluye node_modules/.git para que sea liviano.
+          # De mobile/ se sincroniza SOLO package.json (no el código fuente): el Dockerfile
+          # lo necesita para validar el `bun install --frozen-lockfile` (mobile figura en los
+          # workspaces del bun.lock). Se sincroniza fresco para no quedar con un manifest stale
+          # (rsync no usa --delete), que rompería el frozen install.
           rsync -a \
             --exclude='.git/' \
-            --exclude='mobile/' \
             --exclude='node_modules/' \
             --exclude='deploy/app.env' \
+            --include='/mobile/' \
+            --include='/mobile/package.json' \
+            --exclude='/mobile/*' \
             ./ /home/kilo/pulsia/
           cd /home/kilo/pulsia
           # El CMD del contenedor corre db:migrate + db:seed + start, así que las migraciones
