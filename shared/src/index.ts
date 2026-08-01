@@ -23,6 +23,7 @@ export * from "./catalog/exercises";
 export { exerciseMediaFor, hasExerciseMedia, type ExerciseMedia } from "./catalog/exerciseMedia";
 export * from "./schemas/session";
 export * from "./schemas/cardio";
+export * from "./cardio/buildFitActivity";
 export * from "./session/completion";
 export * from "./schemas/metrics";
 export * from "./schemas/metricImport";
