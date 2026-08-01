@@ -1,3 +1,4 @@
+import { buildFitActivity, type CardioFitPreview } from "@pulsia/shared";
 import { apiFetch, ApiError } from "../api/client";
 import { classifyByExtension } from "./classify";
 
@@ -27,10 +28,19 @@ async function importFit(fitBase64: string): Promise<ImportResult> {
   } catch (e) {
     if (!(e instanceof ApiError) || e.status !== 422) throw e;
   }
-  // No es fuerza → cardio: parsear (sin persistir) y luego persistir con un id nuevo.
-  const activity = await apiFetch<Record<string, unknown>>("/cardio/parse", { method: "POST", body: { fitBase64 } });
+  // No es fuerza → cardio: parsear (sin persistir) y armar la CardioActivity con la MISMA
+  // transformación que el móvil (`buildFitActivity` en @pulsia/shared). El preview crudo NO es una
+  // CardioActivity válida: le faltan `source` y `kcalSource` (requeridos), y armarlos a mano acá
+  // volvería a arrastrar el bug de "un campo olvidado = NULL para siempre". En batch no hay form, así
+  // que los campos editables salen del propio preview.
+  const preview = await apiFetch<CardioFitPreview>("/cardio/parse", { method: "POST", body: { fitBase64 } });
+  const activity = buildFitActivity(
+    preview,
+    { type: preview.type, durationMs: preview.durationMs, distanceM: preview.distanceM, avgHr: preview.avgHr, notes: "" },
+    crypto.randomUUID(),
+  );
   try {
-    await apiFetch("/cardio", { method: "POST", body: { ...activity, id: crypto.randomUUID(), fitBase64 } });
+    await apiFetch("/cardio", { method: "POST", body: { ...activity, fitBase64 } });
     return { kind: "cardio", duplicate: false };
   } catch (e) {
     if (e instanceof ApiError && e.status === 409) return { kind: "cardio", duplicate: true };
