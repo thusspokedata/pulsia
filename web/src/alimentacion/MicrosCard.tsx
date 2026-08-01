@@ -1,4 +1,4 @@
-import { coveragePeriod, NUTRIENTS, NUTRIENT_REFERENCES, NUTRIENT_REFERENCE_KIND, mealsByLocalDay, type PerDayNutrients, type NutrientKey } from "@pulsia/shared";
+import { coveragePeriod, NUTRIENTS, NUTRIENT_REFERENCES, mealsByLocalDay, type PerDayNutrients } from "@pulsia/shared";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMeals } from "./useMeals";
 import { useProfile } from "./useProfile";
@@ -21,16 +21,13 @@ export function MicrosCard() {
     .filter((c) => c.foodAvg != null)
     .map((c) => ({ key: c.key, pct: Math.round(((c.foodAvg as number) / c.ref) * 100) }));
 
-  const limitKeys = ["cholesterol_mg", "saturated_fat_g", "sodium_mg", "sugars_g"].filter(
-    (k) => (NUTRIENT_REFERENCE_KIND as Record<string, string>)[k] === "max",
-  );
-  const limits = limitKeys.map((k) => {
-    const vals = days.map((d) => byDay[d].nutrients[k as NutrientKey]).filter((v): v is number => v != null);
-    const avg = vals.length ? vals.reduce((a, v) => a + v, 0) / vals.length : null;
-    const ref = (NUTRIENT_REFERENCES as Record<string, number>)[k];
-    return { key: k, avg, ref, over: avg != null && avg > ref };
-  });
-  const colesterol = limits.find((l) => l.key === "cholesterol_mg");
+  // Colesterol como LÍMITE (max): promedio diario vs el techo fijo de references.ts. Los demás
+  // límites (saturadas/sodio/azúcares) se harán cuando tengan su referencia correcta —p.ej.
+  // saturadas depende de la meta calórica (saturatedFatRefG), no es un valor fijo.
+  const cholVals = days.map((d) => byDay[d].nutrients.cholesterol_mg).filter((v): v is number => v != null);
+  const cholAvg = cholVals.length ? cholVals.reduce((a, v) => a + v, 0) / cholVals.length : null;
+  const cholRef = (NUTRIENT_REFERENCES as Record<string, number>).cholesterol_mg;
+  const colesterol = cholAvg != null ? { avg: cholAvg, ref: cholRef, over: cholAvg > cholRef } : null;
 
   return (
     <Card>
@@ -41,7 +38,7 @@ export function MicrosCard() {
         {!isLoading && !isError && days.length === 0 && <p className="text-sm text-muted-foreground">Sin comidas en el rango.</p>}
         {days.length > 0 && (
           <>
-            {colesterol && colesterol.avg != null && (
+            {colesterol && (
               <div className="mb-3 rounded-md p-3" style={{ background: colesterol.over ? "#FAEEDA" : "#E1F5EE" }}>
                 <div className="flex items-center justify-between text-sm font-medium" style={{ color: colesterol.over ? "#633806" : "#085041" }}>
                   <span>Colesterol</span>

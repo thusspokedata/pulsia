@@ -14,7 +14,7 @@ export function CaloriasCard() {
 
   const byDay = mealsByLocalDay(data ?? [], (ms) => localDayKey(ms));
   const days = Object.keys(byDay).sort();
-  const serie = days.map((d) => ({ t: new Date(d + "T12:00:00").getTime(), kcal: Math.round(byDay[d].kcal) }));
+  const serie = days.map((d) => ({ t: new Date(d + "T12:00:00").getTime(), kcal: Math.round(byDay[d].kcal), meta: meta?.kcal }));
   const n = days.length;
   const avg = n
     ? {
@@ -47,7 +47,7 @@ export function CaloriasCard() {
                 <YAxis />
                 <Tooltip labelFormatter={(t) => fmt(Number(t))} />
                 <Bar dataKey="kcal" name="kcal" fill="#0E7C86" />
-                {meta && <Line dataKey={() => meta.kcal} name="Meta" stroke="#94a3b8" strokeDasharray="4 4" dot={false} strokeWidth={2} />}
+                {meta && <Line dataKey="meta" name="Meta" stroke="#94a3b8" strokeDasharray="4 4" dot={false} strokeWidth={2} />}
               </ComposedChart>
             </ResponsiveContainer>
             <div className="mt-3 grid grid-cols-3 gap-3">
