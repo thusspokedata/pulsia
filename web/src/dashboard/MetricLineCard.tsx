@@ -14,7 +14,7 @@ export function MetricLineCard({ title, type, unit, showAverage }: { title: stri
   return (
     <Card>
       <CardHeader>
-        <CardTitle role="heading">{title}{unit ? ` (${unit})` : ""}</CardTitle>
+        <CardTitle role="heading" aria-level={2}>{title}{unit ? ` (${unit})` : ""}</CardTitle>
       </CardHeader>
       <CardContent>
         {isLoading && <p className="text-sm text-muted-foreground">Cargando…</p>}

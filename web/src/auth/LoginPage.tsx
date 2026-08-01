@@ -27,7 +27,7 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle role="heading" className="text-center text-xl">Pulsia</CardTitle>
+          <CardTitle role="heading" aria-level={2} className="text-center text-xl">Pulsia</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} aria-label="login" className="flex flex-col gap-3">

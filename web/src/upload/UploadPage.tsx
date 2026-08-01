@@ -33,7 +33,7 @@ export function UploadPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle role="heading">Subir archivos</CardTitle>
+        <CardTitle role="heading" aria-level={2}>Subir archivos</CardTitle>
       </CardHeader>
       <CardContent>
         <section

@@ -33,7 +33,7 @@ export function ConsistencyCard() {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Constancia de entrenos</CardTitle>
+        <CardTitle role="heading" aria-level={2}>Constancia de entrenos</CardTitle>
         <select
           value={year}
           onChange={(e) => setSelectedYear(Number(e.target.value))}

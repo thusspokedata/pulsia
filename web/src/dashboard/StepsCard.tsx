@@ -16,7 +16,7 @@ export function StepsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Pasos</CardTitle>
+        <CardTitle role="heading" aria-level={2}>Pasos</CardTitle>
       </CardHeader>
       <CardContent>
         {isLoading && <p className="text-sm text-muted-foreground">Cargando…</p>}
