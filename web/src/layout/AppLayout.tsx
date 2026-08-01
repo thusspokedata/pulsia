@@ -1,6 +1,8 @@
 import { NavLink, Outlet } from "react-router";
 import { useAuth } from "../auth/AuthContext";
 import { useDateRange } from "../dashboard/DateRangeContext";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 const RANGES = [30, 90, 365];
 
@@ -8,21 +10,42 @@ export function AppLayout() {
   const { logout } = useAuth();
   const { days, setDays } = useDateRange();
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
-      <aside style={{ width: 200, background: "#0f172a", color: "#e2e8f0", padding: 16 }}>
-        <div style={{ color: "#5eead4", fontWeight: 700, marginBottom: 16 }}>Pulsia</div>
-        <nav style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <NavLink to="/">Dashboard</NavLink>
-          <NavLink to="/subir">Subir archivos</NavLink>
+    <div className="flex min-h-screen">
+      <aside className="flex w-52 shrink-0 flex-col gap-1 border-r bg-slate-900 p-4 text-slate-200">
+        <div className="mb-4 text-lg font-medium text-teal-300">Pulsia</div>
+        <nav className="flex flex-col gap-1">
+          <NavLink
+            to="/"
+            className={({ isActive }) =>
+              cn("rounded-md px-3 py-2 text-sm", isActive ? "bg-slate-800 text-white" : "text-slate-300 hover:bg-slate-800/60")
+            }
+          >
+            Dashboard
+          </NavLink>
+          <NavLink
+            to="/subir"
+            className={({ isActive }) =>
+              cn("rounded-md px-3 py-2 text-sm", isActive ? "bg-slate-800 text-white" : "text-slate-300 hover:bg-slate-800/60")
+            }
+          >
+            Subir archivos
+          </NavLink>
         </nav>
-        <button onClick={() => { logout().catch(() => {}); }} style={{ marginTop: 24 }}>Salir</button>
+        <button
+          onClick={() => {
+            logout().catch(() => {});
+          }}
+          className="mt-auto rounded-md px-3 py-2 text-left text-sm text-slate-300 hover:bg-slate-800/60"
+        >
+          Salir
+        </button>
       </aside>
-      <main style={{ flex: 1, padding: 24 }}>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 16 }}>
+      <main className="flex-1 p-6">
+        <div className="mb-4 flex justify-end gap-2">
           {RANGES.map((d) => (
-            <button key={d} onClick={() => setDays(d)} aria-pressed={days === d}>
+            <Button key={d} size="sm" variant={days === d ? "default" : "outline"} aria-pressed={days === d} onClick={() => setDays(d)}>
               {d === 365 ? "1 año" : `${d} días`}
-            </button>
+            </Button>
           ))}
         </div>
         <Outlet />

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSessions } from "./useSessions";
 import { countByLocalDay, localDayKey, yearOf } from "./heatmap";
 
@@ -30,22 +31,29 @@ export function ConsistencyCard() {
   }
 
   return (
-    <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h3>Constancia de entrenos</h3>
-        <select value={year} onChange={(e) => setSelectedYear(Number(e.target.value))} aria-label="Año">
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle role="heading" aria-level={2}>Constancia de entrenos</CardTitle>
+        <select
+          value={year}
+          onChange={(e) => setSelectedYear(Number(e.target.value))}
+          aria-label="Año"
+          className="rounded-md border px-2 py-1 text-sm"
+        >
           {(years.length ? years : [year]).map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
-      </div>
-      {isLoading && <p>Cargando…</p>}
-      {isError && <p role="alert">No se pudo cargar.</p>}
-      {!isLoading && !isError && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(53, 1fr)", gridAutoFlow: "column", gridTemplateRows: "repeat(7, 10px)", gap: 2 }}>
-          {cells.map((c) => (
-            <div key={c.key} title={`${c.key}: ${c.count}`} style={{ width: 10, height: 10, borderRadius: 2, background: color(c.count) }} />
-          ))}
-        </div>
-      )}
-    </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading && <p className="text-sm text-muted-foreground">Cargando…</p>}
+        {isError && <p role="alert" className="text-sm text-destructive">No se pudo cargar.</p>}
+        {!isLoading && !isError && (
+          <div className="grid grid-flow-col grid-cols-[repeat(53,1fr)] grid-rows-[repeat(7,10px)] gap-0.5">
+            {cells.map((c) => (
+              <div key={c.key} title={`${c.key}: ${c.count}`} className="h-2.5 w-2.5 rounded-sm" style={{ background: color(c.count) }} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

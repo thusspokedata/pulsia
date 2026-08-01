@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { useAuth } from "./AuthContext";
 import { ApiError } from "../api/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -22,12 +24,24 @@ export function LoginPage() {
   }
 
   return (
-    <form onSubmit={onSubmit} aria-label="login">
-      <h1>Pulsia</h1>
-      <label>Email <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
-      <label>Contraseña <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
-      {error && <p role="alert">{error}</p>}
-      <button type="submit" disabled={busy}>{busy ? "Entrando…" : "Entrar"}</button>
-    </form>
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardTitle role="heading" aria-level={2} className="text-center text-xl">Pulsia</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={onSubmit} aria-label="login" className="flex flex-col gap-3">
+            <label className="flex flex-col gap-1 text-sm">Email
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="rounded-md border px-3 py-2 text-sm" />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">Contraseña
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="rounded-md border px-3 py-2 text-sm" />
+            </label>
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" disabled={busy}>{busy ? "Entrando…" : "Entrar"}</Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
