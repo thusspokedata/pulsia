@@ -18,7 +18,8 @@ const validSession = {
 };
 
 // fakeDb que registra inserts/deletes y sirve una fila para el GET.
-function fakeDb(storedRow: any = null, recentRows: any[] | null = null) {
+// `sessionAtSecond`: lo que devuelve el select().from().where() de findSessionAtSecond (dedupe del import).
+function fakeDb(storedRow: any = null, recentRows: any[] | null = null, sessionAtSecond: any[] = []) {
   const inserts: Array<{ table: any; rows: any[] }> = [];
   const deletes: Array<{ table: any }> = [];
   let seq = 0;
@@ -36,7 +37,7 @@ function fakeDb(storedRow: any = null, recentRows: any[] | null = null) {
     insert,
     delete: (table: any) => ({ where: async () => { deletes.push({ table }); } }),
     transaction: async (fn: any) => fn(db),
-    select: () => ({ from: () => ({ where: async () => [] }) }),
+    select: () => ({ from: () => ({ where: async () => sessionAtSecond }) }),
     query: {
       workoutSession: {
         findFirst: async () => storedRow,
@@ -232,6 +233,17 @@ test("POST /sessions/from-fit guarda las series con FC y la sesión con hrSeries
   expect(wsInsert.rows[0].hrSeries).toBeTruthy();
   const setInserts = db._inserts.filter((i: any) => i.table === setLog);
   expect(setInserts.some((i: any) => i.rows[0].hrAvg != null)).toBe(true);
+});
+
+test("POST /sessions/from-fit dedupea un entreno ya importado en el mismo segundo → 409, sin persistir", async () => {
+  // getSessionOwnerId (findFirst) → null (id nuevo, como el de la web batch); findSessionAtSecond
+  // (select().where()) → una fila ya existente en ese segundo. Debe rechazar sin borrar/insertar.
+  const db = fakeDb(null, null, [{ id: "ya-existe" }]);
+  const app = createApp(deps(db) as any);
+  const res = await postJson(app, "/sessions/from-fit", { fitBase64: buildStrengthFitBase64(), id: FIT_SID, location: "gym" });
+  expect(res.status).toBe(409);
+  expect(db._inserts.some((i: any) => i.table === workoutSession)).toBe(false);
+  expect(db._deletes.some((d: any) => d.table === workoutSession)).toBe(false);
 });
 
 test("POST /sessions/from-fit con un id de otro usuario devuelve 409", async () => {

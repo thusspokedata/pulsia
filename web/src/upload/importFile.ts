@@ -26,6 +26,9 @@ async function importFit(fitBase64: string): Promise<ImportResult> {
     await apiFetch("/sessions/from-fit", { method: "POST", body: { fitBase64, id, location: "gym" } });
     return { kind: "strength" };
   } catch (e) {
+    // 409 = ya se importó este entreno (dedupe por segundo, como cardio). No es un fallo: lo marcamos
+    // duplicado. 422 = no es fuerza → cae a cardio abajo. Cualquier otro error sí propaga.
+    if (e instanceof ApiError && e.status === 409) return { kind: "strength", duplicate: true };
     if (!(e instanceof ApiError) || e.status !== 422) throw e;
   }
   // No es fuerza → cardio: parsear (sin persistir) y armar la CardioActivity con la MISMA

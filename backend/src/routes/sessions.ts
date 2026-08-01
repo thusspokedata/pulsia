@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { Decoder, Stream } from "@garmin/fitsdk";
 import { WorkoutSessionSchema } from "@pulsia/shared";
-import { upsertSession, getSession, listSessions, deleteSession, getRecentSessions, getSessionOwnerId } from "../sessions/repository";
+import { upsertSession, getSession, listSessions, deleteSession, getRecentSessions, getSessionOwnerId, findSessionAtSecond } from "../sessions/repository";
 import { lastWeightByExercise } from "../sessions/lastWeight";
 import { parseFitStrength } from "../cardio/parseFitStrength";
 import { catalogIdForFit } from "../cardio/fitExerciseMap";
@@ -87,6 +87,14 @@ export function sessionsRoutes(deps: AppDeps) {
       if (!validated.success) return c.json({ error: "El .FIT produjo una sesión inválida" }, 400);
       const owner = await getSessionOwnerId(deps.db, body.id);
       if (owner && owner !== userId) return c.json({ error: "esa sesión pertenece a otro usuario" }, 409);
+      // Dedupe del import (espeja /cardio): reimportar el MISMO .FIT de fuerza —la web genera un id
+      // nuevo por subida, así que no choca por PK— no debe crear dos workout_session. Solo aplica a
+      // un id genuinamente nuevo (owner == null); un re-POST del mismo id (owner === userId) sigue al
+      // upsert idempotente, que se encontraría a sí mismo en ese segundo y daría un 409 falso.
+      if (owner == null) {
+        const dup = await findSessionAtSecond(deps.db, userId, startedAt);
+        if (dup) return c.json({ error: "Ya importaste este entrenamiento" }, 409);
+      }
       await upsertSession(deps.db, userId, validated.data);
       return c.json({ id: body.id }, 200);
     } catch (e) {

@@ -18,6 +18,14 @@ test("al elegir archivos, los sube y muestra el resultado por archivo", async ()
   await waitFor(() => expect(screen.getAllByText(/importado|cardio/i).length).toBeGreaterThan(0));
 });
 
+test("un entreno de fuerza duplicado se muestra como 'ya estaba'", async () => {
+  vi.spyOn(importer, "importFile").mockResolvedValue({ kind: "strength", duplicate: true });
+  render(<UploadPage />);
+  const input = screen.getByLabelText(/elegir archivos/i) as HTMLInputElement;
+  await userEvent.upload(input, [new File(["a"], "entreno.fit")]);
+  await waitFor(() => expect(screen.getByText(/ya estaba/i)).toBeInTheDocument());
+});
+
 test("al soltar archivos sobre la zona de drop, los sube igual que el picker", async () => {
   vi.spyOn(importer, "importFile").mockImplementation(async (f: File) =>
     f.name.endsWith(".fit") ? { kind: "cardio", duplicate: false } : { kind: "weight", imported: 2, duplicates: 0 },

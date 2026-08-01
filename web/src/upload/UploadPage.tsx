@@ -7,7 +7,7 @@ function describe(item: BatchItem): string {
   if (item.status === "running") return "subiendo…";
   if (item.status === "error") return `✗ ${item.error}`;
   const r = item.result!;
-  if (r.kind === "strength") return "✓ entreno de fuerza importado";
+  if (r.kind === "strength") return r.duplicate ? "• ya estaba (duplicado)" : "✓ entreno de fuerza importado";
   if (r.kind === "cardio") return r.duplicate ? "• ya estaba (duplicado)" : "✓ actividad importada";
   return `✓ ${r.imported} importados / ${r.duplicates} duplicados (${r.kind})`;
 }

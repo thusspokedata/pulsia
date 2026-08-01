@@ -17,6 +17,12 @@ test(".fit de fuerza: from-fit responde 200 → strength", async () => {
   expect(res).toMatchObject({ kind: "strength" });
 });
 
+test(".fit de fuerza ya importado: from-fit 409 → strength duplicate:true", async () => {
+  vi.stubGlobal("fetch", fetchSeq({ status: 409, body: { error: "Ya importaste este entrenamiento" } }));
+  const res = await importFile(file("entreno.fit"));
+  expect(res).toMatchObject({ kind: "strength", duplicate: true });
+});
+
 test(".fit no-fuerza: from-fit 422 → cae a cardio (parse + post con source/kcalSource)", async () => {
   // El preview de /cardio/parse NO trae source ni kcalSource; buildFitActivity los agrega.
   const preview = { type: "walk", startedAt: 1_700_000_000_000, durationMs: 1_800_000, distanceM: 2500, avgHr: 110, maxHr: 130, elevationGainM: 12, kcal: 150 };
