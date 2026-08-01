@@ -2,7 +2,10 @@
 **/node_modules
 # El build de la SPA se genera dentro de la imagen; ignorar el dist local.
 web/dist
+# El código de mobile no se copia, pero SÍ su package.json: bun necesita todos los
+# manifests de los workspaces del bun.lock para validar el install congelado.
 mobile
+!mobile/package.json
 .git
 .github
 .claude
