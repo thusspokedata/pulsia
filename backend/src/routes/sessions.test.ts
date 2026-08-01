@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import { createApp } from "../app";
+import { SINGLE_USER_ID } from "../constants";
 import { buildStrengthFitBase64, buildStrengthFitWithHrBase64, buildFitFixtureBase64 } from "../cardio/fitFixture";
 import { workoutSession, setLog } from "../db/schema";
 
@@ -244,6 +245,17 @@ test("POST /sessions/from-fit dedupea un entreno ya importado en el mismo segund
   expect(res.status).toBe(409);
   expect(db._inserts.some((i: any) => i.table === workoutSession)).toBe(false);
   expect(db._deletes.some((d: any) => d.table === workoutSession)).toBe(false);
+});
+
+test("POST /sessions/from-fit: re-POST del mismo id por el mismo dueño NO dispara el dedupe (idempotente)", async () => {
+  // owner === userId (SINGLE_USER_ID): re-POST del MISMO id. findSessionAtSecond se encontraría a sí
+  // misma en ese segundo (sessionAtSecond trae la fila), pero el guard owner==null saltea el dedupe y
+  // evita el 409 falso. Debe persistir (upsert idempotente). Blinda la decisión de diseño del guard.
+  const db = fakeDb({ userId: SINGLE_USER_ID }, null, [{ id: FIT_SID }]);
+  const app = createApp(deps(db) as any);
+  const res = await postJson(app, "/sessions/from-fit", { fitBase64: buildStrengthFitBase64(), id: FIT_SID, location: "gym" });
+  expect(res.status).toBe(200);
+  expect(db._inserts.some((i: any) => i.table === workoutSession)).toBe(true);
 });
 
 test("POST /sessions/from-fit con un id de otro usuario devuelve 409", async () => {
