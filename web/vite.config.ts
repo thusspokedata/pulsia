@@ -5,7 +5,7 @@ import path from "node:path";
 
 // El backend Hono corre en :8787 en dev. Se proxean las rutas de API para trabajar same-origin
 // sin CORS (y para que la cookie de sesión funcione igual que en prod).
-const API_PREFIXES = ["/auth", "/cardio", "/sessions", "/metrics", "/health"];
+const API_PREFIXES = ["/auth", "/cardio", "/sessions", "/metrics", "/health", "/nutrition", "/profile"];
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
