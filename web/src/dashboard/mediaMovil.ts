@@ -3,6 +3,7 @@ import type { Point } from "./toSeries";
 // Media móvil CENTRADA: suaviza la tendencia sin los saltos diarios.
 // Para cada punto i promediamos la ventana [i-r, i+r] con r = floor(ventana/2),
 // recortándola contra los bordes para que la línea cubra TODO el rango (sin huecos).
+// Se espera una `ventana` impar: con una par, [i-r, i+r] termina teniendo ventana+1 puntos.
 export function mediaMovil(points: Point[], ventana = 7): Point[] {
   // ventana <= 1 no suaviza nada: devolvemos una copia para no mutar la entrada.
   if (ventana <= 1) return points.map((p) => ({ ...p }));

@@ -5,7 +5,7 @@ import { ConsistencyCard } from "./ConsistencyCard";
 
 export function DashboardPage() {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+    <div className="grid gap-4 md:grid-cols-2">
       <WeightCard />
       <SleepCard />
       <StepsCard />
