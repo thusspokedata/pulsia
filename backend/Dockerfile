@@ -4,15 +4,21 @@ FROM oven/bun:1
 
 WORKDIR /app
 
-# Manifiestos primero (cache de capas). Escribimos un package.json raíz SIN "mobile"
-# para no instalar Expo/React Native en la imagen del backend. Sí incluye "web": la SPA
-# (React+Vite) se buildea acá y el backend Hono la sirve desde /app/web/dist.
+# Manifiestos primero (cache de capas). Copiamos el package.json y el bun.lock REALES
+# del repo para que el install sea reproducible (frozen): las versiones transitivas
+# quedan pineadas por el lockfile, no re-resueltas en cada build.
+# Se copia también mobile/package.json aunque NO instalemos sus deps: el workspace
+# "mobile" figura en el package.json raíz y bun exige que todos los manifests existan
+# para validar el lockfile congelado. --filter '!@pulsia/mobile' excluye a Expo/React
+# Native del install (la SPA web sí se instala y se buildea; el backend la sirve desde
+# /app/web/dist).
+COPY package.json bun.lock ./
 COPY shared/package.json shared/package.json
 COPY backend/package.json backend/package.json
 COPY web/package.json web/package.json
+COPY mobile/package.json mobile/package.json
 COPY tsconfig.base.json ./
-RUN printf '{"name":"pulsia","private":true,"type":"module","workspaces":["shared","backend","web"]}\n' > package.json
-RUN bun install
+RUN bun install --frozen-lockfile --filter '!@pulsia/mobile'
 
 # Código
 COPY shared shared
