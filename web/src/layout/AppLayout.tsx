@@ -30,6 +30,14 @@ export function AppLayout() {
           >
             Subir archivos
           </NavLink>
+          <NavLink
+            to="/alimentacion"
+            className={({ isActive }) =>
+              cn("rounded-md px-3 py-2 text-sm", isActive ? "bg-slate-800 text-white" : "text-slate-300 hover:bg-slate-800/60")
+            }
+          >
+            Alimentación
+          </NavLink>
         </nav>
         <button
           onClick={() => {

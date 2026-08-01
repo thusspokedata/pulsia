@@ -6,6 +6,7 @@ import { DateRangeProvider } from "./dashboard/DateRangeContext";
 import { AppLayout } from "./layout/AppLayout";
 import { DashboardPage } from "./dashboard/DashboardPage";
 import { UploadPage } from "./upload/UploadPage";
+import { AlimentacionPage } from "./alimentacion/AlimentacionPage";
 
 const queryClient = new QueryClient();
 
@@ -20,6 +21,7 @@ export function App() {
                 <Route element={<AppLayout />}>
                   <Route index element={<DashboardPage />} />
                   <Route path="subir" element={<UploadPage />} />
+                  <Route path="alimentacion" element={<AlimentacionPage />} />
                 </Route>
               </Routes>
             </BrowserRouter>
