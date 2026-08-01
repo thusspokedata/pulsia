@@ -1,0 +1,1 @@
+CREATE INDEX "workout_session_user_started_idx" ON "workout_session" USING btree ("user_id","started_at");

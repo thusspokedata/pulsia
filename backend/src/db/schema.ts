@@ -338,7 +338,11 @@ export const workoutSession = pgTable("workout_session", {
   pauseIntervals: jsonb("pause_intervals").$type<{ startedAt: number; endedAt: number }[]>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  // Toda lectura de sesiones es "las del usuario en este rango" (historial, progreso, y el dedupe
+  // por segundo del import de fuerza). Espeja el índice de cardio_activity.
+  byUserStarted: index("workout_session_user_started_idx").on(t.userId, t.startedAt),
+}));
 
 export const sessionExercise = pgTable("session_exercise", {
   id: uuid("id").defaultRandom().primaryKey(),

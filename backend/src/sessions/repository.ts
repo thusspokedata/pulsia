@@ -1,7 +1,8 @@
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, lte } from "drizzle-orm";
 import type { WorkoutSession } from "@pulsia/shared";
 import { sessionCompletionPct } from "@pulsia/shared";
 import type { Db } from "../db/client";
+import { secondWindow } from "../cardio/repository";
 import { workoutSession, sessionExercise, setLog } from "../db/schema";
 
 // --- Mapeo puro: fila anidada de Drizzle -> shape compartido WorkoutSession ---
@@ -88,6 +89,18 @@ export async function getSessionOwnerId(db: Db, id: string): Promise<string | nu
     columns: { userId: true },
   });
   return row?.userId ?? null;
+}
+
+// Dedupe del import de fuerza: el id de una sesión ya existente del mismo usuario cuyo startedAt cae
+// en el mismo segundo, o null. Espeja findCardioAtSecond del lado de cardio y reusa su secondWindow
+// (misma fuente del criterio): el .FIT guarda el timestamp en segundos, así que reimportar el MISMO
+// entreno cae en la misma ventana. Solo lo llama POST /sessions/from-fit para no crear duplicados.
+export async function findSessionAtSecond(db: Db, userId: string, startedAt: number): Promise<string | null> {
+  const { from, to } = secondWindow(startedAt);
+  const rows = await db.select({ id: workoutSession.id }).from(workoutSession).where(
+    and(eq(workoutSession.userId, userId), gte(workoutSession.startedAt, from), lte(workoutSession.startedAt, to)),
+  );
+  return rows[0]?.id ?? null;
 }
 
 export async function getRecentSessions(db: Db, userId: string, limit = 6): Promise<WorkoutSession[]> {

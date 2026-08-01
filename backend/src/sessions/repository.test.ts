@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { rowsToSession, getRecentSessions, getSessionsSince, listSessions, upsertSession } from "./repository";
+import { rowsToSession, getRecentSessions, getSessionsSince, listSessions, upsertSession, findSessionAtSecond } from "./repository";
 import type { WorkoutSession } from "@pulsia/shared";
 
 // Fila anidada tal como la devuelve db.query.workoutSession.findFirst({ with: ... }).
@@ -200,6 +200,19 @@ test("upsertSession inserta pauseIntervals null cuando la sesión no la trae", a
   };
   await upsertSession(db, "u", s);
   expect(insertedValues.pauseIntervals).toBeNull();
+});
+
+// findSessionAtSecond: dedupe del import de fuerza (espeja findCardioAtSecond del lado de cardio).
+test("findSessionAtSecond devuelve el id de la sesión del mismo segundo", async () => {
+  const db: any = { select: () => ({ from: () => ({ where: async () => [{ id: "sesion-existente" }] }) }) };
+  const id = await findSessionAtSecond(db, "u", 1784000000123);
+  expect(id).toBe("sesion-existente");
+});
+
+test("findSessionAtSecond devuelve null si no hay ninguna en ese segundo", async () => {
+  const db: any = { select: () => ({ from: () => ({ where: async () => [] }) }) };
+  const id = await findSessionAtSecond(db, "u", 1784000000123);
+  expect(id).toBeNull();
 });
 
 test("listSessions incluye completionPct y proyecta liviano (sin exercises)", async () => {
