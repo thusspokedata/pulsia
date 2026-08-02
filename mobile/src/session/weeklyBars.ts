@@ -2,7 +2,7 @@
 // día lo hace `dailyBurn.ts`; acá solo se recorta la ventana y se rellenan los días sin actividad.
 
 import { dateKey } from "./dateKey";
-import type { DayBurn } from "./dailyBurn";
+import type { DayBurn } from "@pulsia/shared";
 
 export interface DailyKcal {
   date: string; // YYYY-MM-DD (fecha local)

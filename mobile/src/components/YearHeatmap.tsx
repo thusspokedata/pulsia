@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import Svg, { Rect } from "react-native-svg";
-import { availableYears, buildYearHeatmap, type HeatmapCell } from "../session/heatmap";
-import type { DayBurn } from "../session/dailyBurn";
+import { availableYears, buildYearHeatmap, type HeatmapCell, type DayBurn } from "@pulsia/shared";
 import { colors, radius, spacing } from "../theme/tokens";
 
 const CELL = 12;

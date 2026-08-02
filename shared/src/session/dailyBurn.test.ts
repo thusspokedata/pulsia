@@ -1,5 +1,6 @@
-import { buildDailyBurn } from "../src/session/dailyBurn";
-import { dayExerciseBurn } from "@pulsia/shared";
+import { test, expect } from "bun:test";
+import { buildDailyBurn } from "./dailyBurn";
+import { dayExerciseBurn } from "../nutrition/exerciseBurn";
 
 const ATHLETE = { weightKg: 80, age: 40, sex: "male" as const, bmr: null };
 

@@ -1,4 +1,5 @@
-import { burnThresholds, FIXED_THRESHOLDS, MIN_DAYS_FOR_PERCENTILES } from "../src/session/burnThresholds";
+import { test, expect } from "bun:test";
+import { burnThresholds, FIXED_THRESHOLDS, MIN_DAYS_FOR_PERCENTILES } from "./burnThresholds";
 
 test("con pocos días usa los umbrales fijos", () => {
   const few = [100, 200, 300];

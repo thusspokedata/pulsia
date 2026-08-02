@@ -14,11 +14,8 @@ import { YearHeatmap } from "../../src/components/YearHeatmap";
 import { BarChart } from "../../src/components/BarChart";
 import { buildReadingFromForm, buildBpReadingFromForm, buildReadingForTypes, valuesForDay, type BpForm } from "../../src/session/metricForm";
 import { dayAtNoon, dayLabel } from "../../src/session/metricDate";
-import { availableYears } from "../../src/session/heatmap";
 import { buildDailyKcal } from "../../src/session/weeklyBars";
-import { buildDailyBurn } from "../../src/session/dailyBurn";
-import { burnThresholds } from "../../src/session/burnThresholds";
-import { computeNutritionGoal, BODY_METRIC_TYPES, ACTIVITY_METRIC_TYPES, SUBJECTIVE_METRIC_TYPES, FLOW_METRIC_TYPES, METRIC_LABELS, METRIC_UNITS, type MetricType, type BodyMetric, type PerformanceTrends, type CardioActivity, type TrainingProfile, type NutritionGoalInput } from "@pulsia/shared";
+import { availableYears, buildDailyBurn, burnThresholds, computeNutritionGoal, BODY_METRIC_TYPES, ACTIVITY_METRIC_TYPES, SUBJECTIVE_METRIC_TYPES, FLOW_METRIC_TYPES, METRIC_LABELS, METRIC_UNITS, type MetricType, type BodyMetric, type PerformanceTrends, type CardioActivity, type TrainingProfile, type NutritionGoalInput } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
 // Trío categórico distinguible (incl. daltonismo): teal (acento), azul, ámbar.

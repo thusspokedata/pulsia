@@ -1,5 +1,6 @@
-import { availableYears, buildYearHeatmap } from "../src/session/heatmap";
-import type { DayBurn } from "../src/session/dailyBurn";
+import { test, expect } from "bun:test";
+import { availableYears, buildYearHeatmap } from "./heatmap";
+import type { DayBurn } from "./dailyBurn";
 
 const T: [number, number, number] = [200, 400, 600];
 
