@@ -56,21 +56,23 @@ test(".fit cardio duplicado: /cardio responde 409 → duplicate:true", async () 
   expect(res).toMatchObject({ kind: "cardio", duplicate: true });
 });
 
-test(".csv: prueba weight/parse (vacío) luego steps/parse (con filas) → steps", async () => {
+test(".csv: weight/parse tira 400 (no es peso) → sigue a steps/parse (con filas) → steps", async () => {
+  // Costura real: el endpoint /parse devuelve 400 cuando su parser no reconoce el CSV, NO {rows:[]}.
+  // El parser de peso se prueba primero; un Steps.csv le tira 400 y el probe debe seguir a steps.
   vi.stubGlobal("fetch", fetchSeq(
-    { status: 200, body: { rows: [], skipped: [] } },              // weight/parse
-    { status: 200, body: { rows: [{ date: "2026-01-01" }], skipped: [] } }, // steps/parse
-    { status: 200, body: { imported: 3, duplicates: 1 } },          // steps (persist)
+    { status: 400, body: { error: "No se pudo leer ninguna medición del CSV" } }, // weight/parse (no es peso)
+    { status: 200, body: { rows: [{ date: "2026-01-01" }], skipped: [] } },       // steps/parse (con filas)
+    { status: 200, body: { imported: 3, duplicates: 1 } },                        // steps (persist)
   ));
   const res = await importFile(file("pasos.csv"));
   expect(res).toMatchObject({ kind: "steps", imported: 3, duplicates: 1 });
 });
 
-test(".csv sin match en ningún parser → lanza error de tipo desconocido", async () => {
+test(".csv que ningún parser reconoce (los 3 tiran 400) → error de tipo desconocido", async () => {
   vi.stubGlobal("fetch", fetchSeq(
-    { status: 200, body: { rows: [], skipped: [] } },
-    { status: 200, body: { rows: [], skipped: [] } },
-    { status: 200, body: { rows: [], skipped: [] } },
+    { status: 400, body: { error: "No se pudo leer ninguna medición del CSV" } },
+    { status: 400, body: { error: "No se pudo leer ninguna medición del CSV" } },
+    { status: 400, body: { error: "No se pudo leer ninguna medición del CSV" } },
   ));
   await expect(importFile(file("raro.csv"))).rejects.toThrow(/no se pudo reconocer/i);
 });
