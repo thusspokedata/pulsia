@@ -1,6 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CaloriasCard } from "./CaloriasCard";
 import { MicrosCard } from "./MicrosCard";
+import { DiarioTab } from "./DiarioTab";
 
 const PROXIMAMENTE = <p className="text-sm text-muted-foreground">Próximamente.</p>;
 
@@ -22,7 +23,7 @@ export function AlimentacionPage() {
             <MicrosCard />
           </div>
         </TabsContent>
-        <TabsContent value="diario">{PROXIMAMENTE}</TabsContent>
+        <TabsContent value="diario"><DiarioTab /></TabsContent>
         <TabsContent value="suplementos">{PROXIMAMENTE}</TabsContent>
         <TabsContent value="informes">{PROXIMAMENTE}</TabsContent>
         <TabsContent value="agua">{PROXIMAMENTE}</TabsContent>
