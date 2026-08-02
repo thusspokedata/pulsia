@@ -53,11 +53,20 @@ async function importFit(fitBase64: string): Promise<ImportResult> {
 
 async function importCsv(csvBase64: string): Promise<ImportResult> {
   const tzOffsetMinutes = new Date().getTimezoneOffset();
-  // Probar cada parser (no persiste); el primero que devuelve filas define el tipo.
+  // Probar cada parser (no persiste); el primero que reconoce el CSV define el tipo. OJO: el endpoint
+  // /parse devuelve 400 (no {rows:[]}) cuando SU parser no reconoce el CSV, así que un 400 significa
+  // "no es este tipo, probá el siguiente" — no un fallo del lote. Sin este catch, subir un Steps/Sleep
+  // .csv fallaba con el error del parser de PESO (que se prueba primero) y nunca llegaba a su tipo.
   for (const type of CSV_TYPES) {
-    const preview = await apiFetch<{ rows: unknown[] }>(`/metrics/import/${type}/parse`, {
-      method: "POST", body: { csvBase64, tzOffsetMinutes },
-    });
+    let preview: { rows: unknown[] };
+    try {
+      preview = await apiFetch<{ rows: unknown[] }>(`/metrics/import/${type}/parse`, {
+        method: "POST", body: { csvBase64, tzOffsetMinutes },
+      });
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 400) continue;
+      throw e;
+    }
     if (preview.rows.length > 0) {
       const res = await apiFetch<{ imported: number; duplicates: number }>(`/metrics/import/${type}`, {
         method: "POST", body: { csvBase64, tzOffsetMinutes },
