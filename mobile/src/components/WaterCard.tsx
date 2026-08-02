@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput, Alert } from "react-native";
 import type { WaterLog } from "@pulsia/shared";
 import { Bar } from "../nutrition/tabs/ui";
@@ -21,8 +21,18 @@ export function WaterCard({
   const [overrideMl, setOverrideMl] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [goalInput, setGoalInput] = useState("");
+  const dirty = useRef(false); // el usuario ya editó la meta localmente
 
-  useEffect(() => { void (async () => setOverrideMl(await getWaterGoalOverride()))(); }, []);
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const v = await getWaterGoalOverride();
+      // No pisar una edición local que llegó antes de que resuelva la carga inicial,
+      // ni tocar el estado si el componente ya se desmontó.
+      if (alive && !dirty.current) setOverrideMl(v);
+    })();
+    return () => { alive = false; };
+  }, []);
 
   const goal = computeWaterGoalMl({ overrideMl, weightKg });
   const drank = Math.round(liquid.drank);
@@ -31,6 +41,7 @@ export function WaterCard({
   async function saveGoal() {
     const n = Number(goalInput.replace(",", "."));
     if (Number.isFinite(n) && n > 0) {
+      dirty.current = true;
       await setWaterGoalOverride(n);
       setOverrideMl(Math.round(n));
     }
@@ -38,6 +49,7 @@ export function WaterCard({
   }
 
   async function useAuto() {
+    dirty.current = true;
     await setWaterGoalOverride(null);
     setOverrideMl(null);
     setEditing(false);

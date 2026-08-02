@@ -10,8 +10,11 @@ export function computeWaterGoalMl(input: {
   weightKg?: number | null;
 }): number {
   const { overrideMl, weightKg } = input;
-  if (overrideMl != null && Number.isFinite(overrideMl) && overrideMl > 0) {
-    return Math.round(overrideMl);
+  if (overrideMl != null && Number.isFinite(overrideMl)) {
+    // Un override sub-1 ml (redondea a 0) no es una meta usable: se ignora y cae a auto,
+    // igual que 0 / negativo / NaN. Así get/set/compute quedan coherentes (nunca meta 0).
+    const rounded = Math.round(overrideMl);
+    if (rounded >= 1) return rounded;
   }
   if (weightKg != null && Number.isFinite(weightKg) && weightKg > 0) {
     return Math.round(WATER_ML_PER_KG * weightKg);

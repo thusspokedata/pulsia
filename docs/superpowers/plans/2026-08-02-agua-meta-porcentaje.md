@@ -15,7 +15,7 @@
 
 ---
 
-### Task 1: Cálculo puro de la meta de agua
+## Task 1: Cálculo puro de la meta de agua
 
 **Files:**
 - Create: `mobile/src/nutrition/waterGoal.ts`
@@ -100,7 +100,7 @@ git commit -S -m "feat(agua): cálculo puro de la meta (35 ml/kg + override + fa
 
 ---
 
-### Task 2: Persistencia del override en AsyncStorage
+## Task 2: Persistencia del override en AsyncStorage
 
 **Files:**
 - Create: `mobile/src/storage/waterGoal.ts`
@@ -193,7 +193,7 @@ git commit -S -m "feat(agua): persistir el override de la meta en AsyncStorage"
 
 ---
 
-### Task 3: Componente `WaterCard`
+## Task 3: Componente `WaterCard`
 
 **Files:**
 - Create: `mobile/src/components/WaterCard.tsx`
@@ -406,7 +406,7 @@ git commit -S -m "feat(agua): componente WaterCard (meta, % y borrado con confir
 
 ---
 
-### Task 4: Cablear `WaterCard` en la pantalla + exponer `weightKg`
+## Task 4: Cablear `WaterCard` en la pantalla + exponer `weightKg`
 
 **Files:**
 - Modify: `mobile/src/nutrition/useNutritionDay.ts:73` (agregar `weightKg` al return)

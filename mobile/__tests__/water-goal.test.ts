@@ -20,6 +20,11 @@ test("un override inválido (0, negativo, NaN) se ignora y cae a auto", () => {
   expect(computeWaterGoalMl({ overrideMl: Number.NaN, weightKg: 80 })).toBe(2800);
 });
 
+test("un override sub-1 ml (redondea a 0) se ignora y cae a auto — nunca meta 0", () => {
+  expect(computeWaterGoalMl({ overrideMl: 0.1, weightKg: 80 })).toBe(2800);
+  expect(computeWaterGoalMl({ overrideMl: 0.4, weightKg: null })).toBe(WATER_GOAL_FALLBACK_ML);
+});
+
 test("un peso inválido (0, negativo) cae al fallback", () => {
   expect(computeWaterGoalMl({ overrideMl: null, weightKg: 0 })).toBe(WATER_GOAL_FALLBACK_ML);
   expect(computeWaterGoalMl({ overrideMl: null, weightKg: -10 })).toBe(WATER_GOAL_FALLBACK_ML);

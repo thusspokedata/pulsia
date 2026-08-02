@@ -31,3 +31,10 @@ test("un valor corrupto en storage se lee como null", async () => {
   await AsyncStorage.setItem("pulsia.waterGoalOverrideMl", "wat");
   expect(await getWaterGoalOverride()).toBeNull();
 });
+
+test("un valor sub-1 ml (redondea a 0) no persiste como \"0\": se borra y lee como null", async () => {
+  await setWaterGoalOverride(3000);
+  await setWaterGoalOverride(0.1);
+  expect(await AsyncStorage.getItem("pulsia.waterGoalOverrideMl")).toBeNull();
+  expect(await getWaterGoalOverride()).toBeNull();
+});

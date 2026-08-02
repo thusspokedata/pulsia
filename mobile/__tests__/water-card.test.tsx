@@ -24,14 +24,27 @@ test("+1 vaso llama onAddWater(250)", async () => {
 
 test("borrar el último pide confirmación y solo borra al confirmar", async () => {
   const onUndoLast = jest.fn();
-  jest.spyOn(Alert, "alert").mockImplementation((_t, _m, buttons) => {
-    const confirm = (buttons ?? []).find((b) => b.style === "destructive");
-    confirm?.onPress?.();
-  });
+  let buttons: { text?: string; style?: string; onPress?: () => void }[] = [];
+  jest.spyOn(Alert, "alert").mockImplementation((_t, _m, b) => { buttons = (b ?? []) as typeof buttons; });
   await render(<WaterCard water={water} liquid={liquid} weightKg={80} onAddWater={jest.fn()} onUndoLast={onUndoLast} />);
+
   await fireEvent.press(screen.getByTestId("water-undo"));
   expect(Alert.alert).toHaveBeenCalled();
-  expect(onUndoLast).toHaveBeenCalledTimes(1);
+  expect(onUndoLast).not.toHaveBeenCalled(); // abrir el diálogo no borra
+
+  buttons.find((b) => b.style === "cancel")?.onPress?.();
+  expect(onUndoLast).not.toHaveBeenCalled(); // Cancelar no borra
+
+  buttons.find((b) => b.style === "destructive")?.onPress?.();
+  expect(onUndoLast).toHaveBeenCalledTimes(1); // solo Borrar borra
+});
+
+test("Agregar con el input libre llama onAddWater con el número y limpia el input", async () => {
+  const onAddWater = jest.fn();
+  await render(<WaterCard water={water} liquid={liquid} weightKg={80} onAddWater={onAddWater} onUndoLast={jest.fn()} />);
+  await fireEvent.changeText(screen.getByTestId("water-ml-input"), "330");
+  await fireEvent.press(screen.getByTestId("water-add"));
+  expect(onAddWater).toHaveBeenCalledWith(330);
 });
 
 test("editar la meta guarda el override y lo refleja", async () => {

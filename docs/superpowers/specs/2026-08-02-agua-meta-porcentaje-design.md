@@ -80,7 +80,7 @@ Layout:
 
 `undoLastWater` envuelve el borrado en `Alert.alert`, mismo patrón que `remove(m)` (comidas):
 
-```
+```ts
 Alert.alert("Borrar registro", "¿Borrar el último registro de agua (X ml)?", [
   { text: "Cancelar", style: "cancel" },
   { text: "Borrar", style: "destructive", onPress: <borra> },

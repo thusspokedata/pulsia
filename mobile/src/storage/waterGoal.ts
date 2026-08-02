@@ -11,9 +11,12 @@ export async function getWaterGoalOverride(): Promise<number | null> {
 }
 
 export async function setWaterGoalOverride(ml: number | null): Promise<void> {
-  if (ml == null || !Number.isFinite(ml) || ml <= 0) {
+  // Persistir solo un entero >= 1: un valor sub-1 (que redondearía a "0") equivale a "sin
+  // override" y se borra, para no guardar un "0" que `get` leería de vuelta como null.
+  const rounded = ml != null && Number.isFinite(ml) ? Math.round(ml) : 0;
+  if (rounded < 1) {
     await AsyncStorage.removeItem(KEY);
     return;
   }
-  await AsyncStorage.setItem(KEY, String(Math.round(ml)));
+  await AsyncStorage.setItem(KEY, String(rounded));
 }
