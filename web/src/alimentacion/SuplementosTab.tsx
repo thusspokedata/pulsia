@@ -48,6 +48,9 @@ export function SuplementosTab() {
                 const food = c.foodAvg ?? 0;
                 const total = food + c.suppAvg;
                 const foodPct = total > 0 ? (food / total) * 100 : 0;
+                // Si no hay aporte de ninguno de los dos lados (total 0), ambos segmentos quedan en 0
+                // → barra vacía, no 100% violeta (un nutriente "sin cubrir" no se pinta como suplemento).
+                const suppPct = total > 0 ? 100 - foodPct : 0;
                 return (
                   <li key={c.key}>
                     <div className="mb-1 flex justify-between text-sm">
@@ -56,7 +59,7 @@ export function SuplementosTab() {
                     </div>
                     <div className="flex h-2 overflow-hidden rounded-full bg-secondary">
                       <div style={{ width: `${foodPct}%`, background: "#0E7C86" }} />
-                      <div style={{ width: `${100 - foodPct}%`, background: "#7F77DD" }} />
+                      <div style={{ width: `${suppPct}%`, background: "#7F77DD" }} />
                     </div>
                     <div className="mt-0.5 text-xs text-muted-foreground">
                       comida {Math.round(food)} · suplemento {Math.round(c.suppAvg)} {unit(c.key)} (ref {Math.round(c.ref)})
