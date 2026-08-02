@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ScrollView, View, Text, Pressable, Alert, TextInput } from "react-native";
+import { ScrollView, View, Text, Pressable, Alert } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { deleteMeal, logWater, deleteWater } from "../../src/api/nutrition";
 import { getDayChecklist, putTake } from "../../src/api/supplements";
@@ -10,6 +10,7 @@ import { dayBounds } from "../../src/nutrition/dayBounds";
 import { useNutritionDay } from "../../src/nutrition/useNutritionDay";
 import { macroTargetLabel, remainingLabel } from "../../src/nutrition/goalView";
 import { SupplementChecklist } from "../../src/components/SupplementChecklist";
+import { WaterCard } from "../../src/components/WaterCard";
 import { Bar } from "../../src/nutrition/tabs/ui";
 import type { Meal, DayChecklistEntry, TakeStatus } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
@@ -18,8 +19,7 @@ const SHORT: Record<"protein" | "carbs" | "fat", string> = { protein: "Prot", ca
 
 export default function NutricionScreen() {
   const [offset, setOffset] = useState(0);
-  const [mlInput, setMlInput] = useState("");
-  const { error, setError, meals, water, summary, goalView, baseUrl, reload } = useNutritionDay(offset);
+  const { error, setError, meals, water, summary, goalView, weightKg, baseUrl, reload } = useNutritionDay(offset);
   const { dayTotals, cholesterolMg, liquid } = summary;
   const [checklist, setChecklist] = useState<{ hasPlan: boolean; entries: DayChecklistEntry[] } | null>(null);
 
@@ -127,26 +127,13 @@ export default function NutricionScreen() {
       </Pressable>
 
       {/* Líquido del día */}
-      <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm }}>
-        <Text style={{ color: colors.text, fontSize: 16, fontWeight: "700" }}>💧 Líquido {liquid.total} ml</Text>
-        <Text style={{ color: colors.textMuted, fontSize: 12 }}>tomada {Math.round(liquid.drank)} + alimentos {Math.round(liquid.fromFood)}</Text>
-        <View style={{ flexDirection: "row", gap: spacing.sm, alignItems: "center" }}>
-          <Pressable onPress={() => addWater(250)} style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.md }}>
-            <Text style={{ color: colors.accentText, fontWeight: "600" }}>+1 vaso (250 ml)</Text>
-          </Pressable>
-          <TextInput value={mlInput} onChangeText={setMlInput} keyboardType="numeric" placeholder="ml" placeholderTextColor={colors.icon}
-            style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.sm, color: colors.text }} />
-          <Pressable onPress={() => { const n = Number(mlInput.replace(",", ".")); if (Number.isFinite(n) && n > 0) { void addWater(n); setMlInput(""); } }}
-            style={{ backgroundColor: colors.accent, borderRadius: radius.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.md }}>
-            <Text style={{ color: "#fff", fontWeight: "600" }}>Agregar</Text>
-          </Pressable>
-        </View>
-        {water.length > 0 && (
-          <Pressable onPress={undoLastWater}>
-            <Text style={{ color: colors.accentText, fontSize: 12 }}>Deshacer último ({Math.round(water[water.length - 1].ml)} ml)</Text>
-          </Pressable>
-        )}
-      </View>
+      <WaterCard
+        water={water}
+        liquid={liquid}
+        weightKg={weightKg}
+        onAddWater={addWater}
+        onUndoLast={undoLastWater}
+      />
 
       {/* Suplementos del día */}
       <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm }}>

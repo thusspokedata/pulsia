@@ -24,6 +24,7 @@ export interface NutritionDay {
   // dos vistas del mismo día terminan comparando contra referencias distintas.
   profile: TrainingProfile | null;
   goalResult: NutritionGoalResult | null;
+  weightKg: number | undefined;
   goalView: GoalView | null;
   exercise: number;
   baseUrl: string | null;
@@ -70,5 +71,5 @@ export function useNutritionDay(offset: number): NutritionDay {
       }, exercise)
     : null;
 
-  return { error, setError, meals, water, summary, profile, goalResult, goalView, exercise, baseUrl: baseUrl.current, reload };
+  return { error, setError, meals, water, summary, profile, weightKg, goalResult, goalView, exercise, baseUrl: baseUrl.current, reload };
 }
