@@ -243,6 +243,11 @@ export default function ProgresoScreen() {
     bmr: burnGoal?.status === "ok" ? burnGoal.bmr : null,
   });
   const thresholds = burnThresholds(Array.from(burnByDate.values(), (d) => d.kcal));
+  const heatmapY = heatmapYear ?? new Date().getFullYear();
+  const trainedDays = Array.from(burnByDate.entries()).filter(
+    ([date, d]) => d.kcal > 0 && Number(date.slice(0, 4)) === heatmapY,
+  ).length;
+  const daysInYear = (heatmapY % 4 === 0 && (heatmapY % 100 !== 0 || heatmapY % 400 === 0)) ? 366 : 365;
 
   const chartData = series.map((m) => ({ x: m.measuredAt, y: m.value }));
   const bpCurrent = latest.bp_systolic && latest.bp_diastolic
@@ -430,14 +435,19 @@ export default function ProgresoScreen() {
         ) : sessions.length === 0 && activities.length === 0 ? (
           <Text style={{ color: colors.textMuted }}>Todavía no hay entrenamientos registrados.</Text>
         ) : (
-          <YearHeatmap
-            burnByDate={burnByDate}
-            thresholds={thresholds}
-            sessions={sessions}
-            activities={activities}
-            year={heatmapYear ?? new Date().getFullYear()}
-            onSelectYear={setHeatmapYear}
-          />
+          <>
+            <Text style={{ color: colors.textMuted, fontSize: 13, marginBottom: spacing.xs }}>
+              {trainedDays}/{daysInYear} días
+            </Text>
+            <YearHeatmap
+              burnByDate={burnByDate}
+              thresholds={thresholds}
+              sessions={sessions}
+              activities={activities}
+              year={heatmapY}
+              onSelectYear={setHeatmapYear}
+            />
+          </>
         )}
       </Section>
 
