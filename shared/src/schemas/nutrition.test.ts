@@ -248,3 +248,20 @@ test("FoodMicrosEstimateSchema NO incluye macros (kcal, protein_g, carbs_g, fat_
   for (const k of ["kcal", "protein_g", "carbs_g", "fat_g"]) expect(k in shape).toBe(false);
   for (const k of NUTRIENT_KEYS) expect(k in shape).toBe(true);
 });
+
+// `mine`: flag de lectura del catálogo compartido (lo setea el backend según quién hace el
+// request). `sourceMicros: null` va porque FoodExtractionSchema lo exige (no lo trae el base del
+// enunciado).
+const foodBase = {
+  id: "11111111-1111-4111-8111-111111111111", name: "Banana", basis: "per_100g",
+  kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120,
+  sourceMacros: "ai", sourceMicros: null, searchQuery: "banana", createdAt: 1,
+};
+
+test("FoodSchema: mine es undefined si no viene (retrocompat)", () => {
+  expect(FoodSchema.parse(foodBase).mine).toBeUndefined();
+});
+
+test("FoodSchema: mine true se conserva", () => {
+  expect(FoodSchema.parse({ ...foodBase, mine: true }).mine).toBe(true);
+});

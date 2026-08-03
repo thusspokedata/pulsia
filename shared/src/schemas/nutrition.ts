@@ -95,6 +95,9 @@ export type FoodInput = z.infer<typeof FoodInputSchema>;
 export const FoodSchema = FoodInputSchema.extend({
   id: z.string().uuid(),
   createdAt: z.number().int(),
+  // Sólo lectura: lo setea el backend (no viene en el alta/edición). true si el alimento lo creó
+  // quien hace el request. Es la base del catálogo compartido entre usuarios.
+  mine: z.boolean().optional(),
 });
 export type Food = z.infer<typeof FoodSchema>;
 
