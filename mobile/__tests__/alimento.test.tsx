@@ -199,6 +199,25 @@ test("muestra los macros por 100 g y desde acá se edita el alimento", async () 
   expect(router.push).toHaveBeenCalledWith(`/nutricion/agregar-alimento?foodId=${FOOD_ID}`);
 });
 
+test("en un alimento AJENO (mine=false) no se ofrece editar/actualizar/completar", async () => {
+  // El catálogo es compartido: mutar un alimento ajeno lo rechaza el backend (403), así que la
+  // pantalla ni siquiera muestra los controles. El detalle en sí sigue visible.
+  (getFood as jest.Mock).mockResolvedValue(alimento({ mine: false }));
+  await render(<AlimentoDetalleScreen />);
+  await waitFor(() => expect(screen.getByText("Lentejas cocidas")).toBeTruthy());
+  expect(screen.queryByText("Editar")).toBeNull();
+  expect(screen.queryByTestId("alimento-actualizar")).toBeNull();
+  expect(screen.queryByTestId("alimento-completar-ia")).toBeNull();
+});
+
+test("un alimento PROPIO (mine=true) sí ofrece editar/actualizar/completar", async () => {
+  (getFood as jest.Mock).mockResolvedValue(alimento({ mine: true }));
+  await render(<AlimentoDetalleScreen />);
+  await waitFor(() => expect(screen.getByText("Editar")).toBeTruthy());
+  expect(screen.getByTestId("alimento-actualizar")).toBeTruthy();
+  expect(screen.getByTestId("alimento-completar-ia")).toBeTruthy();
+});
+
 // ---- "Actualizar": traer las vitaminas y minerales de USDA ----
 // Los 80 alimentos cargados antes de la copia local de USDA no tienen micros. El botón los trae, y
 // de paso RE-SNAPSHOTEA las comidas que usan el alimento: por eso hay una confirmación en el medio.

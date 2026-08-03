@@ -193,33 +193,40 @@ export default function AlimentoDetalleScreen() {
         <>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" }}>
             <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text, flex: 1 }}>{food.name}</Text>
-            {/* Trae las vitaminas y minerales de USDA. Los ~80 alimentos cargados antes de la copia
-                local no los tienen, y sin este botón la única forma de conseguirlos era darlos de
-                alta de nuevo (perdiendo el historial de comidas que los referencia). */}
-            <Pressable
-              testID="alimento-actualizar"
-              accessibilityRole="button"
-              onPress={() => void pedirPropuesta()}
-              disabled={cargandoPropuesta}
-              style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, opacity: cargandoPropuesta ? 0.6 : 1 }}
-            >
-              <Text style={{ color: colors.accentText, fontWeight: "600" }}>{cargandoPropuesta ? "Buscando…" : "Actualizar"}</Text>
-            </Pressable>
-            <Pressable
-              testID="alimento-completar-ia"
-              accessibilityRole="button"
-              onPress={() => void pedirPropuestaIA()}
-              disabled={cargandoIA}
-              style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, opacity: cargandoIA ? 0.6 : 1 }}
-            >
-              <Text style={{ color: colors.accentText, fontWeight: "600" }}>{cargandoIA ? "Estimando…" : "Completar con IA"}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => router.push(`/nutricion/agregar-alimento?foodId=${food.id}`)}
-              style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs }}
-            >
-              <Text style={{ color: colors.accentText, fontWeight: "600" }}>Editar</Text>
-            </Pressable>
+            {/* El catálogo es COMPARTIDO: los controles que MUTAN el alimento (Actualizar, Completar
+                con IA, Editar) solo van en los propios. Ajeno = `mine === false`; con `mine` true o
+                undefined (backend viejo) se muestran, por retrocompat. */}
+            {food.mine !== false && (
+              <>
+                {/* Trae las vitaminas y minerales de USDA. Los ~80 alimentos cargados antes de la copia
+                    local no los tienen, y sin este botón la única forma de conseguirlos era darlos de
+                    alta de nuevo (perdiendo el historial de comidas que los referencia). */}
+                <Pressable
+                  testID="alimento-actualizar"
+                  accessibilityRole="button"
+                  onPress={() => void pedirPropuesta()}
+                  disabled={cargandoPropuesta}
+                  style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, opacity: cargandoPropuesta ? 0.6 : 1 }}
+                >
+                  <Text style={{ color: colors.accentText, fontWeight: "600" }}>{cargandoPropuesta ? "Buscando…" : "Actualizar"}</Text>
+                </Pressable>
+                <Pressable
+                  testID="alimento-completar-ia"
+                  accessibilityRole="button"
+                  onPress={() => void pedirPropuestaIA()}
+                  disabled={cargandoIA}
+                  style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, opacity: cargandoIA ? 0.6 : 1 }}
+                >
+                  <Text style={{ color: colors.accentText, fontWeight: "600" }}>{cargandoIA ? "Estimando…" : "Completar con IA"}</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => router.push(`/nutricion/agregar-alimento?foodId=${food.id}`)}
+                  style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs }}
+                >
+                  <Text style={{ color: colors.accentText, fontWeight: "600" }}>Editar</Text>
+                </Pressable>
+              </>
+            )}
           </View>
           <SourceChip sourceMacros={food.sourceMacros} sourceMicros={food.sourceMicros} />
 

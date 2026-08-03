@@ -20,7 +20,11 @@ function emptyResultsMessage(q: string, nutrient: FlaggedNutrient | null): strin
   return causes.length > 0 ? `No se encontraron alimentos ${causes.join(" ")}.` : "No se encontraron alimentos.";
 }
 
-function FoodRow({ food, onDelete }: { food: Food; onDelete: (f: Food) => void }) {
+// El catálogo es COMPARTIDO: el backend marca `mine` según quién hizo el request. Los controles que
+// MUTAN el alimento (acá, Borrar) solo van en los propios. Ajeno = `mine === false`; con `mine` true
+// o undefined (backend viejo) se muestran, por retrocompat.
+export function FoodRow({ food, onDelete }: { food: Food; onDelete: (f: Food) => void }) {
+  const canEdit = food.mine !== false;
   return (
     <View style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
       {/* La fila abre el DETALLE (solo lectura, con los 30 nutrientes), no el formulario: editar
@@ -36,9 +40,13 @@ function FoodRow({ food, onDelete }: { food: Food; onDelete: (f: Food) => void }
         </Text>
         <NutrientFlags food={food} />
       </Pressable>
-      <Pressable onPress={() => onDelete(food)} style={{ padding: spacing.sm }}>
-        <Text style={{ color: colors.danger }}>Borrar</Text>
-      </Pressable>
+      {canEdit ? (
+        <Pressable onPress={() => onDelete(food)} style={{ padding: spacing.sm }}>
+          <Text style={{ color: colors.danger }}>Borrar</Text>
+        </Pressable>
+      ) : (
+        <Text style={{ color: colors.textMuted, fontSize: 12, paddingHorizontal: spacing.sm }}>de la familia</Text>
+      )}
     </View>
   );
 }
