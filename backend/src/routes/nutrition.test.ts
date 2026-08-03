@@ -126,9 +126,19 @@ function fakeDb(opts: {
             joins++;
             return chain;
           },
+          // listFoods hace `.from(food).orderBy(...)` SIN `.where()`: el catálogo compartido no
+          // filtra por usuario. Sin este hermano de `where`, la lista compartida no tendría de dónde
+          // salir.
+          orderBy: async () => (table === food ? (opts.foods ?? []) : []),
           where: (cond?: any) => {
             let rows: any[];
-            if (table === food) rows = opts.foods ?? [];
+            if (table === food) {
+              // Honra el `user_id` del where igual que `query.food.findFirst`: los lookups del
+              // catálogo (createMeal/updateMeal) ya no lo pasan (catálogo compartido), pero si algún
+              // camino lo pasara, el fake debe filtrar de verdad en vez de devolver siempre todo.
+              const userIdPedido = valorDe(cond, "food", "user_id");
+              rows = (opts.foods ?? []).filter((f: any) => userIdPedido === undefined || f.userId === userIdPedido);
+            }
             else if (table === meal) rows = opts.meals ?? [];
             // meal_item JOIN meal: el fake APLICA el join de verdad. Si lo resolviera devolviendo
             // `opts.items` tal cual, un handler que se olvidara del `meal.user_id` —o del join
@@ -315,6 +325,58 @@ test("PATCH /nutrition/foods/:id → 400 con body inválido", async () => {
     body: JSON.stringify({ name: "", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, sourceMacros: "ai", sourceMicros: null }),
   });
   expect(res.status).toBe(400);
+});
+
+// ---- Catálogo COMPARTIDO: lectura/reuso entre usuarios, mutación solo del creador ----
+
+test("GET /nutrition/foods es compartido y marca mine", async () => {
+  const mio = { ...bananaRow, id: FOOD_ID, userId: SINGLE_USER_ID, name: "Banana" };
+  const ajeno = { ...bananaRow, id: "33333333-3333-4333-8333-333333333333", userId: "otro-user", name: "Avena" };
+  const app = createApp(deps(fakeDb({ foods: [mio, ajeno] })));
+  const res = await app.request("/nutrition/foods");
+  expect(res.status).toBe(200);
+  const list: any[] = await res.json();
+  expect(list.find((f) => f.name === "Banana").mine).toBe(true);
+  expect(list.find((f) => f.name === "Avena").mine).toBe(false);
+});
+
+test("GET /nutrition/foods/:id de otro usuario → 200 con mine=false", async () => {
+  const app = createApp(deps(fakeDb({ foodRow: { ...bananaRow, userId: "otro-user" } })));
+  const res = await app.request(`/nutrition/foods/${FOOD_ID}`);
+  expect(res.status).toBe(200);
+  expect((await res.json()).mine).toBe(false);
+});
+
+test("DELETE /nutrition/foods/:id ajeno → 403", async () => {
+  const app = createApp(deps(fakeDb({ foodRow: { ...bananaRow, userId: "otro-user" } })));
+  const res = await app.request(`/nutrition/foods/${FOOD_ID}`, { method: "DELETE" });
+  expect(res.status).toBe(403);
+});
+
+test("DELETE /nutrition/foods/:id propio → 200", async () => {
+  const app = createApp(deps(fakeDb({ foodRow: bananaRow })));
+  const res = await app.request(`/nutrition/foods/${FOOD_ID}`, { method: "DELETE" });
+  expect(res.status).toBe(200);
+});
+
+test("PATCH /nutrition/foods/:id ajeno → 403", async () => {
+  const app = createApp(deps(fakeDb({ foodRow: { ...bananaRow, userId: "otro-user" } })));
+  const res = await app.request(`/nutrition/foods/${FOOD_ID}`, {
+    method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "X", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, sourceMacros: "ai", sourceMicros: null, searchQuery: "x" }),
+  });
+  expect(res.status).toBe(403);
+});
+
+test("POST /nutrition/meals permite usar un alimento de OTRO usuario", async () => {
+  // El alimento es de "otro-user"; el que registra es SINGLE_USER_ID. Debe poder.
+  const ajeno = { ...bananaRow, userId: "otro-user" };
+  const app = createApp(deps(fakeDb({ foods: [ajeno] })));
+  const res = await app.request("/nutrition/meals", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ eatenAt: 1, mealType: "snack", note: null, items: [{ foodId: FOOD_ID, quantity: 100, quantityUnit: "g" }] }),
+  });
+  expect(res.status).toBe(200);
 });
 
 test("GET /nutrition/meals/:id → 200 con la comida", async () => {

@@ -4,7 +4,7 @@ import { FoodInputSchema, FoodIdentificationSchema, MealInputSchema, WaterLogInp
 import { searchUsda, getUsdaFood, type UsdaCandidate } from "../usda/matcher";
 import { assembleFoodExtraction, assembleFoodWithAiMicros } from "../nutrition/assemble";
 import {
-  insertFood, listFoods, getFood, updateFood, updateFoodRow, deleteFood,
+  insertFood, listFoods, getFood, getFoodShared, getFoodOwner, updateFood, updateFoodRow, deleteFood,
   createMeal, listMeals, updateMeal, deleteMeal, getMealById,
   insertWater, listWater, deleteWater,
   getGoalInput, upsertGoalInput,
@@ -244,19 +244,29 @@ export function nutritionRoutes(deps: AppDeps) {
   });
 
   r.get("/foods/:id", async (c) => {
-    const f = await getFood(deps.db, c.get("userId"), c.req.param("id"));
+    const f = await getFoodShared(deps.db, c.req.param("id"), c.get("userId"));
     return f ? c.json(f) : c.json({ error: "No encontrado" }, 404);
   });
 
   r.patch("/foods/:id", async (c) => {
     const parsed = FoodInputSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "Alimento inválido", detail: parsed.error.issues }, 400);
-    const updated = await updateFood(deps.db, c.get("userId"), c.req.param("id"), parsed.data);
+    const userId = c.get("userId");
+    const id = c.req.param("id");
+    const owner = await getFoodOwner(deps.db, id);
+    if (!owner) return c.json({ error: "No encontrado" }, 404);
+    if (owner.userId !== userId) return c.json({ error: "No sos el creador de este alimento" }, 403);
+    const updated = await updateFood(deps.db, userId, id, parsed.data);
     return updated ? c.json(updated) : c.json({ error: "No encontrado" }, 404);
   });
 
   r.delete("/foods/:id", async (c) => {
-    const ok = await deleteFood(deps.db, c.get("userId"), c.req.param("id"));
+    const userId = c.get("userId");
+    const id = c.req.param("id");
+    const owner = await getFoodOwner(deps.db, id);
+    if (!owner) return c.json({ error: "No encontrado" }, 404);
+    if (owner.userId !== userId) return c.json({ error: "No sos el creador de este alimento" }, 403);
+    const ok = await deleteFood(deps.db, userId, id);
     return ok ? c.json({ ok: true }) : c.json({ error: "No encontrado" }, 404);
   });
 
