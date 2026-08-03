@@ -15,7 +15,7 @@ import { BarChart } from "../../src/components/BarChart";
 import { buildReadingFromForm, buildBpReadingFromForm, buildReadingForTypes, valuesForDay, type BpForm } from "../../src/session/metricForm";
 import { dayAtNoon, dayLabel } from "../../src/session/metricDate";
 import { buildDailyKcal } from "../../src/session/weeklyBars";
-import { availableYears, buildDailyBurn, burnThresholds, computeNutritionGoal, BODY_METRIC_TYPES, ACTIVITY_METRIC_TYPES, SUBJECTIVE_METRIC_TYPES, FLOW_METRIC_TYPES, METRIC_LABELS, METRIC_UNITS, type MetricType, type BodyMetric, type PerformanceTrends, type CardioActivity, type TrainingProfile, type NutritionGoalInput } from "@pulsia/shared";
+import { availableYears, buildDailyBurn, burnThresholds, computeNutritionGoal, countTrainedDays, daysInYear, BODY_METRIC_TYPES, ACTIVITY_METRIC_TYPES, SUBJECTIVE_METRIC_TYPES, FLOW_METRIC_TYPES, METRIC_LABELS, METRIC_UNITS, type MetricType, type BodyMetric, type PerformanceTrends, type CardioActivity, type TrainingProfile, type NutritionGoalInput } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
 // Trío categórico distinguible (incl. daltonismo): teal (acento), azul, ámbar.
@@ -244,10 +244,8 @@ export default function ProgresoScreen() {
   });
   const thresholds = burnThresholds(Array.from(burnByDate.values(), (d) => d.kcal));
   const heatmapY = heatmapYear ?? new Date().getFullYear();
-  const trainedDays = Array.from(burnByDate.entries()).filter(
-    ([date, d]) => d.kcal > 0 && Number(date.slice(0, 4)) === heatmapY,
-  ).length;
-  const daysInYear = (heatmapY % 4 === 0 && (heatmapY % 100 !== 0 || heatmapY % 400 === 0)) ? 366 : 365;
+  const trainedDays = countTrainedDays(burnByDate, heatmapY);
+  const daysInYearN = daysInYear(heatmapY);
 
   const chartData = series.map((m) => ({ x: m.measuredAt, y: m.value }));
   const bpCurrent = latest.bp_systolic && latest.bp_diastolic
@@ -437,7 +435,7 @@ export default function ProgresoScreen() {
         ) : (
           <>
             <Text style={{ color: colors.textMuted, fontSize: 13, marginBottom: spacing.xs }}>
-              {trainedDays}/{daysInYear} días
+              {trainedDays}/{daysInYearN} días
             </Text>
             <YearHeatmap
               burnByDate={burnByDate}

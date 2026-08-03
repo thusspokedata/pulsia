@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { availableYears, buildYearHeatmap } from "./heatmap";
+import { availableYears, buildYearHeatmap, daysInYear, countTrainedDays } from "./heatmap";
 import type { DayBurn } from "./dailyBurn";
 
 const T: [number, number, number] = [200, 400, 600];
@@ -178,4 +178,21 @@ test("un año pasado se muestra completo (no se recorta)", () => {
   const { weeks } = buildYearHeatmap(burnMap({}), T, 2024, now);
   const inYear = weeks.flat().filter((c) => c.inYear);
   expect(inYear.length).toBeGreaterThanOrEqual(365);
+});
+
+test("daysInYear: bisiesto vs no bisiesto (regla gregoriana completa)", () => {
+  expect(daysInYear(2024)).toBe(366); // divisible por 4, no por 100
+  expect(daysInYear(2023)).toBe(365); // no divisible por 4
+  expect(daysInYear(2000)).toBe(366); // divisible por 400
+  expect(daysInYear(1900)).toBe(365); // divisible por 100 pero no por 400
+});
+
+test("countTrainedDays cuenta solo días con kcal > 0 del año pedido", () => {
+  const m = new Map<string, DayBurn>([
+    ["2026-01-05", { kcal: 300, strengthKcal: 300, cardioKcal: 0, minutes: 40 }],
+    ["2026-02-10", { kcal: 150, strengthKcal: 0, cardioKcal: 150, minutes: 30 }],
+    ["2026-03-01", { kcal: 0, strengthKcal: 0, cardioKcal: 0, minutes: 0 }], // sin gasto, no cuenta
+    ["2025-06-10", { kcal: 500, strengthKcal: 500, cardioKcal: 0, minutes: 50 }], // otro año, no cuenta
+  ]);
+  expect(countTrainedDays(m, 2026)).toBe(2);
 });
