@@ -2,7 +2,7 @@
 // (fuerza + cardio), no minutos: una caminata de 2 h y una sesión de pesas de 50 min ocupan
 // tiempos muy distintos para esfuerzos parecidos. El gasto por día lo arma `dailyBurn.ts`.
 
-import { dateKey } from "./dateKey";
+import { localDayKey as dateKey } from "./localDayKey";
 import type { DayBurn } from "./dailyBurn";
 
 export interface HeatmapCell {

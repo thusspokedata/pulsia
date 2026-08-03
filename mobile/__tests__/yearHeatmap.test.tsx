@@ -1,6 +1,6 @@
 import { render, fireEvent } from "@testing-library/react-native";
 import { YearHeatmap } from "../src/components/YearHeatmap";
-import type { DayBurn } from "../src/session/dailyBurn";
+import type { DayBurn } from "@pulsia/shared";
 
 function burnMap(entries: Record<string, Partial<DayBurn>>): Map<string, DayBurn> {
   const m = new Map<string, DayBurn>();

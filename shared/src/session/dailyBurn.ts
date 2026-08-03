@@ -10,9 +10,9 @@ import {
   estimateSessionBurn,
   estimateCardioBurn,
   type AthleteBurnArgs,
-  type CardioType,
-} from "@pulsia/shared";
-import { dateKey } from "./dateKey";
+} from "../nutrition/exerciseBurn";
+import type { CardioType } from "../schemas/cardio";
+import { localDayKey as dateKey } from "./localDayKey";
 
 export interface DayBurn {
   kcal: number; // total del día = strengthKcal + cardioKcal

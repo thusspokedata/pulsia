@@ -1,5 +1,5 @@
 import { buildDailyKcal } from "../src/session/weeklyBars";
-import type { DayBurn } from "../src/session/dailyBurn";
+import type { DayBurn } from "@pulsia/shared";
 
 function burnMap(entries: Record<string, number>): Map<string, DayBurn> {
   const m = new Map<string, DayBurn>();
