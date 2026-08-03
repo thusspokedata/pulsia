@@ -1,39 +1,53 @@
 import { useState } from "react";
+import { buildDailyBurn, burnThresholds, availableYears, countTrainedDays, daysInYear, type DayBurn } from "@pulsia/shared";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSessions } from "./useSessions";
-import { countByLocalDay, localDayKey, yearOf } from "./heatmap";
-
-const DAY = 24 * 3600 * 1000;
-
-// Intensidad 0..4 por cantidad de entrenos ese día (paleta teal).
-function color(count: number): string {
-  if (count <= 0) return "#e2e8f0";
-  const shades = ["#99f6e4", "#5eead4", "#2dd4bf", "#0E7C86"];
-  return shades[Math.min(count, shades.length) - 1];
-}
+import { useCardio } from "./useCardio";
+import { useProfile } from "../alimentacion/useProfile";
+import { useNutritionGoal } from "../alimentacion/useNutritionGoal";
+import { YearHeatmapGrid } from "./YearHeatmapGrid";
 
 export function ConsistencyCard() {
-  const { data, isLoading, isError } = useSessions();
-  const years = Array.from(new Set((data ?? []).map((s) => yearOf(s.startedAt)))).sort((a, b) => b - a);
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  // Por defecto se muestra el año más reciente CON datos (no necesariamente el actual); una vez
-  // que el usuario elige, esa elección manda.
-  const year = selectedYear ?? years[0] ?? new Date().getFullYear();
-  const counts = countByLocalDay((data ?? []).map((s) => s.startedAt));
+  const sessionsQ = useSessions();
+  const cardioQ = useCardio();
+  const profileQ = useProfile();
+  const goal = useNutritionGoal();
 
-  // Grilla de todos los días del año elegido.
-  const start = new Date(year, 0, 1).getTime();
-  const end = new Date(year, 11, 31).getTime();
-  const cells: { key: string; count: number }[] = [];
-  for (let t = start; t <= end; t += DAY) {
-    const key = localDayKey(t);
-    cells.push({ key, count: counts.get(key) ?? 0 });
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+
+  const isLoading = sessionsQ.isLoading || cardioQ.isLoading;
+  const isError = sessionsQ.isError || cardioQ.isError;
+
+  const sessions = sessionsQ.data ?? [];
+  const activities = cardioQ.data ?? [];
+  const profile = profileQ.data ?? null;
+
+  const athlete = {
+    weightKg: profile?.weightKg,
+    age: profile?.age,
+    sex: profile?.sex,
+    bmr: goal?.status === "ok" ? goal.bmr : null,
+  };
+  const canComputeBurn = profile?.weightKg != null && profile?.age != null;
+
+  const years = availableYears(sessions, activities);
+  const year = selectedYear ?? years[0] ?? new Date().getFullYear();
+
+  let burnByDate = new Map<string, DayBurn>();
+  let thresholds: [number, number, number] = [0, 0, 0];
+  if (canComputeBurn) {
+    burnByDate = buildDailyBurn(
+      sessions.map((s) => ({ startedAt: s.startedAt, totalDurationMs: s.totalDurationMs, avgHr: s.avgHr })),
+      activities,
+      athlete,
+    );
+    thresholds = burnThresholds(Array.from(burnByDate.values(), (d) => d.kcal));
   }
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle role="heading" aria-level={2}>Constancia de entrenos</CardTitle>
+        <CardTitle role="heading" aria-level={2}>Días entrenados y gasto</CardTitle>
         <select
           value={year}
           onChange={(e) => setSelectedYear(Number(e.target.value))}
@@ -46,12 +60,19 @@ export function ConsistencyCard() {
       <CardContent>
         {isLoading && <p className="text-sm text-muted-foreground">Cargando…</p>}
         {isError && <p role="alert" className="text-sm text-destructive">No se pudo cargar.</p>}
-        {!isLoading && !isError && (
-          <div className="grid grid-flow-col grid-cols-[repeat(53,1fr)] grid-rows-[repeat(7,10px)] gap-0.5">
-            {cells.map((c) => (
-              <div key={c.key} title={`${c.key}: ${c.count}`} className="h-2.5 w-2.5 rounded-sm" style={{ background: color(c.count) }} />
-            ))}
-          </div>
+        {!isLoading && !isError && years.length === 0 && (
+          <p className="text-sm text-muted-foreground">Todavía no hay entrenamientos registrados.</p>
+        )}
+        {!isLoading && !isError && years.length > 0 && !canComputeBurn && (
+          <p className="text-sm text-muted-foreground">Completá peso y edad en tu perfil para ver el gasto.</p>
+        )}
+        {!isLoading && !isError && years.length > 0 && canComputeBurn && (
+          <>
+            <p className="mb-2 text-sm text-muted-foreground">
+              {countTrainedDays(burnByDate, year)}/{daysInYear(year)} días
+            </p>
+            <YearHeatmapGrid burnByDate={burnByDate} thresholds={thresholds} year={year} />
+          </>
         )}
       </CardContent>
     </Card>
