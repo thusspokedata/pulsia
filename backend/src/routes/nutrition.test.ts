@@ -126,9 +126,19 @@ function fakeDb(opts: {
             joins++;
             return chain;
           },
+          // listFoods hace `.from(food).orderBy(...)` SIN `.where()`: el catálogo compartido no
+          // filtra por usuario. Sin este hermano de `where`, la lista compartida no tendría de dónde
+          // salir.
+          orderBy: async () => (table === food ? (opts.foods ?? []) : []),
           where: (cond?: any) => {
             let rows: any[];
-            if (table === food) rows = opts.foods ?? [];
+            if (table === food) {
+              // Honra el `user_id` del where igual que `query.food.findFirst`: los lookups del
+              // catálogo (createMeal/updateMeal) ya no lo pasan (catálogo compartido), pero si algún
+              // camino lo pasara, el fake debe filtrar de verdad en vez de devolver siempre todo.
+              const userIdPedido = valorDe(cond, "food", "user_id");
+              rows = (opts.foods ?? []).filter((f: any) => userIdPedido === undefined || f.userId === userIdPedido);
+            }
             else if (table === meal) rows = opts.meals ?? [];
             // meal_item JOIN meal: el fake APLICA el join de verdad. Si lo resolviera devolviendo
             // `opts.items` tal cual, un handler que se olvidara del `meal.user_id` —o del join
@@ -277,6 +287,21 @@ test("PATCH /nutrition/meals/:id 404 si la comida es de otro usuario (no filtra 
   expect(res.status).toBe(404); // NO 409 — mismo status que "no existe"
 });
 
+test("PATCH /nutrition/meals/:id permite reusar un alimento de OTRO usuario (catálogo compartido)", async () => {
+  // La comida es del usuario actual; el alimento que agrega es de otro. Igual que en POST /meals,
+  // el lookup del catálogo ya no filtra por dueño, así que debe poder (200). La comida sigue siendo suya.
+  const ajeno = { ...bananaRow, userId: "otro-user" };
+  const db = fakeDb({
+    mealFull: { id: MEAL_ID, userId: SINGLE_USER_ID, eatenAt: 1, mealType: null, note: null },
+    meals: [{ id: MEAL_ID, userId: SINGLE_USER_ID, eatenAt: 1, mealType: null, note: null }],
+    foods: [ajeno],
+  });
+  const res = await createApp(deps(db)).request(`/nutrition/meals/${MEAL_ID}`, {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: validMealBody,
+  });
+  expect(res.status).toBe(200);
+});
+
 const MEAL_ID2 = "44444444-4444-4444-8444-444444444444";
 
 test("GET /nutrition/foods/:id → 200 con el alimento", async () => {
@@ -315,6 +340,58 @@ test("PATCH /nutrition/foods/:id → 400 con body inválido", async () => {
     body: JSON.stringify({ name: "", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, sourceMacros: "ai", sourceMicros: null }),
   });
   expect(res.status).toBe(400);
+});
+
+// ---- Catálogo COMPARTIDO: lectura/reuso entre usuarios, mutación solo del creador ----
+
+test("GET /nutrition/foods es compartido y marca mine", async () => {
+  const mio = { ...bananaRow, id: FOOD_ID, userId: SINGLE_USER_ID, name: "Banana" };
+  const ajeno = { ...bananaRow, id: "33333333-3333-4333-8333-333333333333", userId: "otro-user", name: "Avena" };
+  const app = createApp(deps(fakeDb({ foods: [mio, ajeno] })));
+  const res = await app.request("/nutrition/foods");
+  expect(res.status).toBe(200);
+  const list: any[] = await res.json();
+  expect(list.find((f) => f.name === "Banana").mine).toBe(true);
+  expect(list.find((f) => f.name === "Avena").mine).toBe(false);
+});
+
+test("GET /nutrition/foods/:id de otro usuario → 200 con mine=false", async () => {
+  const app = createApp(deps(fakeDb({ foodRow: { ...bananaRow, userId: "otro-user" } })));
+  const res = await app.request(`/nutrition/foods/${FOOD_ID}`);
+  expect(res.status).toBe(200);
+  expect((await res.json()).mine).toBe(false);
+});
+
+test("DELETE /nutrition/foods/:id ajeno → 403", async () => {
+  const app = createApp(deps(fakeDb({ foodRow: { ...bananaRow, userId: "otro-user" } })));
+  const res = await app.request(`/nutrition/foods/${FOOD_ID}`, { method: "DELETE" });
+  expect(res.status).toBe(403);
+});
+
+test("DELETE /nutrition/foods/:id propio → 200", async () => {
+  const app = createApp(deps(fakeDb({ foodRow: bananaRow })));
+  const res = await app.request(`/nutrition/foods/${FOOD_ID}`, { method: "DELETE" });
+  expect(res.status).toBe(200);
+});
+
+test("PATCH /nutrition/foods/:id ajeno → 403", async () => {
+  const app = createApp(deps(fakeDb({ foodRow: { ...bananaRow, userId: "otro-user" } })));
+  const res = await app.request(`/nutrition/foods/${FOOD_ID}`, {
+    method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "X", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, sourceMacros: "ai", sourceMicros: null, searchQuery: "x" }),
+  });
+  expect(res.status).toBe(403);
+});
+
+test("POST /nutrition/meals permite usar un alimento de OTRO usuario", async () => {
+  // El alimento es de "otro-user"; el que registra es SINGLE_USER_ID. Debe poder.
+  const ajeno = { ...bananaRow, userId: "otro-user" };
+  const app = createApp(deps(fakeDb({ foods: [ajeno] })));
+  const res = await app.request("/nutrition/meals", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ eatenAt: 1, mealType: "snack", note: null, items: [{ foodId: FOOD_ID, quantity: 100, quantityUnit: "g" }] }),
+  });
+  expect(res.status).toBe(200);
 });
 
 test("GET /nutrition/meals/:id → 200 con la comida", async () => {
@@ -1015,10 +1092,12 @@ test("aplicar con un fdcId inexistente → 404 y no escribe nada", async () => {
   expect(db._updates).toHaveLength(0);
 });
 
-test("aplicar sobre un alimento de OTRO usuario → 404 y no escribe nada", async () => {
+test("aplicar sobre un alimento de OTRO usuario → 403 y no escribe nada", async () => {
+  // Refinar es mutar: mismo contrato que PATCH/DELETE (403 en ajeno, no 404: el alimento es
+  // visible por la lectura compartida).
   const db = refreshDb({ foodRow: { ...almendraRow, userId: OTRO_USUARIO } });
   const res = await postApply(createApp(deps(db, refreshAi)), applyBody);
-  expect(res.status).toBe(404);
+  expect(res.status).toBe(403);
   expect(db._updates).toHaveLength(0);
 });
 
@@ -1129,9 +1208,10 @@ test("ai-micros-proposal de un alimento de OTRO usuario → 404", async () => {
   expect(res.status).toBe(404);
 });
 
-test("ai-micros-apply de un alimento de OTRO usuario → 404 y no escribe nada", async () => {
+test("ai-micros-apply de un alimento de OTRO usuario → 403 y no escribe nada", async () => {
+  // Igual que usda-apply: refinar lo ajeno se bloquea con 403 (mutación), no 404.
   const db = refreshDb({ foodRow: { ...almendraRow, userId: OTRO_USUARIO } });
   const res = await postAiApply(createApp(deps(db, refreshAi)), aiFoodBody);
-  expect(res.status).toBe(404);
+  expect(res.status).toBe(403);
   expect(db._updates).toHaveLength(0);
 });

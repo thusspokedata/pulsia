@@ -79,13 +79,27 @@ export async function insertFood(db: Db, userId: string, input: FoodInput): Prom
 }
 
 export async function listFoods(db: Db, userId: string): Promise<Food[]> {
-  const rows = await db.select().from(food).where(eq(food.userId, userId)).orderBy(asc(food.name));
-  return rows.map(toFood);
+  // Catálogo COMPARTIDO: se devuelven los alimentos de TODOS. `userId` solo marca cuáles son del
+  // que consulta (editar/borrar es del creador). Ver docs/superpowers/specs/2026-08-03-catalogo-comidas-compartido-design.md
+  const rows = await db.select().from(food).orderBy(asc(food.name));
+  return rows.map((r) => ({ ...toFood(r), mine: r.userId === userId }));
 }
 
 export async function getFood(db: Db, userId: string, id: string): Promise<Food | null> {
   const row = await db.query.food.findFirst({ where: and(eq(food.id, id), eq(food.userId, userId)) });
   return row ? toFood(row) : null;
+}
+
+// Lectura compartida por id: cualquiera puede leer cualquier alimento. `viewerId` solo calcula `mine`.
+export async function getFoodShared(db: Db, id: string, viewerId: string): Promise<Food | null> {
+  const row = await db.query.food.findFirst({ where: eq(food.id, id) });
+  return row ? { ...toFood(row), mine: row.userId === viewerId } : null;
+}
+
+// Solo el creador: distingue 404 (no existe) de 403 (no es tuyo) en las rutas de mutación.
+export async function getFoodOwner(db: Db, id: string): Promise<{ userId: string } | null> {
+  const row = await db.query.food.findFirst({ where: eq(food.id, id), columns: { userId: true } });
+  return row ? { userId: row.userId } : null;
 }
 
 export async function updateFood(db: Db, userId: string, id: string, input: FoodInput): Promise<Food | null> {
@@ -115,9 +129,11 @@ export async function deleteFood(db: Db, userId: string, id: string): Promise<bo
 // ---- Meals ----
 export async function createMeal(db: Db, userId: string, input: MealInput): Promise<Meal> {
   const ids = [...new Set(input.items.map((i) => i.foodId))];
-  const foods = await db.select().from(food).where(and(eq(food.userId, userId), inArray(food.id, ids)));
+  // Catálogo COMPARTIDO: podés registrar tu comida usando un alimento de cualquiera. El aislamiento
+  // de diarios lo da que la `meal` se inserta con `userId`, no este lookup.
+  const foods = await db.select().from(food).where(inArray(food.id, ids));
   const catalog = new Map(foods.map((f) => [f.id, f]));
-  const snapped = snapshotItems(input.items, catalog); // tira MealValidationError si algún foodId no es del usuario
+  const snapped = snapshotItems(input.items, catalog); // tira MealValidationError si algún foodId no está en el catálogo compartido
   return db.transaction(async (tx) => {
     const [mealRow] = await tx.insert(meal).values({
       userId, eatenAt: input.eatenAt, mealType: input.mealType ?? null, note: input.note ?? null,
@@ -157,7 +173,9 @@ export async function updateMeal(db: Db, userId: string, id: string, input: Meal
   const owner = await getMealOwner(db, id);
   if (!owner || owner.userId !== userId) return null;
   const ids = [...new Set(input.items.map((i) => i.foodId))];
-  const foods = await db.select().from(food).where(and(eq(food.userId, userId), inArray(food.id, ids)));
+  // Catálogo COMPARTIDO: igual que en createMeal, el lookup no filtra por usuario. La propiedad de la
+  // comida ya la chequeó `getMealOwner` arriba.
+  const foods = await db.select().from(food).where(inArray(food.id, ids));
   const snapped = snapshotItems(input.items, new Map(foods.map((f) => [f.id, f])));
   await db.transaction(async (tx) => {
     await tx.update(meal).set({ eatenAt: input.eatenAt, mealType: input.mealType ?? null, note: input.note ?? null })
