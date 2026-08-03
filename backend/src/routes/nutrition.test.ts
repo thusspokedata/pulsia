@@ -287,6 +287,21 @@ test("PATCH /nutrition/meals/:id 404 si la comida es de otro usuario (no filtra 
   expect(res.status).toBe(404); // NO 409 — mismo status que "no existe"
 });
 
+test("PATCH /nutrition/meals/:id permite reusar un alimento de OTRO usuario (catálogo compartido)", async () => {
+  // La comida es del usuario actual; el alimento que agrega es de otro. Igual que en POST /meals,
+  // el lookup del catálogo ya no filtra por dueño, así que debe poder (200). La comida sigue siendo suya.
+  const ajeno = { ...bananaRow, userId: "otro-user" };
+  const db = fakeDb({
+    mealFull: { id: MEAL_ID, userId: SINGLE_USER_ID, eatenAt: 1, mealType: null, note: null },
+    meals: [{ id: MEAL_ID, userId: SINGLE_USER_ID, eatenAt: 1, mealType: null, note: null }],
+    foods: [ajeno],
+  });
+  const res = await createApp(deps(db)).request(`/nutrition/meals/${MEAL_ID}`, {
+    method: "PATCH", headers: { "content-type": "application/json" }, body: validMealBody,
+  });
+  expect(res.status).toBe(200);
+});
+
 const MEAL_ID2 = "44444444-4444-4444-8444-444444444444";
 
 test("GET /nutrition/foods/:id → 200 con el alimento", async () => {
@@ -1077,10 +1092,12 @@ test("aplicar con un fdcId inexistente → 404 y no escribe nada", async () => {
   expect(db._updates).toHaveLength(0);
 });
 
-test("aplicar sobre un alimento de OTRO usuario → 404 y no escribe nada", async () => {
+test("aplicar sobre un alimento de OTRO usuario → 403 y no escribe nada", async () => {
+  // Refinar es mutar: mismo contrato que PATCH/DELETE (403 en ajeno, no 404: el alimento es
+  // visible por la lectura compartida).
   const db = refreshDb({ foodRow: { ...almendraRow, userId: OTRO_USUARIO } });
   const res = await postApply(createApp(deps(db, refreshAi)), applyBody);
-  expect(res.status).toBe(404);
+  expect(res.status).toBe(403);
   expect(db._updates).toHaveLength(0);
 });
 
@@ -1191,9 +1208,10 @@ test("ai-micros-proposal de un alimento de OTRO usuario → 404", async () => {
   expect(res.status).toBe(404);
 });
 
-test("ai-micros-apply de un alimento de OTRO usuario → 404 y no escribe nada", async () => {
+test("ai-micros-apply de un alimento de OTRO usuario → 403 y no escribe nada", async () => {
+  // Igual que usda-apply: refinar lo ajeno se bloquea con 403 (mutación), no 404.
   const db = refreshDb({ foodRow: { ...almendraRow, userId: OTRO_USUARIO } });
   const res = await postAiApply(createApp(deps(db, refreshAi)), aiFoodBody);
-  expect(res.status).toBe(404);
+  expect(res.status).toBe(403);
   expect(db._updates).toHaveLength(0);
 });

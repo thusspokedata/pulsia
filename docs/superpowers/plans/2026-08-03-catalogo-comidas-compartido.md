@@ -458,4 +458,3 @@ git commit -S -m "feat(nutrition): en el catálogo, borrar/editar solo en alimen
 - Backend cambia → se despliega a la Pi por el flujo normal.
 - Actualizar la memoria `nutrition-comidas-status` con el catálogo compartido.
 - **Fase 2 (fuera de alcance):** guarda anti-duplicado en `agregar-alimento` (sugerir coincidencias del compartido antes de la IA).
-```

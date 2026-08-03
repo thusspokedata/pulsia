@@ -59,12 +59,15 @@ queries de lectura/reuso. Se agrega un flag de lectura `mine` (calculado, no per
 
 **Mutación → solo el creador (SIN cambio de query, ya filtran por `user_id`):**
 - `updateFood` / `updateFoodRow` / `deleteFood`: siguen con `and(eq(food.id, id), eq(food.userId, userId))`.
-- `usda-proposal` / `usda-apply` / `ai-micros-proposal` / `ai-micros-apply`: ya gateados por
-  `getFood(db, userId, …)` + `updateFoodRow(db, userId, …)` → solo el creador refina. Sin cambio.
+- `usda-proposal` / `ai-micros-proposal` (NO mutan): gateados por `getFood(db, userId, …)` → un
+  alimento ajeno da 404. Sin cambio.
+- `usda-apply` / `ai-micros-apply` (SÍ mutan): pre-chequean con `getFoodOwner` → **403** en alimento
+  ajeno (igual que `PATCH`/`DELETE`), 404 si no existe; el `updateFoodRow(db, userId, …)` sigue
+  scopeado. (Consistencia con las otras mutaciones — se alineó tras la review.)
 
 **Routes — `backend/src/routes/nutrition.ts`:**
 - `GET /foods` y `GET /foods/:id`: setear `mine` en la respuesta.
-- `PUT /foods/:id` (update) y `DELETE /foods/:id`: cuando el alimento **existe pero no es del
+- `PATCH /foods/:id` (update) y `DELETE /foods/:id`: cuando el alimento **existe pero no es del
   usuario**, responder **403** ("no sos el creador"), distinto del 404 "no existe". Requiere
   distinguir "no encontrado" de "no es tuyo": chequear existencia con `getFoodShared` y propiedad con
   el `user_id`. (Hoy devuelven 404 en ambos casos porque el update/delete filtra por user y da null.)
@@ -89,7 +92,7 @@ queries de lectura/reuso. Se agrega un flag de lectura `mine` (calculado, no per
 **Backend (la costura, no solo las piezas):**
 - A crea "banana"; B la ve en `listFoods` (con `mine=false`); A la ve con `mine=true`.
 - B registra una comida usando la "banana" de A → OK; la comida queda como de B.
-- B intenta `PUT`/`DELETE` la "banana" de A → **403**; sigue existiendo.
+- B intenta `PATCH`/`DELETE` (o `usda-apply`/`ai-micros-apply` sobre) la "banana" de A → **403**; sigue existiendo.
 - A `DELETE` su propia "banana" → OK.
 - **Aislamiento:** `listMeals(B)` no incluye comidas de A; A no ve el diario de B.
 - **Re-snapshot:** A refina "banana" con USDA → los `meal_item` de A se re-snapshotean; los de B

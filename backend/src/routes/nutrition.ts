@@ -336,6 +336,12 @@ export function nutritionRoutes(deps: AppDeps) {
     const parsed = AssembleSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "Body inválido", detail: parsed.error.issues }, 400);
 
+    // Refinar es MUTAR: mismo contrato que PATCH/DELETE (catálogo compartido). 404 si no existe,
+    // 403 si es de otro (no 404: el alimento es visible por la lectura compartida, mentir "no existe" confunde).
+    const owner = await getFoodOwner(deps.db, foodId);
+    if (!owner) return c.json({ error: "No encontrado" }, 404);
+    if (owner.userId !== userId) return c.json({ error: "No sos el creador de este alimento" }, 403);
+
     const f = await getFood(deps.db, userId, foodId);
     if (!f) return c.json({ error: "No encontrado" }, 404);
     const usdaRow = await getUsdaFood(deps.db, parsed.data.fdcId);
@@ -399,6 +405,10 @@ export function nutritionRoutes(deps: AppDeps) {
     const foodId = c.req.param("id");
     const parsed = AiApplySchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "Body inválido", detail: parsed.error.issues }, 400);
+    // Refinar es MUTAR: 404 si no existe, 403 si es de otro (igual que PATCH/DELETE, catálogo compartido).
+    const owner = await getFoodOwner(deps.db, foodId);
+    if (!owner) return c.json({ error: "No encontrado" }, 404);
+    if (owner.userId !== userId) return c.json({ error: "No sos el creador de este alimento" }, 403);
     const f = await getFood(deps.db, userId, foodId);
     if (!f) return c.json({ error: "No encontrado" }, 404);
     const bodyRec = parsed.data.food as unknown as Record<string, number | null | undefined>;
