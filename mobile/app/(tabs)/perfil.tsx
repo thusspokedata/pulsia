@@ -5,6 +5,7 @@ import { TrainingProfileSchema, type TrainingProfile } from "@pulsia/shared";
 import { getProfile, setProfile } from "../../src/storage/profile";
 import { getBackendUrl } from "../../src/storage/config";
 import { getLatestMetrics, postReading } from "../../src/api/metrics";
+import { putProfile } from "../../src/api/profile";
 import { weightToRecordOnSave } from "../../src/profile/weightMeasurement";
 import { ChipGroup } from "../../src/components/ChipGroup";
 import { colors, radius, spacing } from "../../src/theme/tokens";
@@ -140,6 +141,15 @@ export default function PerfilScreen() {
     // Si el peso cambió respecto de lo cargado, registrarlo como medición weight_kg (fuente única).
     // No rompemos el guardado del perfil si esto falla (offline, etc.).
     const url = backendUrl.current;
+    // Subir el perfil al backend (fuente de verdad para la web). Best-effort: si el backend
+    // está caído no rompemos el guardado local; se reintenta en el próximo arranque via sync.
+    if (url) {
+      try {
+        await putProfile(url, parsed.data);
+      } catch {
+        /* se sincroniza en el próximo arranque */
+      }
+    }
     const toRecord = weightToRecordOnSave(loadedWeight.current, weightKg);
     if (url && toRecord != null) {
       try {

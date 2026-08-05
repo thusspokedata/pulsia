@@ -23,6 +23,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../src/auth/AuthContext";
 import { colors } from "../src/theme/tokens";
 import { setupRestNotifications } from "../src/notifications/setup";
+import { getBackendUrl } from "../src/storage/config";
+import { syncProfileToBackend } from "../src/profile/syncProfile";
 
 const queryClient = new QueryClient();
 
@@ -37,6 +39,20 @@ function Guarded() {
     if (status === "out" && !inAuth) router.replace("/login");
     else if (status === "in" && inAuth) router.replace("/");
   }, [status, segments, router]);
+
+  // Backfill best-effort del perfil al autenticarse: si el backend no tiene perfil pero el
+  // dispositivo sí, lo sube (ver src/profile/syncProfile.ts). No bloquea el render.
+  useEffect(() => {
+    if (status !== "in") return;
+    (async () => {
+      try {
+        const url = await getBackendUrl();
+        if (url) void syncProfileToBackend(url);
+      } catch {
+        /* sin backend configurado: no hay nada que sincronizar */
+      }
+    })();
+  }, [status]);
 
   if (status === "loading") {
     return (
