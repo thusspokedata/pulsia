@@ -15,8 +15,12 @@ export function ConsistencyCard() {
 
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
-  const isLoading = sessionsQ.isLoading || cardioQ.isLoading;
-  const isError = sessionsQ.isError || cardioQ.isError;
+  // Se incluye el perfil: sin él no se sabe si mostrar el heatmap o el empty state "completá
+  // peso y edad", así que mientras carga es "cargando" y si falla de verdad es "error" (no el
+  // empty state, que sería una remediación equivocada). `useProfile` traga el 404 → null, así
+  // que `isError` solo se prende ante una falla real de /profile.
+  const isLoading = sessionsQ.isLoading || cardioQ.isLoading || profileQ.isLoading;
+  const isError = sessionsQ.isError || cardioQ.isError || profileQ.isError;
 
   const sessions = sessionsQ.data ?? [];
   const activities = cardioQ.data ?? [];
