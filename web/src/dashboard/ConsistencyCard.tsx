@@ -3,6 +3,7 @@ import { buildDailyBurn, burnThresholds, availableYears, countTrainedDays, daysI
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSessions } from "./useSessions";
 import { useCardio } from "./useCardio";
+import { useLatestMetrics } from "./useLatestMetrics";
 import { useProfile } from "../alimentacion/useProfile";
 import { useNutritionGoal } from "../alimentacion/useNutritionGoal";
 import { YearHeatmapGrid } from "./YearHeatmapGrid";
@@ -11,6 +12,7 @@ export function ConsistencyCard() {
   const sessionsQ = useSessions();
   const cardioQ = useCardio();
   const profileQ = useProfile();
+  const latestQ = useLatestMetrics();
   const goal = useNutritionGoal();
 
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
@@ -19,20 +21,22 @@ export function ConsistencyCard() {
   // peso y edad", así que mientras carga es "cargando" y si falla de verdad es "error" (no el
   // empty state, que sería una remediación equivocada). `useProfile` traga el 404 → null, así
   // que `isError` solo se prende ante una falla real de /profile.
-  const isLoading = sessionsQ.isLoading || cardioQ.isLoading || profileQ.isLoading;
-  const isError = sessionsQ.isError || cardioQ.isError || profileQ.isError;
+  const isLoading = sessionsQ.isLoading || cardioQ.isLoading || profileQ.isLoading || latestQ.isLoading;
+  const isError = sessionsQ.isError || cardioQ.isError || profileQ.isError || latestQ.isError;
 
   const sessions = sessionsQ.data ?? [];
   const activities = cardioQ.data ?? [];
   const profile = profileQ.data ?? null;
+  // El peso "actual" es la última medición registrada (igual que el móvil), no el del perfil.
+  const weightKg = latestQ.data?.weight_kg?.value;
 
   const athlete = {
-    weightKg: profile?.weightKg,
+    weightKg,
     age: profile?.age,
     sex: profile?.sex,
     bmr: goal?.status === "ok" ? goal.bmr : null,
   };
-  const canComputeBurn = profile?.weightKg != null && profile?.age != null;
+  const canComputeBurn = weightKg != null && profile?.age != null;
 
   const years = availableYears(sessions, activities);
   const year = selectedYear ?? years[0] ?? new Date().getFullYear();
