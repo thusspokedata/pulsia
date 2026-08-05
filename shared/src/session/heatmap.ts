@@ -29,6 +29,18 @@ function levelFor(kcal: number, [t1, t2, t3]: [number, number, number]): 0 | 1 |
   return 4;
 }
 
+// Cantidad de días de un año (regla gregoriana, incl. siglo/400).
+export function daysInYear(year: number): number {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 366 : 365;
+}
+
+// Días con gasto > 0 dentro del año dado (el "X" del contador X/365 del heatmap).
+export function countTrainedDays(burnByDate: Map<string, DayBurn>, year: number): number {
+  let n = 0;
+  for (const [date, d] of burnByDate) if (d.kcal > 0 && Number(date.slice(0, 4)) === year) n++;
+  return n;
+}
+
 // Años (desc, sin duplicados) con al menos una sesión de fuerza O una actividad de cardio.
 export function availableYears(
   sessions: { startedAt: number }[],
