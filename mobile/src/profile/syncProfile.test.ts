@@ -55,3 +55,19 @@ test("getBackendProfile lanza (offline/backend caído) → no propaga y no sube 
   await expect(syncProfileToBackend(URL)).resolves.toBeUndefined();
   expect(putProfile).not.toHaveBeenCalled();
 });
+
+// Carrera: el usuario guarda un perfil NUEVO mientras el read del backend está en vuelo. El
+// backfill re-lee el local antes de escribir, así sube el valor nuevo y no pisa el guardado
+// reciente con el snapshot viejo.
+test("perfil cambia durante el read del backend → sube el valor NUEVO, no el viejo", async () => {
+  const NEWER_PROFILE: TrainingProfile = { ...LOCAL_PROFILE, age: 42 };
+  (getProfile as jest.Mock)
+    .mockResolvedValueOnce(LOCAL_PROFILE) // snapshot inicial (antes del guardado del usuario)
+    .mockResolvedValueOnce(NEWER_PROFILE); // re-lectura justo antes del PUT (ya con el guardado)
+  (getBackendProfile as jest.Mock).mockResolvedValue(null);
+
+  await syncProfileToBackend(URL);
+
+  expect(putProfile).toHaveBeenCalledTimes(1);
+  expect(putProfile).toHaveBeenCalledWith(URL, NEWER_PROFILE);
+});
