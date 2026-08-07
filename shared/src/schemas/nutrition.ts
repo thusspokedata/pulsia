@@ -11,8 +11,10 @@ export type MealType = z.infer<typeof MealTypeSchema>;
 
 // Procedencia de los macros y de los micros de etiqueta. `estimate` se abrió en `ai` (lo estimó
 // el modelo) y `manual` (lo cargó el usuario a mano): la distinción estaba pendiente en el
-// backlog y la migración se hacía igual.
-export const SourceMacrosSchema = z.enum(["label", "ai", "manual"]);
+// backlog y la migración se hacía igual. `usda` = los macros salieron de la base de composición
+// de USDA (no de una etiqueta, ni de la IA, ni tipeados a mano): lo usa el seed del catálogo
+// base, que arma cada alimento entero desde una fila de USDA. Es una fuente real, como `label`.
+export const SourceMacrosSchema = z.enum(["label", "ai", "manual", "usda"]);
 export type SourceMacros = z.infer<typeof SourceMacrosSchema>;
 
 // Procedencia del bloque de vitaminas y minerales. null = no se pudo matchear contra USDA y el

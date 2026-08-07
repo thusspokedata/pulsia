@@ -148,7 +148,8 @@ test("sourceMicros acepta null (alimento sin match en USDA)", () => {
 });
 
 test("las dos procedencias tienen los valores de la migración", () => {
-  expect(SourceMacrosSchema.options).toEqual(["label", "ai", "manual"]);
+  expect(SourceMacrosSchema.options).toEqual(["label", "ai", "manual", "usda"]);
+  expect(SourceMacrosSchema.safeParse("usda").success).toBe(true); // el seed del catálogo base arma los macros desde USDA
   expect(SourceMicrosSchema.safeParse("usda").success).toBe(true);
   expect(SourceMicrosSchema.safeParse("ai").success).toBe(true);
   expect(SourceMicrosSchema.safeParse("manual").success).toBe(false); // los micros no se cargan a mano
