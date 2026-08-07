@@ -35,12 +35,14 @@ export const SEED_FOODS: SeedFood[] = [
   { name: "Pollo", basis: "per_100g", unitWeightG: null, fdcId: 171052, usda: "Chicken, broilers or fryers, meat only, raw" },
   { name: "Pavo", basis: "per_100g", unitWeightG: null, fdcId: 171098, usda: "Turkey, whole, breast, meat only, raw" },
   { name: "Conejo", basis: "per_100g", unitWeightG: null, fdcId: 174347, usda: "Game meat, rabbit, wild, raw" },
-  { name: "Merluza", basis: "per_100g", unitWeightG: null, fdcId: 173713, usda: "Fish, whiting, mixed species, raw" },
+  // USDA no tiene merluza/hake: whiting es otro gádido blanco magro, nutricionalmente casi idéntico (proxy).
+  { name: "Merluza", basis: "per_100g", unitWeightG: null, fdcId: 173713, usda: "Fish, whiting, mixed species, raw (proxy de merluza)" },
   { name: "Bacalao", basis: "per_100g", unitWeightG: null, fdcId: 2684444, usda: "Fish, cod, Atlantic, wild caught, raw" },
   { name: "Sepia", basis: "per_100g", unitWeightG: null, fdcId: 174215, usda: "Mollusks, cuttlefish, mixed species, raw" },
   { name: "Tilapia", basis: "per_100g", unitWeightG: null, fdcId: 2684442, usda: "Fish, tilapia, farm raised, raw" },
   { name: "Calamar", basis: "per_100g", unitWeightG: null, fdcId: 174223, usda: "Mollusks, squid, mixed species, raw" },
-  { name: "Dorada", basis: "per_100g", unitWeightG: null, fdcId: 175142, usda: "Fish, sea bass, mixed species, raw" },
+  // USDA no tiene dorada (sea bream/gilthead): sea bass es el pescado marino magro más cercano (proxy).
+  { name: "Dorada", basis: "per_100g", unitWeightG: null, fdcId: 175142, usda: "Fish, sea bass, mixed species, raw (proxy de dorada)" },
   { name: "Fiambre de pavo/pollo", basis: "per_100g", unitWeightG: null, fdcId: 172941, usda: "Turkey breast, sliced, prepackaged" },
   { name: "Proteína en polvo", basis: "per_100g", unitWeightG: null, fdcId: 173180, usda: "Beverages, Protein powder whey based" },
   { name: "Queso fresco batido light", basis: "per_100g", unitWeightG: null, fdcId: 173417, usda: "Cheese, cottage, lowfat, 1% milkfat" },
@@ -55,7 +57,8 @@ export const SEED_FOODS: SeedFood[] = [
   { name: "Solomillo de ternera", basis: "per_100g", unitWeightG: null, fdcId: 2727573, usda: "Beef, tenderloin steak, raw" },
   { name: "Solomillo de cerdo", basis: "per_100g", unitWeightG: null, fdcId: 2646169, usda: "Pork, loin, tenderloin, boneless, raw" },
   { name: "Trucha", basis: "per_100g", unitWeightG: null, fdcId: 173717, usda: "Fish, trout, rainbow, farmed, raw" },
-  { name: "Secreto ibérico", basis: "per_100g", unitWeightG: null, fdcId: 2514745, usda: "Pork, ground, raw" },
+  // USDA no tiene el corte "secreto": la carne de cerdo molida es el perfil graso más parecido (proxy).
+  { name: "Secreto ibérico", basis: "per_100g", unitWeightG: null, fdcId: 2514745, usda: "Pork, ground, raw (proxy de secreto)" },
   { name: "Entrecote de ternera", basis: "per_100g", unitWeightG: null, fdcId: 2646172, usda: "Beef, ribeye, steak, boneless, choice, raw" },
   { name: "Vacío de ternera", basis: "per_100g", unitWeightG: null, fdcId: 2646175, usda: "Beef, flank, steak, boneless, choice, raw" },
   { name: "Cordero", basis: "per_100g", unitWeightG: null, fdcId: 2727570, usda: "Lamb, ground, raw" },
@@ -66,7 +69,11 @@ export const SEED_FOODS: SeedFood[] = [
   { name: "Tofu", basis: "per_100g", unitWeightG: null, fdcId: 172475, usda: "Tofu, raw, firm, prepared with calcium sulfate" },
 
   // ---------------------------------------------------------------------- CARBOHIDRATOS
-  { name: "Arroz basmati/integral", basis: "per_100g", unitWeightG: null, fdcId: 2708414, usda: "Rice, brown, cooked, no added fat" },
+  // La imagen los agrupa en una línea ("Arroz basmati/integral"), pero el basmati (blanco) y el
+  // integral (marrón) tienen macros/micros distintos (fibra, magnesio…): se siembran por separado
+  // con la fila que corresponde a cada uno, en vez de mapear los dos al arroz integral.
+  { name: "Arroz basmati", basis: "per_100g", unitWeightG: null, fdcId: 168878, usda: "Rice, white, long-grain, regular, enriched, cooked" },
+  { name: "Arroz integral", basis: "per_100g", unitWeightG: null, fdcId: 2708414, usda: "Rice, brown, cooked, no added fat" },
   { name: "Arroz inflado", basis: "per_100g", unitWeightG: null, fdcId: 173912, usda: "Cereals ready-to-eat, rice, puffed, fortified" },
   { name: "Pasta integral", basis: "per_100g", unitWeightG: null, fdcId: 2708358, usda: "Pasta, whole grain, cooked" },
   { name: "Patata", basis: "per_100g", unitWeightG: null, fdcId: 170026, usda: "Potatoes, flesh and skin, raw" },

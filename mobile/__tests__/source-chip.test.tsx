@@ -19,6 +19,16 @@ test("macros cargados a mano → dice 'a mano', no 'estimado'", async () => {
   expect(screen.queryByText("estimado")).toBeNull();
 });
 
+test("macros de USDA → dice 'USDA' y se destaca como fuente real", async () => {
+  // El seed del catálogo base arma los macros desde USDA: es una fuente real, así que el chip se
+  // destaca (accentSoft) igual que "etiqueta", no como una estimación.
+  await render(<SourceChip sourceMacros="usda" />);
+  const chip = screen.getByTestId("source-chip-usda");
+  expect(screen.getByText("USDA")).toBeTruthy();
+  expect(chip.props.style.backgroundColor).toBe(colors.accentSoft);
+  expect(chip.props.style.backgroundColor).not.toBe(colors.surfaceMuted);
+});
+
 test("el estimado NO usa el ámbar de 'te pasaste': no es un error, es información", async () => {
   await render(<SourceChip sourceMacros="ai" />);
   expect(screen.getByTestId("source-chip-ai").props.style.backgroundColor).not.toBe(colors.warning);

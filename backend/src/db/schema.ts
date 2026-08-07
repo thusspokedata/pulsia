@@ -137,7 +137,7 @@ export const food = pgTable("food", {
   zincMg: real("zinc_mg"),
   unitWeightG: real("unit_weight_g"), // nullable
   // Procedencia partida: los macros y los micros pueden venir de fuentes distintas.
-  sourceMacros: text("source_macros").notNull(), // 'label' | 'ai' | 'manual'
+  sourceMacros: text("source_macros").notNull(), // 'label' | 'ai' | 'manual' | 'usda'
   sourceMicros: text("source_micros"),           // 'usda' | 'ai' | null (null = sin match USDA)
   usdaFdcId: integer("usda_fdc_id"),             // fila de USDA de la que salieron los micros
   createdAt: timestamp("created_at").defaultNow().notNull(),

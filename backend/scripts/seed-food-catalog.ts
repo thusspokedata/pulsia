@@ -5,6 +5,12 @@
 // Idempotente: saltea los alimentos cuyo nombre ya existe en el catálogo (compartido, todos los
 // usuarios), case-insensitive. Corré primero con --dry-run.
 //
+// La idempotencia es leer-nombres → saltear, NO atómica: dos corridas EN PARALELO podrían duplicar.
+// Es aceptable a propósito — esto es una siembra manual de UNA sola vez, corrida por un operador,
+// no un endpoint concurrente. La alternativa (un índice único sobre `food.name`) NO va: el catálogo
+// es compartido y dos usuarios pueden tener legítimamente un alimento con el mismo nombre, así que
+// un único global cambiaría la semántica del alta de comidas de toda la app — fuera de alcance.
+//
 // Uso (en la Pi, con el backend levantado):
 //   SEED_OWNER_ID=<uuid-del-dueño-del-catálogo> \
 //     docker compose -f deploy/docker-compose.yml exec -e SEED_OWNER_ID=... \

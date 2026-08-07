@@ -19,8 +19,8 @@ Queremos sembrar esos ingredientes que faltan, cada uno con su información nutr
   ("Leche desnatada + 1 yogur 0 %", etc.) se **excluyen**.
 - Objetivo ≈ 130 ítems de las imágenes; ya presentes ~12–15 (por nombre equivalente); a sembrar
   ≈ **110–115**.
-- Owner de las filas sembradas: `dae98d70-dc82-4321-83cb-d020bf83beb3` (a.saleme@pm.me), el dueño
-  del catálogo compartido.
+- Owner de las filas sembradas: el dueño del catálogo compartido, pasado por `SEED_OWNER_ID` al
+  correr el script (sin default en código: el repo es público, el UUID del dueño no vive acá).
 
 ## Decisiones
 
@@ -48,9 +48,10 @@ Dos archivos nuevos en `backend/scripts/`:
   agrupada y comentada por grupo de macro. Los `fdcId` se resuelven consultando `usda_food` (vía
   `ssh nextcloud` → `psql`), eligiendo la fila cruda/simple de mejor tipo.
   - Todos `per_100g` (los pocos "líquidos" del set —aceites— USDA los reporta por 100 g).
-  - `unitWeightG` solo para ítems obviamente contables (huevo, frutas de pieza); `null` si no.
-  - Set explícito `ALREADY_COVERED` (o simplemente no incluirlos) para ítems ya presentes con otro
-    nombre (ej. Plátano↔Banana, Almendras↔Almendra) y así no duplicar.
+  - `unitWeightG: null` para TODOS: el plan es por raciones/gramos, no por unidad, y no queremos
+    inventar pesos medios por pieza. La app permite loguear en gramos.
+  - Los ítems ya presentes con otro nombre (Plátano↔Banana, Almendras↔Almendra, etc.) simplemente
+    no se incluyen en la lista, así no se duplican.
 
 - **`seed-food-catalog.ts`** — el ejecutor. Para cada entrada:
   1. `getUsdaFood(db, fdcId)` → fila USDA (34 valores).
@@ -75,9 +76,11 @@ Se testea aparte (fila USDA de fixture → FoodInput esperado).
 
 La imagen del backend trae bun + el código fuente y `WORKDIR /app/backend`, así que corre en la Pi:
 
-```
+```bash
 ssh nextcloud
-docker compose -f ~/pulsia/deploy/docker-compose.yml exec backend bun scripts/seed-food-catalog.ts --dry-run
+export SEED_OWNER_ID=<uuid-del-dueño-del-catálogo>
+docker compose -f ~/pulsia/deploy/docker-compose.yml exec -e SEED_OWNER_ID \
+  backend bun scripts/seed-food-catalog.ts --dry-run
 # revisar salida; luego sin --dry-run
 ```
 
