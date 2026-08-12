@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { getToken, clearToken } from "../storage/authToken";
 import { setUnauthorizedHandler } from "./unauthorized";
 
-type Status = "loading" | "in" | "out";
+export type AuthStatus = "loading" | "in" | "out";
+type Status = AuthStatus;
 type AuthValue = { status: Status; refresh: () => Promise<void>; signOut: () => Promise<void> };
 
 const AuthCtx = createContext<AuthValue | null>(null);

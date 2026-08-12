@@ -16,11 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { Stack, useRouter, useSegments } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../src/auth/AuthContext";
+import { authLanding, NUTRICION_ROUTE } from "../src/auth/landing";
 import { colors } from "../src/theme/tokens";
 import { setupRestNotifications } from "../src/notifications/setup";
 import { getBackendUrl } from "../src/storage/config";
@@ -32,12 +33,17 @@ function Guarded() {
   const { status } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  // Marca si ya hicimos el aterrizaje inicial en esta corrida. Tras el primer landing dejamos de
+  // redirigir, así el `replace("/")` de otros flujos (fin de sesión, generar programa) puede volver
+  // a Programa sin que lo pisemos hacia Nutrición. Ver src/auth/landing.ts.
+  const landedRef = useRef(false);
 
   useEffect(() => {
-    if (status === "loading") return;
     const inAuth = segments[0] === "login" || segments[0] === "registro";
-    if (status === "out" && !inAuth) router.replace("/login");
-    else if (status === "in" && inAuth) router.replace("/");
+    const to = authLanding({ status, inAuth, alreadyLanded: landedRef.current });
+    if (!to) return;
+    if (to === NUTRICION_ROUTE) landedRef.current = true;
+    router.replace(to);
   }, [status, segments, router]);
 
   // Backfill best-effort del perfil al autenticarse: si el backend no tiene perfil pero el

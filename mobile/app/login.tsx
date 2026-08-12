@@ -19,7 +19,7 @@ export default function LoginScreen() {
       const url = await getBackendUrl();
       await login(url, email.trim(), password);
       await refresh();
-      router.replace("/");
+      router.replace("/(tabs)/nutricion");
     } catch (e) {
       setError((e as Error).message || "No se pudo iniciar sesión");
     } finally {

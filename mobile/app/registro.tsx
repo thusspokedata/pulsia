@@ -20,7 +20,7 @@ export default function RegistroScreen() {
       const url = await getBackendUrl();
       await register(url, email.trim(), password, invite.trim());
       await refresh();
-      router.replace("/");
+      router.replace("/(tabs)/nutricion");
     } catch (e) {
       setError((e as Error).message || "No se pudo registrar");
     } finally {
