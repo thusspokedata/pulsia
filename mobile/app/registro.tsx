@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { getBackendUrl } from "../src/storage/config";
 import { register } from "../src/api/auth";
 import { useAuth } from "../src/auth/AuthContext";
+import { NUTRICION_ROUTE } from "../src/auth/landing";
 import { colors, radius, spacing } from "../src/theme/tokens";
 
 export default function RegistroScreen() {
@@ -20,7 +21,7 @@ export default function RegistroScreen() {
       const url = await getBackendUrl();
       await register(url, email.trim(), password, invite.trim());
       await refresh();
-      router.replace("/(tabs)/nutricion");
+      router.replace(NUTRICION_ROUTE);
     } catch (e) {
       setError((e as Error).message || "No se pudo registrar");
     } finally {

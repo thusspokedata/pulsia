@@ -3,13 +3,12 @@ import { getToken, clearToken } from "../storage/authToken";
 import { setUnauthorizedHandler } from "./unauthorized";
 
 export type AuthStatus = "loading" | "in" | "out";
-type Status = AuthStatus;
-type AuthValue = { status: Status; refresh: () => Promise<void>; signOut: () => Promise<void> };
+type AuthValue = { status: AuthStatus; refresh: () => Promise<void>; signOut: () => Promise<void> };
 
 const AuthCtx = createContext<AuthValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<Status>("loading");
+  const [status, setStatus] = useState<AuthStatus>("loading");
 
   async function refresh() {
     const t = await getToken();
