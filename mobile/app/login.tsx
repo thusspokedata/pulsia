@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { getBackendUrl } from "../src/storage/config";
 import { login } from "../src/api/auth";
 import { useAuth } from "../src/auth/AuthContext";
+import { NUTRICION_ROUTE } from "../src/auth/landing";
 import { colors, radius, spacing } from "../src/theme/tokens";
 
 export default function LoginScreen() {
@@ -19,7 +20,7 @@ export default function LoginScreen() {
       const url = await getBackendUrl();
       await login(url, email.trim(), password);
       await refresh();
-      router.replace("/");
+      router.replace(NUTRICION_ROUTE);
     } catch (e) {
       setError((e as Error).message || "No se pudo iniciar sesión");
     } finally {

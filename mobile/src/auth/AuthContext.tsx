@@ -2,13 +2,13 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { getToken, clearToken } from "../storage/authToken";
 import { setUnauthorizedHandler } from "./unauthorized";
 
-type Status = "loading" | "in" | "out";
-type AuthValue = { status: Status; refresh: () => Promise<void>; signOut: () => Promise<void> };
+export type AuthStatus = "loading" | "in" | "out";
+type AuthValue = { status: AuthStatus; refresh: () => Promise<void>; signOut: () => Promise<void> };
 
 const AuthCtx = createContext<AuthValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<Status>("loading");
+  const [status, setStatus] = useState<AuthStatus>("loading");
 
   async function refresh() {
     const t = await getToken();
