@@ -4,7 +4,7 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { getBackendUrl } from "../../src/storage/config";
 import { listFoods, createFood, updateFood, getFood, deleteFood } from "../../src/api/nutrition";
 import { allowedUnits, type MealRow } from "../../src/nutrition/mealForm";
-import { recipeTotals, buildRecipeFoodInput } from "../../src/nutrition/recipeForm";
+import { recipeTotals, buildRecipeFoodInput, parseQuantityInput, filterIngredientMatches } from "../../src/nutrition/recipeForm";
 import type { Food, QuantityUnit } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
@@ -59,8 +59,8 @@ export default function CrearComidaScreen() {
     setQ("");
   }
   function setQty(i: number, v: string) {
-    const n = Number(v.replace(",", "."));
-    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, quantity: Number.isNaN(n) ? 0 : n } : r)));
+    const n = parseQuantityInput(v);
+    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, quantity: n } : r)));
   }
   function setUnit(i: number, unit: QuantityUnit) {
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, unit } : r)));
@@ -80,6 +80,7 @@ export default function CrearComidaScreen() {
     if (name.trim() === "") { setError("Ponele un nombre a la comida."); return; }
     if (rows.length === 0) { setError("Agregá al menos un ingrediente."); return; }
     if (rows.some((r) => r.quantity <= 0)) { setError("Los pesos tienen que ser mayores a 0."); return; }
+    if (rows.some((r) => !Number.isFinite(r.quantity))) { setError("Las cantidades tienen que ser números válidos."); return; }
     if (cookedWeight.trim() !== "" && parsedCookedWeight() == null) { setError("El peso cocido tiene que ser un número mayor a 0 (o dejalo vacío)."); return; }
     if (!baseUrl.current) { setError("No se pudo conectar con el servidor."); return; }
     setSaving(true);
@@ -105,7 +106,7 @@ export default function CrearComidaScreen() {
 
   const hasWeight = rows.some((r) => r.quantity > 0) || parsedCookedWeight() != null;
   const totals = hasWeight ? recipeTotals(rows, parsedCookedWeight()) : null;
-  const matches = q.trim() ? foods.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase())) : [];
+  const matches = filterIngredientMatches(foods, q, foodId);
 
   if (loading) {
     return (
