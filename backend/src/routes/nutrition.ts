@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { FoodInputSchema, FoodIdentificationSchema, MealInputSchema, WaterLogInputSchema, NutritionGoalInputSchema, ReportGenerateInputSchema, NUTRIENT_KEYS, type ReportKind, type FoodExtraction, type FoodIdentification, type FoodMicrosEstimate } from "@pulsia/shared";
+import { FoodInputSchema, FoodIdentificationSchema, MealInputSchema, WaterLogInputSchema, NutritionGoalInputSchema, ReportGenerateInputSchema, NUTRIENT_KEYS, type ReportKind, type FoodExtraction, type FoodIdentification, type FoodInput, type FoodMicrosEstimate } from "@pulsia/shared";
 import { searchUsda, getUsdaFood, type UsdaCandidate } from "../usda/matcher";
 import { assembleFoodExtraction, assembleFoodWithAiMicros } from "../nutrition/assemble";
 import {
@@ -11,10 +11,11 @@ import {
   countMealsWithFood, resnapshotItemsOfFood,
   MealValidationError,
 } from "../nutrition/repository";
+import { applyRecipeDerivation, RecipeValidationError } from "../nutrition/deriveRecipeInput";
 import { identificationFromFood } from "../nutrition/refreshUsda";
 import { resolveAiKey } from "../ai/resolveKey";
-import { settings } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { food, settings } from "../db/schema";
+import { eq, inArray } from "drizzle-orm";
 import { getReport, upsertReport, listReports } from "../reports/repository";
 import { collectReportData, hasAnyData } from "../reports/collect";
 import { appendMemory } from "../memory/repository";
@@ -52,6 +53,27 @@ function parseQueryNumber(raw: string | undefined): number | undefined {
   if (raw == null) return undefined;
   const n = Number(raw);
   return Number.isNaN(n) ? undefined : n;
+}
+
+// Si `input` es una receta, re-deriva su per-100g desde los ingredientes REALES del catálogo (el
+// server no confía en los macros que mandó el cliente — CodeRabbit CR-4). Un alimento común no
+// dispara ninguna consulta extra: sale intacto de `applyRecipeDerivation`. `catalog` sale de una
+// query SIN filtro de usuario: una receta puede referenciar cualquier alimento del catálogo
+// compartido, igual que `snapshotItems` para los ítems de una comida.
+//
+// `excludeFoodId` (solo lo pasa el UPDATE) saca del catálogo la propia fila que se está editando:
+// sin esto, la query trae el snapshot PRE-update de ese id, y una receta que se listara a sí misma
+// como ingrediente derivaría "bien" contra ese snapshot viejo en vez de 400 (defense-in-depth del
+// follow-up de @claude — la UI ya lo bloquea con `filterIngredientMatches`, esto lo cierra también
+// a nivel HTTP crudo). El alta (`POST /foods`) no tiene id todavía: no pasa nada, comportamiento
+// intacto.
+async function resolveFoodInput(deps: AppDeps, input: FoodInput, excludeFoodId?: string): Promise<FoodInput> {
+  if (!input.recipe) return input;
+  const ids = input.recipe.items.map((it) => it.foodId);
+  const rows = await deps.db.select().from(food).where(inArray(food.id, ids));
+  const catalog = new Map(rows.map((r) => [r.id, r]));
+  if (excludeFoodId) catalog.delete(excludeFoodId);
+  return applyRecipeDerivation(input, catalog);
 }
 
 // La respuesta de extract/describe: la extracción persistible + los candidatos de USDA rankeados
@@ -236,7 +258,13 @@ export function nutritionRoutes(deps: AppDeps) {
   r.post("/foods", async (c) => {
     const parsed = FoodInputSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "Alimento inválido", detail: parsed.error.issues }, 400);
-    return c.json(await insertFood(deps.db, c.get("userId"), parsed.data));
+    try {
+      const input = await resolveFoodInput(deps, parsed.data);
+      return c.json(await insertFood(deps.db, c.get("userId"), input));
+    } catch (e) {
+      if (e instanceof RecipeValidationError) return c.json({ error: e.message }, 400);
+      throw e;
+    }
   });
 
   r.get("/foods", async (c) => {
@@ -256,8 +284,14 @@ export function nutritionRoutes(deps: AppDeps) {
     const owner = await getFoodOwner(deps.db, id);
     if (!owner) return c.json({ error: "No encontrado" }, 404);
     if (owner.userId !== userId) return c.json({ error: "No sos el creador de este alimento" }, 403);
-    const updated = await updateFood(deps.db, userId, id, parsed.data);
-    return updated ? c.json(updated) : c.json({ error: "No encontrado" }, 404);
+    try {
+      const input = await resolveFoodInput(deps, parsed.data, id);
+      const updated = await updateFood(deps.db, userId, id, input);
+      return updated ? c.json(updated) : c.json({ error: "No encontrado" }, 404);
+    } catch (e) {
+      if (e instanceof RecipeValidationError) return c.json({ error: e.message }, 400);
+      throw e;
+    }
   });
 
   r.delete("/foods/:id", async (c) => {
@@ -282,6 +316,7 @@ export function nutritionRoutes(deps: AppDeps) {
     const foodId = c.req.param("id");
     const f = await getFood(deps.db, userId, foodId);
     if (!f) return c.json({ error: "No encontrado" }, 404);
+    if (f.recipe) return c.json({ error: "Esta comida es una receta: sus valores se calculan desde los ingredientes. Editala desde 'Crear comida'." }, 400);
 
     const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
     const apiKey = resolveAiKey(settingsRow, deps.config);
@@ -344,6 +379,7 @@ export function nutritionRoutes(deps: AppDeps) {
 
     const f = await getFood(deps.db, userId, foodId);
     if (!f) return c.json({ error: "No encontrado" }, 404);
+    if (f.recipe) return c.json({ error: "Esta comida es una receta: sus valores se calculan desde los ingredientes. Editala desde 'Crear comida'." }, 400);
     const usdaRow = await getUsdaFood(deps.db, parsed.data.fdcId);
     if (!usdaRow) return c.json({ error: "No encontrado" }, 404);
 
@@ -377,6 +413,7 @@ export function nutritionRoutes(deps: AppDeps) {
     const foodId = c.req.param("id");
     const f = await getFood(deps.db, userId, foodId);
     if (!f) return c.json({ error: "No encontrado" }, 404);
+    if (f.recipe) return c.json({ error: "Esta comida es una receta: sus valores se calculan desde los ingredientes. Editala desde 'Crear comida'." }, 400);
     if (!deps.aiClient.estimateFoodMicros) return c.json({ error: "El servidor no soporta estimación de micros." }, 500);
     const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
     const apiKey = resolveAiKey(settingsRow, deps.config);
@@ -411,6 +448,7 @@ export function nutritionRoutes(deps: AppDeps) {
     if (owner.userId !== userId) return c.json({ error: "No sos el creador de este alimento" }, 403);
     const f = await getFood(deps.db, userId, foodId);
     if (!f) return c.json({ error: "No encontrado" }, 404);
+    if (f.recipe) return c.json({ error: "Esta comida es una receta: sus valores se calculan desde los ingredientes. Editala desde 'Crear comida'." }, 400);
     const bodyRec = parsed.data.food as unknown as Record<string, number | null | undefined>;
     const micros: FoodMicrosEstimate = {};
     for (const k of NUTRIENT_KEYS) (micros as Record<string, number | null>)[k] = bodyRec[k] ?? null;

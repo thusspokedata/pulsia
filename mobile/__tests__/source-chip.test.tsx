@@ -63,3 +63,13 @@ test("micros estimados por la IA muestran su propio chip, no destacado", async (
   expect(chip.props.style.backgroundColor).not.toBe(colors.accentSoft);
 });
 
+test("macros compuestos desde una receta → dice 'receta' y se destaca como fuente real", async () => {
+  // Una receta no es una estimación: son los macros de los ingredientes que el usuario compuso.
+  await render(<SourceChip sourceMacros="recipe" sourceMicros={null} />);
+  const chip = screen.getByTestId("source-chip-recipe");
+  expect(chip).toBeTruthy();
+  expect(screen.getByText("receta")).toBeTruthy();
+  expect(chip.props.style.backgroundColor).toBe(colors.accentSoft);
+  expect(chip.props.style.backgroundColor).not.toBe(colors.surfaceMuted);
+});
+

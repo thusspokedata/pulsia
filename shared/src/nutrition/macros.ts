@@ -64,8 +64,10 @@ export function sumNullableMicro(values: Array<number | null | undefined>): numb
   return sumNutrient(values).value;
 }
 
-// Fuente única del cálculo: la usan el móvil (preview) y el backend (snapshot).
-export function foodMacrosForQuantity(food: MacroSource, quantity: number, unit: QuantityUnit): ScaledMacros {
+// Núcleo sin redondear: la usa foodMacrosForQuantity (abajo) y deriveRecipe, que necesita sumar
+// contribuciones crudas de varios ingredientes ANTES de redondear (sumar valores ya redondeados y
+// volver a escalar a por-100g introduce sesgo — ver deriveRecipe).
+export function foodMacrosRaw(food: MacroSource, quantity: number, unit: QuantityUnit): ScaledMacros {
   // Guard de coherencia unidad/basis.
   if (unit === "unit") {
     if (food.unitWeightG == null) throw new Error("El alimento no tiene peso por unidad; cargá gramos/ml.");
@@ -82,15 +84,36 @@ export function foodMacrosForQuantity(food: MacroSource, quantity: number, unit:
   const scaled = {} as Record<string, number | null>;
   for (const n of NUTRIENTS) {
     const v = (food as unknown as Record<string, number | null | undefined>)[n.key];
-    scaled[n.key] = v == null ? null : roundTo(v * factor, n.decimals);
+    scaled[n.key] = v == null ? null : v * factor;
   }
 
   return {
     grams,
-    kcal: Math.round(food.kcal * factor),
-    protein_g: round1(food.protein_g * factor),
-    carbs_g: round1(food.carbs_g * factor),
-    fat_g: round1(food.fat_g * factor),
+    kcal: food.kcal * factor,
+    protein_g: food.protein_g * factor,
+    carbs_g: food.carbs_g * factor,
+    fat_g: food.fat_g * factor,
+    ...scaled,
+  } as ScaledMacros;
+}
+
+// Fuente única del cálculo: la usan el móvil (preview) y el backend (snapshot). Envuelve
+// foodMacrosRaw aplicando el redondeo de siempre — su salida no cambia.
+export function foodMacrosForQuantity(food: MacroSource, quantity: number, unit: QuantityUnit): ScaledMacros {
+  const raw = foodMacrosRaw(food, quantity, unit);
+
+  const scaled = {} as Record<string, number | null>;
+  for (const n of NUTRIENTS) {
+    const v = (raw as unknown as Record<string, number | null>)[n.key];
+    scaled[n.key] = v == null ? null : roundTo(v, n.decimals);
+  }
+
+  return {
+    grams: raw.grams,
+    kcal: Math.round(raw.kcal),
+    protein_g: round1(raw.protein_g),
+    carbs_g: round1(raw.carbs_g),
+    fat_g: round1(raw.fat_g),
     ...scaled,
   } as ScaledMacros;
 }

@@ -11,6 +11,7 @@ import { colors, radius, spacing } from "../theme/tokens";
 //                 "manual" = lo cargó el usuario a mano
 //                 "usda"   = los macros salieron de la base de composición de USDA (seed del
 //                            catálogo base) → fuente real, se destaca igual que "etiqueta"
+//                 "recipe" = macros compuestos desde los ingredientes de una receta → chip "receta"
 //   sourceMicros: "usda"   = las vitaminas y minerales salieron de la base de USDA
 //                 "ai"     = las estimó el modelo → chip "micros IA", sin destacar (es una
 //                            estimación, no un dato de laboratorio)
@@ -28,6 +29,7 @@ const MACROS_LABEL: Record<SourceMacros, string> = {
   ai: "estimado",
   manual: "a mano",
   usda: "USDA",
+  recipe: "receta",
 };
 
 // Los macros de una fuente real (una etiqueta leída, o la base de USDA) se destacan; los estimados
@@ -37,6 +39,7 @@ const MACROS_STRONG: Record<SourceMacros, boolean> = {
   usda: true,
   ai: false,
   manual: false,
+  recipe: true,
 };
 
 function Chip({ text, strong, testID }: { text: string; strong: boolean; testID: string }) {

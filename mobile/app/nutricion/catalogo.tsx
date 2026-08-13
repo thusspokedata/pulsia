@@ -88,9 +88,14 @@ export default function CatalogoScreen() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.md }}>
       <Text style={{ fontSize: 20, fontWeight: "700", color: colors.text }}>Catálogo de alimentos</Text>
-      <Pressable onPress={() => router.push("/nutricion/agregar-alimento")} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
-        <Text style={{ color: "#fff", fontWeight: "600" }}>+ Agregar alimento</Text>
-      </Pressable>
+      <View style={{ flexDirection: "row", gap: spacing.sm }}>
+        <Pressable onPress={() => router.push("/nutricion/agregar-alimento")} style={{ flex: 1, backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
+          <Text style={{ color: "#fff", fontWeight: "600" }}>+ Agregar alimento</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push("/nutricion/crear-comida")} style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
+          <Text style={{ color: colors.text, fontWeight: "600" }}>+ Crear comida</Text>
+        </Pressable>
+      </View>
       <TextInput value={q} onChangeText={setQ} placeholder="Buscar…" placeholderTextColor={colors.icon}
         style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.md, color: colors.text }} />
       {/* Filtrar por nutriente sin alimentos en el catálogo no tiene sentido — abajo va directo

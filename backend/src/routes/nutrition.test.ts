@@ -244,6 +244,84 @@ test("POST /nutrition/foods crea un alimento con micros", async () => {
   });
 });
 
+// CR-4: el server re-deriva la per-100g de una receta desde sus ingredientes REALES en vez de
+// confiar en lo que mandó el cliente. `bananaRow` hace de ingrediente (89 kcal/100g); el body
+// manda un kcal deliberadamente mentiroso (9999) para que el test falle si el server lo persistiera tal cual.
+test("POST /nutrition/foods con recipe re-deriva la per-100g en el server (ignora el kcal del cliente)", async () => {
+  const db = fakeDb({ foods: [bananaRow] });
+  const app = createApp(deps(db));
+  const res = await app.request("/nutrition/foods", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: "Ensalada de banana", basis: "per_100g", kcal: 9999, protein_g: 1, carbs_g: 1, fat_g: 1,
+      unitWeightG: null, sourceMacros: "recipe", sourceMicros: "ai",
+      recipe: { items: [{ foodId: FOOD_ID, quantity: 100, unit: "g" }], cookedWeightG: null },
+    }),
+  });
+  expect(res.status).toBe(200);
+  const inserted = db._inserts.at(-1).rows[0];
+  // 100g de banana (89 kcal/100g) sobre un peso efectivo de 100g → 89 kcal/100g derivado.
+  expect(inserted.kcal).toBe(89);
+  expect(inserted.kcal).not.toBe(9999);
+  expect(inserted.sourceMacros).toBe("recipe");
+  expect(inserted.sourceMicros).toBeNull(); // forzado por ser receta, aunque el body mandó "ai"
+});
+
+test("POST /nutrition/foods con recipe y un ingrediente inexistente → 400 (no 500)", async () => {
+  const db = fakeDb({ foods: [] }); // catálogo vacío: el ingrediente referenciado no existe
+  const app = createApp(deps(db));
+  const res = await app.request("/nutrition/foods", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: "Ensalada fantasma", basis: "per_100g", kcal: 100, protein_g: 1, carbs_g: 1, fat_g: 1,
+      unitWeightG: null, sourceMacros: "recipe", sourceMicros: null,
+      recipe: { items: [{ foodId: FOOD_ID, quantity: 100, unit: "g" }], cookedWeightG: null },
+    }),
+  });
+  expect(res.status).toBe(400);
+  expect(db._inserts).toHaveLength(0);
+});
+
+// F5: al EDITAR una receta, el catálogo que consulta `resolveFoodInput` viene de una query SIN
+// excluir el id que se está editando — la fila pre-update de `bananaRow` (id=FOOD_ID) sale en el
+// `select` como si fuera un ingrediente cualquiera. Sin excluirla, una receta que se lista a sí
+// misma como ingrediente derivaría "bien" (contra su propio snapshot viejo) en vez de 400.
+test("PATCH /nutrition/foods/:id con recipe que se referencia a sí misma → 400, no persiste", async () => {
+  const db = fakeDb({ foodRow: bananaRow, foods: [bananaRow] });
+  const app = createApp(deps(db));
+  const res = await app.request(`/nutrition/foods/${FOOD_ID}`, {
+    method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: "Receta autorreferenciada", basis: "per_100g", kcal: 100, protein_g: 1, carbs_g: 1, fat_g: 1,
+      unitWeightG: null, sourceMacros: "recipe", sourceMicros: null,
+      recipe: { items: [{ foodId: FOOD_ID, quantity: 100, unit: "g" }], cookedWeightG: null },
+    }),
+  });
+  expect(res.status).toBe(400);
+  expect(db._updates).toHaveLength(0);
+});
+
+// Contraprueba de F5: una receta que referencia a OTRO alimento (no a sí misma) se sigue pudiendo
+// editar y re-deriva su per-100g en el server, igual que en el alta (F4).
+test("PATCH /nutrition/foods/:id con recipe que referencia OTRO alimento → 200, re-deriva", async () => {
+  const RECETA_ID = "22222222-2222-4222-8222-222222222222";
+  const recetaRow = { ...bananaRow, id: RECETA_ID, name: "Ensalada de banana" };
+  const db = fakeDb({ foodRow: recetaRow, foods: [bananaRow] }); // bananaRow (FOOD_ID) es el ingrediente, distinto de RECETA_ID
+  const app = createApp(deps(db));
+  const res = await app.request(`/nutrition/foods/${RECETA_ID}`, {
+    method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: "Ensalada de banana", basis: "per_100g", kcal: 9999, protein_g: 1, carbs_g: 1, fat_g: 1,
+      unitWeightG: null, sourceMacros: "recipe", sourceMicros: null,
+      recipe: { items: [{ foodId: FOOD_ID, quantity: 100, unit: "g" }], cookedWeightG: null },
+    }),
+  });
+  expect(res.status).toBe(200);
+  const updated = await res.json();
+  expect(updated.kcal).toBe(89); // derivado de bananaRow (89 kcal/100g), no del 9999 mentiroso del cliente
+  expect(updated.sourceMacros).toBe("recipe");
+});
+
 test("POST /nutrition/meals snapshotea macros desde el catálogo (ignora los del cliente)", async () => {
   const db = fakeDb({ foods: [bananaRow] });
   const app = createApp(deps(db));
@@ -1213,5 +1291,73 @@ test("ai-micros-apply de un alimento de OTRO usuario → 403 y no escribe nada",
   const db = refreshDb({ foodRow: { ...almendraRow, userId: OTRO_USUARIO } });
   const res = await postAiApply(createApp(deps(db, refreshAi)), aiFoodBody);
   expect(res.status).toBe(403);
+  expect(db._updates).toHaveLength(0);
+});
+
+// ---- Guard: ninguna de las 4 rutas de refresh/IA-micros puede tocar una RECETA ----
+//
+// `food.recipe != null` ⇔ es una receta: sus macros/micros se derivan de los ingredientes, no de
+// una fila de USDA ni de una estimación de IA. Las 4 rutas construyen un `FoodExtraction` (que NO
+// tiene `recipe`) y llaman `updateFoodRow`, que hace `recipe: input.recipe ?? null` — aplicar
+// cualquiera de las 4 sobre una receta BORRARÍA sus ingredientes para siempre. `toFood` solo agrega
+// la clave `recipe` cuando `row.recipe` es truthy, así que alcanza con que el fixture la tenga.
+const recetaRow = {
+  ...almendraRow,
+  sourceMacros: "recipe",
+  recipe: { items: [{ foodId: OTRO_FOOD_ID, quantity: 100, unit: "g" }], cookedWeightG: 250 },
+};
+
+// CR-5: el guard tiene que cortar ANTES de tocar la IA, no solo antes de escribir. Se cuentan las
+// llamadas a los 3 métodos que este camino podría invocar (búsqueda/elección/estimación) para que
+// un guard que revisara `f.recipe` DESPUÉS de llamar a la IA (desperdiciando la llamada, o peor,
+// pisándola con datos que después se descartan) se vea en el test.
+function spiedAi() {
+  const calls = { usdaSearchQuery: 0, pickUsdaCandidate: 0, estimateFoodMicros: 0 };
+  const client = {
+    ...refreshAi,
+    usdaSearchQuery: async () => { calls.usdaSearchQuery++; return refreshAi.usdaSearchQuery(); },
+    pickUsdaCandidate: async () => { calls.pickUsdaCandidate++; return refreshAi.pickUsdaCandidate(); },
+    estimateFoodMicros: async () => { calls.estimateFoodMicros++; return aiClient.estimateFoodMicros(); },
+  };
+  return { client, calls };
+}
+
+test("usda-proposal sobre una receta → 400, no llama a la IA de USDA", async () => {
+  const db = refreshDb({ foodRow: recetaRow });
+  const { client, calls } = spiedAi();
+  const res = await postProposal(createApp(deps(db, client)));
+  expect(res.status).toBe(400);
+  expect((await res.json()).error).toMatch(/receta/i);
+  expect(db._updates).toHaveLength(0);
+  expect(calls.usdaSearchQuery).toBe(0);
+  expect(calls.pickUsdaCandidate).toBe(0);
+  expect(calls.estimateFoodMicros).toBe(0);
+});
+
+test("usda-apply sobre una receta → 400 y NO le pisa el campo recipe (no la borra)", async () => {
+  const db = refreshDb({ foodRow: recetaRow });
+  const res = await postApply(createApp(deps(db, refreshAi)), applyBody);
+  expect(res.status).toBe(400);
+  expect((await res.json()).error).toMatch(/receta/i);
+  expect(db._updates).toHaveLength(0); // el UPDATE que nuelearía `recipe` nunca se disparó
+});
+
+test("ai-micros-proposal sobre una receta → 400, no llama a la IA", async () => {
+  const db = refreshDb({ foodRow: recetaRow });
+  const { client, calls } = spiedAi();
+  const res = await postAiProposal(createApp(deps(db, client)));
+  expect(res.status).toBe(400);
+  expect((await res.json()).error).toMatch(/receta/i);
+  expect(db._updates).toHaveLength(0);
+  expect(calls.usdaSearchQuery).toBe(0);
+  expect(calls.pickUsdaCandidate).toBe(0);
+  expect(calls.estimateFoodMicros).toBe(0);
+});
+
+test("ai-micros-apply sobre una receta → 400 y NO le pisa el campo recipe (no la borra)", async () => {
+  const db = refreshDb({ foodRow: recetaRow });
+  const res = await postAiApply(createApp(deps(db, refreshAi)), aiFoodBody);
+  expect(res.status).toBe(400);
+  expect((await res.json()).error).toMatch(/receta/i);
   expect(db._updates).toHaveLength(0);
 });
