@@ -103,7 +103,8 @@ export default function CrearComidaScreen() {
     ]);
   }
 
-  const totals = rows.length > 0 ? recipeTotals(rows, parsedCookedWeight()) : null;
+  const hasWeight = rows.some((r) => r.quantity > 0) || parsedCookedWeight() != null;
+  const totals = hasWeight ? recipeTotals(rows, parsedCookedWeight()) : null;
   const matches = q.trim() ? foods.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase())) : [];
 
   if (loading) {
