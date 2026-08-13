@@ -60,11 +60,19 @@ function parseQueryNumber(raw: string | undefined): number | undefined {
 // dispara ninguna consulta extra: sale intacto de `applyRecipeDerivation`. `catalog` sale de una
 // query SIN filtro de usuario: una receta puede referenciar cualquier alimento del catálogo
 // compartido, igual que `snapshotItems` para los ítems de una comida.
-async function resolveFoodInput(deps: AppDeps, input: FoodInput): Promise<FoodInput> {
+//
+// `excludeFoodId` (solo lo pasa el UPDATE) saca del catálogo la propia fila que se está editando:
+// sin esto, la query trae el snapshot PRE-update de ese id, y una receta que se listara a sí misma
+// como ingrediente derivaría "bien" contra ese snapshot viejo en vez de 400 (defense-in-depth del
+// follow-up de @claude — la UI ya lo bloquea con `filterIngredientMatches`, esto lo cierra también
+// a nivel HTTP crudo). El alta (`POST /foods`) no tiene id todavía: no pasa nada, comportamiento
+// intacto.
+async function resolveFoodInput(deps: AppDeps, input: FoodInput, excludeFoodId?: string): Promise<FoodInput> {
   if (!input.recipe) return input;
   const ids = input.recipe.items.map((it) => it.foodId);
   const rows = await deps.db.select().from(food).where(inArray(food.id, ids));
   const catalog = new Map(rows.map((r) => [r.id, r]));
+  if (excludeFoodId) catalog.delete(excludeFoodId);
   return applyRecipeDerivation(input, catalog);
 }
 
@@ -277,7 +285,7 @@ export function nutritionRoutes(deps: AppDeps) {
     if (!owner) return c.json({ error: "No encontrado" }, 404);
     if (owner.userId !== userId) return c.json({ error: "No sos el creador de este alimento" }, 403);
     try {
-      const input = await resolveFoodInput(deps, parsed.data);
+      const input = await resolveFoodInput(deps, parsed.data, id);
       const updated = await updateFood(deps.db, userId, id, input);
       return updated ? c.json(updated) : c.json({ error: "No encontrado" }, 404);
     } catch (e) {
