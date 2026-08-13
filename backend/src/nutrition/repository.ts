@@ -2,7 +2,7 @@ import { and, asc, eq, gte, lte, inArray } from "drizzle-orm";
 import { food, meal, mealItem, waterLog, nutritionGoal } from "../db/schema";
 import { foodMacrosForQuantity } from "@pulsia/shared";
 import { nutrientsFromRow, nutrientsToColumns } from "./columns";
-import type { Food, FoodInput, Meal, MealItem, MealItemInput, MealInput, NutritionGoalInput, QuantityUnit, WaterLog, WaterLogInput } from "@pulsia/shared";
+import type { Food, FoodInput, Meal, MealItem, MealItemInput, MealInput, NutritionGoalInput, QuantityUnit, Recipe, WaterLog, WaterLogInput } from "@pulsia/shared";
 import type { Db, DbOrTx } from "../db/client";
 
 type FoodRow = typeof food.$inferSelect;
@@ -24,6 +24,9 @@ export function toFood(row: FoodRow): Food {
     sourceMicros: row.sourceMicros as Food["sourceMicros"],
     usdaFdcId: row.usdaFdcId ?? null,
     createdAt: new Date(row.createdAt).getTime(),
+    // Solo presente si es una receta: un alimento común no debe ganar una clave `recipe: null`
+    // que rompa comparaciones exactas de tests/clientes existentes.
+    ...(row.recipe ? { recipe: row.recipe as Recipe } : {}),
   };
 }
 
@@ -73,6 +76,7 @@ export async function insertFood(db: Db, userId: string, input: FoodInput): Prom
     unitWeightG: input.unitWeightG,
     sourceMacros: input.sourceMacros, sourceMicros: input.sourceMicros ?? null,
     usdaFdcId: input.usdaFdcId ?? null,
+    recipe: input.recipe ?? null,
     ...nutrientsToColumns(input),
   }).returning();
   return toFood(row);
@@ -116,6 +120,7 @@ export async function updateFoodRow(db: DbOrTx, userId: string, id: string, inpu
     unitWeightG: input.unitWeightG,
     sourceMacros: input.sourceMacros, sourceMicros: input.sourceMicros ?? null,
     usdaFdcId: input.usdaFdcId ?? null,
+    recipe: input.recipe ?? null,
     ...nutrientsToColumns(input),
   }).where(and(eq(food.id, id), eq(food.userId, userId))).returning();
   return rows[0] ?? null;

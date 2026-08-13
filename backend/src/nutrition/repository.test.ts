@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { snapshotItems, toFood, toMeal, insertWater, deleteWater, getGoalInput, upsertGoalInput } from "./repository";
+import { snapshotItems, toFood, toMeal, insertWater, deleteWater, getGoalInput, upsertGoalInput, insertFood, getFood } from "./repository";
 
 const banana = {
   id: "11111111-1111-4111-8111-111111111111", userId: "u", name: "Banana", basis: "per_100g",
@@ -108,4 +108,52 @@ test("upsertGoalInput inserta con onConflict y devuelve el input", async () => {
   const out = await upsertGoalInput(db, "u", { objective: "gain", rateKgPerWeek: 0.25, manualKcal: null });
   expect(out).toEqual({ objective: "gain", rateKgPerWeek: 0.25, manualKcal: null });
   expect(calls[0]).toMatchObject({ userId: "u", objective: "gain", rateKgPerWeek: 0.25 });
+});
+
+test("insertFood/getFood: round-trip de una receta (recipe jsonb + sourceMacros 'recipe')", async () => {
+  // Ingrediente ya existente en el catálogo (reusa el fixture banana como si fuera el foodId real).
+  const ingredientId = banana.id;
+  const recipe = {
+    items: [{ foodId: ingredientId, quantity: 200, unit: "g" }],
+    cookedWeightG: 500,
+  };
+  const input: any = {
+    name: "Ensalada de pollo", basis: "per_100g", kcal: 120, protein_g: 15, carbs_g: 5, fat_g: 4,
+    unitWeightG: null, sourceMacros: "recipe", sourceMicros: null, usdaFdcId: null,
+    iron_mg: 0.4, recipe,
+  };
+  let savedRow: any;
+  const db: any = {
+    insert: () => ({
+      values(v: any) {
+        savedRow = { id: "recipe-1", createdAt: new Date(0), ...v };
+        return { returning: async () => [savedRow] };
+      },
+    }),
+    query: { food: { findFirst: async () => savedRow } },
+  };
+
+  const created = await insertFood(db, "u", input);
+  expect(created.sourceMacros).toBe("recipe");
+  expect(created.recipe?.cookedWeightG).toBe(500);
+
+  const fetched = await getFood(db, "u", "recipe-1");
+  expect(fetched?.recipe?.items[0]).toMatchObject({ foodId: ingredientId, quantity: 200 });
+});
+
+test("insertFood/toFood: un alimento común NO trae la clave recipe", async () => {
+  const input: any = {
+    name: "Manzana", basis: "per_100g", kcal: 52, protein_g: 0.3, carbs_g: 14, fat_g: 0.2,
+    unitWeightG: 180, sourceMacros: "ai", sourceMicros: null, usdaFdcId: null,
+  };
+  const db: any = {
+    insert: () => ({
+      values(v: any) {
+        const row = { id: "f2", createdAt: new Date(0), ...v };
+        return { returning: async () => [row] };
+      },
+    }),
+  };
+  const created = await insertFood(db, "u", input);
+  expect("recipe" in created).toBe(false);
 });
