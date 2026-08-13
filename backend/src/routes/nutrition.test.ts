@@ -1215,3 +1215,48 @@ test("ai-micros-apply de un alimento de OTRO usuario → 403 y no escribe nada",
   expect(res.status).toBe(403);
   expect(db._updates).toHaveLength(0);
 });
+
+// ---- Guard: ninguna de las 4 rutas de refresh/IA-micros puede tocar una RECETA ----
+//
+// `food.recipe != null` ⇔ es una receta: sus macros/micros se derivan de los ingredientes, no de
+// una fila de USDA ni de una estimación de IA. Las 4 rutas construyen un `FoodExtraction` (que NO
+// tiene `recipe`) y llaman `updateFoodRow`, que hace `recipe: input.recipe ?? null` — aplicar
+// cualquiera de las 4 sobre una receta BORRARÍA sus ingredientes para siempre. `toFood` solo agrega
+// la clave `recipe` cuando `row.recipe` es truthy, así que alcanza con que el fixture la tenga.
+const recetaRow = {
+  ...almendraRow,
+  sourceMacros: "recipe",
+  recipe: { items: [{ foodId: OTRO_FOOD_ID, quantity: 100, unit: "g" }], cookedWeightG: 250 },
+};
+
+test("usda-proposal sobre una receta → 400, no llama a la IA de USDA", async () => {
+  const db = refreshDb({ foodRow: recetaRow });
+  const res = await postProposal(createApp(deps(db, refreshAi)));
+  expect(res.status).toBe(400);
+  expect((await res.json()).error).toMatch(/receta/i);
+  expect(db._updates).toHaveLength(0);
+});
+
+test("usda-apply sobre una receta → 400 y NO le pisa el campo recipe (no la borra)", async () => {
+  const db = refreshDb({ foodRow: recetaRow });
+  const res = await postApply(createApp(deps(db, refreshAi)), applyBody);
+  expect(res.status).toBe(400);
+  expect((await res.json()).error).toMatch(/receta/i);
+  expect(db._updates).toHaveLength(0); // el UPDATE que nuelearía `recipe` nunca se disparó
+});
+
+test("ai-micros-proposal sobre una receta → 400, no llama a la IA", async () => {
+  const db = refreshDb({ foodRow: recetaRow });
+  const res = await postAiProposal(createApp(deps(db, refreshAi)));
+  expect(res.status).toBe(400);
+  expect((await res.json()).error).toMatch(/receta/i);
+  expect(db._updates).toHaveLength(0);
+});
+
+test("ai-micros-apply sobre una receta → 400 y NO le pisa el campo recipe (no la borra)", async () => {
+  const db = refreshDb({ foodRow: recetaRow });
+  const res = await postAiApply(createApp(deps(db, refreshAi)), aiFoodBody);
+  expect(res.status).toBe(400);
+  expect((await res.json()).error).toMatch(/receta/i);
+  expect(db._updates).toHaveLength(0);
+});

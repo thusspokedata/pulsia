@@ -218,6 +218,20 @@ test("un alimento PROPIO (mine=true) sí ofrece editar/actualizar/completar", as
   expect(screen.getByTestId("alimento-completar-ia")).toBeTruthy();
 });
 
+test("una RECETA propia no ofrece Actualizar ni Completar con IA (borrarían los ingredientes), pero sí Editar", async () => {
+  // `food.recipe` presente = receta: sus valores salen de los ingredientes, no de USDA ni de una
+  // estimación de IA. Aplicar cualquiera de las dos acciones sobre una receta nuclearía `recipe`
+  // en el backend (ver el guard en nutrition.ts), así que la pantalla ni siquiera las ofrece.
+  (getFood as jest.Mock).mockResolvedValue(alimento({
+    mine: true, sourceMacros: "recipe",
+    recipe: { items: [{ foodId: "22222222-2222-4222-8222-222222222222", quantity: 100, unit: "g" }], cookedWeightG: 250 },
+  }));
+  await render(<AlimentoDetalleScreen />);
+  await waitFor(() => expect(screen.getByText("Editar")).toBeTruthy());
+  expect(screen.queryByTestId("alimento-actualizar")).toBeNull();
+  expect(screen.queryByTestId("alimento-completar-ia")).toBeNull();
+});
+
 // ---- "Actualizar": traer las vitaminas y minerales de USDA ----
 // Los 80 alimentos cargados antes de la copia local de USDA no tienen micros. El botón los trae, y
 // de paso RE-SNAPSHOTEA las comidas que usan el alimento: por eso hay una confirmación en el medio.

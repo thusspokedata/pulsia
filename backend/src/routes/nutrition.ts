@@ -282,6 +282,7 @@ export function nutritionRoutes(deps: AppDeps) {
     const foodId = c.req.param("id");
     const f = await getFood(deps.db, userId, foodId);
     if (!f) return c.json({ error: "No encontrado" }, 404);
+    if (f.recipe) return c.json({ error: "Esta comida es una receta: sus valores se calculan desde los ingredientes. Editala desde 'Crear comida'." }, 400);
 
     const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
     const apiKey = resolveAiKey(settingsRow, deps.config);
@@ -344,6 +345,7 @@ export function nutritionRoutes(deps: AppDeps) {
 
     const f = await getFood(deps.db, userId, foodId);
     if (!f) return c.json({ error: "No encontrado" }, 404);
+    if (f.recipe) return c.json({ error: "Esta comida es una receta: sus valores se calculan desde los ingredientes. Editala desde 'Crear comida'." }, 400);
     const usdaRow = await getUsdaFood(deps.db, parsed.data.fdcId);
     if (!usdaRow) return c.json({ error: "No encontrado" }, 404);
 
@@ -377,6 +379,7 @@ export function nutritionRoutes(deps: AppDeps) {
     const foodId = c.req.param("id");
     const f = await getFood(deps.db, userId, foodId);
     if (!f) return c.json({ error: "No encontrado" }, 404);
+    if (f.recipe) return c.json({ error: "Esta comida es una receta: sus valores se calculan desde los ingredientes. Editala desde 'Crear comida'." }, 400);
     if (!deps.aiClient.estimateFoodMicros) return c.json({ error: "El servidor no soporta estimación de micros." }, 500);
     const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
     const apiKey = resolveAiKey(settingsRow, deps.config);
@@ -411,6 +414,7 @@ export function nutritionRoutes(deps: AppDeps) {
     if (owner.userId !== userId) return c.json({ error: "No sos el creador de este alimento" }, 403);
     const f = await getFood(deps.db, userId, foodId);
     if (!f) return c.json({ error: "No encontrado" }, 404);
+    if (f.recipe) return c.json({ error: "Esta comida es una receta: sus valores se calculan desde los ingredientes. Editala desde 'Crear comida'." }, 400);
     const bodyRec = parsed.data.food as unknown as Record<string, number | null | undefined>;
     const micros: FoodMicrosEstimate = {};
     for (const k of NUTRIENT_KEYS) (micros as Record<string, number | null>)[k] = bodyRec[k] ?? null;

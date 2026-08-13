@@ -200,25 +200,33 @@ export default function AlimentoDetalleScreen() {
               <>
                 {/* Trae las vitaminas y minerales de USDA. Los ~80 alimentos cargados antes de la copia
                     local no los tienen, y sin este botón la única forma de conseguirlos era darlos de
-                    alta de nuevo (perdiendo el historial de comidas que los referencia). */}
-                <Pressable
-                  testID="alimento-actualizar"
-                  accessibilityRole="button"
-                  onPress={() => void pedirPropuesta()}
-                  disabled={cargandoPropuesta}
-                  style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, opacity: cargandoPropuesta ? 0.6 : 1 }}
-                >
-                  <Text style={{ color: colors.accentText, fontWeight: "600" }}>{cargandoPropuesta ? "Buscando…" : "Actualizar"}</Text>
-                </Pressable>
-                <Pressable
-                  testID="alimento-completar-ia"
-                  accessibilityRole="button"
-                  onPress={() => void pedirPropuestaIA()}
-                  disabled={cargandoIA}
-                  style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, opacity: cargandoIA ? 0.6 : 1 }}
-                >
-                  <Text style={{ color: colors.accentText, fontWeight: "600" }}>{cargandoIA ? "Estimando…" : "Completar con IA"}</Text>
-                </Pressable>
+                    alta de nuevo (perdiendo el historial de comidas que los referencia).
+                    Una RECETA no: sus valores se derivan de los ingredientes, no de una fila de USDA,
+                    y el backend rechazaría el apply — igual que rechazaría nuclear `recipe`. */}
+                {!food.recipe && (
+                  <Pressable
+                    testID="alimento-actualizar"
+                    accessibilityRole="button"
+                    onPress={() => void pedirPropuesta()}
+                    disabled={cargandoPropuesta}
+                    style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, opacity: cargandoPropuesta ? 0.6 : 1 }}
+                  >
+                    <Text style={{ color: colors.accentText, fontWeight: "600" }}>{cargandoPropuesta ? "Buscando…" : "Actualizar"}</Text>
+                  </Pressable>
+                )}
+                {/* Mismo motivo: una receta no tiene un bloque de micros para "completar", los suyos
+                    salen de sumar los de sus ingredientes. */}
+                {!food.recipe && (
+                  <Pressable
+                    testID="alimento-completar-ia"
+                    accessibilityRole="button"
+                    onPress={() => void pedirPropuestaIA()}
+                    disabled={cargandoIA}
+                    style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, opacity: cargandoIA ? 0.6 : 1 }}
+                  >
+                    <Text style={{ color: colors.accentText, fontWeight: "600" }}>{cargandoIA ? "Estimando…" : "Completar con IA"}</Text>
+                  </Pressable>
+                )}
                 <Pressable
                   onPress={() => router.push(food.recipe ? `/nutricion/crear-comida?id=${food.id}` : `/nutricion/agregar-alimento?foodId=${food.id}`)}
                   style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs }}
