@@ -110,19 +110,29 @@ export type Recipe = z.infer<typeof RecipeSchema>;
 // Alta/edición de un alimento del catálogo (lo que confirma el usuario). `recipe` presente = el
 // Food es una receta (sus macros/micros per-100g se derivan de los ingredientes); ausente = un
 // alimento común. La IA nunca lo emite (FoodExtractionSchema no lo tiene).
-export const FoodInputSchema = FoodExtractionSchema.extend({
+// Base OBJETO (no refinada) para que FoodSchema pueda seguir usando `.extend` — un ZodEffects
+// (lo que devuelve `.refine`) no tiene `.extend`.
+const FoodInputObjectSchema = FoodExtractionSchema.extend({
   recipe: RecipeSchema.nullable().optional(),
 });
+
+// La receta y su procedencia van de la mano: `sourceMacros: "recipe"` ⟺ `recipe != null`. Sin
+// esto, un alimento común podría mostrarse como receta, o una receta declarar otra procedencia.
+const recipeSourceConsistent = (data: { sourceMacros: string; recipe?: unknown | null }) =>
+  (data.sourceMacros === "recipe") === (data.recipe != null);
+const recipeSourceMessage = { message: "sourceMacros 'recipe' requiere recipe, y recipe requiere sourceMacros 'recipe'." } as const;
+
+export const FoodInputSchema = FoodInputObjectSchema.refine(recipeSourceConsistent, recipeSourceMessage);
 export type FoodInput = z.infer<typeof FoodInputSchema>;
 
 // Alimento persistido / devuelto por el backend.
-export const FoodSchema = FoodInputSchema.extend({
+export const FoodSchema = FoodInputObjectSchema.extend({
   id: z.string().uuid(),
   createdAt: z.number().int(),
   // Sólo lectura: lo setea el backend (no viene en el alta/edición). true si el alimento lo creó
   // quien hace el request. Es la base del catálogo compartido entre usuarios.
   mine: z.boolean().optional(),
-});
+}).refine(recipeSourceConsistent, recipeSourceMessage);
 export type Food = z.infer<typeof FoodSchema>;
 
 // Un ítem al crear una comida (lo que manda el móvil): referencia + cantidad cruda.

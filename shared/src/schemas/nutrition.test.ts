@@ -286,12 +286,37 @@ test("FoodInputSchema acepta recipe opcional y lo omite cuando no está", () => 
   const base = {
     name: "Cazuela de pollo", basis: "per_100g" as const,
     kcal: 120, protein_g: 10, carbs_g: 5, fat_g: 6,
-    unitWeightG: null, sourceMacros: "recipe" as const, sourceMicros: null,
+    unitWeightG: null, sourceMacros: "manual" as const, sourceMicros: null,
   };
   expect(FoodInputSchema.parse(base).recipe).toBeUndefined();
   const withRecipe = FoodInputSchema.parse({
     ...base,
+    sourceMacros: "recipe" as const,
     recipe: { items: [{ foodId: "11111111-1111-4111-8111-111111111111", quantity: 200, unit: "g" }], cookedWeightG: 500 },
   });
   expect(withRecipe.recipe?.cookedWeightG).toBe(500);
+});
+
+test("FoodInputSchema rechaza sourceMacros 'recipe' SIN recipe", () => {
+  expect(() => FoodInputSchema.parse({
+    name: "X", basis: "per_100g", kcal: 100, protein_g: 5, carbs_g: 5, fat_g: 5,
+    unitWeightG: null, sourceMacros: "recipe", sourceMicros: null,
+  })).toThrow();
+});
+
+test("FoodInputSchema rechaza recipe CON sourceMacros que no es 'recipe'", () => {
+  expect(() => FoodInputSchema.parse({
+    name: "X", basis: "per_100g", kcal: 100, protein_g: 5, carbs_g: 5, fat_g: 5,
+    unitWeightG: null, sourceMacros: "manual", sourceMicros: null,
+    recipe: { items: [{ foodId: "11111111-1111-4111-8111-111111111111", quantity: 100, unit: "g" }], cookedWeightG: null },
+  })).toThrow();
+});
+
+test("FoodInputSchema acepta la receta consistente (recipe + sourceMacros 'recipe')", () => {
+  const ok = FoodInputSchema.parse({
+    name: "Cazuela", basis: "per_100g", kcal: 100, protein_g: 5, carbs_g: 5, fat_g: 5,
+    unitWeightG: null, sourceMacros: "recipe", sourceMicros: null,
+    recipe: { items: [{ foodId: "11111111-1111-4111-8111-111111111111", quantity: 200, unit: "g" }], cookedWeightG: 500 },
+  });
+  expect(ok.recipe?.cookedWeightG).toBe(500);
 });
