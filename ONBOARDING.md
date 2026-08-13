@@ -94,6 +94,9 @@ final interna** fueron las que cazaron los bugs de costura que las reviews por-t
 ### Pendiente
 - El **checklist en device** del owner (crear receta con un ingrediente nuevo, peso cocido, registrar
   porción desde "+ nueva comida", editar, ver chip + semáforo).
+- **Limitación conocida (snapshot)**: la per-100g de la receta es un **snapshot** derivado al guardar;
+  si después editás los valores de un ingrediente en el catálogo, la receta **no se recalcula sola**
+  hasta que la reabrís y guardás (mismo criterio que los `Meal`, que snapshotean al registrar).
 - **Fuera de alcance (v1)**: "porciones" numéricas (loguear "1 porción" en vez de gramos — el owner
   **pesa** cada porción); recetas anidadas como ingrediente de primera clase (funciona, no se promociona).
 
