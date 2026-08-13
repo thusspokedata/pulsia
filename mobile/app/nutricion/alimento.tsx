@@ -220,7 +220,7 @@ export default function AlimentoDetalleScreen() {
                   <Text style={{ color: colors.accentText, fontWeight: "600" }}>{cargandoIA ? "Estimando…" : "Completar con IA"}</Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => router.push(`/nutricion/agregar-alimento?foodId=${food.id}`)}
+                  onPress={() => router.push(food.recipe ? `/nutricion/crear-comida?id=${food.id}` : `/nutricion/agregar-alimento?foodId=${food.id}`)}
                   style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs }}
                 >
                   <Text style={{ color: colors.accentText, fontWeight: "600" }}>Editar</Text>
