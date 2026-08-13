@@ -39,3 +39,13 @@ test("micro que NINGÚN ingrediente tiene → null; el que alguno tiene → suma
 test("peso efectivo 0 tira (receta vacía / sin peso)", () => {
   expect(() => deriveRecipe([], null)).toThrow();
 });
+
+test("agrega sin redondear: 50 g de un alimento de 89 kcal/100g → 89 kcal/100g (no 90)", () => {
+  const alimento89 = { basis: "per_100g" as const, kcal: 89, protein_g: 1.1, carbs_g: 22.8, fat_g: 0.3, unitWeightG: null };
+  const d = deriveRecipe([{ food: alimento89, quantity: 50, unit: "g" }], null);
+  expect(d.effectiveWeightG).toBe(50);
+  // per-100g debe recuperar la densidad de origen, no arrastrar el redondeo por-ingrediente.
+  expect(d.per100.kcal).toBe(89);
+  expect(d.per100.protein_g).toBeCloseTo(1.1, 5);
+  expect(d.per100.carbs_g).toBeCloseTo(22.8, 5);
+});
