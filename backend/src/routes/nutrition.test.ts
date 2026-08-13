@@ -244,6 +244,44 @@ test("POST /nutrition/foods crea un alimento con micros", async () => {
   });
 });
 
+// CR-4: el server re-deriva la per-100g de una receta desde sus ingredientes REALES en vez de
+// confiar en lo que mandó el cliente. `bananaRow` hace de ingrediente (89 kcal/100g); el body
+// manda un kcal deliberadamente mentiroso (9999) para que el test falle si el server lo persistiera tal cual.
+test("POST /nutrition/foods con recipe re-deriva la per-100g en el server (ignora el kcal del cliente)", async () => {
+  const db = fakeDb({ foods: [bananaRow] });
+  const app = createApp(deps(db));
+  const res = await app.request("/nutrition/foods", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: "Ensalada de banana", basis: "per_100g", kcal: 9999, protein_g: 1, carbs_g: 1, fat_g: 1,
+      unitWeightG: null, sourceMacros: "recipe", sourceMicros: "ai",
+      recipe: { items: [{ foodId: FOOD_ID, quantity: 100, unit: "g" }], cookedWeightG: null },
+    }),
+  });
+  expect(res.status).toBe(200);
+  const inserted = db._inserts.at(-1).rows[0];
+  // 100g de banana (89 kcal/100g) sobre un peso efectivo de 100g → 89 kcal/100g derivado.
+  expect(inserted.kcal).toBe(89);
+  expect(inserted.kcal).not.toBe(9999);
+  expect(inserted.sourceMacros).toBe("recipe");
+  expect(inserted.sourceMicros).toBeNull(); // forzado por ser receta, aunque el body mandó "ai"
+});
+
+test("POST /nutrition/foods con recipe y un ingrediente inexistente → 400 (no 500)", async () => {
+  const db = fakeDb({ foods: [] }); // catálogo vacío: el ingrediente referenciado no existe
+  const app = createApp(deps(db));
+  const res = await app.request("/nutrition/foods", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: "Ensalada fantasma", basis: "per_100g", kcal: 100, protein_g: 1, carbs_g: 1, fat_g: 1,
+      unitWeightG: null, sourceMacros: "recipe", sourceMicros: null,
+      recipe: { items: [{ foodId: FOOD_ID, quantity: 100, unit: "g" }], cookedWeightG: null },
+    }),
+  });
+  expect(res.status).toBe(400);
+  expect(db._inserts).toHaveLength(0);
+});
+
 test("POST /nutrition/meals snapshotea macros desde el catálogo (ignora los del cliente)", async () => {
   const db = fakeDb({ foods: [bananaRow] });
   const app = createApp(deps(db));
@@ -1229,12 +1267,31 @@ const recetaRow = {
   recipe: { items: [{ foodId: OTRO_FOOD_ID, quantity: 100, unit: "g" }], cookedWeightG: 250 },
 };
 
+// CR-5: el guard tiene que cortar ANTES de tocar la IA, no solo antes de escribir. Se cuentan las
+// llamadas a los 3 métodos que este camino podría invocar (búsqueda/elección/estimación) para que
+// un guard que revisara `f.recipe` DESPUÉS de llamar a la IA (desperdiciando la llamada, o peor,
+// pisándola con datos que después se descartan) se vea en el test.
+function spiedAi() {
+  const calls = { usdaSearchQuery: 0, pickUsdaCandidate: 0, estimateFoodMicros: 0 };
+  const client = {
+    ...refreshAi,
+    usdaSearchQuery: async () => { calls.usdaSearchQuery++; return refreshAi.usdaSearchQuery(); },
+    pickUsdaCandidate: async () => { calls.pickUsdaCandidate++; return refreshAi.pickUsdaCandidate(); },
+    estimateFoodMicros: async () => { calls.estimateFoodMicros++; return aiClient.estimateFoodMicros(); },
+  };
+  return { client, calls };
+}
+
 test("usda-proposal sobre una receta → 400, no llama a la IA de USDA", async () => {
   const db = refreshDb({ foodRow: recetaRow });
-  const res = await postProposal(createApp(deps(db, refreshAi)));
+  const { client, calls } = spiedAi();
+  const res = await postProposal(createApp(deps(db, client)));
   expect(res.status).toBe(400);
   expect((await res.json()).error).toMatch(/receta/i);
   expect(db._updates).toHaveLength(0);
+  expect(calls.usdaSearchQuery).toBe(0);
+  expect(calls.pickUsdaCandidate).toBe(0);
+  expect(calls.estimateFoodMicros).toBe(0);
 });
 
 test("usda-apply sobre una receta → 400 y NO le pisa el campo recipe (no la borra)", async () => {
@@ -1247,10 +1304,14 @@ test("usda-apply sobre una receta → 400 y NO le pisa el campo recipe (no la bo
 
 test("ai-micros-proposal sobre una receta → 400, no llama a la IA", async () => {
   const db = refreshDb({ foodRow: recetaRow });
-  const res = await postAiProposal(createApp(deps(db, refreshAi)));
+  const { client, calls } = spiedAi();
+  const res = await postAiProposal(createApp(deps(db, client)));
   expect(res.status).toBe(400);
   expect((await res.json()).error).toMatch(/receta/i);
   expect(db._updates).toHaveLength(0);
+  expect(calls.usdaSearchQuery).toBe(0);
+  expect(calls.pickUsdaCandidate).toBe(0);
+  expect(calls.estimateFoodMicros).toBe(0);
 });
 
 test("ai-micros-apply sobre una receta → 400 y NO le pisa el campo recipe (no la borra)", async () => {
