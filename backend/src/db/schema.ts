@@ -140,6 +140,10 @@ export const food = pgTable("food", {
   sourceMacros: text("source_macros").notNull(), // 'label' | 'ai' | 'manual' | 'usda'
   sourceMicros: text("source_micros"),           // 'usda' | 'ai' | null (null = sin match USDA)
   usdaFdcId: integer("usda_fdc_id"),             // fila de USDA de la que salieron los micros
+  // Composición de una receta: { items:[{foodId,quantity,unit}], cookedWeightG }. null = alimento
+  // común (no receta). La per-100g del Food ya está derivada en las columnas de macros/micros; esto
+  // guarda la receta viva para poder editarla y recalcular. Ver shared/src/nutrition/recipe.ts.
+  recipe: jsonb("recipe"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
   byUser: index("food_user_idx").on(t.userId),
