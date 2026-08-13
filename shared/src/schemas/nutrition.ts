@@ -14,7 +14,8 @@ export type MealType = z.infer<typeof MealTypeSchema>;
 // backlog y la migración se hacía igual. `usda` = los macros salieron de la base de composición
 // de USDA (no de una etiqueta, ni de la IA, ni tipeados a mano): lo usa el seed del catálogo
 // base, que arma cada alimento entero desde una fila de USDA. Es una fuente real, como `label`.
-export const SourceMacrosSchema = z.enum(["label", "ai", "manual", "usda"]);
+// `recipe` = macros COMPUESTOS desde los ingredientes de una receta (no de etiqueta/USDA/IA/manual).
+export const SourceMacrosSchema = z.enum(["label", "ai", "manual", "usda", "recipe"]);
 export type SourceMacros = z.infer<typeof SourceMacrosSchema>;
 
 // Procedencia del bloque de vitaminas y minerales. null = no se pudo matchear contra USDA y el
@@ -89,8 +90,29 @@ export type FoodIdentification = z.infer<typeof FoodIdentificationSchema>;
 export const FoodMicrosEstimateSchema = z.object(nutrientFields);
 export type FoodMicrosEstimate = z.infer<typeof FoodMicrosEstimateSchema>;
 
-// Alta/edición de un alimento del catálogo (lo que confirma el usuario).
-export const FoodInputSchema = FoodExtractionSchema;
+// Un ingrediente de una receta: referencia a un Food del catálogo + cantidad cruda en su unidad.
+export const RecipeItemInputSchema = z.object({
+  foodId: z.string().uuid(),
+  quantity: z.number().positive(),
+  unit: QuantityUnitSchema,
+});
+export type RecipeItemInput = z.infer<typeof RecipeItemInputSchema>;
+
+// La composición viva de una receta. Se guarda en el Food (JSONB) para poder editar y recalcular.
+// cookedWeightG = peso del plato terminado; null = usar la suma de los pesos de los ingredientes.
+// El agua agregada/evaporada queda capturada por cookedWeightG cuando el usuario pesa el plato.
+export const RecipeSchema = z.object({
+  items: z.array(RecipeItemInputSchema).min(1),
+  cookedWeightG: z.number().positive().nullable(),
+});
+export type Recipe = z.infer<typeof RecipeSchema>;
+
+// Alta/edición de un alimento del catálogo (lo que confirma el usuario). `recipe` presente = el
+// Food es una receta (sus macros/micros per-100g se derivan de los ingredientes); ausente = un
+// alimento común. La IA nunca lo emite (FoodExtractionSchema no lo tiene).
+export const FoodInputSchema = FoodExtractionSchema.extend({
+  recipe: RecipeSchema.nullable().optional(),
+});
 export type FoodInput = z.infer<typeof FoodInputSchema>;
 
 // Alimento persistido / devuelto por el backend.

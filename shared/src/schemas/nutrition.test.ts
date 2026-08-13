@@ -7,6 +7,7 @@ import {
   NutritionObjectiveSchema, NutritionGoalInputSchema,
   SourceMacrosSchema, SourceMicrosSchema,
   FoodMicrosEstimateSchema,
+  RecipeSchema,
 } from "./nutrition";
 import { NUTRIENT_KEYS } from "../nutrition/nutrients";
 
@@ -148,7 +149,7 @@ test("sourceMicros acepta null (alimento sin match en USDA)", () => {
 });
 
 test("las dos procedencias tienen los valores de la migración", () => {
-  expect(SourceMacrosSchema.options).toEqual(["label", "ai", "manual", "usda"]);
+  expect(SourceMacrosSchema.options).toEqual(["label", "ai", "manual", "usda", "recipe"]);
   expect(SourceMacrosSchema.safeParse("usda").success).toBe(true); // el seed del catálogo base arma los macros desde USDA
   expect(SourceMicrosSchema.safeParse("usda").success).toBe(true);
   expect(SourceMicrosSchema.safeParse("ai").success).toBe(true);
@@ -265,4 +266,32 @@ test("FoodSchema: mine es undefined si no viene (retrocompat)", () => {
 
 test("FoodSchema: mine true se conserva", () => {
   expect(FoodSchema.parse({ ...foodBase, mine: true }).mine).toBe(true);
+});
+
+test("SourceMacrosSchema acepta 'recipe'", () => {
+  expect(SourceMacrosSchema.parse("recipe")).toBe("recipe");
+});
+
+test("RecipeSchema exige al menos un ítem y cookedWeightG nullable", () => {
+  const ok = RecipeSchema.parse({
+    items: [{ foodId: "11111111-1111-4111-8111-111111111111", quantity: 150, unit: "g" }],
+    cookedWeightG: null,
+  });
+  expect(ok.items).toHaveLength(1);
+  expect(() => RecipeSchema.parse({ items: [], cookedWeightG: null })).toThrow();
+  expect(() => RecipeSchema.parse({ items: [{ foodId: "11111111-1111-4111-8111-111111111111", quantity: 150, unit: "g" }], cookedWeightG: 0 })).toThrow();
+});
+
+test("FoodInputSchema acepta recipe opcional y lo omite cuando no está", () => {
+  const base = {
+    name: "Cazuela de pollo", basis: "per_100g" as const,
+    kcal: 120, protein_g: 10, carbs_g: 5, fat_g: 6,
+    unitWeightG: null, sourceMacros: "recipe" as const, sourceMicros: null,
+  };
+  expect(FoodInputSchema.parse(base).recipe).toBeUndefined();
+  const withRecipe = FoodInputSchema.parse({
+    ...base,
+    recipe: { items: [{ foodId: "11111111-1111-4111-8111-111111111111", quantity: 200, unit: "g" }], cookedWeightG: 500 },
+  });
+  expect(withRecipe.recipe?.cookedWeightG).toBe(500);
 });
