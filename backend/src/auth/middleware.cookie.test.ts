@@ -1,10 +1,10 @@
 import { test, expect } from "bun:test";
 import { Hono } from "hono";
-import { requireAuth } from "./middleware";
+import { requireAuth, type Validator } from "./middleware";
 import { SESSION_COOKIE } from "./cookie";
 
-const okValidate = async () => "user-1";
-function appWith(validate = okValidate) {
+const okValidate: Validator = async () => "user-1";
+function appWith(validate: Validator = okValidate) {
   const app = new Hono<{ Variables: { userId: string } }>();
   app.use("*", requireAuth({} as any, 30, validate));
   app.get("/g", (c) => c.text(c.get("userId")));
