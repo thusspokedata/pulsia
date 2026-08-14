@@ -9,6 +9,7 @@ import type { Food, MealType, QuantityUnit } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 import { NutrientFlags } from "../../src/nutrition/NutrientFlags";
+import { SourceChip } from "../../src/nutrition/SourceChip";
 
 const MEAL_TYPES: MealType[] = ["desayuno", "almuerzo", "cena", "snack"];
 
@@ -187,7 +188,10 @@ export default function NuevaComidaScreen() {
         style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.md, color: colors.text }} />
       {matches.map((f) => (
         <Pressable key={f.id} onPress={() => addFood(f)} style={{ padding: spacing.sm, backgroundColor: colors.accentSoft, borderRadius: radius.sm }}>
-          <Text style={{ color: colors.accentText }}>+ {f.name}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+            <Text style={{ color: colors.accentText, flexShrink: 1 }}>+ {f.name}</Text>
+            <SourceChip sourceMacros={f.sourceMacros} sourceMicros={f.sourceMicros} />
+          </View>
           <NutrientFlags food={f} />
         </Pressable>
       ))}
