@@ -54,3 +54,26 @@ export function buildMealInput(args: {
     items: args.rows.map((r) => ({ foodId: r.food.id, quantity: r.quantity, quantityUnit: r.unit })),
   };
 }
+
+// Toma el DÍA (Y/M/D local) de dayMs y le aplica la hora del texto "HH:MM".
+// Devuelve el timestamp en ms, o null si el texto no es un HH:MM válido (00–23 : 00–59).
+// Exige exactamente dos dígitos por lado para no aceptar "8", "8:5", etc.
+// También rechaza horas locales inexistentes (el salto del cambio de horario: p.ej. en
+// Europe/Berlin "02:30" el día del spring-forward), que setHours normalizaría en silencio.
+export function combineDayAndTime(dayMs: number, hhmm: string): number | null {
+  const match = /^(\d{2}):(\d{2})$/.exec(hhmm);
+  if (!match) return null;
+  const h = Number(match[1]);
+  const m = Number(match[2]);
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  const d = new Date(dayMs);
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const date = d.getDate();
+  d.setHours(h, m, 0, 0);
+  // Si el runtime tuvo que normalizar (hora inexistente por DST), la fecha/hora ya no coincide.
+  if (d.getFullYear() !== year || d.getMonth() !== month || d.getDate() !== date || d.getHours() !== h || d.getMinutes() !== m) {
+    return null;
+  }
+  return d.getTime();
+}
