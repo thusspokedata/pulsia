@@ -3,7 +3,7 @@ import { ScrollView, View, Text, TextInput, Pressable, ActivityIndicator, Alert 
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { getBackendUrl } from "../../src/storage/config";
 import { listFoods, createMeal, getMeal, updateMeal, deleteMeal } from "../../src/api/nutrition";
-import { buildMealInput, mealTotals, itemPreview, allowedUnits, type MealRow } from "../../src/nutrition/mealForm";
+import { buildMealInput, mealTotals, itemPreview, allowedUnits, hhmmFromMs, combineDayAndTime, type MealRow } from "../../src/nutrition/mealForm";
 import type { Food, MealType, QuantityUnit } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
@@ -27,7 +27,10 @@ export default function NuevaComidaScreen() {
   const [loading, setLoading] = useState(!!mealId);
   const initedRef = useRef(false);
   // eatenAt: si vino por params (día seleccionado en el tab), usarlo; si no, ahora.
-  const eatenAt = useRef<number>(params.eatenAt ? Number(params.eatenAt) : Date.now());
+  const initialEatenAt = params.eatenAt ? Number(params.eatenAt) : Date.now();
+  const [eatenAt, setEatenAt] = useState<number>(initialEatenAt);
+  const [timeStr, setTimeStr] = useState<string>(hhmmFromMs(initialEatenAt));
+  const [mealTypeError, setMealTypeError] = useState(false);
 
   useFocusEffect(useCallback(() => {
     (async () => {
@@ -40,7 +43,8 @@ export default function NuevaComidaScreen() {
         initedRef.current = true;
         try {
           const m = await getMeal(url, mealId);
-          eatenAt.current = m.eatenAt;
+          setEatenAt(m.eatenAt);
+          setTimeStr(hhmmFromMs(m.eatenAt));
           setMealType(m.mealType);
           setNote(m.note ?? "");
           const reconstructed = m.items.map((it) => {
@@ -74,12 +78,15 @@ export default function NuevaComidaScreen() {
   async function save() {
     setError(null);
     if (notEditable) { setError("Esta comida no se puede editar: uno de sus alimentos fue borrado del catálogo o cambió de unidad/formato. Borrala y volvé a cargarla."); return; }
+    if (!mealType) { setMealTypeError(true); setError("Elegí el tipo de comida."); return; }
     if (rows.length === 0) { setError("Agregá al menos un alimento."); return; }
     if (rows.some((r) => r.quantity <= 0)) { setError("Las cantidades tienen que ser mayores a 0."); return; }
+    const combined = combineDayAndTime(eatenAt, timeStr);
+    if (combined === null) { setError("Horario inválido (usá HH:MM)."); return; }
     if (!baseUrl.current) { setError("No se pudo conectar con el servidor."); return; }
     setSaving(true);
     try {
-      const input = buildMealInput({ eatenAt: eatenAt.current, mealType, note, rows });
+      const input = buildMealInput({ eatenAt: combined, mealType, note, rows });
       if (mealId) await updateMeal(baseUrl.current, mealId, input);
       else await createMeal(baseUrl.current, input);
       router.back();
@@ -119,15 +126,33 @@ export default function NuevaComidaScreen() {
         </Text>
       )}
 
-      <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" }}>
-        {MEAL_TYPES.map((t) => (
-          <Pressable key={t} onPress={() => setMealType((cur) => (cur === t ? null : t))} style={{
-            paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.pill,
-            backgroundColor: mealType === t ? colors.accent : colors.surfaceMuted,
-          }}>
-            <Text style={{ color: mealType === t ? "#fff" : colors.text }}>{t}</Text>
-          </Pressable>
-        ))}
+      <View style={{ gap: spacing.xs }}>
+        <Text style={{ color: mealTypeError ? colors.danger : colors.textMuted, fontSize: 12 }}>Tipo de comida</Text>
+        <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap", borderWidth: mealTypeError ? 1 : 0, borderColor: colors.danger, borderRadius: radius.md, padding: mealTypeError ? spacing.xs : 0 }}>
+          {MEAL_TYPES.map((t) => (
+            <Pressable key={t} onPress={() => { setMealTypeError(false); setMealType((cur) => (cur === t ? null : t)); }} style={{
+              paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.pill,
+              backgroundColor: mealType === t ? colors.accent : colors.surfaceMuted,
+            }}>
+              <Text style={{ color: mealType === t ? "#fff" : colors.text }}>{t}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {/* Horario de la comida (HH:MM, mismo día) */}
+      <View style={{ gap: spacing.xs }}>
+        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Horario</Text>
+        <TextInput
+          value={timeStr}
+          onChangeText={setTimeStr}
+          placeholder="HH:MM"
+          placeholderTextColor={colors.icon}
+          keyboardType="numbers-and-punctuation"
+          autoCapitalize="none"
+          maxLength={5}
+          style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.md, color: colors.text, width: 100 }}
+        />
       </View>
 
       {/* Ítems agregados */}
