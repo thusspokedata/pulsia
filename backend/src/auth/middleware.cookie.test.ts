@@ -3,8 +3,9 @@ import { Hono } from "hono";
 import { requireAuth } from "./middleware";
 import { SESSION_COOKIE } from "./cookie";
 
-const okValidate = async () => "user-1";
-function appWith(validate = okValidate) {
+type Validate = (db: any, token: string, ttlDays: number) => Promise<string | null>;
+const okValidate: Validate = async () => "user-1";
+function appWith(validate: Validate = okValidate) {
   const app = new Hono<{ Variables: { userId: string } }>();
   app.use("*", requireAuth({} as any, 30, validate));
   app.get("/g", (c) => c.text(c.get("userId")));
