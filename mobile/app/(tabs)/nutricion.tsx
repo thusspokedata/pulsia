@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ScrollView, View, Text, Pressable, Alert } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { deleteMeal, logWater, deleteWater } from "../../src/api/nutrition";
@@ -24,11 +24,25 @@ export default function NutricionScreen() {
   const { dayTotals, cholesterolMg, liquid } = summary;
   const [checklist, setChecklist] = useState<{ hasPlan: boolean; entries: DayChecklistEntry[] } | null>(null);
   const [supplementsCollapsed, setCollapsed] = useState(true);
+  // Un token invalida cualquier lectura de storage en vuelo: si el usuario togglea
+  // (o la pantalla pierde foco) antes de que resuelva, el valor viejo no pisa el nuevo.
+  const collapseLoad = useRef(0);
 
-  useFocusEffect(useCallback(() => { void getSupplementsCollapsed().then(setCollapsed); }, []));
+  useFocusEffect(useCallback(() => {
+    const seq = ++collapseLoad.current;
+    getSupplementsCollapsed()
+      .then((v) => { if (seq === collapseLoad.current) setCollapsed(v); })
+      .catch(() => {});
+    return () => { collapseLoad.current++; };
+  }, []));
 
   function toggleSupplements() {
-    setCollapsed((c) => { const next = !c; void setSupplementsCollapsed(next); return next; });
+    collapseLoad.current++; // descarta cualquier lectura en vuelo
+    setCollapsed((c) => {
+      const next = !c;
+      setSupplementsCollapsed(next).catch(() => {});
+      return next;
+    });
   }
 
   const loadChecklist = useCallback(async () => {
@@ -164,17 +178,17 @@ export default function NutricionScreen() {
 
       {/* Suplementos del día — colapsable (estado recordado), después de Informes */}
       <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm }}>
-        <Pressable onPress={toggleSupplements} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Pressable onPress={toggleSupplements} hitSlop={8} style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
             <Text style={{ color: colors.icon, fontSize: 14, width: 14 }}>{supplementsCollapsed ? "▸" : "▾"}</Text>
             <Text style={{ color: colors.text, fontSize: 16, fontWeight: "700" }}>💊 Suplementos</Text>
-          </View>
+          </Pressable>
           {checklist?.hasPlan && (
             <Pressable onPress={() => router.push("/nutricion/plan-suplementos")} hitSlop={8}>
               <Text style={{ color: colors.accentText, fontSize: 12 }}>Ver plan ›</Text>
             </Pressable>
           )}
-        </Pressable>
+        </View>
         {!supplementsCollapsed && (
           <>
             {checklist && !checklist.hasPlan && (
