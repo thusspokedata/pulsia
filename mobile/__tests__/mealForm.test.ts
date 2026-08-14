@@ -1,4 +1,5 @@
-import { buildMealInput, itemPreview, mealTotals, allowedUnits, hhmmFromMs, combineDayAndTime } from "../src/nutrition/mealForm";
+import { buildMealInput, itemPreview, mealTotals, allowedUnits, combineDayAndTime } from "../src/nutrition/mealForm";
+import { hhmm } from "../src/session/metricDate";
 
 // Los alimentos ya no guardan sal sino SODIO (factor 2,5: 0,1 g de sal = 40 mg de sodio). Las
 // aserciones de los tests siguen hablando en sal, que es lo que la app muestra.
@@ -81,12 +82,6 @@ test("mealTotals suma colesterol y agua", () => {
 // construimos el instante con new Date(y,m,d,h,mm) y verificamos con getHours/getMinutes.
 const day = new Date(2026, 7, 14, 14, 35, 0, 0).getTime(); // agosto = mes 7
 
-test("hhmmFromMs formatea la hora local con padStart", () => {
-  expect(hhmmFromMs(new Date(2026, 7, 14, 8, 5, 0, 0).getTime())).toBe("08:05");
-  expect(hhmmFromMs(new Date(2026, 7, 14, 23, 59, 0, 0).getTime())).toBe("23:59");
-  expect(hhmmFromMs(new Date(2026, 7, 14, 0, 0, 0, 0).getTime())).toBe("00:00");
-});
-
 test("combineDayAndTime aplica la hora al día de dayMs y preserva la fecha", () => {
   const out = combineDayAndTime(day, "08:00");
   expect(out).not.toBeNull();
@@ -111,8 +106,8 @@ test("combineDayAndTime devuelve null para HH:MM inválido", () => {
   }
 });
 
-test("hhmmFromMs ↔ combineDayAndTime round-trip sobre el mismo día", () => {
-  const s = hhmmFromMs(day);
+test("hhmm ↔ combineDayAndTime round-trip sobre el mismo día", () => {
+  const s = hhmm(day);
   const back = combineDayAndTime(day, s);
-  expect(hhmmFromMs(back as number)).toBe(s);
+  expect(hhmm(back as number)).toBe(s);
 });

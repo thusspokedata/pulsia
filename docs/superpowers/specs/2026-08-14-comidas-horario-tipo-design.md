@@ -28,15 +28,16 @@ Todo en el móvil. Fuente única de la lógica pura en `mealForm.ts` (ya es el h
 
 Patrón ya usado en la app para el recordatorio de informes (`configuracion.tsx`): un `TextInput` con placeholder `"HH:MM"`, `keyboardType="numbers-and-punctuation"`, parseado con `split(":")`. JS puro, sin deps.
 
-**Helpers puros nuevos en `mobile/src/nutrition/mealForm.ts`:**
+**Formateo de la hora (reuso):** para inicializar el campo se reusa `hhmm(ms)` de `mobile/src/session/metricDate.ts` (hora local `"HH:MM"` con `padStart`), ya importado por otras pantallas de nutrición (`comida.tsx`). No se crea un helper nuevo de formateo.
 
-- `hhmmFromMs(ms: number): string` — hora local en `"HH:MM"` con `padStart(2,"0")` (mismo formato que `metricDate.ts`). Inicializa el campo.
-- `combineDayAndTime(dayMs: number, hhmm: string): number | null` — toma el **día** (Y/M/D local) de `dayMs`, le aplica la hora del texto, devuelve el timestamp en ms; `null` si el texto no es un `HH:MM` válido (hora 0–23, minutos 0–59). Implementado con `new Date(dayMs)` + `setHours(h, m, 0, 0)`.
+**Helper puro nuevo en `mobile/src/nutrition/mealForm.ts`:**
+
+- `combineDayAndTime(dayMs: number, hhmm: string): number | null` — toma el **día** (Y/M/D local) de `dayMs`, le aplica la hora del texto, devuelve el timestamp en ms; `null` si el texto no es un `HH:MM` válido (hora 0–23, minutos 0–59). Implementado con `new Date(dayMs)` + `setHours(h, m, 0, 0)`, y **rechaza también las horas locales inexistentes** del salto de DST (compara la fecha/hora resultante con la entrada y devuelve `null` si `setHours` tuvo que normalizar — p.ej. `"02:30"` en Europe/Berlin el día del spring-forward).
 
 **Estado de la pantalla:**
 
 - `eatenAt` pasa de `useRef` a estado. Inicial: al **crear**, `params.eatenAt` (día seleccionado, mediodía) o `Date.now()`; al **editar**, `m.eatenAt` (ya se carga en el focus effect).
-- `timeStr` (estado string) inicializado con `hhmmFromMs(eatenAt inicial)`; en modo edición se re-setea tras cargar la comida.
+- `timeStr` (estado string) inicializado con `hhmm(eatenAt inicial)`; en modo edición se re-setea tras cargar la comida.
 
 **UI:** una fila etiquetada "Horario" cerca de los chips de tipo, con el `TextInput` HH:MM.
 
@@ -64,13 +65,13 @@ Sin cambios de red ni de datos: `buildMealInput` ya propaga `eatenAt`; `createMe
 
 `__tests__/mealForm.test.ts` (jest):
 
-- `parseHHMM`/`combineDayAndTime`: válidos (`"08:30"`, `"00:00"`, `"23:59"`), inválidos (`"24:00"`, `"12:60"`, `"8"`, `""`, `"aa:bb"`), y que **preserva el día** (Y/M/D de `dayMs` intactos, solo cambia la hora).
-- `hhmmFromMs`: round-trip con `combineDayAndTime` sobre el mismo día.
-- `buildMealInput`: respeta el `eatenAt` combinado que se le pasa.
+- `combineDayAndTime`: válidos (`"08:30"`, `"00:00"`, `"23:59"`), inválidos (`"24:00"`, `"12:60"`, `"8"`, `""`, `"aa:bb"`), y que **preserva el día** (Y/M/D de `dayMs` intactos, solo cambia la hora).
+- `hhmm` (de `metricDate`) ↔ `combineDayAndTime`: round-trip sobre el mismo día.
+- `buildMealInput`: respeta el `eatenAt` combinado que se le pasa (ya cubierto por el test existente de `buildMealInput`).
 
 ## Archivos
 
-- Modify `mobile/src/nutrition/mealForm.ts` — `hhmmFromMs`, `combineDayAndTime` (y `parseHHMM` interno si conviene exponerlo para test).
+- Modify `mobile/src/nutrition/mealForm.ts` — `combineDayAndTime` (el formateo reusa `hhmm` de `metricDate.ts`).
 - Modify `mobile/app/nutricion/nueva-comida.tsx` — estado de `eatenAt`/`timeStr`/`mealTypeError`, campo HH:MM, validaciones en `save()`, resaltado del selector.
 - Modify `mobile/__tests__/mealForm.test.ts` — tests de los helpers.
 

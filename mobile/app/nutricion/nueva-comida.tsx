@@ -3,7 +3,8 @@ import { ScrollView, View, Text, TextInput, Pressable, ActivityIndicator, Alert 
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { getBackendUrl } from "../../src/storage/config";
 import { listFoods, createMeal, getMeal, updateMeal, deleteMeal } from "../../src/api/nutrition";
-import { buildMealInput, mealTotals, itemPreview, allowedUnits, hhmmFromMs, combineDayAndTime, type MealRow } from "../../src/nutrition/mealForm";
+import { buildMealInput, mealTotals, itemPreview, allowedUnits, combineDayAndTime, type MealRow } from "../../src/nutrition/mealForm";
+import { hhmm } from "../../src/session/metricDate";
 import type { Food, MealType, QuantityUnit } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
@@ -29,7 +30,7 @@ export default function NuevaComidaScreen() {
   // eatenAt: si vino por params (día seleccionado en el tab), usarlo; si no, ahora.
   const initialEatenAt = params.eatenAt ? Number(params.eatenAt) : Date.now();
   const [eatenAt, setEatenAt] = useState<number>(initialEatenAt);
-  const [timeStr, setTimeStr] = useState<string>(hhmmFromMs(initialEatenAt));
+  const [timeStr, setTimeStr] = useState<string>(hhmm(initialEatenAt));
   const [mealTypeError, setMealTypeError] = useState(false);
 
   useFocusEffect(useCallback(() => {
@@ -44,7 +45,7 @@ export default function NuevaComidaScreen() {
         try {
           const m = await getMeal(url, mealId);
           setEatenAt(m.eatenAt);
-          setTimeStr(hhmmFromMs(m.eatenAt));
+          setTimeStr(hhmm(m.eatenAt));
           setMealType(m.mealType);
           setNote(m.note ?? "");
           const reconstructed = m.items.map((it) => {

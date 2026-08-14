@@ -10,6 +10,8 @@
 
 **Referencia:** spec `docs/superpowers/specs/2026-08-14-comidas-horario-tipo-design.md`.
 
+> **Nota post-review (2026-08-14):** implementado. Dos ajustes de review aplicados sobre lo que muestran los bloques de abajo: (1) el `hhmmFromMs` que se creaba se **descartó** en favor de reusar `hhmm` de `mobile/src/session/metricDate.ts` (era idéntico; DRY, hallazgo de @claude); (2) `combineDayAndTime` además **rechaza horas locales inexistentes** del salto de DST (hallazgo de CodeRabbit).
+
 ---
 
 ## File Structure
@@ -30,7 +32,7 @@
 - Modify: `mobile/src/nutrition/mealForm.ts`
 - Test: `mobile/__tests__/mealForm.test.ts`
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 Agregar al final de `mobile/__tests__/mealForm.test.ts`. Importar los dos helpers nuevos en la línea 1 (extender el import existente):
 
@@ -84,12 +86,12 @@ test("hhmmFromMs ↔ combineDayAndTime round-trip sobre el mismo día", () => {
 });
 ```
 
-- [ ] **Step 2: Correr los tests y verificar que fallan**
+- [x] **Step 2: Correr los tests y verificar que fallan**
 
 Run: `cd mobile && bun run test __tests__/mealForm.test.ts`
 Expected: FAIL — `hhmmFromMs`/`combineDayAndTime` no existen (TypeError / undefined).
 
-- [ ] **Step 3: Implementar los helpers**
+- [x] **Step 3: Implementar los helpers**
 
 En `mobile/src/nutrition/mealForm.ts`, agregar (después de los imports, antes de `allowedUnits` o al final del archivo):
 
@@ -115,12 +117,12 @@ export function combineDayAndTime(dayMs: number, hhmm: string): number | null {
 }
 ```
 
-- [ ] **Step 4: Correr los tests y verificar que pasan**
+- [x] **Step 4: Correr los tests y verificar que pasan**
 
 Run: `cd mobile && bun run test __tests__/mealForm.test.ts`
 Expected: PASS (todos, incluidos los preexistentes).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add mobile/src/nutrition/mealForm.ts mobile/__tests__/mealForm.test.ts
@@ -136,7 +138,7 @@ git commit -S -m "feat(comidas): helpers puros hhmmFromMs + combineDayAndTime"
 **Files:**
 - Modify: `mobile/app/nutricion/nueva-comida.tsx`
 
-- [ ] **Step 1: Importar los helpers y ajustar el estado**
+- [x] **Step 1: Importar los helpers y ajustar el estado**
 
 En el import de `mealForm` (línea 6) agregar `hhmmFromMs` y `combineDayAndTime`:
 
@@ -161,7 +163,7 @@ por estado + el string del horario + el flag de error de tipo:
   const [mealTypeError, setMealTypeError] = useState(false);
 ```
 
-- [ ] **Step 2: Cargar la hora al editar una comida**
+- [x] **Step 2: Cargar la hora al editar una comida**
 
 En el focus effect, dentro del bloque `if (mealId ...)`, donde hoy dice `eatenAt.current = m.eatenAt;` (línea 43), reemplazar por:
 
@@ -170,7 +172,7 @@ En el focus effect, dentro del bloque `if (mealId ...)`, donde hoy dice `eatenAt
           setTimeStr(hhmmFromMs(m.eatenAt));
 ```
 
-- [ ] **Step 3: Limpiar el error de tipo al elegir uno**
+- [x] **Step 3: Limpiar el error de tipo al elegir uno**
 
 En el `onPress` del chip de tipo (línea 124), cambiar:
 
@@ -184,7 +186,7 @@ por (limpia el resaltado al tocar un tipo):
           <Pressable key={t} onPress={() => { setMealTypeError(false); setMealType((cur) => (cur === t ? null : t)); }} style={{
 ```
 
-- [ ] **Step 4: Validar tipo y hora en `save()`**
+- [x] **Step 4: Validar tipo y hora en `save()`**
 
 Reemplazar el cuerpo de `save()` (líneas 74-87) por:
 
@@ -208,7 +210,7 @@ Reemplazar el cuerpo de `save()` (líneas 74-87) por:
   }
 ```
 
-- [ ] **Step 5: Agregar el campo Horario y el resaltado del selector en la UI**
+- [x] **Step 5: Agregar el campo Horario y el resaltado del selector en la UI**
 
 En el bloque de chips de tipo (líneas 122-131), envolver la fila con una etiqueta y el resaltado. Reemplazar:
 
@@ -258,17 +260,17 @@ por:
       </View>
 ```
 
-- [ ] **Step 6: Type-check + lint del móvil**
+- [x] **Step 6: Type-check + lint del móvil**
 
 Run: `cd mobile && bun run typecheck`
 Expected: sin errores. (script `typecheck` = `tsc --noEmit`.)
 
-- [ ] **Step 7: Correr los tests del móvil**
+- [x] **Step 7: Correr los tests del móvil**
 
 Run: `cd mobile && bun run test`
 Expected: PASS (nada roto por el cambio de pantalla).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add mobile/app/nutricion/nueva-comida.tsx
