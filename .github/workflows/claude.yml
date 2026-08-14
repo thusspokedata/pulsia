@@ -35,7 +35,23 @@ jobs:
         with:
           fetch-depth: 1
 
+      # Pre-instalamos las deps en un step normal (con red completa, FUERA del sandbox de
+      # Claude). Así, cuando Claude corre tests/typecheck, ya encuentra node_modules y no
+      # necesita red en su runtime — que es lo que antes lo dejaba en "static review only".
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Le permitimos SOLO correr los scripts de bun (no shell arbitrario). Con las deps
+          # ya instaladas puede verificar sus afirmaciones: `bun run typecheck` (todos los
+          # workspaces), `bun run test` (shared+backend), `bun run test:mobile` (jest mobile).
+          # No incluimos `bunx` a propósito: ningún script lo necesita y este job lo disparan
+          # comentarios de terceros con permisos de escritura sobre PRs/issues.
+          claude_args: |
+            --allowedTools "Bash(bun run:*),Bash(bun test:*)"
