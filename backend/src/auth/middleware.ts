@@ -3,7 +3,7 @@ import type { Db } from "../db/client";
 import { validateSession } from "./sessions";
 import { readSessionCookie } from "./cookie";
 
-type Validator = (db: Db, token: string, ttlDays: number) => Promise<string | null>;
+export type Validator = (db: Db, token: string, ttlDays: number) => Promise<string | null>;
 
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
