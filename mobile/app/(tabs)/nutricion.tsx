@@ -11,6 +11,7 @@ import { useNutritionDay } from "../../src/nutrition/useNutritionDay";
 import { macroTargetLabel, remainingLabel } from "../../src/nutrition/goalView";
 import { SupplementChecklist } from "../../src/components/SupplementChecklist";
 import { WaterCard } from "../../src/components/WaterCard";
+import { getSupplementsCollapsed, setSupplementsCollapsed } from "../../src/storage/supplementsCollapsed";
 import { Bar } from "../../src/nutrition/tabs/ui";
 import type { Meal, DayChecklistEntry, TakeStatus } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
@@ -22,6 +23,13 @@ export default function NutricionScreen() {
   const { error, setError, meals, water, summary, goalView, weightKg, baseUrl, reload } = useNutritionDay(offset);
   const { dayTotals, cholesterolMg, liquid } = summary;
   const [checklist, setChecklist] = useState<{ hasPlan: boolean; entries: DayChecklistEntry[] } | null>(null);
+  const [supplementsCollapsed, setCollapsed] = useState(true);
+
+  useFocusEffect(useCallback(() => { void getSupplementsCollapsed().then(setCollapsed); }, []));
+
+  function toggleSupplements() {
+    setCollapsed((c) => { const next = !c; void setSupplementsCollapsed(next); return next; });
+  }
 
   const loadChecklist = useCallback(async () => {
     try {
@@ -135,30 +143,6 @@ export default function NutricionScreen() {
         onUndoLast={undoLastWater}
       />
 
-      {/* Suplementos del día */}
-      <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm }}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ color: colors.text, fontSize: 16, fontWeight: "700" }}>💊 Suplementos</Text>
-          {checklist?.hasPlan && (
-            <Pressable onPress={() => router.push("/nutricion/plan-suplementos")} hitSlop={8}>
-              <Text style={{ color: colors.accentText, fontSize: 12 }}>Ver plan ›</Text>
-            </Pressable>
-          )}
-        </View>
-        {checklist && !checklist.hasPlan && (
-          <Pressable onPress={() => router.push("/nutricion/plan-suplementos")}
-            style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
-            <Text style={{ color: "#fff", fontWeight: "600" }}>Armar plan con IA</Text>
-          </Pressable>
-        )}
-        {checklist && checklist.hasPlan && checklist.entries.length === 0 && (
-          <Text style={{ color: colors.textMuted }}>Hoy no toca ningún suplemento.</Text>
-        )}
-        {checklist && checklist.hasPlan && checklist.entries.length > 0 && (
-          <SupplementChecklist entries={checklist.entries} onMark={onMarkTake} />
-        )}
-      </View>
-
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
         <Pressable onPress={() => router.push(`/nutricion/nueva-comida?eatenAt=${offset === 0 ? Date.now() : noon}`)}
           style={{ flex: 1, backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
@@ -177,6 +161,37 @@ export default function NutricionScreen() {
         style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
         <Text style={{ color: colors.accentText, fontWeight: "600" }}>📋 Informes</Text>
       </Pressable>
+
+      {/* Suplementos del día — colapsable (estado recordado), después de Informes */}
+      <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm }}>
+        <Pressable onPress={toggleSupplements} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
+            <Text style={{ color: colors.icon, fontSize: 14, width: 14 }}>{supplementsCollapsed ? "▸" : "▾"}</Text>
+            <Text style={{ color: colors.text, fontSize: 16, fontWeight: "700" }}>💊 Suplementos</Text>
+          </View>
+          {checklist?.hasPlan && (
+            <Pressable onPress={() => router.push("/nutricion/plan-suplementos")} hitSlop={8}>
+              <Text style={{ color: colors.accentText, fontSize: 12 }}>Ver plan ›</Text>
+            </Pressable>
+          )}
+        </Pressable>
+        {!supplementsCollapsed && (
+          <>
+            {checklist && !checklist.hasPlan && (
+              <Pressable onPress={() => router.push("/nutricion/plan-suplementos")}
+                style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center" }}>
+                <Text style={{ color: "#fff", fontWeight: "600" }}>Armar plan con IA</Text>
+              </Pressable>
+            )}
+            {checklist && checklist.hasPlan && checklist.entries.length === 0 && (
+              <Text style={{ color: colors.textMuted }}>Hoy no toca ningún suplemento.</Text>
+            )}
+            {checklist && checklist.hasPlan && checklist.entries.length > 0 && (
+              <SupplementChecklist entries={checklist.entries} onMark={onMarkTake} />
+            )}
+          </>
+        )}
+      </View>
 
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
       {meals.length === 0 && <Text style={{ color: colors.textMuted }}>No hay comidas registradas este día.</Text>}
