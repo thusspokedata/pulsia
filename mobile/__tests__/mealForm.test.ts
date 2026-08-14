@@ -1,4 +1,4 @@
-import { buildMealInput, itemPreview, mealTotals, allowedUnits } from "../src/nutrition/mealForm";
+import { buildMealInput, itemPreview, mealTotals, allowedUnits, hhmmFromMs, combineDayAndTime } from "../src/nutrition/mealForm";
 
 // Los alimentos ya no guardan sal sino SODIO (factor 2,5: 0,1 g de sal = 40 mg de sodio). Las
 // aserciones de los tests siguen hablando en sal, que es lo que la app muestra.
@@ -73,4 +73,46 @@ test("mealTotals suma colesterol y agua", () => {
   // banana 1u=120g: chol 0, agua 90 ; leche 200ml: chol 20, agua 176
   expect(t.cholesterol_mg).toBeCloseTo(20, 1);
   expect(t.water_ml).toBeCloseTo(266, 0);
+});
+
+// --- horario editable (HH:MM) ---
+
+// 2026-08-14 14:35 local. Usamos componentes locales para no atarnos a la TZ del runner:
+// construimos el instante con new Date(y,m,d,h,mm) y verificamos con getHours/getMinutes.
+const day = new Date(2026, 7, 14, 14, 35, 0, 0).getTime(); // agosto = mes 7
+
+test("hhmmFromMs formatea la hora local con padStart", () => {
+  expect(hhmmFromMs(new Date(2026, 7, 14, 8, 5, 0, 0).getTime())).toBe("08:05");
+  expect(hhmmFromMs(new Date(2026, 7, 14, 23, 59, 0, 0).getTime())).toBe("23:59");
+  expect(hhmmFromMs(new Date(2026, 7, 14, 0, 0, 0, 0).getTime())).toBe("00:00");
+});
+
+test("combineDayAndTime aplica la hora al día de dayMs y preserva la fecha", () => {
+  const out = combineDayAndTime(day, "08:00");
+  expect(out).not.toBeNull();
+  const d = new Date(out as number);
+  expect(d.getFullYear()).toBe(2026);
+  expect(d.getMonth()).toBe(7);
+  expect(d.getDate()).toBe(14);
+  expect(d.getHours()).toBe(8);
+  expect(d.getMinutes()).toBe(0);
+  expect(d.getSeconds()).toBe(0);
+  expect(d.getMilliseconds()).toBe(0);
+});
+
+test("combineDayAndTime acepta los bordes 00:00 y 23:59", () => {
+  expect(combineDayAndTime(day, "00:00")).not.toBeNull();
+  expect(combineDayAndTime(day, "23:59")).not.toBeNull();
+});
+
+test("combineDayAndTime devuelve null para HH:MM inválido", () => {
+  for (const bad of ["24:00", "12:60", "8", "", "aa:bb", "8:5", "-1:00", "12:5"]) {
+    expect(combineDayAndTime(day, bad)).toBeNull();
+  }
+});
+
+test("hhmmFromMs ↔ combineDayAndTime round-trip sobre el mismo día", () => {
+  const s = hhmmFromMs(day);
+  const back = combineDayAndTime(day, s);
+  expect(hhmmFromMs(back as number)).toBe(s);
 });

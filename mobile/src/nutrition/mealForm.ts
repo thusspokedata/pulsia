@@ -54,3 +54,23 @@ export function buildMealInput(args: {
     items: args.rows.map((r) => ({ foodId: r.food.id, quantity: r.quantity, quantityUnit: r.unit })),
   };
 }
+
+// Hora local de un instante en "HH:MM" (mismo formato que metricDate.ts).
+export function hhmmFromMs(ms: number): string {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+// Toma el DÍA (Y/M/D local) de dayMs y le aplica la hora del texto "HH:MM".
+// Devuelve el timestamp en ms, o null si el texto no es un HH:MM válido (00–23 : 00–59).
+// Exige exactamente dos dígitos por lado para no aceptar "8", "8:5", etc.
+export function combineDayAndTime(dayMs: number, hhmm: string): number | null {
+  const match = /^(\d{2}):(\d{2})$/.exec(hhmm);
+  if (!match) return null;
+  const h = Number(match[1]);
+  const m = Number(match[2]);
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  const d = new Date(dayMs);
+  d.setHours(h, m, 0, 0);
+  return d.getTime();
+}
