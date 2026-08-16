@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { TrainingProfileSchema } from "./profile";
+import { TrainingProfileSchema, ageFromBirthDate, profileWithDerivedAge } from "./profile";
 
 test("acepta un perfil válido", () => {
   const profile = {
@@ -66,4 +66,44 @@ test("acepta activityLevel y lo deja opcional", () => {
   expect(TrainingProfileSchema.parse({ ...base, activityLevel: "moderate" }).activityLevel).toBe("moderate");
   expect(TrainingProfileSchema.parse(base).activityLevel).toBeUndefined();
   expect(TrainingProfileSchema.safeParse({ ...base, activityLevel: "extreme" }).success).toBe(false);
+});
+
+// --- birthDate (PERF-1 #3): guardar la fecha y derivar la edad para que se actualice sola ---
+
+test("acepta birthDate en formato ISO y lo deja opcional", () => {
+  expect(TrainingProfileSchema.parse({ ...base, birthDate: "1990-05-14" }).birthDate).toBe("1990-05-14");
+  expect(TrainingProfileSchema.parse(base).birthDate).toBeUndefined();
+});
+
+test("rechaza birthDate mal formado o con fecha imposible", () => {
+  expect(TrainingProfileSchema.safeParse({ ...base, birthDate: "14/05/1990" }).success).toBe(false);
+  expect(TrainingProfileSchema.safeParse({ ...base, birthDate: "1990-13-01" }).success).toBe(false); // mes 13
+  expect(TrainingProfileSchema.safeParse({ ...base, birthDate: "1990-02-30" }).success).toBe(false); // 30 feb
+  expect(TrainingProfileSchema.safeParse({ ...base, birthDate: "2200-01-01" }).success).toBe(false); // edad imposible
+});
+
+test("ageFromBirthDate calcula años cumplidos según la fecha 'ahora'", () => {
+  const now = Date.UTC(2026, 4, 14); // 14-05-2026
+  expect(ageFromBirthDate("1990-05-14", now)).toBe(36); // justo cumple hoy
+  expect(ageFromBirthDate("1990-05-15", now)).toBe(35); // cumple mañana → todavía 35
+  expect(ageFromBirthDate("1990-05-13", now)).toBe(36); // cumplió ayer
+  expect(ageFromBirthDate("no-es-fecha", now)).toBeUndefined();
+});
+
+test("ageFromBirthDate se corre solo: mismo nacimiento, distinto 'ahora'", () => {
+  expect(ageFromBirthDate("2000-01-01", Date.UTC(2025, 5, 1))).toBe(25);
+  expect(ageFromBirthDate("2000-01-01", Date.UTC(2026, 5, 1))).toBe(26); // un año después
+});
+
+test("profileWithDerivedAge pisa age con la derivada de birthDate", () => {
+  const p = TrainingProfileSchema.parse({ ...base, birthDate: "1990-05-14", age: 20 /* viejo/desactualizado */ });
+  const withAge = profileWithDerivedAge(p, Date.UTC(2026, 4, 14));
+  expect(withAge.age).toBe(36); // derivada de birthDate, no el 20 guardado
+});
+
+test("profileWithDerivedAge deja el perfil intacto si no hay birthDate (fallback a age)", () => {
+  const p = TrainingProfileSchema.parse({ ...base, age: 42 });
+  const out = profileWithDerivedAge(p, Date.UTC(2026, 4, 14));
+  expect(out.age).toBe(42);
+  expect(out.birthDate).toBeUndefined();
 });

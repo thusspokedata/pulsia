@@ -66,6 +66,19 @@ test("PUT /profile rechaza perfil inválido con 400", async () => {
   expect(res.status).toBe(400);
 });
 
+test("GET /profile deriva la edad desde birthDate (fresca, no la guardada)", async () => {
+  // Guardado con una age vieja/desactualizada; la respuesta debe traer la edad derivada de birthDate.
+  const db = fakeDb({ u1: { userId: "u1", data: { ...validProfile, birthDate: "1990-05-14", age: 20 } } });
+  const app = createApp(deps(db) as any);
+  const res = await app.request("/profile", { headers: authU1 });
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.birthDate).toBe("1990-05-14");
+  // Al menos 35 (nació en 1990); nunca el 20 guardado.
+  expect(body.age).toBeGreaterThanOrEqual(35);
+  expect(body.age).not.toBe(20);
+});
+
 test("un usuario no puede ver el perfil de otro", async () => {
   // Solo u1 tiene perfil guardado.
   const db = fakeDb({ u1: { userId: "u1", data: validProfile } });

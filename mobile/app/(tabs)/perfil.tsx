@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, View, Text, TextInput, Pressable } from "react-native";
 import { router } from "expo-router";
-import { TrainingProfileSchema, type TrainingProfile } from "@pulsia/shared";
+import { TrainingProfileSchema, ageFromBirthDate, type TrainingProfile } from "@pulsia/shared";
 import { getProfile, setProfile } from "../../src/storage/profile";
 import { getBackendUrl } from "../../src/storage/config";
 import { getLatestMetrics, postReading } from "../../src/api/metrics";
@@ -55,6 +55,7 @@ export default function PerfilScreen() {
   const [daysPerWeek, setDaysPerWeek] = useState("3");
   const [sessionMinutes, setSessionMinutes] = useState("45");
   const [age, setAge] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [weightKg, setWeightKg] = useState("");
   const [heightCm, setHeightCm] = useState("");
   const [gymEquipment, setGymEquipment] = useState<string[]>([]);
@@ -81,6 +82,7 @@ export default function PerfilScreen() {
         setDaysPerWeek(String(p.daysPerWeek));
         setSessionMinutes(String(p.sessionMinutes));
         setAge(p.age != null ? String(p.age) : "");
+        setBirthDate(p.birthDate ?? "");
         setHeightCm(p.heightCm != null ? String(p.heightCm) : "");
         setGymEquipment(p.gymEquipment);
         setHomeEquipment(p.homeEquipment);
@@ -111,12 +113,21 @@ export default function PerfilScreen() {
 
   async function onSave() {
     const numOrUndef = (s: string) => (s.trim() === "" ? undefined : Number(s));
+    // Con fecha de nacimiento, la edad se deriva de ahí (se mantiene fresca). Si está cargada pero
+    // mal formada, cortamos con un error claro en vez de guardar una edad manual desalineada.
+    const bd = birthDate.trim();
+    const derivedAge = bd ? ageFromBirthDate(bd) : undefined;
+    if (bd && derivedAge == null) {
+      setError("Fecha de nacimiento inválida. Usá el formato AAAA-MM-DD.");
+      return;
+    }
     const candidate = {
       experience,
       goal,
       sex,
       activityLevel: activityLevel as TrainingProfile["activityLevel"],
-      age: numOrUndef(age),
+      age: bd ? derivedAge : numOrUndef(age),
+      birthDate: bd || undefined,
       weightKg: numOrUndef(weightKg),
       heightCm: numOrUndef(heightCm),
       daysPerWeek: Number(daysPerWeek),
@@ -170,6 +181,10 @@ export default function PerfilScreen() {
     backgroundColor: colors.accent, borderRadius: radius.sm, padding: spacing.md, alignItems: "center",
   } as const;
 
+  // Con fecha de nacimiento cargada, la edad se muestra derivada (read-only) en vez del input manual.
+  const birthDateEntered = birthDate.trim() !== "";
+  const derivedAgeNow = birthDateEntered ? ageFromBirthDate(birthDate.trim()) : undefined;
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
       <Pressable
@@ -191,8 +206,24 @@ export default function PerfilScreen() {
         <View style={{ flex: 1 }}><Text style={label}>Días/semana</Text><TextInput style={input} keyboardType="number-pad" value={daysPerWeek} onChangeText={setDaysPerWeek} /></View>
         <View style={{ flex: 1 }}><Text style={label}>Min/sesión</Text><TextInput style={input} keyboardType="number-pad" value={sessionMinutes} onChangeText={setSessionMinutes} /></View>
       </View>
+      <View>
+        <Text style={label}>Fecha de nacimiento (opc.)</Text>
+        <TextInput style={input} value={birthDate} onChangeText={setBirthDate} placeholder="AAAA-MM-DD" autoCapitalize="none" />
+        <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: spacing.xs }}>
+          Si la cargás, la edad se calcula sola y se mantiene al día.
+        </Text>
+      </View>
       <View style={{ flexDirection: "row", gap: spacing.md }}>
-        <View style={{ flex: 1 }}><Text style={label}>Edad (opc.)</Text><TextInput style={input} keyboardType="number-pad" value={age} onChangeText={setAge} placeholder="años" /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={label}>Edad{birthDateEntered ? "" : " (opc.)"}</Text>
+          {birthDateEntered ? (
+            <Text testID="perfil-derived-age" style={[input, { color: derivedAgeNow != null ? colors.text : colors.textMuted }]}>
+              {derivedAgeNow != null ? `${derivedAgeNow} años` : "—"}
+            </Text>
+          ) : (
+            <TextInput style={input} keyboardType="number-pad" value={age} onChangeText={setAge} placeholder="años" />
+          )}
+        </View>
         <View style={{ flex: 1 }}><Text style={label}>Peso actual (última medición)</Text><TextInput style={input} keyboardType="numeric" value={weightKg} onChangeText={(v) => { weightEdited.current = true; setWeightKg(v); }} placeholder="kg" /></View>
         <View style={{ flex: 1 }}><Text style={label}>Altura cm (opc.)</Text><TextInput style={input} keyboardType="number-pad" value={heightCm} onChangeText={setHeightCm} placeholder="cm" /></View>
       </View>
