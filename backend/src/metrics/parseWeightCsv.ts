@@ -21,7 +21,17 @@ const MONTHS: Record<string, number> = {
   Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
   Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
 };
-const DATE_ROW = /^([A-Z][a-z]{2}) (\d{1,2}), (\d{4})$/;
+const DATE_ROW_MDY = /^([A-Z][a-z]{2}) (\d{1,2}), (\d{4})$/; // "Aug 16, 2026"
+const DATE_ROW_DMY = /^(\d{1,2}) ([A-Z][a-z]{2}) (\d{4})$/; // "16 Aug 2026"
+
+// Devuelve el token de mes SIN resolver (para preservar el skip "Mes no reconocido").
+function matchDateRow(s: string): { monthTok: string; d: number; y: number } | null {
+  let m = s.match(DATE_ROW_MDY);
+  if (m) return { monthTok: m[1], d: parseInt(m[2], 10), y: parseInt(m[3], 10) };
+  m = s.match(DATE_ROW_DMY);
+  if (m) return { monthTok: m[2], d: parseInt(m[1], 10), y: parseInt(m[3], 10) };
+  return null;
+}
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -46,18 +56,16 @@ export function parseWeightCsv(csv: string, offMin: number): MetricCsvPreview {
   for (let i = 1; i < lines.length; i++) {
     const cells = splitCsvLine(lines[i]);
     const first = cells[0] ?? "";
-    const dateMatch = first.match(DATE_ROW);
+    const dateMatch = matchDateRow(first);
 
     if (dateMatch) {
-      const mo = MONTHS[dateMatch[1]];
-      const d = parseInt(dateMatch[2], 10);
-      const y = parseInt(dateMatch[3], 10);
+      const mo = MONTHS[dateMatch.monthTok];
       if (!mo) {
         skipped.push({ line: i + 1, reason: `Mes no reconocido: "${first}"` });
         curDate = null;
         continue;
       }
-      curDate = { y, mo, d };
+      curDate = { y: dateMatch.y, mo, d: dateMatch.d };
       continue;
     }
 

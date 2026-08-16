@@ -54,3 +54,42 @@ test("parseWeightCsv salta una fila de medición sin fecha previa", () => {
 test("parseWeightCsv tira error si sólo hay header", () => {
   expect(() => parseWeightCsv(HEADER, -120)).toThrow();
 });
+
+test("parseWeightCsv parsea el formato regional D MMM YYYY", () => {
+  const csv = [
+    HEADER,
+    '"16 Aug 2026",',
+    "8:28 AM,80.0 kg,0.5 kg,25.0,18.0 %,35.0 kg,3.5 kg,61.0 %,",
+  ].join("\n");
+  const { rows } = parseWeightCsv(csv, -120);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].date).toBe("2026-08-16");
+  const byType = Object.fromEntries(rows[0].entries.map((e) => [e.metricType, e.value]));
+  expect(byType.weight_kg).toBe(80.0);
+  expect(byType.body_fat_pct).toBe(18.0);
+});
+
+test("parseWeightCsv parsea un CSV que mezcla ambos formatos de fecha", () => {
+  const csv = [
+    HEADER,
+    '" Jul 18, 2026",',
+    "8:28 AM,80.0 kg,0.5 kg,25.0,18.0 %,35.0 kg,3.5 kg,61.0 %,",
+    '"16 Aug 2026",',
+    "9:00 AM,79.8 kg,0.2 kg,25.1,17.5 %,34.8 kg,3.5 kg,60.7 %,",
+  ].join("\n");
+  const { rows } = parseWeightCsv(csv, -120);
+  expect(rows.some((r) => r.date === "2026-07-18")).toBe(true);
+  expect(rows.some((r) => r.date === "2026-08-16")).toBe(true);
+});
+
+test("parseWeightCsv salta la fila-fecha DMY con mes inválido (Mes no reconocido)", () => {
+  const csv = [
+    HEADER,
+    '"16 Xyz 2026",',
+    "8:28 AM,80.0 kg,0.5 kg,25.0,18.0 %,35.0 kg,3.5 kg,61.0 %,",
+    '"16 Aug 2026",',
+    "9:00 AM,79.8 kg,0.2 kg,25.1,17.5 %,34.8 kg,3.5 kg,60.7 %,",
+  ].join("\n");
+  const { skipped } = parseWeightCsv(csv, -120);
+  expect(skipped.some((s) => /Mes no reconocido: "16 Xyz 2026"/.test(s.reason))).toBe(true);
+});
