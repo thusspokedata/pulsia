@@ -1,4 +1,4 @@
-import { BODY_METRIC_TYPES, BP_METRIC_TYPES, METRIC_RANGES, type MetricReading, type MetricType } from "@pulsia/shared";
+import { BODY_METRIC_TYPES, BP_METRIC_TYPES, METRIC_RANGES, formatMetricValue, type MetricReading, type MetricType } from "@pulsia/shared";
 
 export interface BuildReadingResult {
   reading: MetricReading | null;
@@ -85,7 +85,7 @@ export function valuesForDay(
       .filter((p) => p.measuredAt >= dayStart && p.measuredAt < dayEnd)
       .sort((a, b) => a.measuredAt - b.measuredAt)
       .at(-1);
-    if (last) out[t] = String(last.value);
+    if (last) out[t] = formatMetricValue(last.value);
   }
   return out;
 }

@@ -15,7 +15,7 @@ import { BarChart } from "../../src/components/BarChart";
 import { buildReadingFromForm, buildBpReadingFromForm, buildReadingForTypes, valuesForDay, type BpForm } from "../../src/session/metricForm";
 import { dayAtNoon, dayLabel } from "../../src/session/metricDate";
 import { buildDailyKcal } from "../../src/session/weeklyBars";
-import { availableYears, buildDailyBurn, burnThresholds, computeNutritionGoal, countTrainedDays, daysInYear, BODY_METRIC_TYPES, ACTIVITY_METRIC_TYPES, SUBJECTIVE_METRIC_TYPES, FLOW_METRIC_TYPES, METRIC_LABELS, METRIC_UNITS, formatMetricValue, type MetricType, type BodyMetric, type PerformanceTrends, type CardioActivity, type TrainingProfile, type NutritionGoalInput } from "@pulsia/shared";
+import { availableYears, buildDailyBurn, burnThresholds, computeNutritionGoal, countTrainedDays, daysInYear, BODY_METRIC_TYPES, ACTIVITY_METRIC_TYPES, SUBJECTIVE_METRIC_TYPES, FLOW_METRIC_TYPES, CURRENT_METRIC_TYPES, TREND_METRIC_TYPES, metricsWithData, METRIC_LABELS, METRIC_UNITS, formatMetricValue, type MetricType, type BodyMetric, type PerformanceTrends, type CardioActivity, type TrainingProfile, type NutritionGoalInput } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
 // Trío categórico distinguible (incl. daltonismo): teal (acento), azul, ámbar.
@@ -130,6 +130,14 @@ export default function ProgresoScreen() {
     setActForm(valuesForDay(flowSeries, ACTIVITY_METRIC_TYPES, noon));
     setSubjForm(valuesForDay(flowSeries, SUBJECTIVE_METRIC_TYPES, noon));
   }, [dayOffset, flowSeries]);
+
+  // Tendencia oculta las métricas sin datos. Si `selected` quedó apuntando a una oculta, el chart
+  // queda vacío sin chip resaltado: reseleccionamos la primera métrica de tendencia con datos.
+  useEffect(() => {
+    const visible = metricsWithData(TREND_METRIC_TYPES, latest);
+    if (visible.length > 0 && !visible.some((t) => t === selected)) onSelect(visible[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latest]);
 
   async function onSelect(type: MetricType) {
     setSelected(type);
@@ -258,8 +266,8 @@ export default function ProgresoScreen() {
 
       <Section title="Valores actuales">
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-          {[...BODY_METRIC_TYPES, ...ACTIVITY_METRIC_TYPES, ...SUBJECTIVE_METRIC_TYPES].map((t) => (
-            <View key={t} style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.md, padding: spacing.md, minWidth: 100 }}>
+          {metricsWithData(CURRENT_METRIC_TYPES, latest).map((t) => (
+            <View key={t} testID={`current-tile-${t}`} style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.md, padding: spacing.md, minWidth: 100 }}>
               <Text style={{ color: colors.textMuted, fontSize: 12 }}>{METRIC_LABELS[t]}</Text>
               <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600" }}>
                 {latest[t] ? `${formatMetricValue(latest[t]!.value)} ${METRIC_UNITS[t]}` : "—"}
@@ -271,8 +279,8 @@ export default function ProgresoScreen() {
 
       <Section title="Tendencia">
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
-          {[...BODY_METRIC_TYPES, ...ACTIVITY_METRIC_TYPES, ...SUBJECTIVE_METRIC_TYPES].map((t) => (
-            <Pressable key={t} onPress={() => onSelect(t)}
+          {metricsWithData(TREND_METRIC_TYPES, latest).map((t) => (
+            <Pressable key={t} testID={`trend-chip-${t}`} onPress={() => onSelect(t)}
               style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: selected === t ? colors.accent : colors.surfaceMuted }}>
               <Text style={{ color: selected === t ? "#fff" : colors.text, fontSize: 13 }}>{METRIC_LABELS[t]}</Text>
             </Pressable>

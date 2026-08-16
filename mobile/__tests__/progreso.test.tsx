@@ -84,6 +84,57 @@ test("elegir un día pasado + guardar actividad persiste la lectura con measured
   );
 });
 
+test("Valores actuales solo muestra tiles de métricas con dato", async () => {
+  mockGetLatestMetrics.mockResolvedValue({
+    weight_kg: { value: 80, measuredAt: NOW },
+    steps: { value: 9000, measuredAt: NOW },
+    steps_goal: { value: 10000, measuredAt: NOW },
+  });
+
+  const r = await render(<ProgresoScreen />);
+
+  await waitFor(() => expect(r.getByTestId("current-tile-weight_kg")).toBeTruthy());
+  expect(r.getByTestId("current-tile-steps")).toBeTruthy();
+  // steps_goal es un "valor actual", así que su tile SÍ aparece.
+  expect(r.getByTestId("current-tile-steps_goal")).toBeTruthy();
+  // Métricas sin dato NO se dibujan.
+  expect(r.queryByTestId("current-tile-body_fat_pct")).toBeNull();
+  expect(r.queryByTestId("current-tile-stress")).toBeNull();
+});
+
+test("Tendencia oculta chips sin datos y excluye steps_goal aunque tenga dato", async () => {
+  mockGetLatestMetrics.mockResolvedValue({
+    weight_kg: { value: 80, measuredAt: NOW },
+    steps: { value: 9000, measuredAt: NOW },
+    steps_goal: { value: 10000, measuredAt: NOW },
+  });
+
+  const r = await render(<ProgresoScreen />);
+
+  await waitFor(() => expect(r.getByTestId("trend-chip-weight_kg")).toBeTruthy());
+  // steps_goal es un objetivo, no una serie a seguir: nunca es chip de tendencia.
+  expect(r.queryByTestId("trend-chip-steps_goal")).toBeNull();
+  // Sin dato tampoco aparece.
+  expect(r.queryByTestId("trend-chip-body_fat_pct")).toBeNull();
+});
+
+test("si la métrica seleccionada no tiene datos, el useEffect selecciona la primera disponible", async () => {
+  // weight_kg (default de `selected`) no tiene dato; solo steps. El chart no debe quedar sin chip.
+  mockGetLatestMetrics.mockResolvedValue({
+    steps: { value: 9000, measuredAt: NOW },
+  });
+
+  const r = await render(<ProgresoScreen />);
+
+  await waitFor(() => expect(r.getByTestId("trend-chip-steps")).toBeTruthy());
+  // weight_kg no tiene datos → no hay chip para él.
+  expect(r.queryByTestId("trend-chip-weight_kg")).toBeNull();
+  // El chip de steps quedó seleccionado (fondo de acento).
+  await waitFor(() =>
+    expect(r.getByTestId("trend-chip-steps").props.style.backgroundColor).toBe(colors.accent),
+  );
+});
+
 test("sin peso en el perfil, las secciones de gasto explican qué falta en vez de mostrar la grilla", async () => {
   // Regresión: antes el heatmap funcionaba solo con duración. Al pasar a kcal, un usuario sin
   // perfil completo vería la grilla ENTERA vacía, que se lee como un bug de la app.

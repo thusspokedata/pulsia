@@ -3,6 +3,7 @@ import {
   METRIC_TYPES, BODY_METRIC_TYPES, BP_METRIC_TYPES, METRIC_UNITS, METRIC_LABELS, METRIC_RANGES,
   MetricTypeSchema, BodyMetricEntrySchema, MetricReadingSchema,
   ACTIVITY_METRIC_TYPES, SUBJECTIVE_METRIC_TYPES, FLOW_METRIC_TYPES, formatMetricValue,
+  CURRENT_METRIC_TYPES, TREND_METRIC_TYPES, metricsWithData,
 } from "./metrics";
 
 test("BODY_METRIC_TYPES cubre los 6 tipos originales y tiene unidad + label cada uno", () => {
@@ -119,4 +120,28 @@ test("formatMetricValue redondea a ≤2 decimales sin ceros de relleno", () => {
 test("formatMetricValue devuelve '—' para valores no finitos", () => {
   expect(formatMetricValue(NaN)).toBe("—");
   expect(formatMetricValue(Infinity)).toBe("—");
+});
+
+test("sleep_quality vive en SUBJECTIVE_METRIC_TYPES, no en ACTIVITY_METRIC_TYPES", () => {
+  // Decisión del owner: la calidad de sueño es un rating 1-5 manual, su lugar es "Cómo te sentís".
+  expect(SUBJECTIVE_METRIC_TYPES).toContain("sleep_quality");
+  expect(ACTIVITY_METRIC_TYPES).not.toContain("sleep_quality");
+});
+
+test("TREND_METRIC_TYPES excluye steps_goal pero conserva las series a seguir", () => {
+  expect(TREND_METRIC_TYPES).not.toContain("steps_goal");
+  expect(TREND_METRIC_TYPES).toContain("weight_kg");
+  expect(TREND_METRIC_TYPES).toContain("steps");
+});
+
+test("CURRENT_METRIC_TYPES sí incluye steps_goal (es un valor actual)", () => {
+  expect(CURRENT_METRIC_TYPES).toContain("steps_goal");
+});
+
+test("metricsWithData filtra las métricas sin dato y preserva el orden", () => {
+  const out = metricsWithData(["weight_kg", "steps", "stress"], {
+    weight_kg: { value: 80, measuredAt: 1 },
+    stress: { value: 3, measuredAt: 1 },
+  });
+  expect(out).toEqual(["weight_kg", "stress"]);
 });
