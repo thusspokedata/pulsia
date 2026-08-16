@@ -34,6 +34,14 @@ export const METRIC_UNITS: Record<MetricType, string> = {
   stress: "/5", mood: "/5", energy: "/5",
 };
 
+// Formatea un valor de métrica para mostrar: redondea a ≤2 decimales y deja caer los ceros de
+// relleno (`10.78333h` → `"10.78"`, `7.0h` → `"7"`). Number→String ya descarta los ceros de cola,
+// así que redondear y volver a string alcanza. Devuelve "—" para no-finitos (evita "NaN kg").
+export function formatMetricValue(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  return String(Math.round(n * 100) / 100);
+}
+
 export const METRIC_LABELS: Record<MetricType, string> = {
   weight_kg: "Peso", body_fat_pct: "% grasa", skeletal_muscle_mass_kg: "Masa muscular",
   bone_mass_kg: "Masa ósea", body_water_pct: "Agua corporal", waist_cm: "Cintura",

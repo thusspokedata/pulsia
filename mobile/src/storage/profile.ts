@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { TrainingProfileSchema, type TrainingProfile } from "@pulsia/shared";
+import { TrainingProfileSchema, profileWithDerivedAge, type TrainingProfile } from "@pulsia/shared";
 
 const KEY = "pulsia.profile";
 
@@ -8,7 +8,9 @@ export async function getProfile(): Promise<TrainingProfile | null> {
   if (!raw) return null;
   try {
     const parsed = TrainingProfileSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : null;
+    // Deriva la edad desde birthDate en la lectura: todo consumidor del perfil (perfil, progreso,
+    // gasto) ve la edad fresca sin recalcularla en cada sitio.
+    return parsed.success ? profileWithDerivedAge(parsed.data) : null;
   } catch {
     return null;
   }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, View, Text, TextInput, Pressable } from "react-native";
 import { router } from "expo-router";
-import { TrainingProfileSchema, type TrainingProfile } from "@pulsia/shared";
+import { TrainingProfileSchema, ageFromBirthDate, type TrainingProfile } from "@pulsia/shared";
 import { getProfile, setProfile } from "../../src/storage/profile";
 import { getBackendUrl } from "../../src/storage/config";
 import { getLatestMetrics, postReading } from "../../src/api/metrics";
@@ -29,12 +29,16 @@ const SEX = [
   { value: "other", label: "Otro" },
   { value: "prefer_not_to_say", label: "Prefiero no decir" },
 ];
+// La descripción explica el MOVIMIENTO DIARIO base (sin contar entrenamientos): es la semilla del
+// TDEE, así que elegir bien cambia el gasto estimado (factores 1.2 / 1.375 / 1.55 / 1.725).
 const ACTIVITY = [
-  { value: "sedentary", label: "Sedentario" },
-  { value: "light", label: "Ligero" },
-  { value: "moderate", label: "Moderado" },
-  { value: "active", label: "Activo" },
+  { value: "sedentary", label: "Sedentario", desc: "Trabajo sentado y poco movimiento; casi nada de ejercicio." },
+  { value: "light", label: "Ligero", desc: "Ejercicio ligero o caminatas 1-3 días por semana." },
+  { value: "moderate", label: "Moderado", desc: "Activo la mayoría de los días: ejercicio moderado 3-5 días o trabajo de pie." },
+  { value: "active", label: "Activo", desc: "Muy activo: entrenás fuerte 6-7 días o tenés trabajo físico." },
 ];
+// Cuánto se muestra "Datos guardados ✓" antes de auto-ocultarse.
+const SAVED_FLASH_MS = 2500;
 const EQUIPMENT = [
   { value: "bodyweight", label: "Peso corporal" },
   { value: "dumbbell", label: "Mancuernas" },
@@ -56,6 +60,7 @@ export default function PerfilScreen() {
   const [daysPerWeek, setDaysPerWeek] = useState("3");
   const [sessionMinutes, setSessionMinutes] = useState("45");
   const [age, setAge] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [weightKg, setWeightKg] = useState("");
   const [heightCm, setHeightCm] = useState("");
   const [gymEquipment, setGymEquipment] = useState<string[]>([]);
@@ -63,6 +68,9 @@ export default function PerfilScreen() {
   const [limitations, setLimitations] = useState("");
   const [saved, setSaved] = useState<TrainingProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Feedback efímero de "Datos guardados" tras un guardado exitoso (se auto-oculta).
+  const [savedFlash, setSavedFlash] = useState(false);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // El peso es fuente única: se muestra la última medición del backend. Guardamos el valor
   // cargado para detectar si el usuario lo editó (y recién ahí registrar una medición nueva).
   const backendUrl = useRef<string | null>(null);
@@ -82,6 +90,7 @@ export default function PerfilScreen() {
         setDaysPerWeek(String(p.daysPerWeek));
         setSessionMinutes(String(p.sessionMinutes));
         setAge(p.age != null ? String(p.age) : "");
+        setBirthDate(p.birthDate ?? "");
         setHeightCm(p.heightCm != null ? String(p.heightCm) : "");
         setGymEquipment(p.gymEquipment);
         setHomeEquipment(p.homeEquipment);
@@ -110,14 +119,38 @@ export default function PerfilScreen() {
     })();
   }, []);
 
+  // Limpiar el timer del flash si la pantalla se desmonta mientras está visible.
+  useEffect(() => () => { if (flashTimer.current) clearTimeout(flashTimer.current); }, []);
+
+  function flashSaved() {
+    setSavedFlash(true);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setSavedFlash(false), SAVED_FLASH_MS);
+  }
+
   async function onSave() {
     const numOrUndef = (s: string) => (s.trim() === "" ? undefined : Number(s));
+    // Con fecha de nacimiento, la edad se deriva de ahí (se mantiene fresca). Si está cargada pero
+    // mal formada, cortamos con un error claro en vez de guardar una edad manual desalineada.
+    const bd = birthDate.trim();
+    const derivedAge = bd ? ageFromBirthDate(bd) : undefined;
+    if (bd && derivedAge == null) {
+      setError("Fecha de nacimiento inválida. Usá el formato AAAA-MM-DD.");
+      return;
+    }
+    // La edad derivada válida pero fuera del rango del perfil (12–100) daría un error genérico de
+    // "días/minutos" al parsear; mejor decir cuál es el problema real.
+    if (bd && derivedAge != null && (derivedAge < 12 || derivedAge > 100)) {
+      setError("La edad que sale de esa fecha está fuera de rango (12–100 años).");
+      return;
+    }
     const candidate = {
       experience,
       goal,
       sex,
       activityLevel: activityLevel as TrainingProfile["activityLevel"],
-      age: numOrUndef(age),
+      age: bd ? derivedAge : numOrUndef(age),
+      birthDate: bd || undefined,
       weightKg: numOrUndef(weightKg),
       heightCm: numOrUndef(heightCm),
       daysPerWeek: Number(daysPerWeek),
@@ -135,6 +168,7 @@ export default function PerfilScreen() {
       await setProfile(parsed.data);
       setSaved(parsed.data);
       setError(null);
+      flashSaved();
     } catch {
       setError("No se pudo guardar el perfil. Intentá de nuevo.");
       return;
@@ -171,6 +205,10 @@ export default function PerfilScreen() {
     backgroundColor: colors.accent, borderRadius: radius.sm, padding: spacing.md, alignItems: "center",
   } as const;
 
+  // Con fecha de nacimiento cargada, la edad se muestra derivada (read-only) en vez del input manual.
+  const birthDateEntered = birthDate.trim() !== "";
+  const derivedAgeNow = birthDateEntered ? ageFromBirthDate(birthDate.trim()) : undefined;
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
       <Pressable
@@ -187,13 +225,34 @@ export default function PerfilScreen() {
       <View>
         <Text style={label}>Nivel de actividad (sin contar entrenamientos)</Text>
         <ChipGroup single options={ACTIVITY} selected={activityLevel ? [activityLevel] : []} onChange={(v) => setActivityLevel(v[0])} />
+        {activityLevel ? (
+          <Text testID="activity-desc" style={{ color: colors.textMuted, fontSize: 12, marginTop: spacing.xs }}>
+            {ACTIVITY.find((a) => a.value === activityLevel)?.desc}
+          </Text>
+        ) : null}
       </View>
       <View style={{ flexDirection: "row", gap: spacing.md }}>
         <View style={{ flex: 1 }}><Text style={label}>Días/semana</Text><TextInput style={input} keyboardType="number-pad" value={daysPerWeek} onChangeText={setDaysPerWeek} /></View>
         <View style={{ flex: 1 }}><Text style={label}>Min/sesión</Text><TextInput style={input} keyboardType="number-pad" value={sessionMinutes} onChangeText={setSessionMinutes} /></View>
       </View>
+      <View>
+        <Text style={label}>Fecha de nacimiento (opc.)</Text>
+        <TextInput style={input} value={birthDate} onChangeText={setBirthDate} placeholder="AAAA-MM-DD" autoCapitalize="none" />
+        <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: spacing.xs }}>
+          Si la cargás, la edad se calcula sola y se mantiene al día.
+        </Text>
+      </View>
       <View style={{ flexDirection: "row", gap: spacing.md }}>
-        <View style={{ flex: 1 }}><Text style={label}>Edad (opc.)</Text><TextInput style={input} keyboardType="number-pad" value={age} onChangeText={setAge} placeholder="años" /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={label}>Edad{birthDateEntered ? "" : " (opc.)"}</Text>
+          {birthDateEntered ? (
+            <Text testID="perfil-derived-age" style={[input, { color: derivedAgeNow != null ? colors.text : colors.textMuted }]}>
+              {derivedAgeNow != null ? `${derivedAgeNow} años` : "—"}
+            </Text>
+          ) : (
+            <TextInput style={input} keyboardType="number-pad" value={age} onChangeText={setAge} placeholder="años" />
+          )}
+        </View>
         <View style={{ flex: 1 }}><Text style={label}>Peso actual (última medición)</Text><TextInput style={input} keyboardType="numeric" value={weightKg} onChangeText={(v) => { weightEdited.current = true; setWeightKg(v); }} placeholder="kg" /></View>
         <View style={{ flex: 1 }}><Text style={label}>Altura cm (opc.)</Text><TextInput style={input} keyboardType="number-pad" value={heightCm} onChangeText={setHeightCm} placeholder="cm" /></View>
       </View>
@@ -202,6 +261,7 @@ export default function PerfilScreen() {
       <View><Text style={label}>Limitaciones (una por línea)</Text><TextInput style={[input, { minHeight: 72 }]} multiline value={limitations} onChangeText={setLimitations} placeholder="dolor lumbar leve" /></View>
 
       {error && <Text style={{ color: colors.accentText }}>{error}</Text>}
+      {savedFlash && <Text testID="perfil-saved-flash" accessibilityLiveRegion="polite" style={{ color: colors.accent }}>Datos guardados ✓</Text>}
 
       <Pressable style={primary} onPress={onSave}><Text style={{ color: "#fff" }}>Guardar perfil</Text></Pressable>
 
