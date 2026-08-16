@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, View, Text, TextInput, Pressable } from "react-native";
 import { router } from "expo-router";
-import { TrainingProfileSchema, type TrainingProfile } from "@pulsia/shared";
+import { TrainingProfileSchema, isTrainingEnabled, type TrainingProfile } from "@pulsia/shared";
 import { getProfile, setProfile } from "../../src/storage/profile";
 import { getBackendUrl } from "../../src/storage/config";
 import { getLatestMetrics, postReading } from "../../src/api/metrics";
@@ -48,6 +48,7 @@ const EQUIPMENT = [
 ];
 
 export default function PerfilScreen() {
+  const [trainingEnabled, setTrainingEnabled] = useState(true);
   const [experience, setExperience] = useState("beginner");
   const [goal, setGoal] = useState("general_fitness");
   const [sex, setSex] = useState<string | undefined>(undefined);
@@ -74,6 +75,7 @@ export default function PerfilScreen() {
     (async () => {
       const p = await getProfile();
       if (p) {
+        setTrainingEnabled(isTrainingEnabled(p));
         setExperience(p.experience);
         setGoal(p.goal);
         setSex(p.sex);
@@ -119,8 +121,10 @@ export default function PerfilScreen() {
       age: numOrUndef(age),
       weightKg: numOrUndef(weightKg),
       heightCm: numOrUndef(heightCm),
-      daysPerWeek: Number(daysPerWeek),
-      sessionMinutes: Number(sessionMinutes),
+      trainingEnabled,
+      // En modo "solo seguimiento" no se pide plan → días/min no aplican.
+      daysPerWeek: trainingEnabled ? Number(daysPerWeek) : undefined,
+      sessionMinutes: trainingEnabled ? Number(sessionMinutes) : undefined,
       gymEquipment,
       homeEquipment,
       limitations: limitations.split("\n").map((l) => l.trim()).filter(Boolean),
@@ -180,31 +184,56 @@ export default function PerfilScreen() {
         <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: "600" }}>Qué sabe la IA de mí →</Text>
       </Pressable>
 
-      <View><Text style={label}>Experiencia</Text><ChipGroup single options={EXPERIENCE} selected={[experience]} onChange={(v) => setExperience(v[0])} /></View>
-      <View><Text style={label}>Objetivo</Text><ChipGroup single options={GOAL} selected={[goal]} onChange={(v) => setGoal(v[0])} /></View>
+      <View>
+        <Text style={label}>¿Querés que la app arme un plan de entrenamiento?</Text>
+        <ChipGroup
+          single
+          options={[{ value: "yes", label: "Sí, con plan" }, { value: "no", label: "Solo seguimiento" }]}
+          selected={[trainingEnabled ? "yes" : "no"]}
+          onChange={(v) => setTrainingEnabled(v[0] === "yes")}
+        />
+        {!trainingEnabled ? (
+          <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: spacing.xs }}>
+            Sin plan: seguís usando salud, nutrición y actividad. Podés reactivarlo cuando quieras.
+          </Text>
+        ) : null}
+      </View>
+
+      {trainingEnabled ? (
+        <>
+          <View><Text style={label}>Experiencia</Text><ChipGroup single options={EXPERIENCE} selected={[experience]} onChange={(v) => setExperience(v[0])} /></View>
+          <View><Text style={label}>Objetivo</Text><ChipGroup single options={GOAL} selected={[goal]} onChange={(v) => setGoal(v[0])} /></View>
+        </>
+      ) : null}
       <View><Text style={label}>Sexo</Text><ChipGroup single options={SEX} selected={sex ? [sex] : []} onChange={(v) => setSex(v[0])} /></View>
       <View>
         <Text style={label}>Nivel de actividad (sin contar entrenamientos)</Text>
         <ChipGroup single options={ACTIVITY} selected={activityLevel ? [activityLevel] : []} onChange={(v) => setActivityLevel(v[0])} />
       </View>
-      <View style={{ flexDirection: "row", gap: spacing.md }}>
-        <View style={{ flex: 1 }}><Text style={label}>Días/semana</Text><TextInput style={input} keyboardType="number-pad" value={daysPerWeek} onChangeText={setDaysPerWeek} /></View>
-        <View style={{ flex: 1 }}><Text style={label}>Min/sesión</Text><TextInput style={input} keyboardType="number-pad" value={sessionMinutes} onChangeText={setSessionMinutes} /></View>
-      </View>
+      {trainingEnabled ? (
+        <View style={{ flexDirection: "row", gap: spacing.md }}>
+          <View style={{ flex: 1 }}><Text style={label}>Días/semana</Text><TextInput testID="perfil-days" style={input} keyboardType="number-pad" value={daysPerWeek} onChangeText={setDaysPerWeek} /></View>
+          <View style={{ flex: 1 }}><Text style={label}>Min/sesión</Text><TextInput style={input} keyboardType="number-pad" value={sessionMinutes} onChangeText={setSessionMinutes} /></View>
+        </View>
+      ) : null}
       <View style={{ flexDirection: "row", gap: spacing.md }}>
         <View style={{ flex: 1 }}><Text style={label}>Edad (opc.)</Text><TextInput style={input} keyboardType="number-pad" value={age} onChangeText={setAge} placeholder="años" /></View>
         <View style={{ flex: 1 }}><Text style={label}>Peso actual (última medición)</Text><TextInput style={input} keyboardType="numeric" value={weightKg} onChangeText={(v) => { weightEdited.current = true; setWeightKg(v); }} placeholder="kg" /></View>
         <View style={{ flex: 1 }}><Text style={label}>Altura cm (opc.)</Text><TextInput style={input} keyboardType="number-pad" value={heightCm} onChangeText={setHeightCm} placeholder="cm" /></View>
       </View>
-      <View><Text style={label}>Equipamiento gimnasio</Text><ChipGroup options={EQUIPMENT} selected={gymEquipment} onChange={setGymEquipment} /></View>
-      <View><Text style={label}>Equipamiento casa</Text><ChipGroup options={EQUIPMENT} selected={homeEquipment} onChange={setHomeEquipment} /></View>
+      {trainingEnabled ? (
+        <>
+          <View><Text style={label}>Equipamiento gimnasio</Text><ChipGroup options={EQUIPMENT} selected={gymEquipment} onChange={setGymEquipment} /></View>
+          <View><Text style={label}>Equipamiento casa</Text><ChipGroup options={EQUIPMENT} selected={homeEquipment} onChange={setHomeEquipment} /></View>
+        </>
+      ) : null}
       <View><Text style={label}>Limitaciones (una por línea)</Text><TextInput style={[input, { minHeight: 72 }]} multiline value={limitations} onChangeText={setLimitations} placeholder="dolor lumbar leve" /></View>
 
       {error && <Text style={{ color: colors.accentText }}>{error}</Text>}
 
       <Pressable style={primary} onPress={onSave}><Text style={{ color: "#fff" }}>Guardar perfil</Text></Pressable>
 
-      {saved && (
+      {saved && trainingEnabled && (
         <Pressable
           style={[primary, { backgroundColor: colors.accentSoft }]}
           onPress={() => router.push("/generando")}

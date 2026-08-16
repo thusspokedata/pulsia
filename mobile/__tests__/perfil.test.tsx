@@ -46,3 +46,26 @@ test("el link de memoria navega a /memoria", async () => {
   await fireEvent.press(screen.getByTestId("perfil-memoria-link"));
   expect(router.push).toHaveBeenCalledWith("/memoria");
 });
+
+test("modo 'solo seguimiento' oculta los campos de entrenamiento", async () => {
+  await render(<PerfilScreen />);
+  // Por defecto (con plan) los campos de entrenamiento están.
+  expect(screen.getByText("Objetivo")).toBeTruthy();
+  expect(screen.getByTestId("perfil-days")).toBeTruthy();
+  // Al pasar a "Solo seguimiento" desaparecen.
+  await fireEvent.press(screen.getByTestId("chip-no"));
+  expect(screen.queryByText("Objetivo")).toBeNull();
+  expect(screen.queryByTestId("perfil-days")).toBeNull();
+});
+
+test("guarda en modo 'solo seguimiento' con trainingEnabled=false y sin días/min", async () => {
+  await render(<PerfilScreen />);
+  await fireEvent.press(screen.getByTestId("chip-no"));
+  await fireEvent.press(screen.getByText("Guardar perfil"));
+  await waitFor(async () => {
+    const p = JSON.parse((await AsyncStorage.getItem("pulsia.profile")) as string);
+    expect(p.trainingEnabled).toBe(false);
+    expect(p.daysPerWeek).toBeUndefined();
+    expect(p.sessionMinutes).toBeUndefined();
+  });
+});

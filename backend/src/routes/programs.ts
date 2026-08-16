@@ -129,7 +129,9 @@ export function programsRoutes(deps: AppDeps) {
       return c.json({ error: parsed.error.issues }, 400);
     }
     const { profile: reqProfile, location, focus, notes } = parsed.data;
-    const sessionMinutes = parsed.data.sessionMinutes ?? reqProfile.sessionMinutes;
+    // reqProfile.sessionMinutes es opcional desde el modo "solo seguimiento"; para un entreno
+    // puntual (que sí es entrenamiento) caemos al default del perfil si faltara.
+    const sessionMinutes = parsed.data.sessionMinutes ?? reqProfile.sessionMinutes ?? 45;
     const equipment = parsed.data.equipment.length > 0
       ? parsed.data.equipment
       : (location === "home" ? reqProfile.homeEquipment : reqProfile.gymEquipment);
