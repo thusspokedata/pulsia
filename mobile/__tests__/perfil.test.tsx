@@ -47,22 +47,25 @@ test("el link de memoria navega a /memoria", async () => {
   expect(router.push).toHaveBeenCalledWith("/memoria");
 });
 
-test("al elegir un nivel de actividad se muestra su descripción", async () => {
+test("cada nivel de actividad muestra una descripción no vacía y distinta", async () => {
   await render(<PerfilScreen />);
   // Sin selección todavía no hay descripción.
   expect(screen.queryByTestId("activity-desc")).toBeNull();
-  await fireEvent.press(screen.getByTestId("chip-moderate"));
-  const desc = screen.getByTestId("activity-desc");
-  expect(desc.props.children).toBeTruthy();
-  // Cambiar de nivel cambia la descripción.
-  const moderateText = desc.props.children;
-  await fireEvent.press(screen.getByTestId("chip-sedentary"));
-  expect(screen.getByTestId("activity-desc").props.children).not.toBe(moderateText);
+  const texts: string[] = [];
+  for (const level of ["sedentary", "light", "moderate", "active"]) {
+    await fireEvent.press(screen.getByTestId(`chip-${level}`));
+    const desc = screen.getByTestId("activity-desc").props.children as string;
+    expect(typeof desc).toBe("string");
+    expect(desc.length).toBeGreaterThan(0);
+    texts.push(desc);
+  }
+  // Las cuatro son distintas: atrapa una descripción vacía, faltante o duplicada en cualquier nivel.
+  expect(new Set(texts).size).toBe(4);
 });
 
-test("al guardar el perfil se muestra el feedback 'Datos guardados'", async () => {
+test("al guardar el perfil se muestra el feedback exacto 'Datos guardados ✓'", async () => {
   await render(<PerfilScreen />);
   expect(screen.queryByTestId("perfil-saved-flash")).toBeNull();
   await fireEvent.press(screen.getByText("Guardar perfil"));
-  await waitFor(() => expect(screen.getByTestId("perfil-saved-flash")).toBeTruthy());
+  await waitFor(() => expect(screen.getByTestId("perfil-saved-flash").props.children).toBe("Datos guardados ✓"));
 });

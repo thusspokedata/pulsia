@@ -36,6 +36,8 @@ const ACTIVITY = [
   { value: "moderate", label: "Moderado", desc: "Activo la mayoría de los días: ejercicio moderado 3-5 días o trabajo de pie." },
   { value: "active", label: "Activo", desc: "Muy activo: entrenás fuerte 6-7 días o tenés trabajo físico." },
 ];
+// Cuánto se muestra "Datos guardados ✓" antes de auto-ocultarse.
+const SAVED_FLASH_MS = 2500;
 const EQUIPMENT = [
   { value: "bodyweight", label: "Peso corporal" },
   { value: "dumbbell", label: "Mancuernas" },
@@ -120,7 +122,7 @@ export default function PerfilScreen() {
   function flashSaved() {
     setSavedFlash(true);
     if (flashTimer.current) clearTimeout(flashTimer.current);
-    flashTimer.current = setTimeout(() => setSavedFlash(false), 2500);
+    flashTimer.current = setTimeout(() => setSavedFlash(false), SAVED_FLASH_MS);
   }
 
   async function onSave() {
@@ -221,7 +223,7 @@ export default function PerfilScreen() {
       <View><Text style={label}>Limitaciones (una por línea)</Text><TextInput style={[input, { minHeight: 72 }]} multiline value={limitations} onChangeText={setLimitations} placeholder="dolor lumbar leve" /></View>
 
       {error && <Text style={{ color: colors.accentText }}>{error}</Text>}
-      {savedFlash && <Text testID="perfil-saved-flash" style={{ color: colors.accent }}>Datos guardados ✓</Text>}
+      {savedFlash && <Text testID="perfil-saved-flash" accessibilityLiveRegion="polite" style={{ color: colors.accent }}>Datos guardados ✓</Text>}
 
       <Pressable style={primary} onPress={onSave}><Text style={{ color: "#fff" }}>Guardar perfil</Text></Pressable>
 
