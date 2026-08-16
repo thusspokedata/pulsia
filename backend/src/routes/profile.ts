@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
-import { TrainingProfileSchema } from "@pulsia/shared";
+import { TrainingProfileSchema, profileWithDerivedAge } from "@pulsia/shared";
 import { profiles } from "../db/schema";
 import type { AppDeps } from "../app";
 
@@ -11,7 +11,9 @@ export function profileRoutes(deps: AppDeps) {
     const userId = c.get("userId");
     const row = await deps.db.query.profiles.findFirst({ where: eq(profiles.userId, userId) });
     if (!row) return c.json({ error: "Sin perfil" }, 404);
-    return c.json(row.data);
+    // Deriva la edad desde birthDate si existe: así el perfil que ve el cliente/web está fresco
+    // (no depende de que el móvil re-guarde en cada cumpleaños).
+    return c.json(profileWithDerivedAge(row.data));
   });
 
   r.put("/", async (c) => {
