@@ -19,6 +19,12 @@ test("el prompt incluye los parámetros del perfil", () => {
   expect(prompt).toContain("dolor lumbar leve");
 });
 
+test("describe el objetivo recomposition para la IA (además del enum crudo)", () => {
+  const out = buildGenerationPrompt({ ...profile, goal: "recomposition" });
+  expect(out).toContain("recomposition"); // el enum sigue presente
+  expect(out.toLowerCase()).toContain("recomposición"); // + descripción legible para la IA
+});
+
 test("el prompt solo ofrece ejercicios permitidos por el equipamiento", () => {
   const prompt = buildGenerationPrompt(profile);
   // barbell_bench_press requiere barbell+bench (disponibles) -> presente

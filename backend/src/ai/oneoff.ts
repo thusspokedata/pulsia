@@ -1,4 +1,5 @@
 import { catalogForEquipment, type TrainingProfile, type Equipment, type MuscleGroup } from "@pulsia/shared";
+import { GOAL_ES } from "./prompt";
 
 export type OneOffArgs = {
   location: "gym" | "home";
@@ -28,7 +29,7 @@ export function buildOneOffPrompt(profile: TrainingProfile, args: OneOffArgs): s
     "",
     "Perfil del atleta:",
     `- Experiencia: ${profile.experience}`,
-    `- Objetivo: ${profile.goal}`,
+    `- Objetivo: ${profile.goal}${GOAL_ES[profile.goal] ? ` (${GOAL_ES[profile.goal]})` : ""}`,
     `- Minutos disponibles para esta sesión: ${args.sessionMinutes}`,
     `- Limitaciones: ${profile.limitations.join("; ") || "ninguna"}`,
     "",

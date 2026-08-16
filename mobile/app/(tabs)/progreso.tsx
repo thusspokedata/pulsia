@@ -15,7 +15,7 @@ import { BarChart } from "../../src/components/BarChart";
 import { buildReadingFromForm, buildBpReadingFromForm, buildReadingForTypes, valuesForDay, type BpForm } from "../../src/session/metricForm";
 import { dayAtNoon, dayLabel } from "../../src/session/metricDate";
 import { buildDailyKcal } from "../../src/session/weeklyBars";
-import { availableYears, buildDailyBurn, burnThresholds, computeNutritionGoal, countTrainedDays, daysInYear, BODY_METRIC_TYPES, ACTIVITY_METRIC_TYPES, SUBJECTIVE_METRIC_TYPES, FLOW_METRIC_TYPES, METRIC_LABELS, METRIC_UNITS, type MetricType, type BodyMetric, type PerformanceTrends, type CardioActivity, type TrainingProfile, type NutritionGoalInput } from "@pulsia/shared";
+import { availableYears, buildDailyBurn, burnThresholds, computeNutritionGoal, countTrainedDays, daysInYear, BODY_METRIC_TYPES, ACTIVITY_METRIC_TYPES, SUBJECTIVE_METRIC_TYPES, FLOW_METRIC_TYPES, METRIC_LABELS, METRIC_UNITS, formatMetricValue, type MetricType, type BodyMetric, type PerformanceTrends, type CardioActivity, type TrainingProfile, type NutritionGoalInput } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 
 // Trío categórico distinguible (incl. daltonismo): teal (acento), azul, ámbar.
@@ -249,7 +249,7 @@ export default function ProgresoScreen() {
 
   const chartData = series.map((m) => ({ x: m.measuredAt, y: m.value }));
   const bpCurrent = latest.bp_systolic && latest.bp_diastolic
-    ? `${latest.bp_systolic.value} / ${latest.bp_diastolic.value}${latest.bp_pulse ? ` · ${latest.bp_pulse.value} bpm` : ""}`
+    ? `${formatMetricValue(latest.bp_systolic.value)} / ${formatMetricValue(latest.bp_diastolic.value)}${latest.bp_pulse ? ` · ${formatMetricValue(latest.bp_pulse.value)} bpm` : ""}`
     : "—";
 
   return (
@@ -262,7 +262,7 @@ export default function ProgresoScreen() {
             <View key={t} style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.md, padding: spacing.md, minWidth: 100 }}>
               <Text style={{ color: colors.textMuted, fontSize: 12 }}>{METRIC_LABELS[t]}</Text>
               <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600" }}>
-                {latest[t] ? `${latest[t]!.value} ${METRIC_UNITS[t]}` : "—"}
+                {latest[t] ? `${formatMetricValue(latest[t]!.value)} ${METRIC_UNITS[t]}` : "—"}
               </Text>
             </View>
           ))}
