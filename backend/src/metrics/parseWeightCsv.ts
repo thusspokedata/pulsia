@@ -25,6 +25,9 @@ const DATE_ROW_MDY = /^([A-Z][a-z]{2}) (\d{1,2}), (\d{4})$/; // "Aug 16, 2026"
 const DATE_ROW_DMY = /^(\d{1,2}) ([A-Z][a-z]{2}) (\d{4})$/; // "16 Aug 2026"
 
 // Devuelve el token de mes SIN resolver (para preservar el skip "Mes no reconocido").
+// El orden de intento (MDY antes que DMY) es indistinto: MDY exige la coma y DMY la
+// prohíbe, así que los patrones son mutuamente excluyentes. Un tercer formato futuro
+// sin esa distinción coma/sin-coma sí haría que el orden importe.
 function matchDateRow(s: string): { monthTok: string; d: number; y: number } | null {
   let m = s.match(DATE_ROW_MDY);
   if (m) return { monthTok: m[1], d: parseInt(m[2], 10), y: parseInt(m[3], 10) };
