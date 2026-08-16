@@ -100,14 +100,38 @@ export async function insertReadingsDedup(
   }
   if (all.length === 0) return { imported: 0, duplicates: 0 };
 
+  // Los `steps` crecen dentro del día en curso: el CSV de HOY todavía es parcial, así que reimportar
+  // más tarde tiene que COMPLETAR el conteo, no descartarse. Van por DO UPDATE acotado a que el valor
+  // nuevo sea mayor (`value < excluded.value`) → equivale a GREATEST, con lo que un CSV histórico
+  // nunca puede bajar un día ya escrito. El resto de las métricas mantiene DO NOTHING: reimportar un
+  // CSV no debe pisar (la corrección manual del día va por `insertReading`, que sí es upsert pleno).
+  const steps = all.filter((x) => x.metricType === "steps");
+  const rest = all.filter((x) => x.metricType !== "steps");
+  const target = [bodyMetric.userId, bodyMetric.metricType, bodyMetric.measuredAt];
+  const toRow = (x: { metricType: string; value: number; measuredAt: number }) => ({
+    userId, metricType: x.metricType, value: x.value, measuredAt: x.measuredAt,
+  });
+
   let imported = 0;
-  for (let i = 0; i < all.length; i += INSERT_CHUNK) {
+  for (let i = 0; i < rest.length; i += INSERT_CHUNK) {
     const inserted = await db
       .insert(bodyMetric)
-      .values(all.slice(i, i + INSERT_CHUNK).map((x) => ({ userId, metricType: x.metricType, value: x.value, measuredAt: x.measuredAt })))
-      .onConflictDoNothing({ target: [bodyMetric.userId, bodyMetric.metricType, bodyMetric.measuredAt] })
+      .values(rest.slice(i, i + INSERT_CHUNK).map(toRow))
+      .onConflictDoNothing({ target })
       .returning({ id: bodyMetric.id });
     imported += inserted.length;
+  }
+  for (let i = 0; i < steps.length; i += INSERT_CHUNK) {
+    const upserted = await db
+      .insert(bodyMetric)
+      .values(steps.slice(i, i + INSERT_CHUNK).map(toRow))
+      .onConflictDoUpdate({
+        target,
+        set: { value: sql`excluded.value` },
+        setWhere: sql`${bodyMetric.value} < excluded.value`,
+      })
+      .returning({ id: bodyMetric.id });
+    imported += upserted.length;
   }
   return { imported, duplicates: all.length - imported };
 }

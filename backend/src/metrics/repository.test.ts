@@ -122,6 +122,55 @@ test("insertReadingsDedup no toca la DB si no hay filas", async () => {
   expect(res).toEqual({ imported: 0, duplicates: 0 });
 });
 
+// Fake db que distingue las dos ramas de conflicto (DO NOTHING vs DO UPDATE) y captura el clause
+// de cada insert. `returned(v, kind)` decide qué filas devuelve `returning` (las que la DB dejó).
+function fakeSplitDb(returned?: (v: any[], kind: "nothing" | "update") => any[]) {
+  const calls: { kind: "nothing" | "update"; values: any[]; conflict: any }[] = [];
+  const db: any = {
+    insert: () => ({
+      values: (v: any[]) => {
+        const branch = (kind: "nothing" | "update") => (conflict: any) => {
+          calls.push({ kind, values: v, conflict });
+          const rows = returned ? returned(v, kind) : v;
+          return { returning: async () => rows.map((_: any, i: number) => ({ id: `id-${i}` })) };
+        };
+        return { onConflictDoNothing: branch("nothing"), onConflictDoUpdate: branch("update") };
+      },
+    }),
+  };
+  return { db, calls: () => calls };
+}
+
+test("insertReadingsDedup completa steps del día con GREATEST (solo sube) y deja el resto en DO NOTHING", async () => {
+  const { db, calls } = fakeSplitDb();
+  const rows = [
+    { measuredAt: 100, entries: [{ metricType: "steps", value: 12000 }, { metricType: "steps_goal", value: 10000 }] },
+  ];
+  await insertReadingsDedup(db, "u1", rows);
+
+  const stepsCall = calls().find((c) => c.values.some((v) => v.metricType === "steps"));
+  const restCall = calls().find((c) => c.values.some((v) => v.metricType === "steps_goal"));
+  // steps: upsert acotado a que el nuevo valor sea mayor (los pasos solo crecen dentro del día).
+  expect(stepsCall?.kind).toBe("update");
+  expect(stepsCall?.conflict.target.map((c: any) => c.name)).toEqual(["user_id", "metric_type", "measured_at"]);
+  expect(stepsCall?.conflict.set.value).toBeDefined();
+  expect(stepsCall?.conflict.setWhere).toBeDefined();
+  // steps_goal (y cualquier otra métrica) NO se pisa al reimportar.
+  expect(restCall?.kind).toBe("nothing");
+});
+
+test("insertReadingsDedup: un day de steps que no crece cuenta como duplicado, no como importado", async () => {
+  // La DB acepta lo nuevo (rest) pero deja el steps sin subir (setWhere falso → returning vacío).
+  const { db } = fakeSplitDb((v, kind) => (kind === "update" ? [] : v));
+  const rows = [
+    { measuredAt: 100, entries: [{ metricType: "steps", value: 5000 }] },
+    { measuredAt: 100, entries: [{ metricType: "sleep_score", value: 80 }] },
+  ];
+  const res = await insertReadingsDedup(db, "u1", rows);
+  expect(res.imported).toBe(1); // solo el sleep_score
+  expect(res.duplicates).toBe(1); // el steps que no subió
+});
+
 test("insertReadingsDedup parte el insert en chunks para no pasarse del tope de parámetros de Postgres", async () => {
   // 12.000 filas: son 4 parámetros por fila, así que en una sola sentencia (48.000) todavía entraría,
   // pero un historial de sueño más largo no — el chunk tiene que partirlo igual.
