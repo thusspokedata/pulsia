@@ -69,3 +69,17 @@ test("guarda en modo 'solo seguimiento' con trainingEnabled=false y sin días/mi
     expect(p.sessionMinutes).toBeUndefined();
   });
 });
+
+test("reactivar el plan sobre un perfil 'solo seguimiento' repuebla días/min con defaults (no 'undefined')", async () => {
+  // Perfil guardado sin plan → days/min ausentes. Al reabrir y volver a "Sí, con plan" los inputs
+  // deben mostrar 3/45, no el string "undefined" (que rompería el guardado con Number → NaN).
+  await AsyncStorage.setItem("pulsia.profile", JSON.stringify({
+    experience: "beginner", goal: "general_fitness", trainingEnabled: false,
+    gymEquipment: [], homeEquipment: ["bodyweight"], limitations: [],
+  }));
+  await render(<PerfilScreen />);
+  await waitFor(() => screen.getByTestId("chip-yes"));
+  await fireEvent.press(screen.getByTestId("chip-yes"));
+  expect(screen.getByTestId("perfil-days").props.value).toBe("3");
+  expect(screen.getByTestId("perfil-minutes").props.value).toBe("45");
+});

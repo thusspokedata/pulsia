@@ -80,8 +80,10 @@ export default function PerfilScreen() {
         setGoal(p.goal);
         setSex(p.sex);
         setActivityLevel(p.activityLevel);
-        setDaysPerWeek(String(p.daysPerWeek));
-        setSessionMinutes(String(p.sessionMinutes));
+        // En "solo seguimiento" days/min quedan undefined; al reactivar el plan hay que caer a los
+        // defaults (si no, el input mostraría "undefined" y Number("undefined")=NaN rompe el guardado).
+        setDaysPerWeek(p.daysPerWeek != null ? String(p.daysPerWeek) : "3");
+        setSessionMinutes(p.sessionMinutes != null ? String(p.sessionMinutes) : "45");
         setAge(p.age != null ? String(p.age) : "");
         setHeightCm(p.heightCm != null ? String(p.heightCm) : "");
         setGymEquipment(p.gymEquipment);
@@ -213,7 +215,7 @@ export default function PerfilScreen() {
       {trainingEnabled ? (
         <View style={{ flexDirection: "row", gap: spacing.md }}>
           <View style={{ flex: 1 }}><Text style={label}>Días/semana</Text><TextInput testID="perfil-days" style={input} keyboardType="number-pad" value={daysPerWeek} onChangeText={setDaysPerWeek} /></View>
-          <View style={{ flex: 1 }}><Text style={label}>Min/sesión</Text><TextInput style={input} keyboardType="number-pad" value={sessionMinutes} onChangeText={setSessionMinutes} /></View>
+          <View style={{ flex: 1 }}><Text style={label}>Min/sesión</Text><TextInput testID="perfil-minutes" style={input} keyboardType="number-pad" value={sessionMinutes} onChangeText={setSessionMinutes} /></View>
         </View>
       ) : null}
       <View style={{ flexDirection: "row", gap: spacing.md }}>
