@@ -55,6 +55,11 @@ test("rechaza edad fuera de rango", () => {
   expect(() => TrainingProfileSchema.parse({ ...base, age: 5 })).toThrow();
 });
 
+test("acepta el objetivo recomposition (preset del owner: bajar grasa + subir músculo)", () => {
+  expect(TrainingProfileSchema.parse({ ...base, goal: "recomposition" }).goal).toBe("recomposition");
+  expect(TrainingProfileSchema.safeParse({ ...base, goal: "inventado" }).success).toBe(false);
+});
+
 test("sex es opcional y valida el enum", () => {
   expect(TrainingProfileSchema.safeParse({ ...base, sex: "female" }).success).toBe(true);
   expect(TrainingProfileSchema.safeParse({ ...base }).success).toBe(true);
