@@ -46,3 +46,23 @@ test("el link de memoria navega a /memoria", async () => {
   await fireEvent.press(screen.getByTestId("perfil-memoria-link"));
   expect(router.push).toHaveBeenCalledWith("/memoria");
 });
+
+test("al elegir un nivel de actividad se muestra su descripción", async () => {
+  await render(<PerfilScreen />);
+  // Sin selección todavía no hay descripción.
+  expect(screen.queryByTestId("activity-desc")).toBeNull();
+  await fireEvent.press(screen.getByTestId("chip-moderate"));
+  const desc = screen.getByTestId("activity-desc");
+  expect(desc.props.children).toBeTruthy();
+  // Cambiar de nivel cambia la descripción.
+  const moderateText = desc.props.children;
+  await fireEvent.press(screen.getByTestId("chip-sedentary"));
+  expect(screen.getByTestId("activity-desc").props.children).not.toBe(moderateText);
+});
+
+test("al guardar el perfil se muestra el feedback 'Datos guardados'", async () => {
+  await render(<PerfilScreen />);
+  expect(screen.queryByTestId("perfil-saved-flash")).toBeNull();
+  await fireEvent.press(screen.getByText("Guardar perfil"));
+  await waitFor(() => expect(screen.getByTestId("perfil-saved-flash")).toBeTruthy());
+});

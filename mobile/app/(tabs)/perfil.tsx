@@ -28,11 +28,13 @@ const SEX = [
   { value: "other", label: "Otro" },
   { value: "prefer_not_to_say", label: "Prefiero no decir" },
 ];
+// La descripción explica el MOVIMIENTO DIARIO base (sin contar entrenamientos): es la semilla del
+// TDEE, así que elegir bien cambia el gasto estimado (factores 1.2 / 1.375 / 1.55 / 1.725).
 const ACTIVITY = [
-  { value: "sedentary", label: "Sedentario" },
-  { value: "light", label: "Ligero" },
-  { value: "moderate", label: "Moderado" },
-  { value: "active", label: "Activo" },
+  { value: "sedentary", label: "Sedentario", desc: "Trabajo sentado y poco movimiento; casi nada de ejercicio." },
+  { value: "light", label: "Ligero", desc: "Ejercicio ligero o caminatas 1-3 días por semana." },
+  { value: "moderate", label: "Moderado", desc: "Activo la mayoría de los días: ejercicio moderado 3-5 días o trabajo de pie." },
+  { value: "active", label: "Activo", desc: "Muy activo: entrenás fuerte 6-7 días o tenés trabajo físico." },
 ];
 const EQUIPMENT = [
   { value: "bodyweight", label: "Peso corporal" },
@@ -62,6 +64,9 @@ export default function PerfilScreen() {
   const [limitations, setLimitations] = useState("");
   const [saved, setSaved] = useState<TrainingProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Feedback efímero de "Datos guardados" tras un guardado exitoso (se auto-oculta).
+  const [savedFlash, setSavedFlash] = useState(false);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // El peso es fuente única: se muestra la última medición del backend. Guardamos el valor
   // cargado para detectar si el usuario lo editó (y recién ahí registrar una medición nueva).
   const backendUrl = useRef<string | null>(null);
@@ -109,6 +114,15 @@ export default function PerfilScreen() {
     })();
   }, []);
 
+  // Limpiar el timer del flash si la pantalla se desmonta mientras está visible.
+  useEffect(() => () => { if (flashTimer.current) clearTimeout(flashTimer.current); }, []);
+
+  function flashSaved() {
+    setSavedFlash(true);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setSavedFlash(false), 2500);
+  }
+
   async function onSave() {
     const numOrUndef = (s: string) => (s.trim() === "" ? undefined : Number(s));
     const candidate = {
@@ -134,6 +148,7 @@ export default function PerfilScreen() {
       await setProfile(parsed.data);
       setSaved(parsed.data);
       setError(null);
+      flashSaved();
     } catch {
       setError("No se pudo guardar el perfil. Intentá de nuevo.");
       return;
@@ -186,6 +201,11 @@ export default function PerfilScreen() {
       <View>
         <Text style={label}>Nivel de actividad (sin contar entrenamientos)</Text>
         <ChipGroup single options={ACTIVITY} selected={activityLevel ? [activityLevel] : []} onChange={(v) => setActivityLevel(v[0])} />
+        {activityLevel ? (
+          <Text testID="activity-desc" style={{ color: colors.textMuted, fontSize: 12, marginTop: spacing.xs }}>
+            {ACTIVITY.find((a) => a.value === activityLevel)?.desc}
+          </Text>
+        ) : null}
       </View>
       <View style={{ flexDirection: "row", gap: spacing.md }}>
         <View style={{ flex: 1 }}><Text style={label}>Días/semana</Text><TextInput style={input} keyboardType="number-pad" value={daysPerWeek} onChangeText={setDaysPerWeek} /></View>
@@ -201,6 +221,7 @@ export default function PerfilScreen() {
       <View><Text style={label}>Limitaciones (una por línea)</Text><TextInput style={[input, { minHeight: 72 }]} multiline value={limitations} onChangeText={setLimitations} placeholder="dolor lumbar leve" /></View>
 
       {error && <Text style={{ color: colors.accentText }}>{error}</Text>}
+      {savedFlash && <Text testID="perfil-saved-flash" style={{ color: colors.accent }}>Datos guardados ✓</Text>}
 
       <Pressable style={primary} onPress={onSave}><Text style={{ color: "#fff" }}>Guardar perfil</Text></Pressable>
 
