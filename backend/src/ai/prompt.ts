@@ -4,7 +4,8 @@ const SEX_ES: Record<string, string> = { male: "masculino", female: "femenino", 
 
 // Descripción legible del objetivo para la IA. Se agrega entre paréntesis DESPUÉS del enum crudo
 // (no lo reemplaza), sobre todo para `recomposition`, que sin contexto la IA podría malinterpretar.
-const GOAL_ES: Record<string, string> = {
+// Exportado para reusarlo en el prompt del entreno puntual (buildOneOffPrompt).
+export const GOAL_ES: Record<string, string> = {
   hypertrophy: "hipertrofia / ganar masa muscular",
   strength: "fuerza máxima",
   endurance: "resistencia muscular",

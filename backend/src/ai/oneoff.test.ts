@@ -17,6 +17,14 @@ test("pide UN entreno, sin progresión", () => {
   expect(p.toLowerCase()).not.toContain("progresión");
 });
 
+test("describe el objetivo recomposition para la IA (mismo criterio que el prompt de programa)", () => {
+  const p = buildOneOffPrompt({ ...profile, goal: "recomposition" } as TrainingProfile, {
+    location: "gym", focus: ["chest"], sessionMinutes: 60, equipment: ["dumbbell"],
+  });
+  expect(p).toContain("recomposition");
+  expect(p.toLowerCase()).toContain("recomposición");
+});
+
 test("incluye TODOS los músculos pedidos", () => {
   const p = buildOneOffPrompt(profile, {
     location: "gym", focus: ["chest", "triceps", "shoulders"], sessionMinutes: 60, equipment: ["dumbbell"],
