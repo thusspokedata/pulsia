@@ -67,6 +67,16 @@ test("una birthDate inválida no guarda y muestra error", async () => {
   expect(await AsyncStorage.getItem("pulsia.profile")).toBeNull();
 });
 
+test("una birthDate que deriva una edad fuera de 12–100 muestra un error específico (no el genérico)", async () => {
+  // Un niño (~5 años): la fecha es válida pero la edad derivada cae bajo el mínimo del perfil.
+  const y = new Date().getUTCFullYear() - 5;
+  await render(<PerfilScreen />);
+  await fireEvent.changeText(screen.getByPlaceholderText("AAAA-MM-DD"), `${y}-06-15`);
+  await fireEvent.press(screen.getByText("Guardar perfil"));
+  await waitFor(() => expect(screen.getByText(/fuera de rango/i)).toBeTruthy());
+  expect(await AsyncStorage.getItem("pulsia.profile")).toBeNull();
+});
+
 test("con birthDate cargada, el perfil viejo muestra la edad derivada (no la guardada)", async () => {
   // Perfil viejo: age 20 desactualizada + birthDate de 1990. getProfile deriva la edad al leer.
   await AsyncStorage.setItem("pulsia.profile", JSON.stringify({

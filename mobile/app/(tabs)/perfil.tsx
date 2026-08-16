@@ -121,6 +121,12 @@ export default function PerfilScreen() {
       setError("Fecha de nacimiento inválida. Usá el formato AAAA-MM-DD.");
       return;
     }
+    // La edad derivada válida pero fuera del rango del perfil (12–100) daría un error genérico de
+    // "días/minutos" al parsear; mejor decir cuál es el problema real.
+    if (bd && derivedAge != null && (derivedAge < 12 || derivedAge > 100)) {
+      setError("La edad que sale de esa fecha está fuera de rango (12–100 años).");
+      return;
+    }
     const candidate = {
       experience,
       goal,
