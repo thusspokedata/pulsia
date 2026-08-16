@@ -8,13 +8,22 @@ export const BODY_METRIC_TYPES = [
 export const BP_METRIC_TYPES = ["bp_systolic", "bp_diastolic", "bp_pulse"] as const;
 
 export const ACTIVITY_METRIC_TYPES = [
-  "steps", "floors", "sleep_hours", "sleep_quality", "resting_hr",
+  "steps", "floors", "sleep_hours", "resting_hr",
   "sleep_score", "sleep_need_hours", "body_battery", "hrv", "respiration", "pulse_ox",
   "steps_goal",
 ] as const;
-export const SUBJECTIVE_METRIC_TYPES = ["stress", "mood", "energy"] as const;
+// sleep_quality es un rating 1-5 manual; su lugar natural es "Cómo te sentís", junto a estrés/ánimo/energía.
+export const SUBJECTIVE_METRIC_TYPES = ["stress", "mood", "energy", "sleep_quality"] as const;
 // Métricas de "flujo diario" (promedio reciente, NO delta de tendencia).
 export const FLOW_METRIC_TYPES = [...ACTIVITY_METRIC_TYPES, ...SUBJECTIVE_METRIC_TYPES] as const;
+
+// Métricas que se muestran como "valor actual" (composición + actividad + subjetivo).
+export const CURRENT_METRIC_TYPES = [
+  ...BODY_METRIC_TYPES, ...ACTIVITY_METRIC_TYPES, ...SUBJECTIVE_METRIC_TYPES,
+] as const;
+// Tendencia: igual que las actuales pero sin los targets. `steps_goal` es un objetivo, no una
+// serie a seguir, así que no va en los chips de tendencia.
+export const TREND_METRIC_TYPES = CURRENT_METRIC_TYPES.filter((t) => t !== "steps_goal");
 
 export const METRIC_TYPES = [
   ...BODY_METRIC_TYPES, ...BP_METRIC_TYPES, ...ACTIVITY_METRIC_TYPES, ...SUBJECTIVE_METRIC_TYPES,
@@ -22,6 +31,15 @@ export const METRIC_TYPES = [
 export type MetricType = (typeof METRIC_TYPES)[number];
 
 export const MetricTypeSchema = z.enum(METRIC_TYPES);
+
+// Deja solo las métricas con al menos un dato registrado (presentes en `latest`). Sirve para
+// ocultar los tiles "—" de "Valores actuales" y los chips vacíos de "Tendencia".
+export function metricsWithData<T extends MetricType>(
+  types: readonly T[],
+  latest: Partial<Record<MetricType, unknown>>,
+): T[] {
+  return types.filter((t) => latest[t] != null);
+}
 
 export const METRIC_UNITS: Record<MetricType, string> = {
   weight_kg: "kg", body_fat_pct: "%", skeletal_muscle_mass_kg: "kg",

@@ -1,4 +1,4 @@
-import { buildReadingFromForm, buildBpReadingFromForm, buildReadingForTypes } from "../src/session/metricForm";
+import { buildReadingFromForm, buildBpReadingFromForm, buildReadingForTypes, valuesForDay } from "../src/session/metricForm";
 import { ACTIVITY_METRIC_TYPES } from "@pulsia/shared";
 
 test("arma la lectura solo con los campos completados y válidos", () => {
@@ -58,4 +58,16 @@ test("buildReadingForTypes arma una lectura con la fecha dada", () => {
   const { reading } = buildReadingForTypes({ steps: "8000", sleep_hours: "7" }, ACTIVITY_METRIC_TYPES, 555);
   expect(reading?.measuredAt).toBe(555);
   expect(reading?.entries).toEqual([{ metricType: "steps", value: 8000 }, { metricType: "sleep_hours", value: 7 }]);
+});
+
+test("valuesForDay redondea el valor precargado en vez de mostrar el float largo", () => {
+  // El caso del owner: veía "Sueño (h): 10.7833333" en el input. Debe precargar "10.78".
+  const noon = new Date(2026, 2, 15, 12, 0).getTime(); // mediodía del día
+  const measuredAt = new Date(2026, 2, 15, 8, 0).getTime(); // dentro del mismo día calendario
+  const out = valuesForDay(
+    { sleep_hours: [{ value: 10.783333, measuredAt }] },
+    ["sleep_hours"],
+    noon,
+  );
+  expect(out.sleep_hours).toBe("10.78");
 });
