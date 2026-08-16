@@ -2,6 +2,18 @@ import { catalogForEquipment, type TrainingProfile, type Equipment } from "@puls
 
 const SEX_ES: Record<string, string> = { male: "masculino", female: "femenino", other: "otro", prefer_not_to_say: "prefiere no decir" };
 
+// Descripción legible del objetivo para la IA. Se agrega entre paréntesis DESPUÉS del enum crudo
+// (no lo reemplaza), sobre todo para `recomposition`, que sin contexto la IA podría malinterpretar.
+// Exportado para reusarlo en el prompt del entreno puntual (buildOneOffPrompt).
+export const GOAL_ES: Record<string, string> = {
+  hypertrophy: "hipertrofia / ganar masa muscular",
+  strength: "fuerza máxima",
+  endurance: "resistencia muscular",
+  fat_loss: "pérdida de grasa",
+  general_fitness: "estado físico general",
+  recomposition: "recomposición: bajar grasa y subir músculo a la vez",
+};
+
 export function buildGenerationPrompt(
   profile: TrainingProfile,
   historySummary?: string,
@@ -22,7 +34,7 @@ export function buildGenerationPrompt(
     "",
     "Perfil del atleta:",
     `- Experiencia: ${profile.experience}`,
-    `- Objetivo: ${profile.goal}`,
+    `- Objetivo: ${profile.goal}${GOAL_ES[profile.goal] ? ` (${GOAL_ES[profile.goal]})` : ""}`,
     ...(profile.sex != null ? [`- Sexo: ${SEX_ES[profile.sex]}`] : []),
     ...(profile.age != null ? [`- Edad: ${profile.age} años`] : []),
     ...(profile.heightCm != null ? [`- Altura: ${profile.heightCm} cm`] : []),

@@ -20,6 +20,7 @@ const GOAL = [
   { value: "strength", label: "Fuerza" },
   { value: "endurance", label: "Resistencia" },
   { value: "fat_loss", label: "Pérdida de grasa" },
+  { value: "recomposition", label: "Recomposición" },
   { value: "general_fitness", label: "Fitness general" },
 ];
 const SEX = [

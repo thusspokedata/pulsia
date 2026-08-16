@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 export const ExperienceSchema = z.enum(["beginner", "intermediate", "advanced"]);
-export const GoalSchema = z.enum(["hypertrophy", "strength", "endurance", "fat_loss", "general_fitness"]);
+// `recomposition` = preset del owner (bajar grasa y subir músculo a la vez). Sigue siendo un
+// objetivo único; la meta calórica se fija aparte (ver NutritionObjective en nutrition.ts).
+export const GoalSchema = z.enum(["hypertrophy", "strength", "endurance", "fat_loss", "general_fitness", "recomposition"]);
 export const SexSchema = z.enum(["male", "female", "other", "prefer_not_to_say"]);
 export type Sex = z.infer<typeof SexSchema>;
 
