@@ -241,9 +241,9 @@ test("POST /metrics/import/steps inserta y devuelve conteos", async () => {
     insert: () => ({
       values: (v: any[]) => {
         values.push(...v);
-        return {
-          onConflictDoNothing: () => ({ returning: async () => v.map((_, i) => ({ id: `id-${i}` })) }),
-        };
+        // steps va por DO UPDATE (GREATEST) y steps_goal por DO NOTHING: el fake soporta ambas.
+        const ret = { returning: async () => v.map((_, i) => ({ id: `id-${i}` })) };
+        return { onConflictDoNothing: () => ret, onConflictDoUpdate: () => ret };
       },
     }),
   };
