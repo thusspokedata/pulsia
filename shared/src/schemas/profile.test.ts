@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { TrainingProfileSchema, ageFromBirthDate, profileWithDerivedAge } from "./profile";
+import { TrainingProfileSchema, ageFromBirthDate, profileWithDerivedAge, isTrainingEnabled } from "./profile";
 
 test("acepta un perfil válido", () => {
   const profile = {
@@ -64,6 +64,31 @@ test("sex es opcional y valida el enum", () => {
   expect(TrainingProfileSchema.safeParse({ ...base, sex: "female" }).success).toBe(true);
   expect(TrainingProfileSchema.safeParse({ ...base }).success).toBe(true);
   expect(TrainingProfileSchema.safeParse({ ...base, sex: "otro" }).success).toBe(false);
+});
+
+// --- trainingEnabled (PERF-1 #1): modo "solo seguimiento" para quien no quiere entrenar ---
+
+test("trainingEnabled ausente se considera activado (back-compat)", () => {
+  const p = TrainingProfileSchema.parse(base); // perfiles viejos no tienen el campo
+  expect(p.trainingEnabled).toBeUndefined();
+  expect(isTrainingEnabled(p)).toBe(true);
+});
+
+test("con trainingEnabled=false, días/min son opcionales (solo seguimiento)", () => {
+  const parsed = TrainingProfileSchema.safeParse({
+    experience: "beginner", goal: "general_fitness", trainingEnabled: false,
+    gymEquipment: [], homeEquipment: [], limitations: [],
+  });
+  expect(parsed.success).toBe(true);
+  if (parsed.success) expect(isTrainingEnabled(parsed.data)).toBe(false);
+});
+
+test("con entrenamiento activado, días/min siguen siendo obligatorios", () => {
+  const parsed = TrainingProfileSchema.safeParse({
+    experience: "beginner", goal: "general_fitness", trainingEnabled: true,
+    gymEquipment: [], homeEquipment: [], limitations: [],
+  }); // faltan daysPerWeek/sessionMinutes
+  expect(parsed.success).toBe(false);
 });
 
 test("acepta activityLevel y lo deja opcional", () => {

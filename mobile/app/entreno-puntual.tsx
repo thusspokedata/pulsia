@@ -80,7 +80,7 @@ export default function EntrenoPuntualScreen() {
       const p = await getProfile();
       if (!p) return;
       setProfile(p);
-      setMinutes(p.sessionMinutes);
+      setMinutes(p.sessionMinutes ?? 45); // opcional desde el modo "solo seguimiento"
       setEquipment(location === "home" ? p.homeEquipment : p.gymEquipment);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
