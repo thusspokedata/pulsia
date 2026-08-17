@@ -204,6 +204,13 @@
       "when": 1786627943181,
       "tag": "0028_solid_nemesis",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1786954918747,
+      "tag": "0029_thin_lester",
+      "breakpoints": true
     }
   ]
 }

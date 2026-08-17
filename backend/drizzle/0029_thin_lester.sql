@@ -1,0 +1,4 @@
+ALTER TABLE "supplement_plan_item" ADD COLUMN "active" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "supplement_take" ADD COLUMN "supplement_id" uuid;--> statement-breakpoint
+ALTER TABLE "supplement_take" ADD CONSTRAINT "supplement_take_supplement_id_supplement_id_fk" FOREIGN KEY ("supplement_id") REFERENCES "public"."supplement"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "supplement_take_adhoc_unique_idx" ON "supplement_take" USING btree ("user_id","date","supplement_id","slot") WHERE "supplement_take"."plan_item_id" IS NULL;
