@@ -103,7 +103,7 @@ export async function collectReportData(
   // unión con el catálogo (para sacar los `components` mapeados) es por NOMBRE, no por id — el
   // snapshot de la toma guarda el nombre del suplemento tal como se llamaba al tomarlo.
   let supplementMicrosOut: Partial<Record<NutrientKey, number>> | null = null;
-  if (activePlan) {
+  if (takes.length > 0) {
     const byName = new Map(catalog.map((s) => [s.name, s.components]));
     const forMicros: TakeForMicros[] = takes.map((t) => ({
       status: t.status as TakeForMicros["status"], plannedDose: t.plannedDose, actualDose: t.actualDose ?? null,

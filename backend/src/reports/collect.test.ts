@@ -147,6 +147,23 @@ test("supplementMicros expone el aporte cuantificado de los suplementos tomados"
   expect(data.supplementMicros?.magnesium_mg).toBe(300);
 });
 
+test("supplementMicros cuenta tomas ad-hoc aunque no haya plan activo", async () => {
+  // Sin plan activo (getActivePlan → null) pero con un take ad-hoc en el rango: el gate ya no
+  // depende de activePlan, depende de si hay takes.
+  const deps = {
+    ...baseDeps,
+    listTakesForRange: async () => [
+      { id: "t1", userId: "u", date: "2026-08-10", planItemId: null, supplementName: "Vit D", plannedDose: "1 cápsula", slot: "desayuno", status: "taken", actualDose: null, note: null, createdAt: new Date(0) },
+    ],
+    listSupplements: async () => [
+      { id: "s1", name: "Vit D", brand: null, servingLabel: "1 cápsula", components: [{ name: "Vitamina D", amount: 25, unit: "mcg", nutrientKey: "vitamin_d_mcg", amountPerUnit: 25 }], labelMaxPerDay: null, source: "label", info: null, notes: null, createdAt: 0 },
+    ],
+  };
+  const data = await collectReportData({} as any, "u", 0, 10, athleteIncomplete, deps as any);
+  expect(data.supplements).toBeNull(); // el prompt de plan sigue gateado en activePlan (fuera de alcance)
+  expect(data.supplementMicros?.vitamin_d_mcg).toBe(25);
+});
+
 test("hasAnyData false si SOLO hay datos de suplementos (no justifican un informe solos)", async () => {
   const deps = {
     ...baseDeps,
