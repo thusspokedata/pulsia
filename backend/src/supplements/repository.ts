@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lte, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gte, lte, isNull, isNotNull, sql } from "drizzle-orm";
 import { supplement, supplementPlan, supplementPlanItem, supplementTake, supplementAdjustment } from "../db/schema";
 import type {
   Supplement, SupplementInput, PlanView, PlanItemPatch, TakeInput,
@@ -208,10 +208,16 @@ export async function upsertAdHocTake(db: Db, userId: string, input: {
   return rows[0] ?? null;
 }
 
-// Borra una toma ad-hoc por id. Guardas: del usuario y con plan_item_id null (no tocar tomas del plan).
+// Borra una toma ad-hoc por id. Guardas: del usuario, con plan_item_id null (no tocar tomas del
+// plan) Y supplement_id NOT null — una toma del plan cuyo suplemento/ítem se borró también queda
+// con plan_item_id null, pero su supplement_id es null (nunca lo escribe upsertTake); una ad-hoc
+// real siempre tiene supplement_id seteado (lo escribe upsertAdHocTake).
 export async function deleteAdHocTake(db: Db, userId: string, takeId: string): Promise<boolean> {
   const rows = await db.delete(supplementTake)
-    .where(and(eq(supplementTake.id, takeId), eq(supplementTake.userId, userId), isNull(supplementTake.planItemId)))
+    .where(and(
+      eq(supplementTake.id, takeId), eq(supplementTake.userId, userId),
+      isNull(supplementTake.planItemId), isNotNull(supplementTake.supplementId),
+    ))
     .returning({ id: supplementTake.id });
   return rows.length > 0;
 }
@@ -223,7 +229,10 @@ export async function listAdHocTakesForDate(db: Db, userId: string, date: string
     plannedDose: supplementTake.plannedDose, status: supplementTake.status,
     actualDose: supplementTake.actualDose, note: supplementTake.note,
   }).from(supplementTake)
-    .where(and(eq(supplementTake.userId, userId), eq(supplementTake.date, date), isNull(supplementTake.planItemId)));
+    .where(and(
+      eq(supplementTake.userId, userId), eq(supplementTake.date, date),
+      isNull(supplementTake.planItemId), isNotNull(supplementTake.supplementId),
+    ));
 }
 
 export async function listTakesForDate(db: Db, userId: string, date: string) {

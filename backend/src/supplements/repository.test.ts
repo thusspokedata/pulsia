@@ -2,7 +2,7 @@ import { test, expect } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
   toSupplement, toPlanView, snapshotForTake, insertSupplement, getSupplement, deleteSupplement,
-  createPlan, upsertTake, takesWithComponents, upsertAdHocTake,
+  createPlan, upsertTake, takesWithComponents, upsertAdHocTake, listAdHocTakesForDate, deleteAdHocTake,
 } from "./repository";
 import { supplementPlan, supplementPlanItem, supplementTake, supplement } from "../db/schema";
 import { createDb } from "../db/client";
@@ -143,6 +143,54 @@ test("takesWithComponents resuelve micros de una toma ad-hoc por supplementId di
     expect(result[0].components[0].nutrientKey).toBe("vitamin_d_mcg");
   } finally {
     if (supId) await db.delete(supplement).where(eq(supplement.id, supId)); // cascade borra la toma
+    await sql.end();
+  }
+});
+
+test("listAdHocTakesForDate y deleteAdHocTake no tratan como ad-hoc una toma del plan cuyo ítem se borró", async () => {
+  const { db, sql } = createDb(process.env.DATABASE_URL ?? "postgres://pulsia:pulsia@localhost:5432/pulsia");
+  let supId: string | undefined;
+  let planId: string | undefined;
+  let takeId: string | undefined;
+  try {
+    const sup = await insertSupplement(db, DEV_USER_ID, {
+      name: "Sup Huérfano", servingLabel: "1 cápsula", source: "label",
+      components: [{ name: "X", amount: 1, unit: "mg" }],
+    } as any);
+    supId = sup.id;
+
+    const plan = await createPlan(db, DEV_USER_ID, null, [
+      { supplementId: sup.id, slot: "desayuno", frequency: { type: "daily" }, dose: "1 cápsula", reason: null },
+    ]);
+    planId = plan.id;
+    const planItemId = plan.items[0].id;
+
+    await upsertTake(
+      db, DEV_USER_ID,
+      { date: "2026-08-15", planItemId, status: "taken" } as any,
+      { supplementName: sup.name, plannedDose: "1 cápsula", slot: "desayuno" },
+    );
+    const [take] = await db.select({ id: supplementTake.id }).from(supplementTake)
+      .where(eq(supplementTake.planItemId, planItemId));
+    takeId = take.id;
+
+    // Borrar el suplemento cascadea al plan_item → plan_item_id de la toma queda NULL. supplement_id
+    // de esa toma ya era NULL (la escribió upsertTake, no upsertAdHocTake): queda igual que una toma
+    // ad-hoc real, salvo por ESE detalle, que es justo lo que distingue el fix.
+    await deleteSupplement(db, DEV_USER_ID, sup.id);
+
+    const adhoc = await listAdHocTakesForDate(db, DEV_USER_ID, "2026-08-15");
+    expect(adhoc.find((t) => t.id === takeId)).toBeUndefined();
+
+    const deleted = await deleteAdHocTake(db, DEV_USER_ID, takeId);
+    expect(deleted).toBe(false);
+  } finally {
+    if (takeId) await db.delete(supplementTake).where(eq(supplementTake.id, takeId));
+    if (planId) {
+      await db.delete(supplementPlanItem).where(eq(supplementPlanItem.planId, planId));
+      await db.delete(supplementPlan).where(eq(supplementPlan.id, planId));
+    }
+    if (supId) await deleteSupplement(db, DEV_USER_ID, supId);
     await sql.end();
   }
 });
