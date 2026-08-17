@@ -13,7 +13,7 @@
 
 ## 0-HISTORIAL. Historial de sesiones (archivado)
 
-Los bloques `§0-*` con el detalle cronológico de cada sesión entregada (`✅ HECHO`, del 2026-07-09 al 2026-08-17) se movieron a **[`docs/ONBOARDING-HISTORY.md`](docs/ONBOARDING-HISTORY.md)** — ahí está el "porqué" de cada feature, los PRs, los bugs cazados y las lecciones. Este documento sigue con la referencia estable (§1 en adelante).
+Los bloques `§0-*` con el detalle cronológico de cada sesión entregada (`✅ HECHO`, del 2026-07-09 al 2026-08-17) se movieron a **[`docs/ONBOARDING-HISTORY.md`](docs/ONBOARDING-HISTORY.md)** — ahí está el "porqué" de cada feature, los PRs, los bugs cazados y las lecciones. Este documento sigue con la referencia estable (§1 en adelante). **Nota:** cualquier mención `§0-…` que aparezca a lo largo de este handoff (p.ej. `§0-PERFIL`, `§0-WEB-HEATMAP`, `§0b`) refiere a una sección de ese archivo de historial, no de este documento.
 
 ## 1. Qué es Pulsia
 
@@ -112,6 +112,14 @@ banda hace falta un dev client:
 - **Ejecución subagent-driven siempre** (memoria `execution-subagent-driven`). **NUNCA preguntar qué modo
   de ejecución** — arrancar directo subagent-driven (pedido explícito del usuario, 2026-07-12). Nota: los
   subagentes a veces re-delegan y no terminan → verificar el estado real (git log/tests) y completar directo si hace falta.
+- **Worktrees para trabajo en paralelo (preferido sobre cambiar de rama).** Cuando corren varias tareas o
+  sesiones a la vez, cada una en su **git worktree** — un directorio aislado bajo `.claude/worktrees/` (vía
+  `EnterWorktree`, basado en `origin/main`) —, NO cambiando de rama en el checkout compartido. Así se trabaja
+  en paralelo sin pisarse: cada worktree tiene su rama y su árbol propio. ⚠️ El **snapshot de git del arranque
+  puede mentir** y otra sesión puede haber tomado el checkout principal con una rama de feature y el árbol
+  **sucio** (pasó el 2026-08-17: una sesión estaba en `feat/sup-2-…` con cambios sin commitear). **Antes de
+  ramificar**, verificar `git status` / `git branch` y aislar en un worktree; nunca `reset --hard`/`stash`
+  sobre un árbol ajeno. Memorias: `git-snapshot-stale-concurrent-session`, `subagent-parallel-writes`.
 - **Commits firmados `git commit -S`.** NUNCA atribución a Claude/Anthropic ni Co-Authored-By.
 - **TDD** siempre, con **verificación por mutación de cada test nuevo** (romper el código a propósito
   y confirmar que el test se queja). Specs en `docs/superpowers/specs/`, planes en `docs/superpowers/plans/`.
