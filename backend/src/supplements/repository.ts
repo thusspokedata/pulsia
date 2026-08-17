@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, eq, gte, lte, isNull, sql } from "drizzle-orm";
 import { supplement, supplementPlan, supplementPlanItem, supplementTake, supplementAdjustment } from "../db/schema";
 import type {
   Supplement, SupplementInput, PlanView, PlanItemPatch, TakeInput,
@@ -98,6 +98,7 @@ export function toPlanView(plan: Pick<PlanRow, "id" | "userNote" | "createdAt">,
     items: items.map((it) => ({
       id: it.id, supplementId: it.supplementId, slot: it.slot as TakeSlot,
       frequency: it.frequency as Frequency, dose: it.dose, reason: it.reason ?? null,
+      active: it.active ?? true,
       supplementName: it.supplementName,
     })),
   };
@@ -135,6 +136,7 @@ export async function getActivePlan(db: Db, userId: string): Promise<PlanView | 
     id: supplementPlanItem.id, planId: supplementPlanItem.planId,
     supplementId: supplementPlanItem.supplementId, slot: supplementPlanItem.slot,
     frequency: supplementPlanItem.frequency, dose: supplementPlanItem.dose, reason: supplementPlanItem.reason,
+    active: supplementPlanItem.active,
     supplementName: supplement.name,
   }).from(supplementPlanItem)
     .innerJoin(supplement, eq(supplementPlanItem.supplementId, supplement.id))
@@ -148,6 +150,7 @@ export async function getOwnedPlanItem(db: Db, userId: string, itemId: string): 
     id: supplementPlanItem.id, planId: supplementPlanItem.planId,
     supplementId: supplementPlanItem.supplementId, slot: supplementPlanItem.slot,
     frequency: supplementPlanItem.frequency, dose: supplementPlanItem.dose, reason: supplementPlanItem.reason,
+    active: supplementPlanItem.active,
     supplementName: supplement.name,
   }).from(supplementPlanItem)
     .innerJoin(supplementPlan, eq(supplementPlanItem.planId, supplementPlan.id))
@@ -159,10 +162,11 @@ export async function getOwnedPlanItem(db: Db, userId: string, itemId: string): 
 export async function updatePlanItem(db: Db, userId: string, itemId: string, patch: PlanItemPatch): Promise<PlanItemJoined | null> {
   const owned = await getOwnedPlanItem(db, userId, itemId);
   if (!owned) return null;
-  const set: Partial<Pick<PlanItemRow, "slot" | "frequency" | "dose">> = {};
+  const set: Partial<Pick<PlanItemRow, "slot" | "frequency" | "dose" | "active">> = {};
   if (patch.slot !== undefined) set.slot = patch.slot;
   if (patch.frequency !== undefined) set.frequency = patch.frequency;
   if (patch.dose !== undefined) set.dose = patch.dose;
+  if (patch.active !== undefined) set.active = patch.active;
   await db.update(supplementPlanItem).set(set).where(eq(supplementPlanItem.id, itemId));
   return { ...owned, ...set };
 }
@@ -183,6 +187,43 @@ export async function upsertTake(db: Db, userId: string, input: TakeInput, snaps
       status: input.status, actualDose: input.actualDose ?? null, note: input.note ?? null,
     },
   });
+}
+
+// Toma ad-hoc (SUP-2): suplemento fuera del plan. plan_item_id null, supplement_id set,
+// status "taken". Upsert idempotente por el índice parcial (user, date, supplement_id, slot).
+export async function upsertAdHocTake(db: Db, userId: string, input: {
+  date: string; supplementId: string; slot: string; dose: string; note?: string | null;
+}): Promise<{ id: string } | null> {
+  const sup = await getSupplement(db, userId, input.supplementId);
+  if (!sup) return null;
+  const rows = await db.insert(supplementTake).values({
+    userId, date: input.date, planItemId: null, supplementId: input.supplementId,
+    supplementName: sup.name, plannedDose: input.dose, slot: input.slot,
+    status: "taken", actualDose: null, note: input.note ?? null,
+  }).onConflictDoUpdate({
+    target: [supplementTake.userId, supplementTake.date, supplementTake.supplementId, supplementTake.slot],
+    targetWhere: sql`${supplementTake.planItemId} IS NULL`,
+    set: { supplementName: sup.name, plannedDose: input.dose, status: "taken", note: input.note ?? null },
+  }).returning({ id: supplementTake.id });
+  return rows[0] ?? null;
+}
+
+// Borra una toma ad-hoc por id. Guardas: del usuario y con plan_item_id null (no tocar tomas del plan).
+export async function deleteAdHocTake(db: Db, userId: string, takeId: string): Promise<boolean> {
+  const rows = await db.delete(supplementTake)
+    .where(and(eq(supplementTake.id, takeId), eq(supplementTake.userId, userId), isNull(supplementTake.planItemId)))
+    .returning({ id: supplementTake.id });
+  return rows.length > 0;
+}
+
+export async function listAdHocTakesForDate(db: Db, userId: string, date: string) {
+  return db.select({
+    id: supplementTake.id, supplementId: supplementTake.supplementId,
+    supplementName: supplementTake.supplementName, slot: supplementTake.slot,
+    plannedDose: supplementTake.plannedDose, status: supplementTake.status,
+    actualDose: supplementTake.actualDose, note: supplementTake.note,
+  }).from(supplementTake)
+    .where(and(eq(supplementTake.userId, userId), eq(supplementTake.date, date), isNull(supplementTake.planItemId)));
 }
 
 export async function listTakesForDate(db: Db, userId: string, date: string) {
@@ -241,8 +282,7 @@ export async function takesWithComponents(db: Db, userId: string, date: string):
   for (const it of items) itemToSupp.set(it.id, it.supplementId);
   const out: TakeForMicros[] = [];
   for (const t of takes) {
-    if (t.planItemId == null) continue;
-    const suppId = itemToSupp.get(t.planItemId);
+    const suppId = (t.planItemId != null ? itemToSupp.get(t.planItemId) : null) ?? t.supplementId ?? null;
     const sup = suppId ? byId.get(suppId) : undefined;
     if (!sup) continue;
     out.push({
@@ -272,8 +312,7 @@ export async function takesWithComponentsByDay(
   for (const it of items) itemToSupp.set(it.id, it.supplementId);
   const out = new Map<string, TakeForMicros[]>();
   for (const t of takes) {
-    if (t.planItemId == null) continue;
-    const suppId = itemToSupp.get(t.planItemId);
+    const suppId = (t.planItemId != null ? itemToSupp.get(t.planItemId) : null) ?? t.supplementId ?? null;
     const sup = suppId ? byId.get(suppId) : undefined;
     if (!sup) continue;
     const arr = out.get(t.date) ?? [];

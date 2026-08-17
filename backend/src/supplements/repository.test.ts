@@ -2,9 +2,9 @@ import { test, expect } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
   toSupplement, toPlanView, snapshotForTake, insertSupplement, getSupplement, deleteSupplement,
-  createPlan, upsertTake, takesWithComponents,
+  createPlan, upsertTake, takesWithComponents, upsertAdHocTake,
 } from "./repository";
-import { supplementPlan, supplementPlanItem, supplementTake } from "../db/schema";
+import { supplementPlan, supplementPlanItem, supplementTake, supplement } from "../db/schema";
 import { createDb } from "../db/client";
 
 // Usuario por defecto del entorno de desarrollo single-user (ver seed.ts).
@@ -122,6 +122,27 @@ test("takesWithComponents sigue resolviendo tomas de un plan ya archivado (regen
       await db.delete(supplementPlan).where(eq(supplementPlan.id, planIdB));
     }
     if (supId) await deleteSupplement(db, DEV_USER_ID, supId);
+    await sql.end();
+  }
+});
+
+test("takesWithComponents resuelve micros de una toma ad-hoc por supplementId directo (plan_item_id null)", async () => {
+  const { db, sql } = createDb(process.env.DATABASE_URL ?? "postgres://pulsia:pulsia@localhost:5432/pulsia");
+  let supId: string | undefined;
+  try {
+    const sup = await insertSupplement(db, DEV_USER_ID, {
+      name: "Vit D Adhoc", servingLabel: "1 cápsula", unitLabel: "cápsula", source: "label", info: "x",
+      components: [{ name: "Vitamina D", amount: 25, unit: "mcg", nutrientKey: "vitamin_d_mcg", amountPerUnit: 25 }],
+    } as any);
+    supId = sup.id;
+    await upsertAdHocTake(db, DEV_USER_ID, { date: "2026-08-10", supplementId: sup.id, slot: "desayuno", dose: "2 cápsulas" });
+    const result = await takesWithComponents(db, DEV_USER_ID, "2026-08-10");
+    expect(result).toHaveLength(1);
+    expect(result[0].supplementName).toBe("Vit D Adhoc");
+    expect(result[0].plannedDose).toBe("2 cápsulas");
+    expect(result[0].components[0].nutrientKey).toBe("vitamin_d_mcg");
+  } finally {
+    if (supId) await db.delete(supplement).where(eq(supplement.id, supId)); // cascade borra la toma
     await sql.end();
   }
 });
