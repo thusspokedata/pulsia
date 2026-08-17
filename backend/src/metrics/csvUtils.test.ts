@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { splitCsvLine, parseUnitNumber, parse12hTime, localEpoch, localNoonEpoch } from "./csvUtils";
+import { splitCsvLine, parseUnitNumber, parseClockTime, localEpoch, localNoonEpoch } from "./csvUtils";
 
 test("splitCsvLine respeta comillas con comas adentro", () => {
   expect(splitCsvLine('" Jul 18, 2026",')).toEqual(["Jul 18, 2026", ""]);
@@ -14,12 +14,20 @@ test("parseUnitNumber saca la unidad pegada", () => {
   expect(parseUnitNumber("Good")).toBeNull();
 });
 
-test("parse12hTime convierte 12h a 24h", () => {
-  expect(parse12hTime("8:28 AM")).toEqual({ h: 8, mi: 28 });
-  expect(parse12hTime("1:05 PM")).toEqual({ h: 13, mi: 5 });
-  expect(parse12hTime("12:27 PM")).toEqual({ h: 12, mi: 27 });
-  expect(parse12hTime("12:05 AM")).toEqual({ h: 0, mi: 5 });
-  expect(parse12hTime("basura")).toBeNull();
+test("parseClockTime convierte 12h a 24h", () => {
+  expect(parseClockTime("8:28 AM")).toEqual({ h: 8, mi: 28 });
+  expect(parseClockTime("1:05 PM")).toEqual({ h: 13, mi: 5 });
+  expect(parseClockTime("12:27 PM")).toEqual({ h: 12, mi: 27 });
+  expect(parseClockTime("12:05 AM")).toEqual({ h: 0, mi: 5 });
+  expect(parseClockTime("basura")).toBeNull();
+});
+
+test("parseClockTime acepta 24h sin AM/PM (export regional Garmin)", () => {
+  expect(parseClockTime("10:54")).toEqual({ h: 10, mi: 54 });
+  expect(parseClockTime("23:54")).toEqual({ h: 23, mi: 54 });
+  expect(parseClockTime("09:04")).toEqual({ h: 9, mi: 4 });
+  expect(parseClockTime("00:15")).toEqual({ h: 0, mi: 15 });
+  expect(parseClockTime("24:00")).toBeNull();
 });
 
 test("localNoonEpoch usa el offset del cliente (Berlín CEST = -120)", () => {

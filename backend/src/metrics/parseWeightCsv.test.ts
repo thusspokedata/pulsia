@@ -82,6 +82,38 @@ test("parseWeightCsv parsea un CSV que mezcla ambos formatos de fecha", () => {
   expect(rows.some((r) => r.date === "2026-08-16")).toBe(true);
 });
 
+test("parseWeightCsv parsea el formato regional completo (fecha D MMM + hora 24h)", () => {
+  // Reproduce el export regional del owner: fecha día-primero + hora 24h sin AM/PM.
+  // Sin el fix de 24h esto daba 0 rows y tiraba "No se pudo leer ninguna medición".
+  const csv = [
+    HEADER,
+    '" 16 Aug 2026",',
+    "10:54,74.1 kg,0.1 kg,23.7,23.9 %,30.7 kg,3.9 kg,55.6 %,",
+    '" 14 Aug 2026",',
+    "23:54,74.2 kg,0.8 kg,23.7,22.6 %,30.7 kg,4.0 kg,56.5 %,",
+    "09:04,73.8 kg,1.0 kg,23.6,23.3 %,30.6 kg,4.0 kg,56.0 %,",
+  ].join("\n");
+  const { rows } = parseWeightCsv(csv, -120);
+  expect(rows.length).toBe(3);
+
+  const aug16 = rows.find((r) => r.date === "2026-08-16");
+  expect(aug16).toBeDefined();
+  expect(aug16!.label).toBe("2026-08-16 10:54");
+  expect(aug16!.measuredAt).toBe(Date.UTC(2026, 7, 16, 8, 54, 0));
+  const a16 = Object.fromEntries(aug16!.entries.map((e) => [e.metricType, e.value]));
+  expect(a16.weight_kg).toBe(74.1);
+  expect(a16.body_fat_pct).toBe(23.9);
+
+  const aug14 = rows.filter((r) => r.date === "2026-08-14");
+  expect(aug14).toHaveLength(2);
+  const late = aug14.find((r) => r.label?.includes("23:54"));
+  const early = aug14.find((r) => r.label?.includes("09:04"));
+  expect(late).toBeDefined();
+  expect(early).toBeDefined();
+  expect(late!.measuredAt).toBe(Date.UTC(2026, 7, 14, 21, 54, 0));
+  expect(early!.measuredAt).toBe(Date.UTC(2026, 7, 14, 7, 4, 0));
+});
+
 test("parseWeightCsv salta la fila-fecha DMY con mes inválido (Mes no reconocido)", () => {
   const csv = [
     HEADER,
