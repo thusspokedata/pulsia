@@ -5,7 +5,7 @@ import {
   type MetricCsvPreview,
   type BodyMetricEntry,
 } from "@pulsia/shared";
-import { splitCsvLine, parseUnitNumber, parse12hTime, localEpoch } from "./csvUtils";
+import { splitCsvLine, parseUnitNumber, parseClockTime, localEpoch } from "./csvUtils";
 
 // Header (trim+lower) → metricType. La col 0 es la hora (se trata aparte junto con la fecha
 // de la fila anterior). "Change" y "BMI" no se mapean (no son métricas propias del sistema).
@@ -78,7 +78,7 @@ export function parseWeightCsv(csv: string, offMin: number): MetricCsvPreview {
       continue;
     }
 
-    const time = parse12hTime(first);
+    const time = parseClockTime(first);
     if (!time) {
       skipped.push({ line: i + 1, reason: `Hora inválida: "${first}"` });
       continue;

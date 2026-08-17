@@ -33,16 +33,27 @@ export function parseUnitNumber(cell: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-// "1:05 PM" → {h:13,mi:5}. Ojo con el 12: 12 AM = 0h, 12 PM = 12h.
-export function parse12hTime(raw: string): { h: number; mi: number } | null {
-  const m = raw.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (!m) return null;
-  let h = parseInt(m[1], 10);
-  const mi = parseInt(m[2], 10);
-  if (h < 1 || h > 12 || mi > 59) return null;
-  const pm = m[3].toUpperCase() === "PM";
-  h = h === 12 ? (pm ? 12 : 0) : pm ? h + 12 : h;
-  return { h, mi };
+// Acepta 12h con AM/PM ("1:05 PM") y 24h sin AM/PM ("13:05", "10:54").
+// El export regional de Garmin (owner) usa 24h; el US usa 12h. Ojo 12h: 12 AM = 0h, 12 PM = 12h.
+export function parseClockTime(raw: string): { h: number; mi: number } | null {
+  const t = raw.trim();
+  const m12 = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (m12) {
+    let h = parseInt(m12[1], 10);
+    const mi = parseInt(m12[2], 10);
+    if (h < 1 || h > 12 || mi > 59) return null;
+    const pm = m12[3].toUpperCase() === "PM";
+    h = h === 12 ? (pm ? 12 : 0) : pm ? h + 12 : h;
+    return { h, mi };
+  }
+  const m24 = t.match(/^(\d{1,2}):(\d{2})$/);
+  if (m24) {
+    const h = parseInt(m24[1], 10);
+    const mi = parseInt(m24[2], 10);
+    if (h > 23 || mi > 59) return null;
+    return { h, mi };
+  }
+  return null;
 }
 
 // offMin = Date#getTimezoneOffset() del cliente (minutos a SUMAR al local para llegar a UTC).
