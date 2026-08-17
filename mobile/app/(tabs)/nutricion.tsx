@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { ScrollView, View, Text, Pressable, Alert } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { deleteMeal, logWater, deleteWater } from "../../src/api/nutrition";
-import { getDayChecklist, putTake } from "../../src/api/supplements";
+import { getDayChecklist, putTake, deleteAdHocTake } from "../../src/api/supplements";
 import { getBackendUrl } from "../../src/storage/config";
 import { dayLabel, dayAtNoon, hhmm } from "../../src/session/metricDate";
 import { dateKey } from "../../src/session/dateKey";
@@ -54,9 +54,19 @@ export default function NutricionScreen() {
   useFocusEffect(useCallback(() => { void loadChecklist(); }, [loadChecklist]));
 
   async function onMarkTake(entry: DayChecklistEntry, status: TakeStatus, actualDose?: string, note?: string) {
+    if (!entry.planItemId) return; // las filas ad-hoc no marcan (usan onRemove)
     try {
       const url = await getBackendUrl();
       await putTake(url, { date: dateKey(dayAtNoon(offset, Date.now())), planItemId: entry.planItemId, status, actualDose, note });
+      await loadChecklist();
+    } catch (e) { setError((e as Error).message); }
+  }
+
+  async function onRemoveTake(entry: DayChecklistEntry) {
+    if (!entry.takeId) return;
+    try {
+      const url = await getBackendUrl();
+      await deleteAdHocTake(url, entry.takeId);
       await loadChecklist();
     } catch (e) { setError((e as Error).message); }
   }
@@ -197,12 +207,16 @@ export default function NutricionScreen() {
                 <Text style={{ color: "#fff", fontWeight: "600" }}>Armar plan con IA</Text>
               </Pressable>
             )}
+            {checklist && checklist.entries.length > 0 && (
+              <SupplementChecklist entries={checklist.entries} onMark={onMarkTake} onRemove={onRemoveTake} />
+            )}
             {checklist && checklist.hasPlan && checklist.entries.length === 0 && (
               <Text style={{ color: colors.textMuted }}>Hoy no toca ningún suplemento.</Text>
             )}
-            {checklist && checklist.hasPlan && checklist.entries.length > 0 && (
-              <SupplementChecklist entries={checklist.entries} onMark={onMarkTake} />
-            )}
+            <Pressable onPress={() => router.push("/nutricion/agregar-toma")}
+              style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, padding: spacing.sm, alignItems: "center" }}>
+              <Text style={{ color: colors.accentText, fontWeight: "600" }}>+ Agregar suplemento a hoy</Text>
+            </Pressable>
           </>
         )}
       </View>
