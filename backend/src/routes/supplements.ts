@@ -1,14 +1,15 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import {
-  SupplementInputSchema, GeneratePlanInputSchema, PlanItemPatchSchema, TakeInputSchema,
-  resolveDayChecklist, detectComponentOverlaps, supplementMicros, type Frequency, type TakeStatus, type AiPlanItem,
+  SupplementInputSchema, GeneratePlanInputSchema, PlanItemPatchSchema, TakeInputSchema, AdHocTakeInputSchema,
+  resolveDayChecklist, detectComponentOverlaps, supplementMicros, type Frequency, type TakeStatus, type TakeSlot, type AiPlanItem,
 } from "@pulsia/shared";
 import {
   insertSupplement, listSupplements, getSupplement,
   updateSupplement, deleteSupplement, setSupplementInfo, setSupplementMapping,
   createPlan, getActivePlan, getOwnedPlanItem, updatePlanItem, upsertTake,
   listTakesForDate, getAdjustmentItems, snapshotForTake, takesWithComponents, takesWithComponentsByDay,
+  upsertAdHocTake, deleteAdHocTake, listAdHocTakesForDate,
 } from "../supplements/repository";
 import { resolveAiKey } from "../ai/resolveKey";
 import { settings } from "../db/schema";
@@ -138,14 +139,14 @@ export function supplementsRoutes(deps: AppDeps) {
     const date = c.req.query("date");
     if (!date || !z.iso.date().safeParse(date).success) return c.json({ error: "Falta date (YYYY-MM-DD)" }, 400);
     const userId = c.get("userId");
-    const plan = await getActivePlan(deps.db, userId);
-    if (!plan) return c.json({ hasPlan: false, entries: [] });
-    const [takes, adjustments] = await Promise.all([
+    const [plan, takes, adjustments, adHoc] = await Promise.all([
+      getActivePlan(deps.db, userId),
       listTakesForDate(deps.db, userId, date),
       getAdjustmentItems(deps.db, userId, date),
+      listAdHocTakesForDate(deps.db, userId, date),
     ]);
     const entries = resolveDayChecklist({
-      planItems: plan.items,
+      planItems: plan?.items ?? [],
       adjustments,
       takes: takes
         .filter((t) => t.planItemId != null)
@@ -155,9 +156,14 @@ export function supplementsRoutes(deps: AppDeps) {
           actualDose: t.actualDose,
           note: t.note,
         })),
+      adHocTakes: adHoc.map((t) => ({
+        takeId: t.id, supplementId: t.supplementId as string, supplementName: t.supplementName,
+        slot: t.slot as TakeSlot, plannedDose: t.plannedDose, status: t.status as TakeStatus,
+        actualDose: t.actualDose, note: t.note,
+      })),
       date,
     });
-    return c.json({ hasPlan: true, entries });
+    return c.json({ hasPlan: plan != null, entries });
   });
 
   // --- Tomas ---
@@ -168,6 +174,22 @@ export function supplementsRoutes(deps: AppDeps) {
     if (!item) return c.json({ error: "Ítem de plan no encontrado" }, 404);
     await upsertTake(deps.db, c.get("userId"), parsed.data, snapshotForTake(item));
     return c.json({ ok: true });
+  });
+
+  // Toma ad-hoc (SUP-2): suplemento fuera del plan. Declaradas junto a /takes, antes del
+  // catch-all /:id.
+  r.post("/takes/adhoc", async (c) => {
+    const parsed = AdHocTakeInputSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Toma inválida", detail: parsed.error.issues }, 400);
+    const out = await upsertAdHocTake(deps.db, c.get("userId"), parsed.data);
+    if (!out) return c.json({ error: "Suplemento no encontrado" }, 404);
+    return c.json({ ok: true, id: out.id });
+  });
+
+  r.delete("/takes/adhoc/:id", async (c) => {
+    if (!UuidSchema.safeParse(c.req.param("id")).success) return badId(c);
+    const ok = await deleteAdHocTake(deps.db, c.get("userId"), c.req.param("id"));
+    return ok ? c.json({ ok: true }) : c.json({ error: "No encontrado" }, 404);
   });
 
   r.patch("/:id", async (c) => {
