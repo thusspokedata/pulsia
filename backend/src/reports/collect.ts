@@ -37,7 +37,7 @@ export interface ReportData {
     catalog: { id: string; name: string; components: SupplementComponent[] }[];
   } | null; // null si no hay plan activo
   // Aporte cuantificado de los suplementos TOMADOS en el período, por nutriente (misma agregación
-  // que usa el diario). null si no hay plan activo — igual que `supplements`.
+  // que usa el diario). null solo cuando no hubo tomas en el período (no depende de `activePlan`).
   supplementMicros: Partial<Record<NutrientKey, number>> | null;
 }
 

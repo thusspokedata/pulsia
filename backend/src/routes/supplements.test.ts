@@ -44,6 +44,7 @@ function fakeDb(opts: {
   takes?: any[];
   adHocTakes?: any[];
   adjustmentRow?: any | null;
+  deleteReturns?: any[];
 } = {}) {
   const inserts: any[] = [];
   const db: any = {
@@ -70,7 +71,7 @@ function fakeDb(opts: {
     delete: () => ({
       where: () => {
         const p: any = Promise.resolve(undefined);
-        p.returning = async () => (opts.supRow ? [{ id: opts.supRow.id }] : []);
+        p.returning = async () => (opts.deleteReturns ?? (opts.supRow ? [{ id: opts.supRow.id }] : []));
         return p;
       },
     }),
@@ -641,7 +642,7 @@ test("POST /nutrition/supplements/takes/adhoc → 404 si el suplemento no es del
 });
 
 test("DELETE /nutrition/supplements/takes/adhoc/:id → 200", async () => {
-  const app = createApp(deps(fakeDb({})));
+  const app = createApp(deps(fakeDb({ deleteReturns: [{ id: ITEM_ID }] })));
   const res = await app.request(`/nutrition/supplements/takes/adhoc/${ITEM_ID}`, { method: "DELETE" });
-  expect([200, 404]).toContain(res.status); // depende del mock; el foco es que la ruta existe y no 400
+  expect(res.status).toBe(200);
 });
