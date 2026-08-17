@@ -16,6 +16,7 @@ const plan = {
   items: [{
     id: "33333333-3333-4333-8333-333333333333", supplementId: "s1", supplementName: "Magnesio",
     slot: "antes_de_dormir", frequency: { type: "daily" }, dose: "2 cápsulas", reason: "ayuda al descanso",
+    active: true,
   }],
 };
 
@@ -184,5 +185,20 @@ test("vista semanal: 7 días desde hoy, ítem daily todos los días y weekdays s
     expect(within(screen.getByTestId("week-day-6")).getByText(/Zink/)).toBeTruthy();
   } finally {
     nowSpy.mockRestore();
+  }
+});
+
+test("pausar un ítem activo: 'Pausar' llama updatePlanItem con active:false; ítem pausado muestra badge y 'Reactivar', y WeekPreview no lo lista", async () => {
+  (getPlan as jest.Mock).mockResolvedValueOnce({ plan, warnings: [] });
+  (updatePlanItem as jest.Mock).mockResolvedValueOnce({ ...plan.items[0], active: false });
+  await render(<PlanSuplementosScreen />);
+  await screen.findAllByText(/Magnesio/);
+  await fireEvent.press(screen.getByTestId(`pause-${plan.items[0].id}`));
+  await waitFor(() => expect(updatePlanItem).toHaveBeenCalledWith("http://x", plan.items[0].id, { active: false }));
+  await waitFor(() => expect(screen.getByText(/Pausado/)).toBeTruthy());
+  expect(screen.getByText(/Reactivar/)).toBeTruthy();
+  // WeekPreview ya no lista el ítem pausado en ningún día.
+  for (let i = 0; i < 7; i++) {
+    expect(within(screen.getByTestId(`week-day-${i}`)).queryByText(/Magnesio/)).toBeNull();
   }
 });
