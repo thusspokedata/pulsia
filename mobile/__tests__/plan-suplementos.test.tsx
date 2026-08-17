@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react-native";
+import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react-native";
 import PlanSuplementosScreen from "../app/nutricion/plan-suplementos";
 import { getPlan, generatePlan, updatePlanItem } from "../src/api/supplements";
 
@@ -186,6 +186,36 @@ test("vista semanal: 7 días desde hoy, ítem daily todos los días y weekdays s
   } finally {
     nowSpy.mockRestore();
   }
+});
+
+test("pausar dos ítems distintos casi al mismo tiempo: ambos cambios quedan reflejados (no se pisan con un snapshot viejo)", async () => {
+  const itemB = {
+    id: "44444444-4444-4444-8444-444444444444", supplementId: "s2", supplementName: "Zink",
+    slot: "desayuno", frequency: { type: "daily" }, dose: "1 tableta", reason: null, active: true,
+  };
+  const twoItemPlan = { ...plan, items: [plan.items[0], itemB] };
+  (getPlan as jest.Mock).mockResolvedValueOnce({ plan: twoItemPlan, warnings: [] });
+
+  let resolveA!: (v: unknown) => void;
+  let resolveB!: (v: unknown) => void;
+  const pA = new Promise((res) => { resolveA = res; });
+  const pB = new Promise((res) => { resolveB = res; });
+  (updatePlanItem as jest.Mock).mockImplementationOnce(() => pA).mockImplementationOnce(() => pB);
+
+  await render(<PlanSuplementosScreen />);
+  await screen.findAllByText(/Magnesio/);
+
+  // Dispara ambos requests ANTES de que ninguno resuelva: los dos closures capturan el mismo `plan`.
+  await act(async () => {
+    fireEvent.press(screen.getByTestId(`pause-${plan.items[0].id}`)); // request A
+    fireEvent.press(screen.getByTestId(`pause-${itemB.id}`)); // request B
+  });
+
+  // Resuelven en orden INVERSO al de disparo (B antes que A).
+  await act(async () => { resolveB({ ...itemB, active: false }); await pB; });
+  await waitFor(() => expect(screen.getAllByText(/Reactivar/).length).toBe(1));
+  await act(async () => { resolveA({ ...plan.items[0], active: false }); await pA; });
+  await waitFor(() => expect(screen.getAllByText(/Reactivar/).length).toBe(2)); // ambos, no se pisó el de B
 });
 
 test("pausar un ítem activo: 'Pausar' llama updatePlanItem con active:false; ítem pausado muestra badge y 'Reactivar', y WeekPreview no lo lista", async () => {

@@ -158,7 +158,7 @@ export default function PlanSuplementosScreen() {
     setSavingId(item.id); setError(null);
     try {
       const updated = await updatePlanItem(url.current, item.id, patch);
-      setPlan({ ...plan, items: plan.items.map((it) => (it.id === item.id ? updated : it)) });
+      setPlan((cur) => (cur == null ? cur : { ...cur, items: cur.items.map((it) => (it.id === item.id ? updated : it)) }));
       setExpandedId(null);
     } catch (e) { setError((e as Error).message); }
     setSavingId(null);
@@ -169,7 +169,7 @@ export default function PlanSuplementosScreen() {
     setSavingId(item.id); setError(null);
     try {
       const updated = await updatePlanItem(url.current, item.id, { active: !item.active });
-      setPlan({ ...plan, items: plan.items.map((it) => (it.id === item.id ? updated : it)) });
+      setPlan((cur) => (cur == null ? cur : { ...cur, items: cur.items.map((it) => (it.id === item.id ? updated : it)) }));
     } catch (e) { setError((e as Error).message); }
     setSavingId(null);
   }
