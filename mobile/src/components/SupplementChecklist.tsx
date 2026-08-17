@@ -15,13 +15,15 @@ export const SLOT_LABELS: Record<TakeSlot, string> = {
 export interface SupplementChecklistProps {
   entries: DayChecklistEntry[];
   onMark: (entry: DayChecklistEntry, status: TakeStatus, actualDose?: string, note?: string) => void;
+  onRemove: (entry: DayChecklistEntry) => void;
 }
 
-function Row({ entry, onMark }: { entry: DayChecklistEntry; onMark: SupplementChecklistProps["onMark"] }) {
+function Row({ entry, onMark, onRemove }: { entry: DayChecklistEntry; onMark: SupplementChecklistProps["onMark"]; onRemove: SupplementChecklistProps["onRemove"] }) {
   const [expanded, setExpanded] = useState(false);
   const [dose, setDose] = useState("");
   const [note, setNote] = useState("");
 
+  const isAdHoc = entry.origin === "adhoc";
   const taken = entry.status === "taken";
   const skipped = entry.status === "skipped";
   const deviated = entry.status === "deviated";
@@ -45,15 +47,15 @@ function Row({ entry, onMark }: { entry: DayChecklistEntry; onMark: SupplementCh
 
   return (
     <View style={{ gap: spacing.xs }}>
-      <Pressable onPress={markTaken}
+      <Pressable onPress={isAdHoc ? undefined : markTaken}
         style={{
           flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-          backgroundColor: taken ? colors.successSoft : colors.surfaceMuted,
+          backgroundColor: (taken || isAdHoc) ? colors.successSoft : colors.surfaceMuted,
           borderRadius: radius.md, padding: spacing.md, opacity: skipped ? 0.5 : 1,
         }}>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={{ color: colors.text, fontWeight: "600", textDecorationLine: skipped ? "line-through" : "none" }}>
-            {taken ? "✓ " : ""}{entry.supplementName}
+            {(taken || isAdHoc) ? "✓ " : ""}{entry.supplementName}
           </Text>
           <Text style={{ color: deviated ? colors.warning : colors.textMuted, fontSize: 12 }}>
             {deviated && entry.actualDose ? `${entry.actualDose} (planeado ${entry.plannedDose})` : entry.dose}
@@ -65,15 +67,23 @@ function Row({ entry, onMark }: { entry: DayChecklistEntry; onMark: SupplementCh
           )}
         </View>
         <View style={{ flexDirection: "row", gap: spacing.sm }}>
-          <Pressable testID={`deviate-${entry.planItemId}`} onPress={() => setExpanded((e) => !e)} hitSlop={8}>
-            <Text style={{ color: colors.accentText, fontSize: 12 }}>Desvío</Text>
-          </Pressable>
-          <Pressable testID={`skip-${entry.planItemId}`} onPress={markSkipped} hitSlop={8}>
-            <Text style={{ color: colors.danger, fontSize: 12 }}>Salteado</Text>
-          </Pressable>
+          {isAdHoc ? (
+            <Pressable testID={`remove-${entry.takeId}`} onPress={() => onRemove(entry)} hitSlop={8}>
+              <Text style={{ color: colors.danger, fontSize: 12 }}>Quitar</Text>
+            </Pressable>
+          ) : (
+            <>
+              <Pressable testID={`deviate-${entry.planItemId}`} onPress={() => setExpanded((e) => !e)} hitSlop={8}>
+                <Text style={{ color: colors.accentText, fontSize: 12 }}>Desvío</Text>
+              </Pressable>
+              <Pressable testID={`skip-${entry.planItemId}`} onPress={markSkipped} hitSlop={8}>
+                <Text style={{ color: colors.danger, fontSize: 12 }}>Salteado</Text>
+              </Pressable>
+            </>
+          )}
         </View>
       </Pressable>
-      {expanded && (
+      {!isAdHoc && expanded && (
         <View style={{ gap: spacing.xs, paddingHorizontal: spacing.sm }}>
           <TextInput value={dose} onChangeText={setDose} placeholder="Dosis real (p.ej. 10 g)" placeholderTextColor={colors.icon}
             style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.sm, color: colors.text }} />
@@ -89,7 +99,7 @@ function Row({ entry, onMark }: { entry: DayChecklistEntry; onMark: SupplementCh
   );
 }
 
-export function SupplementChecklist({ entries, onMark }: SupplementChecklistProps) {
+export function SupplementChecklist({ entries, onMark, onRemove }: SupplementChecklistProps) {
   const bySlot = new Map<TakeSlot, DayChecklistEntry[]>();
   for (const e of entries) {
     const list = bySlot.get(e.slot) ?? [];
@@ -103,7 +113,7 @@ export function SupplementChecklist({ entries, onMark }: SupplementChecklistProp
         <View key={slot} style={{ gap: spacing.xs }}>
           <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: "600" }}>{SLOT_LABELS[slot]}</Text>
           {bySlot.get(slot)!.map((entry) => (
-            <Row key={entry.planItemId} entry={entry} onMark={onMark} />
+            <Row key={entry.planItemId ?? entry.takeId} entry={entry} onMark={onMark} onRemove={onRemove} />
           ))}
         </View>
       ))}
