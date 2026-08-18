@@ -9,6 +9,7 @@ import type {
   PlanItemView,
   TakeInput,
   DayChecklistEntry,
+  AdHocTakeInput,
 } from "@pulsia/shared";
 
 export async function extractSupplement(baseUrl: string, imageBase64: string, mediaType: string): Promise<SupplementExtraction> {
@@ -86,6 +87,17 @@ export async function getDayChecklist(baseUrl: string, date: string): Promise<{ 
 export async function putTake(baseUrl: string, input: TakeInput): Promise<void> {
   const res = await apiFetch(baseUrl, "/nutrition/supplements/takes", { method: "PUT", body: JSON.stringify(input) });
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo registrar la toma."));
+}
+
+// Toma ad-hoc (SUP-2): suplemento fuera del plan, tomado hoy.
+export async function addAdHocTake(baseUrl: string, input: AdHocTakeInput): Promise<void> {
+  const res = await apiFetch(baseUrl, "/nutrition/supplements/takes/adhoc", { method: "POST", body: JSON.stringify(input) });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo registrar la toma."));
+}
+
+export async function deleteAdHocTake(baseUrl: string, id: string): Promise<void> {
+  const res = await apiFetch(baseUrl, `/nutrition/supplements/takes/adhoc/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo quitar la toma."));
 }
 
 export interface SupplementNutrients {

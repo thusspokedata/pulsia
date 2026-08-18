@@ -6,8 +6,8 @@ const SUP_ZN = "22222222-2222-4222-8222-222222222222";
 const ITEM_MG = "33333333-3333-4333-8333-333333333333";
 const ITEM_ZN = "44444444-4444-4444-8444-444444444444";
 
-const mgItem = { id: ITEM_MG, supplementId: SUP_MG, slot: "antes_de_dormir" as const, frequency: { type: "daily" as const }, dose: "2 cápsulas", reason: "el magnesio ayuda al descanso", supplementName: "Magnesio" };
-const znItem = { id: ITEM_ZN, supplementId: SUP_ZN, slot: "desayuno" as const, frequency: { type: "every_other_day" as const, anchorDate: "2026-07-15" }, dose: "1 tableta", reason: null, supplementName: "Zink" };
+const mgItem = { id: ITEM_MG, supplementId: SUP_MG, slot: "antes_de_dormir" as const, frequency: { type: "daily" as const }, dose: "2 cápsulas", active: true as const, reason: "el magnesio ayuda al descanso", supplementName: "Magnesio" };
+const znItem = { id: ITEM_ZN, supplementId: SUP_ZN, slot: "desayuno" as const, frequency: { type: "every_other_day" as const, anchorDate: "2026-07-15" }, dose: "1 tableta", active: true as const, reason: null, supplementName: "Zink" };
 
 test("frequencyAppliesOn: daily siempre; every_other_day por paridad desde anchorDate (cruza meses)", () => {
   expect(frequencyAppliesOn({ type: "daily" }, "2026-07-16")).toBe(true);
@@ -29,12 +29,12 @@ test("frequencyAppliesOn: weekdays por día de semana (0=domingo, convención ge
 });
 
 test("resolveDayChecklist filtra por frecuencia y agrupa en el orden canónico de franjas", () => {
-  const out = resolveDayChecklist({ planItems: [mgItem, znItem], adjustments: [], takes: [], date: "2026-07-16" });
+  const out = resolveDayChecklist({ planItems: [mgItem, znItem], adjustments: [], takes: [], adHocTakes: [], date: "2026-07-16" });
   // el 16 el zinc NO toca (día por medio anclado al 15); el magnesio sí
   expect(out).toHaveLength(1);
   expect(out[0]).toMatchObject({ planItemId: ITEM_MG, slot: "antes_de_dormir", supplementName: "Magnesio", dose: "2 cápsulas", status: null });
 
-  const out15 = resolveDayChecklist({ planItems: [mgItem, znItem], adjustments: [], takes: [], date: "2026-07-15" });
+  const out15 = resolveDayChecklist({ planItems: [mgItem, znItem], adjustments: [], takes: [], adHocTakes: [], date: "2026-07-15" });
   expect(out15).toHaveLength(2);
   // orden canónico: desayuno antes que antes_de_dormir
   expect(out15[0].slot).toBe("desayuno");
@@ -46,7 +46,7 @@ test("ajuste skip marca la entrada (no la borra) y reduce cambia la dosis efecti
     { supplementId: SUP_MG, action: "skip" as const, reason: "ayer comiste rico en magnesio" },
     { supplementId: SUP_ZN, action: "reduce" as const, dose: "media tableta", reason: "dosis alta acumulada" },
   ];
-  const out = resolveDayChecklist({ planItems: [mgItem, znItem], adjustments, takes: [], date: "2026-07-15" });
+  const out = resolveDayChecklist({ planItems: [mgItem, znItem], adjustments, takes: [], adHocTakes: [], date: "2026-07-15" });
   const mg = out.find((e) => e.planItemId === ITEM_MG)!;
   expect(mg.adjusted?.action).toBe("skip");
   // Igualdad exacta: el fixture tiene DOS textos con "magnesio" (el motivo del ajuste y el del
@@ -61,17 +61,46 @@ test("ajuste skip marca la entrada (no la borra) y reduce cambia la dosis efecti
 
 test("ajuste para un suplemento que no toca ese día se ignora en silencio", () => {
   const adjustments = [{ supplementId: SUP_ZN, action: "skip" as const, reason: "x" }];
-  const out = resolveDayChecklist({ planItems: [mgItem, znItem], adjustments, takes: [], date: "2026-07-16" });
+  const out = resolveDayChecklist({ planItems: [mgItem, znItem], adjustments, takes: [], adHocTakes: [], date: "2026-07-16" });
   expect(out).toHaveLength(1);
   expect(out[0].adjusted ?? null).toBeNull();
 });
 
 test("mergea tomas registradas por planItemId (estado + dosis real + nota)", () => {
   const takes = [{ planItemId: ITEM_MG, status: "deviated" as const, actualDose: "1 cápsula", note: "me quedaban pocas" }];
-  const out = resolveDayChecklist({ planItems: [mgItem], adjustments: [], takes, date: "2026-07-16" });
+  const out = resolveDayChecklist({ planItems: [mgItem], adjustments: [], takes, adHocTakes: [], date: "2026-07-16" });
   expect(out[0]).toMatchObject({ status: "deviated", actualDose: "1 cápsula", note: "me quedaban pocas" });
 });
 
 test("plan vacío o día sin ítems → lista vacía", () => {
-  expect(resolveDayChecklist({ planItems: [], adjustments: [], takes: [], date: "2026-07-16" })).toEqual([]);
+  expect(resolveDayChecklist({ planItems: [], adjustments: [], takes: [], adHocTakes: [], date: "2026-07-16" })).toEqual([]);
+});
+
+test("resolveDayChecklist: omite ítems pausados (active:false)", () => {
+  const paused = { ...mgItem, active: false as const };
+  const out = resolveDayChecklist({ planItems: [paused, { ...znItem, active: true as const }], adjustments: [], takes: [], adHocTakes: [], date: "2026-07-15" });
+  // el 15 el zinc toca; el magnesio está pausado → solo 1 entry, la del zinc
+  expect(out).toHaveLength(1);
+  expect(out[0]).toMatchObject({ planItemId: ITEM_ZN, origin: "plan", takeId: null });
+});
+
+test("resolveDayChecklist: mergea tomas ad-hoc como entries origin=adhoc, ordenadas por franja", () => {
+  const adHoc = {
+    takeId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    supplementId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    supplementName: "Vitamina D",
+    slot: "desayuno" as const,
+    plannedDose: "1 cápsula",
+    status: "taken" as const,
+    actualDose: null,
+    note: null,
+  };
+  const out = resolveDayChecklist({
+    planItems: [{ ...mgItem, active: true as const }], // antes_de_dormir
+    adjustments: [], takes: [], adHocTakes: [adHoc], date: "2026-07-16",
+  });
+  expect(out).toHaveLength(2);
+  // desayuno (ad-hoc) antes que antes_de_dormir (plan)
+  expect(out[0]).toMatchObject({ takeId: adHoc.takeId, origin: "adhoc", planItemId: null, supplementName: "Vitamina D", status: "taken" });
+  expect(out[1]).toMatchObject({ planItemId: ITEM_MG, origin: "plan" });
 });

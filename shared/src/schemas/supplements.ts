@@ -80,6 +80,8 @@ export const PlanItemSchema = z.object({
   slot: TakeSlotSchema,
   frequency: FrequencySchema,
   dose: z.string().trim().min(1),
+  // Pausa (SUP-2): false = pausado indefinido (se reactiva a mano). El default lo pone la DB.
+  active: z.boolean(),
   reason: z.string().nullish(),
 });
 export type PlanItem = z.infer<typeof PlanItemSchema>;
@@ -135,8 +137,9 @@ export const PlanItemPatchSchema = z
     slot: TakeSlotSchema.optional(),
     frequency: FrequencySchema.optional(),
     dose: z.string().trim().min(1).optional(),
+    active: z.boolean().optional(),
   })
-  .refine((p) => p.slot !== undefined || p.frequency !== undefined || p.dose !== undefined);
+  .refine((p) => p.slot !== undefined || p.frequency !== undefined || p.dose !== undefined || p.active !== undefined);
 export type PlanItemPatch = z.infer<typeof PlanItemPatchSchema>;
 
 // Ítem del plan como lo devuelve el backend (join con el nombre del suplemento).
@@ -159,3 +162,15 @@ export const TakeInputSchema = z.object({
   note: z.string().nullish(),
 });
 export type TakeInput = z.infer<typeof TakeInputSchema>;
+
+// Toma ad-hoc (SUP-2): un suplemento que NO está en el plan, tomado hoy. Nace siempre "taken";
+// plannedDose = la dosis elegida (stepper de unitLabel en el móvil). Se dedupe por
+// (userId, date, supplementId, slot) — índice parcial WHERE plan_item_id IS NULL.
+export const AdHocTakeInputSchema = z.object({
+  date: z.iso.date(),
+  supplementId: z.string().uuid(),
+  slot: TakeSlotSchema,
+  dose: z.string().trim().min(1),
+  note: z.string().nullish(),
+});
+export type AdHocTakeInput = z.infer<typeof AdHocTakeInputSchema>;

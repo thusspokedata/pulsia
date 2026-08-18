@@ -42,7 +42,9 @@ function fakeDb(opts: {
   planItemRows?: any[];
   ownedItemRows?: any[];
   takes?: any[];
+  adHocTakes?: any[];
   adjustmentRow?: any | null;
+  deleteReturns?: any[];
 } = {}) {
   const inserts: any[] = [];
   const db: any = {
@@ -53,7 +55,7 @@ function fakeDb(opts: {
         inserts.push({ table, rows });
         const p: any = Promise.resolve(rows);
         p.returning = async () => rows;
-        p.onConflictDoUpdate = async () => undefined;
+        p.onConflictDoUpdate = () => ({ returning: async () => rows });
         return p;
       },
     }),
@@ -69,7 +71,7 @@ function fakeDb(opts: {
     delete: () => ({
       where: () => {
         const p: any = Promise.resolve(undefined);
-        p.returning = async () => (opts.supRow ? [{ id: opts.supRow.id }] : []);
+        p.returning = async () => (opts.deleteReturns ?? (opts.supRow ? [{ id: opts.supRow.id }] : []));
         return p;
       },
     }),
@@ -92,7 +94,7 @@ function fakeDb(opts: {
               else if (joins === 2) rows = opts.ownedItemRows ?? [];
               else throw new Error("query shape desconocida");
             }
-            else if (table === supplementTake) rows = opts.takes ?? [];
+            else if (table === supplementTake) rows = _fields ? (opts.adHocTakes ?? []) : (opts.takes ?? []);
             else rows = [];
             const p: any = Promise.resolve(rows);
             p.orderBy = async () => rows;
@@ -617,4 +619,30 @@ test("POST /nutrition/supplements/backfill-micros → 500 si el servidor no sopo
   const app = createApp(deps(fakeDb({ supplements: [] }))); // sin mapSupplementComponents
   const res = await app.request("/nutrition/supplements/backfill-micros", { method: "POST" });
   expect(res.status).toBe(500);
+});
+
+// ---- SUP-2: tomas ad-hoc ----
+
+test("POST /nutrition/supplements/takes/adhoc → 200 con suplemento propio", async () => {
+  const app = createApp(deps(fakeDb({ supRow })));
+  const res = await app.request("/nutrition/supplements/takes/adhoc", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ date: "2026-08-10", supplementId: SUP_ID, slot: "desayuno", dose: "1 cápsula" }),
+  });
+  expect(res.status).toBe(200);
+});
+
+test("POST /nutrition/supplements/takes/adhoc → 404 si el suplemento no es del usuario", async () => {
+  const app = createApp(deps(fakeDb({ supRow: null })));
+  const res = await app.request("/nutrition/supplements/takes/adhoc", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ date: "2026-08-10", supplementId: SUP_UNKNOWN, slot: "desayuno", dose: "1 cápsula" }),
+  });
+  expect(res.status).toBe(404);
+});
+
+test("DELETE /nutrition/supplements/takes/adhoc/:id → 200", async () => {
+  const app = createApp(deps(fakeDb({ deleteReturns: [{ id: ITEM_ID }] })));
+  const res = await app.request(`/nutrition/supplements/takes/adhoc/${ITEM_ID}`, { method: "DELETE" });
+  expect(res.status).toBe(200);
 });

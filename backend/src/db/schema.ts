@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, jsonb, timestamp, integer, bigint, boolean, doublePrecision, real, index, uniqueIndex, customType } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import type { TrainingProfile, Program, PlannedExercise, SupplementComponent, Frequency, AdjustmentItem, CardioSamples, CardioFitExtras } from "@pulsia/shared";
 
 export { usdaFood, usdaDataset } from "../usda/schema";
@@ -270,6 +270,7 @@ export const supplementPlanItem = pgTable("supplement_plan_item", {
   frequency: jsonb("frequency").$type<Frequency>().notNull(),
   dose: text("dose").notNull(),
   reason: text("reason"),
+  active: boolean("active").notNull().default(true),
 }, (t) => ({
   byPlan: index("supplement_plan_item_plan_idx").on(t.planId),
 }));
@@ -281,6 +282,7 @@ export const supplementTake = pgTable("supplement_take", {
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   date: text("date").notNull(), // YYYY-MM-DD, día calendario del dispositivo
   planItemId: uuid("plan_item_id").references(() => supplementPlanItem.id, { onDelete: "set null" }), // el snapshot sobrevive
+  supplementId: uuid("supplement_id").references(() => supplement.id, { onDelete: "set null" }), // toma ad-hoc (SUP-2)
   supplementName: text("supplement_name").notNull(),
   plannedDose: text("planned_dose").notNull(),
   slot: text("slot").notNull(),
@@ -291,6 +293,8 @@ export const supplementTake = pgTable("supplement_take", {
 }, (t) => ({
   // (user_id, date) queda cubierto como prefijo del índice único.
   oncePerItemDay: uniqueIndex("supplement_take_unique_idx").on(t.userId, t.date, t.planItemId),
+  // Dedup de tomas ad-hoc (SUP-2): el índice de arriba no aplica (plan_item_id NULL → filas distintas en PG).
+  adhocOncePerDay: uniqueIndex("supplement_take_adhoc_unique_idx").on(t.userId, t.date, t.supplementId, t.slot).where(sql`${t.planItemId} IS NULL`),
 }));
 
 export const report = pgTable("report", {

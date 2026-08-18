@@ -12,6 +12,8 @@ import {
   getSupplement,
   getDayNutrients,
   getRangeNutrients,
+  addAdHocTake,
+  deleteAdHocTake,
 } from "../src/api/supplements";
 
 const extraction = {
@@ -114,4 +116,21 @@ test("getDayNutrients / getRangeNutrients degradan limpio si el fetch tira (red/
   global.fetch = jest.fn(async () => { throw new Error("network down"); }) as any;
   expect(await getDayNutrients("http://x", "2026-07-16")).toEqual({ totals: {}, byNutrient: {} });
   expect(await getRangeNutrients("http://x", "2026-07-01", "2026-07-16")).toEqual({ totals: {}, byNutrient: {} });
+});
+
+test("addAdHocTake postea a /takes/adhoc con el body correcto", async () => {
+  global.fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => ({ ok: true, id: "x" }) })) as any;
+  await addAdHocTake("http://x", { date: "2026-08-10", supplementId: "s1", slot: "desayuno", dose: "1 cápsula" });
+  const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+  expect(String(url)).toContain("/nutrition/supplements/takes/adhoc");
+  expect(init.method).toBe("POST");
+  expect(JSON.parse(init.body)).toMatchObject({ date: "2026-08-10", supplementId: "s1", slot: "desayuno", dose: "1 cápsula" });
+});
+
+test("deleteAdHocTake llama DELETE /takes/adhoc/:id", async () => {
+  global.fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => ({ ok: true }) })) as any;
+  await deleteAdHocTake("http://x", "t1");
+  const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+  expect(String(url)).toContain("/nutrition/supplements/takes/adhoc/t1");
+  expect(init.method).toBe("DELETE");
 });

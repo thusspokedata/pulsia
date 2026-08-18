@@ -94,7 +94,7 @@ function WeekPreview({ items }: { items: PlanItemView[] }) {
     const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + i);
     const date = dateKey(d.getTime());
     const label = i === 0 ? "Hoy" : WEEKDAY_LABELS[d.getDay()];
-    const names = items.filter((it) => frequencyAppliesOn(it.frequency, date)).map((it) => it.supplementName);
+    const names = items.filter((it) => it.active !== false && frequencyAppliesOn(it.frequency, date)).map((it) => it.supplementName);
     return { date, label, text: names.length > 0 ? names.join(" · ") : "—" };
   });
   return (
@@ -158,8 +158,18 @@ export default function PlanSuplementosScreen() {
     setSavingId(item.id); setError(null);
     try {
       const updated = await updatePlanItem(url.current, item.id, patch);
-      setPlan({ ...plan, items: plan.items.map((it) => (it.id === item.id ? updated : it)) });
+      setPlan((cur) => (cur == null ? cur : { ...cur, items: cur.items.map((it) => (it.id === item.id ? updated : it)) }));
       setExpandedId(null);
+    } catch (e) { setError((e as Error).message); }
+    setSavingId(null);
+  }
+
+  async function togglePause(item: PlanItemView) {
+    if (!url.current || !plan) return;
+    setSavingId(item.id); setError(null);
+    try {
+      const updated = await updatePlanItem(url.current, item.id, { active: !item.active });
+      setPlan((cur) => (cur == null ? cur : { ...cur, items: cur.items.map((it) => (it.id === item.id ? updated : it)) }));
     } catch (e) { setError((e as Error).message); }
     setSavingId(null);
   }
@@ -221,16 +231,28 @@ export default function PlanSuplementosScreen() {
             <View key={slot} style={{ gap: spacing.xs }}>
               <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: "600" }}>{SLOT_LABELS[slot]}</Text>
               {bySlot.get(slot)!.map((item) => (
-                <View key={item.id} style={{ ...card, padding: 0, overflow: "hidden" }}>
+                <View key={item.id} style={{ ...card, padding: 0, overflow: "hidden", opacity: item.active === false ? 0.5 : 1 }}>
                   <Pressable onPress={() => setExpandedId((id) => (id === item.id ? null : item.id))}
                     style={{ padding: spacing.md, gap: 2 }}>
-                    <Text style={{ color: colors.text, fontWeight: "600" }}>{item.supplementName}</Text>
-                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-                      {item.dose} · {frequencyLabel(item.frequency)}
-                    </Text>
-                    {item.reason && (
-                      <Text style={{ color: colors.icon, fontSize: 11, fontStyle: "italic" }}>{item.reason}</Text>
-                    )}
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text style={{ color: colors.text, fontWeight: "600" }}>{item.supplementName}</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                          {item.dose} · {frequencyLabel(item.frequency)}
+                        </Text>
+                        {item.reason && (
+                          <Text style={{ color: colors.icon, fontSize: 11, fontStyle: "italic" }}>{item.reason}</Text>
+                        )}
+                        {item.active === false && (
+                          <Text style={{ color: colors.warning, fontSize: 11, fontWeight: "600" }}>⏸ Pausado</Text>
+                        )}
+                      </View>
+                      <Pressable testID={`pause-${item.id}`} onPress={() => togglePause(item)} hitSlop={8}>
+                        <Text style={{ color: item.active === false ? colors.warning : colors.accentText, fontSize: 12 }}>
+                          {item.active === false ? "Reactivar" : "Pausar"}
+                        </Text>
+                      </Pressable>
+                    </View>
                   </Pressable>
                   {expandedId === item.id && (
                     // EditItem queda montado durante el guardado: si falla, la edición no se pierde.

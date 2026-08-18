@@ -37,7 +37,7 @@ export interface ReportData {
     catalog: { id: string; name: string; components: SupplementComponent[] }[];
   } | null; // null si no hay plan activo
   // Aporte cuantificado de los suplementos TOMADOS en el período, por nutriente (misma agregación
-  // que usa el diario). null si no hay plan activo — igual que `supplements`.
+  // que usa el diario). null solo cuando no hubo tomas en el período (no depende de `activePlan`).
   supplementMicros: Partial<Record<NutrientKey, number>> | null;
 }
 
@@ -103,7 +103,7 @@ export async function collectReportData(
   // unión con el catálogo (para sacar los `components` mapeados) es por NOMBRE, no por id — el
   // snapshot de la toma guarda el nombre del suplemento tal como se llamaba al tomarlo.
   let supplementMicrosOut: Partial<Record<NutrientKey, number>> | null = null;
-  if (activePlan) {
+  if (takes.length > 0) {
     const byName = new Map(catalog.map((s) => [s.name, s.components]));
     const forMicros: TakeForMicros[] = takes.map((t) => ({
       status: t.status as TakeForMicros["status"], plannedDose: t.plannedDose, actualDose: t.actualDose ?? null,
