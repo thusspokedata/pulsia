@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, Text, Pressable, TextInput } from "react-native";
 import type { DayChecklistEntry, TakeSlot, TakeStatus } from "@pulsia/shared";
-import { TAKE_SLOTS } from "@pulsia/shared";
+import { TAKE_SLOTS, parseCountableDose, formatCountableDose } from "@pulsia/shared";
 import { colors, radius, spacing } from "../theme/tokens";
 
 export const SLOT_LABELS: Record<TakeSlot, string> = {
@@ -19,19 +19,31 @@ export interface SupplementChecklistProps {
 }
 
 function Row({ entry, onMark, onRemove }: { entry: DayChecklistEntry; onMark: SupplementChecklistProps["onMark"]; onRemove: SupplementChecklistProps["onRemove"] }) {
+  const isAdHoc = entry.origin === "adhoc";
+  // Solo las filas del plan tienen panel de desvío; detectamos si la dosis planeada es
+  // "contable" (ej. "3 cápsulas") para ofrecer un stepper +/- en lugar del texto libre.
+  const countable = isAdHoc ? null : parseCountableDose(entry.dose);
+
   const [expanded, setExpanded] = useState(false);
   const [dose, setDose] = useState("");
   const [note, setNote] = useState("");
+  const [stepCount, setStepCount] = useState(countable?.count ?? 0);
 
-  const isAdHoc = entry.origin === "adhoc";
   const taken = entry.status === "taken";
   const skipped = entry.status === "skipped";
   const deviated = entry.status === "deviated";
 
   function confirmDeviated() {
-    onMark(entry, "deviated", dose || undefined, note || undefined);
+    if (countable) {
+      // Igual al planeado → tomado; distinto → desvío (ej. tomar 1 de 3).
+      const status: TakeStatus = stepCount === countable.count ? "taken" : "deviated";
+      onMark(entry, status, formatCountableDose(stepCount, countable.unit), note || undefined);
+      setStepCount(countable.count);
+    } else {
+      onMark(entry, "deviated", dose || undefined, note || undefined);
+      setDose("");
+    }
     setExpanded(false);
-    setDose("");
     setNote("");
   }
 
@@ -85,8 +97,24 @@ function Row({ entry, onMark, onRemove }: { entry: DayChecklistEntry; onMark: Su
       </Pressable>
       {!isAdHoc && expanded && (
         <View style={{ gap: spacing.xs, paddingHorizontal: spacing.sm }}>
-          <TextInput value={dose} onChangeText={setDose} placeholder="Dosis real (p.ej. 10 g)" placeholderTextColor={colors.icon}
-            style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.sm, color: colors.text }} />
+          {countable ? (
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.lg }}>
+              <Pressable testID={`step-minus-${entry.planItemId}`} onPress={() => setStepCount((c) => Math.max(0, c - 1))} hitSlop={8}
+                style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.md, width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ color: colors.text, fontSize: 22, fontWeight: "600" }}>−</Text>
+              </Pressable>
+              <Text testID={`step-count-${entry.planItemId}`} style={{ color: colors.text, fontSize: 18, fontWeight: "600", minWidth: 90, textAlign: "center" }}>
+                {formatCountableDose(stepCount, countable.unit)}
+              </Text>
+              <Pressable testID={`step-plus-${entry.planItemId}`} onPress={() => setStepCount((c) => c + 1)} hitSlop={8}
+                style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.md, width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ color: colors.text, fontSize: 22, fontWeight: "600" }}>+</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <TextInput value={dose} onChangeText={setDose} placeholder="Dosis real (p.ej. 10 g)" placeholderTextColor={colors.icon}
+              style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.sm, color: colors.text }} />
+          )}
           <TextInput value={note} onChangeText={setNote} placeholder="Nota (opcional)" placeholderTextColor={colors.icon}
             style={{ backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.sm, color: colors.text }} />
           <Pressable onPress={confirmDeviated}
