@@ -96,8 +96,10 @@ export default function HistorialScreen() {
     setDetailError(null); // limpiar cualquier error previo antes de reintentar
     try {
       await putSession(url, updated);
-    } catch {
+    } catch (e) {
       setDetailError("No se pudo guardar la nota");
+      // Re-lanzar para que NotesEditor NO muestre "Guardado ✓" cuando el guardado falló.
+      throw e;
     }
   }
 
@@ -152,10 +154,32 @@ export default function HistorialScreen() {
   if (selected != null) {
     return (
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
-        <Pressable testID="hist-back" onPress={() => setSelected(null)} style={{ paddingVertical: spacing.xs }}>
+        <Pressable
+          testID="hist-back"
+          onPress={async () => {
+            // Guardar la nota antes de salir por si el input nunca perdió el foco.
+            // Si falla, igual volvemos: el error ya quedó registrado en detailError.
+            try {
+              await saveDetailNotes();
+            } catch {
+              /* noop: saveDetailNotes ya seteó el mensaje visible */
+            }
+            setSelected(null);
+          }}
+          style={{ paddingVertical: spacing.xs }}
+        >
           <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: "600" }}>← Volver al historial</Text>
         </Pressable>
-        <NotesEditor value={detailNotes} onChangeText={setDetailNotes} onBlur={saveDetailNotes} />
+        <NotesEditor
+          value={detailNotes}
+          onChangeText={setDetailNotes}
+          // Blur = guardado de defensa: traga el rechazo (el error ya queda en detailError),
+          // así no genera un unhandled rejection. onSave sí propaga para que NotesEditor lo sepa.
+          onBlur={() => {
+            saveDetailNotes().catch(() => {});
+          }}
+          onSave={saveDetailNotes}
+        />
         {detailError && <Text testID="hist-detail-error" style={{ color: colors.danger, fontSize: 12 }}>{detailError}</Text>}
         <SessionSummary summary={summarize(selected)} />
       </ScrollView>

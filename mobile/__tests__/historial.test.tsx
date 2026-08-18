@@ -218,6 +218,47 @@ test("editar la nota en el detalle del historial la guarda con putSession", asyn
   );
 });
 
+test("al tocar hist-back con una nota editada, guarda antes de volver", async () => {
+  (putSession as jest.Mock).mockClear();
+  await render(<HistorialScreen />);
+  await waitFor(() => expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy());
+  await fireEvent.press(screen.getByTestId(`hist-item-${mockSessionA.id}`));
+  const input = await screen.findByTestId("notes-input");
+  // Editar la nota SIN hacer blur: solo el back debe disparar el guardado.
+  await fireEvent.changeText(input, "guardar al salir");
+
+  await fireEvent.press(screen.getByTestId("hist-back"));
+
+  // Guardó con la nota editada…
+  await waitFor(() =>
+    expect(putSession).toHaveBeenCalledWith(
+      "http://backend.test",
+      expect.objectContaining({ id: mockSessionA.id, notes: "guardar al salir" }),
+    ),
+  );
+  // …y volvió a la lista.
+  await waitFor(() => expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy());
+});
+
+test("con onSave presente en el detalle, el botón notes-save guarda y muestra la confirmación", async () => {
+  (putSession as jest.Mock).mockClear();
+  await render(<HistorialScreen />);
+  await waitFor(() => expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy());
+  await fireEvent.press(screen.getByTestId(`hist-item-${mockSessionA.id}`));
+  const input = await screen.findByTestId("notes-input");
+  await fireEvent.changeText(input, "nota con botón");
+
+  await fireEvent.press(screen.getByTestId("notes-save"));
+
+  await waitFor(() =>
+    expect(putSession).toHaveBeenCalledWith(
+      "http://backend.test",
+      expect.objectContaining({ id: mockSessionA.id, notes: "nota con botón" }),
+    ),
+  );
+  await waitFor(() => expect(screen.getByTestId("notes-saved")).toBeTruthy());
+});
+
 test("un guardado de nota que falla muestra el error, y un guardado exitoso posterior lo limpia", async () => {
   await render(<HistorialScreen />);
   await waitFor(() => expect(screen.getByTestId(`hist-item-${mockSessionA.id}`)).toBeTruthy());
