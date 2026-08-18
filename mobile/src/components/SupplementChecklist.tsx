@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, Text, Pressable, TextInput } from "react-native";
 import type { DayChecklistEntry, TakeSlot, TakeStatus } from "@pulsia/shared";
-import { TAKE_SLOTS, parseCountableDose, formatCountableDose } from "@pulsia/shared";
+import { TAKE_SLOTS, parseCountableDose, formatCountableDose, parseLeadingNumber } from "@pulsia/shared";
 import { colors, radius, spacing } from "../theme/tokens";
 
 export const SLOT_LABELS: Record<TakeSlot, string> = {
@@ -35,8 +35,13 @@ function Row({ entry, onMark, onRemove }: { entry: DayChecklistEntry; onMark: Su
 
   function confirmDeviated() {
     if (countable) {
-      // Igual al planeado → tomado; distinto → desvío (ej. tomar 1 de 3).
-      const status: TakeStatus = stepCount === countable.count ? "taken" : "deviated";
+      // "taken" en el diario cuenta plannedDose (la dosis del PLAN ORIGINAL, no la ajustada
+      // de hoy), así que la decisión taken/deviated se compara contra ese conteo original —
+      // no contra countable.count, que sale de entry.dose (la efectiva/ajustada). Si no,
+      // en un día con ajuste reduce (3→1) confirmar en 1 marcaría "taken" y el diario
+      // contaría 3. El baseline del stepper SÍ sigue en la efectiva (buena UX).
+      const plannedCount = parseLeadingNumber(entry.plannedDose) ?? countable.count;
+      const status: TakeStatus = stepCount === plannedCount ? "taken" : "deviated";
       onMark(entry, status, formatCountableDose(stepCount, countable.unit), note || undefined);
       setStepCount(countable.count);
     } else {

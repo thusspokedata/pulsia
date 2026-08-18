@@ -76,6 +76,38 @@ test("desvío contable: el stepper no baja de 0", async () => {
   expect(screen.getByTestId(`step-count-${entry.planItemId}`).props.children).toBe("0 cápsulas");
 });
 
+const reducedEntry = {
+  origin: "plan" as const, planItemId: "55555555-5555-4555-8555-555555555555", takeId: null, supplementId: "s4",
+  supplementName: "Magnesio", slot: "antes_de_dormir" as const,
+  // Día con ajuste reduce: la IA bajó de 3 a 1. La dosis EFECTIVA (baseline del stepper) es 1,
+  // pero el PLAN ORIGINAL sigue siendo 3 (el diario cuenta plannedDose para un "taken").
+  dose: "1 cápsula", plannedDose: "3 cápsulas", reason: "ayuda al descanso",
+  adjusted: { action: "reduce" as const, reason: "ayer comiste rico en magnesio" }, status: null, actualDose: null, note: null,
+};
+
+test("desvío con reduce (dose 1, plan 3): confirmar en baseline 1 → deviated, no taken", async () => {
+  const onMark = jest.fn();
+  await render(<SupplementChecklist entries={[reducedEntry]} onMark={onMark} onRemove={jest.fn()} />);
+  await fireEvent.press(screen.getByTestId(`deviate-${reducedEntry.planItemId}`));
+  // baseline = dosis efectiva (1), NO el plan original.
+  expect(screen.getByTestId(`step-count-${reducedEntry.planItemId}`).props.children).toBe("1 cápsula");
+  await fireEvent.press(screen.getByText(/Confirmar/i));
+  // 1 ≠ plan original 3 → deviated (el diario contará actualDose "1 cápsula", no las 3 del plan).
+  expect(onMark).toHaveBeenCalledWith(reducedEntry, "deviated", "1 cápsula", undefined);
+});
+
+test("desvío con reduce (dose 1, plan 3): subir a 3 (ignorar el reduce) → taken", async () => {
+  const onMark = jest.fn();
+  await render(<SupplementChecklist entries={[reducedEntry]} onMark={onMark} onRemove={jest.fn()} />);
+  await fireEvent.press(screen.getByTestId(`deviate-${reducedEntry.planItemId}`));
+  await fireEvent.press(screen.getByTestId(`step-plus-${reducedEntry.planItemId}`));
+  await fireEvent.press(screen.getByTestId(`step-plus-${reducedEntry.planItemId}`));
+  expect(screen.getByTestId(`step-count-${reducedEntry.planItemId}`).props.children).toBe("3 cápsulas");
+  await fireEvent.press(screen.getByText(/Confirmar/i));
+  // 3 === plan original 3 → taken; el diario cuenta las 3 del plan, correcto.
+  expect(onMark).toHaveBeenCalledWith(reducedEntry, "taken", "3 cápsulas", undefined);
+});
+
 test("desvío NO contable ('10 g'): sigue el texto libre, sin stepper", async () => {
   const onMark = jest.fn();
   await render(<SupplementChecklist entries={[nonCountableEntry]} onMark={onMark} onRemove={jest.fn()} />);
