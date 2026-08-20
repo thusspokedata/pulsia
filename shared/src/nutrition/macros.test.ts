@@ -1,5 +1,5 @@
-import { test, expect } from "bun:test";
-import { foodMacrosForQuantity, sumNullableMicro, sumNutrient, sumNutrientByKey } from "./macros";
+import { describe, test, it, expect } from "bun:test";
+import { foodMacrosForQuantity, rawEquivalentGrams, sumNullableMicro, sumNutrient, sumNutrientByKey, type MacroSource } from "./macros";
 import { NUTRIENT_KEYS } from "./nutrients";
 
 const banana = { basis: "per_100g" as const, kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3, unitWeightG: 120 };
@@ -199,4 +199,40 @@ test("respeta los decimales declarados en el registro", () => {
   const out = foodMacrosForQuantity(food as never, 100, "g");
   expect(out.iron_mg).toBe(1.24);
   expect(out.calcium_mg).toBe(1.2);
+});
+
+// Un alimento seco de laboratorio: 350 kcal / 100 g SECO, sin micros.
+const pastaSeca: MacroSource = {
+  basis: "per_100g", kcal: 350, protein_g: 12, carbs_g: 70, fat_g: 1.5,
+  unitWeightG: null, cookingYield: 2.2,
+} as MacroSource;
+
+describe("rawEquivalentGrams", () => {
+  it("convierte gramos cocidos a seco equivalente con el yield", () => {
+    expect(rawEquivalentGrams(220, 2.2, true)).toBeCloseTo(100, 6);
+  });
+  it("no convierte si se pesó seco", () => {
+    expect(rawEquivalentGrams(220, 2.2, false)).toBe(220);
+  });
+  it("no convierte si el yield es null", () => {
+    expect(rawEquivalentGrams(220, null, true)).toBe(220);
+  });
+});
+
+describe("foodMacrosForQuantity con cookingYield", () => {
+  it("aplica el per-100g seco a los gramos secos equivalentes (default cocido)", () => {
+    const m = foodMacrosForQuantity(pastaSeca, 220, "g");
+    // 220 g cocidos / 2.2 = 100 g secos → 350 kcal, no 770.
+    expect(m.kcal).toBe(350);
+    expect(m.grams).toBe(220); // se conserva el peso REAL pesado, no el equivalente
+  });
+  it("weighedCooked:false no convierte", () => {
+    const m = foodMacrosForQuantity(pastaSeca, 220, "g", { weighedCooked: false });
+    expect(m.kcal).toBe(770);
+  });
+  it("sin cookingYield es idéntico a hoy (no-regresión)", () => {
+    const normal = { ...pastaSeca, cookingYield: null } as MacroSource;
+    const m = foodMacrosForQuantity(normal, 220, "g");
+    expect(m.kcal).toBe(770);
+  });
 });
