@@ -20,10 +20,38 @@ function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-// CSV de pasos del export de Garmin: col 0 sin header, fecha MM/DD/AAAA.
+// El export de Garmin numera la fecha como dd/mm o mm/dd según la config regional (IMP-2):
+// el owner exporta día-primero (14/08/2026) pero el formato US es mes-primero. Como ambos
+// son numéricos, la orientación es ambigua fila a fila; la resolvemos por ARCHIVO. Cada fila
+// da señal solo si es inequívoca: primer campo > 12 ⇒ día-primero; segundo campo > 12 ⇒
+// mes-primero. Si distintas filas exigen orientaciones opuestas ⇒ el archivo no es confiable
+// (error). Si ninguna fila desambigua ⇒ default día-primero (formato regional del owner,
+// alineado con el fix de peso IMP-1).
+function detectDayFirst(lines: string[]): boolean {
+  let sawDayFirst = false;
+  let sawMonthFirst = false;
+  for (let i = 1; i < lines.length; i++) {
+    const m = (splitCsvLine(lines[i])[0] ?? "").match(DATE_RE);
+    if (!m) continue;
+    const a = parseInt(m[1], 10); // 1er campo
+    const b = parseInt(m[2], 10); // 2º campo
+    if (a > 12 && b <= 12) sawDayFirst = true;
+    else if (b > 12 && a <= 12) sawMonthFirst = true;
+    // a>12 && b>12 (basura en cualquier orientación) o ambos ≤12 (ambiguo) ⇒ sin señal.
+  }
+  if (sawDayFirst && sawMonthFirst) {
+    throw new Error("El CSV mezcla fechas día-primero y mes-primero; no se puede determinar el formato");
+  }
+  if (sawMonthFirst) return false;
+  return true; // día-primero explícito, o ambiguo → default regional del owner
+}
+
+// CSV de pasos del export de Garmin: col 0 sin header, fecha dd/mm/aaaa o mm/dd/aaaa (IMP-2).
 export function parseStepsCsv(csv: string, offMin: number): MetricCsvPreview {
   const lines = csv.split(/\r?\n/).filter((l) => l.trim() !== "");
   if (lines.length < 2) throw new Error("El CSV no tiene filas de datos");
+
+  const dayFirst = detectDayFirst(lines);
 
   const header = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
   // La col 0 es la fecha (header vacío); el resto se mapea por nombre de header.
@@ -37,11 +65,11 @@ export function parseStepsCsv(csv: string, offMin: number): MetricCsvPreview {
     const dateRaw = cells[0] ?? "";
     const m = dateRaw.match(DATE_RE);
     if (!m) {
-      skipped.push({ line: i + 1, reason: `La primera columna no es una fecha (MM/DD/AAAA): "${dateRaw}"` });
+      skipped.push({ line: i + 1, reason: `La primera columna no es una fecha (dd/mm/aaaa): "${dateRaw}"` });
       continue;
     }
-    const mo = parseInt(m[1], 10);
-    const d = parseInt(m[2], 10);
+    const d = parseInt(dayFirst ? m[1] : m[2], 10);
+    const mo = parseInt(dayFirst ? m[2] : m[1], 10);
     const y = parseInt(m[3], 10);
     const measuredAt = localNoonEpoch(y, mo, d, offMin);
 
