@@ -53,6 +53,9 @@ export const FoodExtractionSchema = z.object({
   // fdcId de la fila de USDA usada, para rastrear de dónde salieron los micros y re-matchear
   // después. null si no hubo match.
   usdaFdcId: z.number().int().nullable().optional(),
+  // cocido ÷ seco. null/ausente = alimento normal (per-100g se aplica tal cual, sin toggle).
+  // !null = el per-100g es SECO; al pesar cocido se convierte a seco equivalente (ver macros.ts).
+  cookingYield: z.number().positive().nullable().optional(),
 });
 export type FoodExtraction = z.infer<typeof FoodExtractionSchema>;
 
@@ -80,6 +83,8 @@ export const FoodIdentificationSchema = z.object({
   sourceMacros: z.enum(["label", "ai"]),
   // Frase de búsqueda en INGLÉS para matchear contra USDA.
   searchQuery: z.string().trim().min(1),
+  // La IA estima el factor cocido÷seco si es un producto seco que absorbe agua; null si no aplica.
+  cookingYield: z.number().positive().nullable(),
 });
 export type FoodIdentification = z.infer<typeof FoodIdentificationSchema>;
 
@@ -89,6 +94,12 @@ export type FoodIdentification = z.infer<typeof FoodIdentificationSchema>;
 // resto del schema) para que un nutriente nuevo caiga solo.
 export const FoodMicrosEstimateSchema = z.object(nutrientFields);
 export type FoodMicrosEstimate = z.infer<typeof FoodMicrosEstimateSchema>;
+
+// Lo que la IA devuelve al estimar el factor de cocción de un alimento seco. null = no aplica.
+export const CookingYieldEstimateSchema = z.object({
+  cookingYield: z.number().positive().nullable(),
+});
+export type CookingYieldEstimate = z.infer<typeof CookingYieldEstimateSchema>;
 
 // Un ingrediente de una receta: referencia a un Food del catálogo + cantidad cruda en su unidad.
 export const RecipeItemInputSchema = z.object({
@@ -140,6 +151,9 @@ export const MealItemInputSchema = z.object({
   foodId: z.string().uuid(),
   quantity: z.number().positive(),
   quantityUnit: QuantityUnitSchema,
+  // true = el usuario pesó la porción COCIDA (aplica la conversión si el food tiene cookingYield).
+  // Ausente/undefined = comportamiento actual (sin conversión).
+  weighedCooked: z.boolean().optional(),
 });
 export type MealItemInput = z.infer<typeof MealItemInputSchema>;
 
@@ -162,6 +176,7 @@ export const MealItemSchema = z.object({
   grams: z.number(),
   ...macrosPer100,
   ...nutrientFields,
+  weighedCooked: z.boolean().nullable().optional(),
 });
 export type MealItem = z.infer<typeof MealItemSchema>;
 
