@@ -31,7 +31,7 @@ const roundTo = (n: number, decimals: number) => {
 // La semántica de null se preserva a mano (no con sumNutrientByKey, que redondea por-llamada y
 // reintroduciría el mismo sesgo): un micro que ningún ingrediente tiene queda null, nunca 0.
 export function deriveRecipe(ingredients: RecipeIngredient[], cookedWeightG: number | null): DerivedRecipe {
-  const raw = ingredients.map((i) => foodMacrosRaw(i.food, i.quantity, i.unit));
+  const raw = ingredients.map((i) => foodMacrosRaw(i.food, i.quantity, i.unit, { weighedCooked: false }));
   const sumGrams = raw.reduce((a, m) => a + m.grams, 0);
   const effectiveWeightG = cookedWeightG ?? sumGrams;
   if (effectiveWeightG <= 0) throw new Error("La receta necesita al menos un ingrediente con peso.");

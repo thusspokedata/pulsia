@@ -1,5 +1,6 @@
-import { test, expect } from "bun:test";
+import { test, it, expect } from "bun:test";
 import { deriveRecipe } from "./recipe";
+import type { MacroSource } from "./macros";
 
 // Pollo (per_100g) con algo de hierro; agua (per_100ml) sin micros.
 const pollo = { basis: "per_100g" as const, kcal: 165, protein_g: 31, carbs_g: 0, fat_g: 3.6, unitWeightG: null, iron_mg: 1 };
@@ -48,4 +49,16 @@ test("agrega sin redondear: 50 g de un alimento de 89 kcal/100g → 89 kcal/100g
   expect(d.per100.kcal).toBe(89);
   expect(d.per100.protein_g).toBeCloseTo(1.1, 5);
   expect(d.per100.carbs_g).toBeCloseTo(22.8, 5);
+});
+
+it("un ingrediente con cookingYield NO se convierte al derivar la receta", () => {
+  // La conversión cocido→seco es una decisión del REGISTRO, no del armado de la receta:
+  // las cantidades de los ingredientes ya son crudas y el agua del plato la captura cookedWeightG.
+  const pastaSeca: MacroSource = {
+    basis: "per_100g", kcal: 350, protein_g: 12, carbs_g: 70, fat_g: 1.5,
+    unitWeightG: null, cookingYield: 2.2,
+  } as MacroSource;
+  const r = deriveRecipe([{ food: pastaSeca, quantity: 100, unit: "g" }], null);
+  // 100 g × 350/100 = 350 kcal (sin dividir por 2.2).
+  expect(r.total.kcal).toBe(350);
 });
