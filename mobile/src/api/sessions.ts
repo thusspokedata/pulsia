@@ -1,14 +1,20 @@
 import { apiFetch } from "./client";
 import type { WorkoutSession } from "@pulsia/shared";
+import { syncErrorFromResponse, syncErrorFromThrown } from "../sync/errors";
 
 // Sube una sesión completa (upsert idempotente en el backend). El id de la sesión
-// es la identidad canónica del sync.
+// es la identidad canónica del sync. Tira SyncError (tipado) ante cualquier fallo.
 export async function putSession(baseUrl: string, session: WorkoutSession): Promise<void> {
-  const res = await apiFetch(baseUrl, `/sessions/${session.id}`, {
-    method: "PUT",
-    body: JSON.stringify(session),
-  });
-  if (!res.ok) throw new Error("No se pudo sincronizar la sesión");
+  let res: Response;
+  try {
+    res = await apiFetch(baseUrl, `/sessions/${session.id}`, {
+      method: "PUT",
+      body: JSON.stringify(session),
+    });
+  } catch (e) {
+    throw syncErrorFromThrown(e);
+  }
+  if (!res.ok) throw syncErrorFromResponse(res);
 }
 
 // Ítem liviano del historial: el backend GET /sessions devuelve una proyección
