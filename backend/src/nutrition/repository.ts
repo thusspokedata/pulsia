@@ -23,6 +23,7 @@ export function toFood(row: FoodRow): Food {
     sourceMacros: row.sourceMacros as Food["sourceMacros"],
     sourceMicros: row.sourceMicros as Food["sourceMicros"],
     usdaFdcId: row.usdaFdcId ?? null,
+    cookingYield: row.cookingYield ?? null,
     createdAt: new Date(row.createdAt).getTime(),
     // Solo presente si es una receta: un alimento común no debe ganar una clave `recipe: null`
     // que rompa comparaciones exactas de tests/clientes existentes.
@@ -37,6 +38,7 @@ export function toMeal(row: MealRow, items: MealItemRow[]): Meal {
       id: it.id, foodId: it.foodId ?? null, foodName: it.foodName,
       quantity: it.quantity, quantityUnit: it.quantityUnit as QuantityUnit, grams: it.grams,
       kcal: it.kcal, protein_g: it.proteinG, carbs_g: it.carbsG, fat_g: it.fatG,
+      weighedCooked: it.weighedCooked ?? null,
       ...nutrientsFromRow(it),
     })),
   };
@@ -52,10 +54,11 @@ export function snapshotItems(items: MealItemInput[], catalog: Map<string, FoodR
       m = foodMacrosForQuantity(
         {
           basis: f.basis as Food["basis"], kcal: f.kcal, protein_g: f.proteinG, carbs_g: f.carbsG, fat_g: f.fatG,
-          unitWeightG: f.unitWeightG,
+          unitWeightG: f.unitWeightG, cookingYield: f.cookingYield ?? null,
           ...nutrientsFromRow(f),
         },
         it.quantity, it.quantityUnit,
+        { weighedCooked: it.weighedCooked ?? true },
       );
     } catch (e) {
       throw new MealValidationError((e as Error).message);
@@ -63,6 +66,7 @@ export function snapshotItems(items: MealItemInput[], catalog: Map<string, FoodR
     return {
       foodId: f.id, foodName: f.name, quantity: it.quantity, quantityUnit: it.quantityUnit,
       grams: m.grams, kcal: m.kcal, proteinG: m.protein_g, carbsG: m.carbs_g, fatG: m.fat_g,
+      weighedCooked: it.weighedCooked ?? null,
       ...nutrientsToColumns(m),
     };
   });
@@ -77,6 +81,7 @@ export async function insertFood(db: Db, userId: string, input: FoodInput): Prom
     sourceMacros: input.sourceMacros, sourceMicros: input.sourceMicros ?? null,
     usdaFdcId: input.usdaFdcId ?? null,
     recipe: input.recipe ?? null,
+    cookingYield: input.cookingYield ?? null,
     ...nutrientsToColumns(input),
   }).returning();
   return toFood(row);
@@ -121,6 +126,7 @@ export async function updateFoodRow(db: DbOrTx, userId: string, id: string, inpu
     sourceMacros: input.sourceMacros, sourceMicros: input.sourceMicros ?? null,
     usdaFdcId: input.usdaFdcId ?? null,
     recipe: input.recipe ?? null,
+    cookingYield: input.cookingYield ?? null,
     ...nutrientsToColumns(input),
   }).where(and(eq(food.id, id), eq(food.userId, userId))).returning();
   return rows[0] ?? null;

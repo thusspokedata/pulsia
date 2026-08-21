@@ -14,6 +14,7 @@ function baseId(overrides: Partial<FoodIdentification> = {}): FoodIdentification
     unitWeightG: 50,
     sourceMacros: "ai",
     searchQuery: "egg whole cooked fried",
+    cookingYield: null,
     ...overrides,
   };
 }

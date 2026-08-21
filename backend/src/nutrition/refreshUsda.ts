@@ -23,5 +23,7 @@ export function identificationFromFood(f: Food, searchQuery: string): FoodIdenti
     // silencio un número escrito por una persona es peor que dejarlo imperfecto.
     sourceMacros: f.sourceMacros === "ai" ? "ai" : "label",
     searchQuery,
+    // Se conserva el yield ya guardado: refrescar contra USDA no debe pisarlo.
+    cookingYield: f.cookingYield ?? null,
   };
 }

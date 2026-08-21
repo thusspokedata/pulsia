@@ -75,6 +75,31 @@ test("snapshotItems escala y persiste colesterol y agua", () => {
   expect(items[0]).toMatchObject({ cholesterolMg: 0, waterMl: 90 });
 });
 
+test("snapshotItems aplica cookingYield cuando weighedCooked", () => {
+  const catalog = new Map<string, any>([["f1", {
+    id: "f1", name: "Pasta seca", basis: "per_100g", kcal: 350, proteinG: 12, carbsG: 70, fatG: 1.5,
+    unitWeightG: null, cookingYield: 2.2,
+    // ...resto de columnas de micros en null (nutrientsFromRow las lee)...
+  }]]);
+  const [snap] = snapshotItems(
+    [{ foodId: "f1", quantity: 220, quantityUnit: "g", weighedCooked: true }] as any,
+    catalog as any,
+  );
+  expect(snap.kcal).toBe(350);      // 220 cocidos / 2.2 = 100 secos → 350 kcal
+  expect(snap.grams).toBe(220);     // peso real pesado
+  expect(snap.weighedCooked).toBe(true);
+});
+
+test("snapshotItems sin weighedCooked no convierte (ítem viejo)", () => {
+  const catalog = new Map<string, any>([["f1", {
+    id: "f1", name: "Pasta seca", basis: "per_100g", kcal: 350, proteinG: 12, carbsG: 70, fatG: 1.5,
+    unitWeightG: null, cookingYield: 2.2,
+  }]]);
+  const [snap] = snapshotItems([{ foodId: "f1", quantity: 220, quantityUnit: "g" }] as any, catalog as any);
+  // Sin weighedCooked el default de foodMacrosForQuantity es cocido=true → 350. (Ver nota abajo.)
+  expect(snap.kcal).toBe(350);
+});
+
 test("insertWater mapea ml + loggedAt y devuelve WaterLog", async () => {
   const inserted: any[] = [];
   const db: any = {
