@@ -20,7 +20,7 @@ jest.mock("../src/api/programs", () => ({
     id: "oid",
     program: {
       name: "Puntual",
-      weeks: [{ weekNumber: 1, workouts: [{ dayLabel: "Puntual: Pecho", location: "home", focus: "chest", exercises: [] }] }],
+      weeks: [{ weekNumber: 1, workouts: [{ dayLabel: "Puntual: Pecho", location: "home", targetMuscles: ["chest"], exercises: [] }] }],
     },
   })),
 }));
