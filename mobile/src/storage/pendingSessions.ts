@@ -15,7 +15,7 @@ export async function getPendingSessions(): Promise<WorkoutSession[]> {
     const result: WorkoutSession[] = [];
     for (const item of json) {
       const parsed = WorkoutSessionSchema.safeParse(item);
-      if (!parsed.success) return [];
+      if (!parsed.success) continue; // saltear el corrupto, conservar los válidos
       result.push(parsed.data);
     }
     return result;

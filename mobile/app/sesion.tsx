@@ -12,8 +12,8 @@ import { getLastWeights } from "../src/api/sessions";
 import { getActiveSession, setActiveSession, clearActiveSession } from "../src/storage/activeSession";
 import { getPauseState, setPauseState, clearPauseState, startPause, endPause, isPaused, totalPausedMs, type OpenPauseInterval } from "../src/storage/pauseState";
 import { getRestState, setRestState, clearRestState } from "../src/storage/restState";
-import { enqueueSession } from "../src/storage/pendingSessions";
-import { syncPending } from "../src/sync/syncSessions";
+import { enqueueSession, getPendingSessions } from "../src/storage/pendingSessions";
+import { syncPending, type SyncResult } from "../src/sync/syncSessions";
 import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets, discardOpenSets, setNotes, substituteExercise, substituteInProgram } from "../src/session/engine";
 import { newSessionId } from "../src/session/id";
 import { useHeartRate } from "../src/ble/useHeartRate";
@@ -24,6 +24,7 @@ import { restNotificationPlan, scheduleRestBell, cancelRestBell } from "../src/s
 import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
 import { parsePlannedReps } from "../src/session/plannedReps";
 import { colors, radius, spacing } from "../src/theme/tokens";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { summarize } from "../src/session/summary";
 import { SessionSummary } from "../src/components/SessionSummary";
 import { NotesEditor } from "../src/components/NotesEditor";
@@ -85,6 +86,7 @@ function setStartFor(s: WorkoutSession, ref: number): number {
 
 export default function SesionScreen() {
   const params = useLocalSearchParams<{ week: string; dayLabel: string; location: string; oneOff?: string }>();
+  const insets = useSafeAreaInsets();
   const [session, setSession] = useState<WorkoutSession | null>(null);
   const [weight, setWeight] = useState("");
   const [rpe, setRpe] = useState("");
@@ -92,6 +94,8 @@ export default function SesionScreen() {
   const [finishError, setFinishError] = useState(false);
   const [finishedSession, setFinishedSession] = useState<WorkoutSession | null>(null);
   const [finishedNotes, setFinishedNotes] = useState("");
+  const [syncState, setSyncState] = useState<"syncing" | "synced" | "pending">("syncing");
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [activeOrder, setActiveOrder] = useState<number | null>(null);
   const [restUntil, setRestUntil] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
@@ -337,15 +341,35 @@ export default function SesionScreen() {
 
   if (finishedSession) {
     return (
-      <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
+      <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg, paddingBottom: insets.bottom + spacing.xl }}>
         <SessionSummary summary={summarize(finishedSession)} />
         <NotesEditor value={finishedNotes} onChangeText={setFinishedNotes} onBlur={saveFinishedNotes} />
+        {syncState === "syncing" && (
+          <Text style={{ color: colors.textMuted, fontSize: 13 }}>Sincronizando…</Text>
+        )}
+        {syncState === "synced" && (
+          <Text style={{ color: colors.text, fontSize: 13 }}>Guardado ✓</Text>
+        )}
+        {syncState === "pending" && (
+          <View style={{ gap: spacing.sm }}>
+            <Text style={{ color: colors.accentText, fontSize: 13 }}>
+              Pendiente de sincronizar{syncMsg ? ` — ${syncMsg}` : ""}
+            </Text>
+            <Pressable
+              testID="retry-sync"
+              onPress={onRetrySync}
+              style={{ backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.sm, alignItems: "center" }}
+            >
+              <Text style={{ color: colors.text }}>Reintentar sincronización</Text>
+            </Pressable>
+          </View>
+        )}
         <Pressable
           testID="summary-done"
           onPress={() => router.replace("/")}
-          style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", marginTop: spacing.md }}
+          style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.lg, alignItems: "center", marginTop: spacing.md }}
         >
-          <Text style={{ color: "#fff" }}>Listo</Text>
+          <Text style={{ color: "#fff", fontSize: 17, fontWeight: "700" }}>Listo</Text>
         </Pressable>
       </ScrollView>
     );
@@ -542,6 +566,47 @@ export default function SesionScreen() {
     void setRestState({ sessionId: sess.id, setStart: setStartRef.current, restUntil: null, restRemaining: restRemainingRef.current });
   }
 
+  // El cartel refleja SOLO la sesión recién terminada (su id), no toda la cola:
+  // una sesión vieja terminalmente inválida (400/409 que nunca sube) mantiene `remaining >= 1`
+  // para siempre y, con el criterio viejo, ensuciaría el estado de CADA sesión futura aunque
+  // ésta haya subido perfecto. Consultamos la cola local: si el id propio ya no está, se guardó.
+  async function reflectSyncFor(sessionId: string, r: SyncResult) {
+    const stillPending = (await getPendingSessions()).some((s) => s.id === sessionId);
+    if (!mounted.current) return;
+    if (!stillPending) {
+      setSyncState("synced");
+      setSyncMsg(null);
+    } else {
+      setSyncState("pending");
+      setSyncMsg(r.lastError?.userMessage ?? "Pendiente");
+    }
+  }
+
+  async function onRetrySync() {
+    if (!finishedSession) return;
+    setSyncState("syncing");
+    setSyncMsg(null);
+    // getBackendUrl() DENTRO del try: cualquier rechazo (o url falsy) cae en "Pendiente", nunca
+    // deja el cartel colgado en "Sincronizando…".
+    try {
+      const url = await getBackendUrl();
+      if (!url) {
+        if (mounted.current) {
+          setSyncState("pending");
+          setSyncMsg("Backend sin configurar");
+        }
+        return;
+      }
+      const r = await syncPending(url);
+      await reflectSyncFor(finishedSession.id, r);
+    } catch {
+      if (mounted.current) {
+        setSyncState("pending");
+        setSyncMsg("Sin conexión");
+      }
+    }
+  }
+
   async function onFinish() {
     // Ninguna serie debe quedar con endedAt=null en el payload (ver closeOpenSets en el motor).
     const { hrAvg, hrMax } = aggregateHr(hr.getSamples());
@@ -568,19 +633,59 @@ export default function SesionScreen() {
       if (mounted.current) setFinishError(true);
       return; // no navegamos; la sesión sigue en activeSession para reintentar
     }
-    const url = await getBackendUrl();
-    if (url) void syncPending(url); // fire-and-forget; si falla queda en la cola
-    // No navegamos: mostramos el resumen; "Listo" navega a la home.
+    // No navegamos: mostramos el resumen al instante con "Sincronizando…"; el resultado del
+    // sync actualiza el cartel a "Guardado ✓" o "Pendiente de sincronizar — {motivo}".
+    setSyncState("syncing");
+    setSyncMsg(null);
     setFinishedSession(done);
+    // getBackendUrl() DENTRO del try: si rechaza (o url falsy) el cartel cae en "Pendiente",
+    // nunca queda colgado en "Sincronizando…".
+    try {
+      const url = await getBackendUrl();
+      if (!url) {
+        if (mounted.current) {
+          setSyncState("pending");
+          setSyncMsg("Backend sin configurar");
+        }
+        return;
+      }
+      const r = await syncPending(url);
+      await reflectSyncFor(done.id, r);
+    } catch {
+      if (mounted.current) {
+        setSyncState("pending");
+        setSyncMsg("Sin conexión");
+      }
+    }
   }
 
   async function saveFinishedNotes() {
     if (!finishedSession) return;
     const updated = setNotes(finishedSession, finishedNotes);
     setFinishedSession(updated);
-    await enqueueSession(updated);
-    const url = await getBackendUrl();
-    if (url) void syncPending(url);
+    setSyncState("syncing");
+    setSyncMsg(null);
+    // Todo el cuerpo async DENTRO del try: el onBlur del NotesEditor invoca esta función sin await,
+    // así que un rechazo de enqueueSession() o getBackendUrl() no debe escapar (promesa colgada) ni
+    // dejar el cartel en "Sincronizando…" para siempre. Cualquier fallo cae en "Pendiente".
+    try {
+      await enqueueSession(updated);
+      const url = await getBackendUrl();
+      if (!url) {
+        if (mounted.current) {
+          setSyncState("pending");
+          setSyncMsg("Backend sin configurar");
+        }
+        return;
+      }
+      const r = await syncPending(url);
+      await reflectSyncFor(updated.id, r);
+    } catch {
+      if (mounted.current) {
+        setSyncState("pending");
+        setSyncMsg("Sin conexión");
+      }
+    }
   }
 
   function onCancel() {

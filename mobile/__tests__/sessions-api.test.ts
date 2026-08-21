@@ -110,3 +110,19 @@ test("importFitStrength lanza si el backend responde no-ok", async () => {
   global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 400, json: async () => ({ error: "falló" }) }) as any;
   await expect(importFitStrength(URL, { fitBase64: "B64", id: "x", location: "gym" })).rejects.toThrow("falló");
 });
+
+// ── SES-1: putSession mapea la respuesta a SyncError tipado ──────────────────────────────────────
+test("putSession resuelve en 200", async () => {
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 }) as any;
+  await expect(putSession(URL, session)).resolves.toBeUndefined();
+});
+
+test("putSession tira SyncError('validation') en 400", async () => {
+  global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 400 }) as any;
+  await expect(putSession(URL, session)).rejects.toMatchObject({ kind: "validation", retryable: false });
+});
+
+test("putSession tira SyncError('network') si fetch explota", async () => {
+  global.fetch = jest.fn().mockRejectedValue(new Error("Network request failed")) as any;
+  await expect(putSession(URL, session)).rejects.toMatchObject({ kind: "network", retryable: true });
+});
