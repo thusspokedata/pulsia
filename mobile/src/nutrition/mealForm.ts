@@ -5,6 +5,7 @@ export interface MealRow {
   food: Food;
   quantity: number;
   unit: QuantityUnit;
+  weighedCooked?: boolean; // sólo relevante si food.cookingYield != null
 }
 
 // Unidades válidas para un alimento: la base (g/ml) + "unit" si tiene peso por unidad.
@@ -13,12 +14,12 @@ export function allowedUnits(food: Food): QuantityUnit[] {
   return food.unitWeightG != null ? [base, "unit"] : [base];
 }
 
-export function itemPreview(food: Food, quantity: number, unit: QuantityUnit) {
-  return foodMacrosForQuantity(food, quantity, unit);
+export function itemPreview(food: Food, quantity: number, unit: QuantityUnit, weighedCooked?: boolean) {
+  return foodMacrosForQuantity(food, quantity, unit, { weighedCooked: weighedCooked ?? true });
 }
 
 export function mealTotals(rows: MealRow[]) {
-  const scaled = rows.map((r) => foodMacrosForQuantity(r.food, r.quantity, r.unit));
+  const scaled = rows.map((r) => foodMacrosForQuantity(r.food, r.quantity, r.unit, { weighedCooked: r.weighedCooked ?? true }));
   const round1 = (n: number) => Math.round(n * 10) / 10;
   // Micro: null si NINGÚN ítem lo tiene; si al menos uno lo tiene, suma tratando null como 0.
   const micro = (key: "saturated_fat_g" | "sugars_g" | "fiber_g" | "cholesterol_mg" | "water_ml"): number | null =>
@@ -51,7 +52,7 @@ export function buildMealInput(args: {
     eatenAt: args.eatenAt,
     mealType: args.mealType,
     note: args.note.trim() === "" ? null : args.note.trim(),
-    items: args.rows.map((r) => ({ foodId: r.food.id, quantity: r.quantity, quantityUnit: r.unit })),
+    items: args.rows.map((r) => ({ foodId: r.food.id, quantity: r.quantity, quantityUnit: r.unit, weighedCooked: r.weighedCooked })),
   };
 }
 

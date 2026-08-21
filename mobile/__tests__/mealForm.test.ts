@@ -111,3 +111,24 @@ test("hhmm ↔ combineDayAndTime round-trip sobre el mismo día", () => {
   const back = combineDayAndTime(day, s);
   expect(hhmm(back as number)).toBe(s);
 });
+
+// --- cookingYield / weighedCooked ---
+
+const pastaSeca = {
+  id: "f3", name: "Pasta seca", basis: "per_100g" as const, kcal: 350, protein_g: 12, carbs_g: 70, fat_g: 1.5,
+  unitWeightG: null, sourceMacros: "label" as const, sourceMicros: null, cookingYield: 2.2, createdAt: 0,
+} as unknown as import("@pulsia/shared").Food;
+
+test("itemPreview convierte cuando se pesó cocido", () => {
+  expect(itemPreview(pastaSeca, 220, "g", true).kcal).toBe(350);
+});
+
+test("itemPreview no convierte cuando se pesó seco", () => {
+  expect(itemPreview(pastaSeca, 220, "g", false).kcal).toBe(770);
+});
+
+test("buildMealInput incluye weighedCooked del row", () => {
+  const rows = [{ food: pastaSeca, quantity: 220, unit: "g" as const, weighedCooked: true }];
+  const input = buildMealInput({ eatenAt: 0, mealType: null, note: "", rows });
+  expect(input.items[0].weighedCooked).toBe(true);
+});
