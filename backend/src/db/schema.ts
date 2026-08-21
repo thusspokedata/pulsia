@@ -144,6 +144,7 @@ export const food = pgTable("food", {
   // común (no receta). La per-100g del Food ya está derivada en las columnas de macros/micros; esto
   // guarda la receta viva para poder editarla y recalcular. Ver shared/src/nutrition/recipe.ts.
   recipe: jsonb("recipe"),
+  cookingYield: real("cooking_yield"), // cocido ÷ seco; null = alimento normal
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
   byUser: index("food_user_idx").on(t.userId),
@@ -205,6 +206,7 @@ export const mealItem = pgTable("meal_item", {
   seleniumMcg: real("selenium_mcg"),
   sodiumMg: real("sodium_mg"),
   zincMg: real("zinc_mg"),
+  weighedCooked: boolean("weighed_cooked"), // true = se pesó cocido; null = ítem viejo / sin conversión
 }, (t) => ({
   byMeal: index("meal_item_meal_idx").on(t.mealId),
 }));
