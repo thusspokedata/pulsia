@@ -52,7 +52,16 @@ export function buildMealInput(args: {
     eatenAt: args.eatenAt,
     mealType: args.mealType,
     note: args.note.trim() === "" ? null : args.note.trim(),
-    items: args.rows.map((r) => ({ foodId: r.food.id, quantity: r.quantity, quantityUnit: r.unit, weighedCooked: r.weighedCooked })),
+    items: args.rows.map((r) => {
+      const base = { foodId: r.food.id, quantity: r.quantity, quantityUnit: r.unit };
+      // Solo las filas con cookingYield usan weighedCooked (ver toggle en la UI); para esas,
+      // persistimos el valor EFECTIVO con el que se calcularon los macros (`?? true`, mismo
+      // default que itemPreview/mealTotals) — no el `undefined` crudo del row, que el refresh
+      // (FIX A) reinterpretaría distinto. Las demás filas mandan el campo AUSENTE.
+      return r.food.cookingYield != null
+        ? { ...base, weighedCooked: r.weighedCooked ?? true }
+        : base;
+    }),
   };
 }
 

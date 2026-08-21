@@ -132,3 +132,20 @@ test("buildMealInput incluye weighedCooked del row", () => {
   const input = buildMealInput({ eatenAt: 0, mealType: null, note: "", rows });
   expect(input.items[0].weighedCooked).toBe(true);
 });
+
+// FIX F: una fila con cookingYield pero SIN weighedCooked explícito (el usuario no tocó el
+// toggle) se calculó como cocida (default `?? true` de itemPreview/mealTotals) — persistir
+// ausente ahí mentiría (el refresh la recalcularía como seca, ver FIX A). Una fila SIN
+// cookingYield nunca usa la conversión, así que el campo va ausente (no `false` ni `undefined`
+// explícito).
+test("buildMealInput: fila con cookingYield y sin weighedCooked explícito manda true", () => {
+  const rows = [{ food: pastaSeca, quantity: 220, unit: "g" as const }];
+  const input = buildMealInput({ eatenAt: 0, mealType: null, note: "", rows });
+  expect(input.items[0].weighedCooked).toBe(true);
+});
+
+test("buildMealInput: fila SIN cookingYield no incluye el campo weighedCooked", () => {
+  const rows = [{ food: banana, quantity: 1, unit: "unit" as const }];
+  const input = buildMealInput({ eatenAt: 0, mealType: null, note: "", rows });
+  expect(Object.prototype.hasOwnProperty.call(input.items[0], "weighedCooked")).toBe(false);
+});
