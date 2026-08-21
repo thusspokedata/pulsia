@@ -121,11 +121,18 @@ export function sessionsRoutes(deps: AppDeps) {
     if (parsed.data.id !== id) { log(400); return c.json({ error: "el id de la URL no coincide con el del body" }, 400); }
     // El id de sesión es PK global: si ya pertenece a otro usuario, rechazamos (evita un 500 por
     // choque de constraint y que un id ajeno se use como blanco).
-    const owner = await getSessionOwnerId(deps.db, id);
-    if (owner && owner !== userId) { log(409); return c.json({ error: "esa sesión pertenece a otro usuario" }, 409); }
-    await upsertSession(deps.db, userId, parsed.data);
-    log(200);
-    return c.json({ id }, 200);
+    try {
+      const owner = await getSessionOwnerId(deps.db, id);
+      if (owner && owner !== userId) { log(409); return c.json({ error: "esa sesión pertenece a otro usuario" }, 409); }
+      await upsertSession(deps.db, userId, parsed.data);
+      log(200);
+      return c.json({ id }, 200);
+    } catch (e) {
+      // Excepción no controlada (fallo de DB/constraint/conexión): sin este log el request se
+      // perdería sin rastro. Logueamos el 500 y dejamos que Hono responda 500 como antes.
+      log(500);
+      throw e;
+    }
   });
 
   r.get("/last-weights", async (c) => {

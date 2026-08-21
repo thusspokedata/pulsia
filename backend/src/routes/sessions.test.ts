@@ -296,3 +296,29 @@ test("PUT /sessions loguea userId + id + status (200)", async () => {
   expect(line).toContain("200");
   expect(line).toContain(SINGLE_USER_ID);
 });
+
+test("PUT /sessions loguea status 500 si upsertSession tira (excepción no controlada)", async () => {
+  // db donde getSessionOwnerId (findFirst) → null (id nuevo, no corta con 409) pero la persistencia
+  // (upsertSession → db.transaction) tira: la excepción se propaga sin pasar por ninguna salida
+  // conocida, y sin este log el request se perdería sin rastro en `docker logs`.
+  const boomDb: any = {
+    query: { workoutSession: { findFirst: async () => null, findMany: async () => [] } },
+    select: () => ({ from: () => ({ where: async () => [] }) }),
+    transaction: async () => { throw new Error("db down"); },
+    insert: () => { throw new Error("db down"); },
+    delete: () => ({ where: async () => { throw new Error("db down"); } }),
+  };
+  const logs: string[] = [];
+  const spy = console.log;
+  console.log = (...a: unknown[]) => { logs.push(a.map(String).join(" ")); };
+  let res: Response;
+  try {
+    const app = createApp(deps(boomDb) as any);
+    res = await app.request(`/sessions/${SID}`, {
+      method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(validSession),
+    });
+  } finally { console.log = spy; }
+  expect(res!.status).toBe(500);
+  const line = logs.find((l) => l.includes("PUT /sessions") && l.includes(SID) && l.includes("500"));
+  expect(line).toBeTruthy();
+});
