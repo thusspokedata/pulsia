@@ -201,6 +201,27 @@ export function nutritionRoutes(deps: AppDeps) {
     }
   });
 
+  // ---- Estimar el factor de cocción (retrofit; no persiste) ----
+  // Espeja /foods/ai-micros: la IA propone el factor cocido÷seco por el nombre; el usuario lo
+  // confirma/edita y recién el PATCH /foods/:id lo guarda.
+  r.post("/foods/cooking-yield", async (c) => {
+    const userId = c.get("userId");
+    const body = await c.req.json().catch(() => null);
+    const name = typeof body?.name === "string" ? body.name.trim() : "";
+    if (name.length === 0) return c.json({ error: "Falta el nombre del alimento." }, 400);
+    if (!deps.aiClient.estimateCookingYield) return c.json({ error: "El servidor no soporta la estimación del factor de cocción." }, 500);
+    const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
+    const apiKey = resolveAiKey(settingsRow, deps.config);
+    if (!apiKey) return c.json({ error: "No hay API key de IA disponible." }, 400);
+    try {
+      const out = await deps.aiClient.estimateCookingYield({ name, apiKey });
+      return c.json({ cookingYield: out.cookingYield });
+    } catch (e) {
+      console.warn("estimateCookingYield falló:", (e as Error).message);
+      return c.json({ error: "No se pudo estimar el factor de cocción. Reintentá." }, 502);
+    }
+  });
+
   // ---- Búsqueda manual en USDA (para el "¿no es este?" del Plan 2) ----
   // Query vacía → [] (la UI puede pedir sin término y recibir nada, en vez de un error). Si
   // usda_food está vacía/rota, también degrada a [] en vez de romper.

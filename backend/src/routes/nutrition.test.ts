@@ -1237,6 +1237,39 @@ test("POST /nutrition/foods/ai-micros con la IA rota devuelve 502 y no rompe", a
   expect(res.status).toBe(502);
 });
 
+// ---- Estimar el factor de cocción (retrofit; no persiste) ----
+
+test("POST /nutrition/foods/cooking-yield devuelve la propuesta de la IA", async () => {
+  const conYield = { ...aiClient, estimateCookingYield: async () => ({ cookingYield: 2.5 }) };
+  const app = createApp(deps(fakeDb(), conYield));
+  const res = await app.request("/nutrition/foods/cooking-yield", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Arroz basmati seco" }),
+  });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ cookingYield: 2.5 });
+});
+
+test("POST /nutrition/foods/cooking-yield 500 si el server no soporta la estimación", async () => {
+  // El aiClient de base (`aiClient`) no trae `estimateCookingYield`.
+  const app = createApp(deps(fakeDb()));
+  const res = await app.request("/nutrition/foods/cooking-yield", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Pasta" }),
+  });
+  expect(res.status).toBe(500);
+});
+
+test("POST /nutrition/foods/cooking-yield rechaza un nombre vacío", async () => {
+  const conYield = { ...aiClient, estimateCookingYield: async () => ({ cookingYield: 2.5 }) };
+  const app = createApp(deps(fakeDb(), conYield));
+  const res = await app.request("/nutrition/foods/cooking-yield", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "  " }),
+  });
+  expect(res.status).toBe(400);
+});
+
 // ---- Completar con IA (alimento guardado): proposal + apply ----
 const postAiProposal = (app: any, id = FOOD_ID) =>
   app.request(`/nutrition/foods/${id}/ai-micros-proposal`, { method: "POST" });
