@@ -73,3 +73,10 @@ test("sin notas, no incluye la sección de notas", () => {
   });
   expect(p.toLowerCase()).not.toContain("notas del atleta");
 });
+
+test("el prompt pide emitir targetMuscles con TODOS los grupos del día", () => {
+  const prompt = buildOneOffPrompt(profile, { location: "gym", focus: ["back", "biceps"], sessionMinutes: 60, equipment: ["dumbbell"] });
+  expect(prompt).toContain('targetMuscles');
+  expect(prompt).toContain('back');
+  expect(prompt).toContain('biceps');
+});
