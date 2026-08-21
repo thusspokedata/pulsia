@@ -93,7 +93,10 @@ jest.mock("../src/session/restNotification", () => {
 });
 
 jest.mock("../src/session/id", () => ({ newSessionId: () => "11111111-1111-4111-8111-111111111111" }));
-jest.mock("../src/storage/config", () => ({ getBackendUrl: async () => "http://backend.test" }));
+// getBackendUrl como jest.fn controlable: los tests que fuerzan un rechazo / null lo sobreescriben
+// con mockRejectedValueOnce / mockResolvedValueOnce para blindar las rutas de error del sync.
+const mockGetBackendUrl = jest.fn(async (): Promise<string | null> => "http://backend.test");
+jest.mock("../src/storage/config", () => ({ getBackendUrl: () => mockGetBackendUrl() }));
 jest.mock("../src/api/sessions", () => ({ getLastWeights: async () => ({ barbell_bench_press: 42 }) }));
 let mockProgramId: string | null = "22222222-2222-4222-8222-222222222222";
 jest.mock("../src/storage/programId", () => ({ getStoredProgramId: async () => mockProgramId }));
@@ -193,6 +196,9 @@ beforeEach(() => {
   mockProgram = baseProgram;
   mockParams = { week: "1", dayLabel: "Día 1", location: "gym" };
   jest.clearAllMocks();
+  // clearAllMocks no restaura la impl base ni vacía la cola de ...Once: re-sembramos el default.
+  mockGetBackendUrl.mockReset();
+  mockGetBackendUrl.mockResolvedValue("http://backend.test");
 });
 
 test("arma la sesión del día y muestra el ejercicio actual", async () => {
@@ -303,6 +309,55 @@ test("si la sesión terminada sube pero queda OTRA ajena atascada en la cola, mu
   // Con el criterio viejo (remaining === 0) esto mostraría "Pendiente" para siempre; el nuevo
   // criterio consulta la cola por el id propio (que sí subió) → "Guardado ✓".
   await waitFor(() => expect(screen.getByText(/Guardado/i)).toBeTruthy());
+});
+
+test("si getBackendUrl rechaza tras terminar, muestra 'Pendiente' y NO queda en 'Sincronizando'", async () => {
+  // getBackendUrl() estaba FUERA del try en onFinish: un rechazo dejaba el cartel en "Sincronizando…"
+  // para siempre. Ahora toda ruta de error cae en "Pendiente de sincronizar".
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("finish"));
+  // El rechazo apunta a la llamada del sync (la del efecto de montaje ya se consumió con el default).
+  mockGetBackendUrl.mockRejectedValueOnce(new Error("boom"));
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => expect(screen.getByText(/Pendiente de sincronizar/i)).toBeTruthy());
+  expect(screen.queryByText(/Sincronizando/i)).toBeNull();
+});
+
+test("si getBackendUrl resuelve null tras terminar, muestra 'Pendiente' (no queda en 'Sincronizando')", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("finish"));
+  mockGetBackendUrl.mockResolvedValueOnce(null);
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => expect(screen.getByText(/Pendiente de sincronizar/i)).toBeTruthy());
+  expect(screen.queryByText(/Sincronizando/i)).toBeNull();
+});
+
+test("reintentar: si getBackendUrl rechaza, vuelve a 'Pendiente' (no queda en 'Sincronizando')", async () => {
+  mockSync.mockResolvedValueOnce({ synced: 0, remaining: 1, lastError: new SyncError("server", 500) });
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("finish"));
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => screen.getByTestId("retry-sync"));
+  // El reintento rechaza en getBackendUrl (fuera del try en el código viejo → colgado en "Sincronizando").
+  mockGetBackendUrl.mockRejectedValueOnce(new Error("boom"));
+  await fireEvent.press(screen.getByTestId("retry-sync"));
+  await waitFor(() => expect(screen.getByText(/Pendiente de sincronizar/i)).toBeTruthy());
+  expect(screen.queryByText(/Sincronizando/i)).toBeNull();
+});
+
+test("editar la nota en el resumen: si enqueueSession rechaza, queda 'Pendiente' (no 'Sincronizando')", async () => {
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("finish"));
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => expect(screen.getByTestId("summary")).toBeTruthy());
+  const input = await screen.findByTestId("notes-input");
+  await fireEvent.changeText(input, "nota que falla al guardar");
+  // enqueueSession rechaza al guardar la nota: el onBlur no maneja la promesa, todo el cuerpo async
+  // debe quedar protegido para no colgar el cartel en "Sincronizando…".
+  mockEnqueue.mockImplementationOnce(() => { throw new Error("disk full"); });
+  await fireEvent(input, "blur");
+  await waitFor(() => expect(screen.getByText(/Pendiente de sincronizar/i)).toBeTruthy());
+  expect(screen.queryByText(/Sincronizando/i)).toBeNull();
 });
 
 test("cancelar entrenamiento confirma, navega y no encola", async () => {

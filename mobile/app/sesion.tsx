@@ -586,15 +586,17 @@ export default function SesionScreen() {
     if (!finishedSession) return;
     setSyncState("syncing");
     setSyncMsg(null);
-    const url = await getBackendUrl();
-    if (!url) {
-      if (mounted.current) {
-        setSyncState("pending");
-        setSyncMsg("Backend sin configurar");
-      }
-      return;
-    }
+    // getBackendUrl() DENTRO del try: cualquier rechazo (o url falsy) cae en "Pendiente", nunca
+    // deja el cartel colgado en "Sincronizando…".
     try {
+      const url = await getBackendUrl();
+      if (!url) {
+        if (mounted.current) {
+          setSyncState("pending");
+          setSyncMsg("Backend sin configurar");
+        }
+        return;
+      }
       const r = await syncPending(url);
       await reflectSyncFor(finishedSession.id, r);
     } catch {
@@ -636,20 +638,24 @@ export default function SesionScreen() {
     setSyncState("syncing");
     setSyncMsg(null);
     setFinishedSession(done);
-    const url = await getBackendUrl();
-    if (url) {
-      try {
-        const r = await syncPending(url);
-        await reflectSyncFor(done.id, r);
-      } catch {
+    // getBackendUrl() DENTRO del try: si rechaza (o url falsy) el cartel cae en "Pendiente",
+    // nunca queda colgado en "Sincronizando…".
+    try {
+      const url = await getBackendUrl();
+      if (!url) {
         if (mounted.current) {
           setSyncState("pending");
-          setSyncMsg("Sin conexión");
+          setSyncMsg("Backend sin configurar");
         }
+        return;
       }
-    } else if (mounted.current) {
-      setSyncState("pending");
-      setSyncMsg("Backend sin configurar");
+      const r = await syncPending(url);
+      await reflectSyncFor(done.id, r);
+    } catch {
+      if (mounted.current) {
+        setSyncState("pending");
+        setSyncMsg("Sin conexión");
+      }
     }
   }
 
@@ -657,18 +663,27 @@ export default function SesionScreen() {
     if (!finishedSession) return;
     const updated = setNotes(finishedSession, finishedNotes);
     setFinishedSession(updated);
-    await enqueueSession(updated);
     setSyncState("syncing");
-    const url = await getBackendUrl();
-    if (url) {
-      try {
-        const r = await syncPending(url);
-        await reflectSyncFor(updated.id, r);
-      } catch {
+    setSyncMsg(null);
+    // Todo el cuerpo async DENTRO del try: el onBlur del NotesEditor invoca esta función sin await,
+    // así que un rechazo de enqueueSession() o getBackendUrl() no debe escapar (promesa colgada) ni
+    // dejar el cartel en "Sincronizando…" para siempre. Cualquier fallo cae en "Pendiente".
+    try {
+      await enqueueSession(updated);
+      const url = await getBackendUrl();
+      if (!url) {
         if (mounted.current) {
           setSyncState("pending");
-          setSyncMsg("Sin conexión");
+          setSyncMsg("Backend sin configurar");
         }
+        return;
+      }
+      const r = await syncPending(url);
+      await reflectSyncFor(updated.id, r);
+    } catch {
+      if (mounted.current) {
+        setSyncState("pending");
+        setSyncMsg("Sin conexión");
       }
     }
   }
