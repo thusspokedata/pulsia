@@ -1,6 +1,8 @@
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react-native";
 import { Alert } from "react-native";
 import { summarize } from "../src/session/summary";
+import { SyncError } from "../src/sync/errors";
+import type { SyncResult } from "../src/sync/syncSessions";
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
@@ -45,7 +47,7 @@ jest.mock("../src/storage/pendingSessions", () => ({
   enqueueSession: async (s: any) => mockEnqueue(s),
 }));
 
-const mockSync = jest.fn(async (..._a: any[]) => 0);
+const mockSync = jest.fn(async (..._a: any[]): Promise<SyncResult> => ({ synced: 0, remaining: 0, lastError: null }));
 jest.mock("../src/sync/syncSessions", () => ({ syncPending: (...a: any[]) => mockSync(...a) }));
 
 const mockBellPlay = jest.fn();
@@ -239,6 +241,35 @@ test("terminar entrenamiento persiste a la cola y muestra el resumen (no navega 
   // Recién al tocar "Listo" se navega a la home.
   await fireEvent.press(screen.getByTestId("summary-done"));
   await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/"));
+});
+
+test("tras terminar, si el sync falla muestra 'Pendiente de sincronizar' + botón reintentar", async () => {
+  mockSync.mockResolvedValueOnce({ synced: 0, remaining: 1, lastError: new SyncError("server", 500) });
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("finish"));
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => expect(screen.getByText(/Pendiente de sincronizar/i)).toBeTruthy());
+  expect(screen.getByTestId("retry-sync")).toBeTruthy();
+});
+
+test("tras terminar, si el sync anda muestra 'Guardado ✓'", async () => {
+  mockSync.mockResolvedValueOnce({ synced: 1, remaining: 0, lastError: null });
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("finish"));
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => expect(screen.getByText(/Guardado/i)).toBeTruthy());
+  expect(screen.getByTestId("summary-done")).toBeTruthy();
+});
+
+test("reintentar sincronización tras un fallo vuelve a llamar al sync y muestra 'Guardado ✓'", async () => {
+  mockSync.mockResolvedValueOnce({ synced: 0, remaining: 1, lastError: new SyncError("server", 500) });
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("finish"));
+  await fireEvent.press(screen.getByTestId("finish"));
+  await waitFor(() => screen.getByTestId("retry-sync"));
+  mockSync.mockResolvedValueOnce({ synced: 1, remaining: 0, lastError: null });
+  await fireEvent.press(screen.getByTestId("retry-sync"));
+  await waitFor(() => expect(screen.getByText(/Guardado/i)).toBeTruthy());
 });
 
 test("cancelar entrenamiento confirma, navega y no encola", async () => {

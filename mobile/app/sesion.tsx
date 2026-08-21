@@ -13,7 +13,7 @@ import { getActiveSession, setActiveSession, clearActiveSession } from "../src/s
 import { getPauseState, setPauseState, clearPauseState, startPause, endPause, isPaused, totalPausedMs, type OpenPauseInterval } from "../src/storage/pauseState";
 import { getRestState, setRestState, clearRestState } from "../src/storage/restState";
 import { enqueueSession } from "../src/storage/pendingSessions";
-import { syncPending } from "../src/sync/syncSessions";
+import { syncPending, type SyncResult } from "../src/sync/syncSessions";
 import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets, discardOpenSets, setNotes, substituteExercise, substituteInProgram } from "../src/session/engine";
 import { newSessionId } from "../src/session/id";
 import { useHeartRate } from "../src/ble/useHeartRate";
@@ -92,6 +92,8 @@ export default function SesionScreen() {
   const [finishError, setFinishError] = useState(false);
   const [finishedSession, setFinishedSession] = useState<WorkoutSession | null>(null);
   const [finishedNotes, setFinishedNotes] = useState("");
+  const [syncState, setSyncState] = useState<"syncing" | "synced" | "pending">("syncing");
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [activeOrder, setActiveOrder] = useState<number | null>(null);
   const [restUntil, setRestUntil] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
@@ -340,6 +342,26 @@ export default function SesionScreen() {
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
         <SessionSummary summary={summarize(finishedSession)} />
         <NotesEditor value={finishedNotes} onChangeText={setFinishedNotes} onBlur={saveFinishedNotes} />
+        {syncState === "syncing" && (
+          <Text style={{ color: colors.textMuted, fontSize: 13 }}>Sincronizando…</Text>
+        )}
+        {syncState === "synced" && (
+          <Text style={{ color: colors.text, fontSize: 13 }}>Guardado ✓</Text>
+        )}
+        {syncState === "pending" && (
+          <View style={{ gap: spacing.sm }}>
+            <Text style={{ color: colors.accentText, fontSize: 13 }}>
+              Pendiente de sincronizar{syncMsg ? ` — ${syncMsg}` : ""}
+            </Text>
+            <Pressable
+              testID="retry-sync"
+              onPress={onRetrySync}
+              style={{ backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.sm, alignItems: "center" }}
+            >
+              <Text style={{ color: colors.text }}>Reintentar sincronización</Text>
+            </Pressable>
+          </View>
+        )}
         <Pressable
           testID="summary-done"
           onPress={() => router.replace("/")}
@@ -542,6 +564,40 @@ export default function SesionScreen() {
     void setRestState({ sessionId: sess.id, setStart: setStartRef.current, restUntil: null, restRemaining: restRemainingRef.current });
   }
 
+  // Traduce el resultado de syncPending al cartel de estado del resumen. `remaining === 0`
+  // (nada quedó en la cola) = guardado; si quedó algo, mostramos el motivo del último error.
+  function applySyncResult(r: SyncResult) {
+    if (!mounted.current) return;
+    if (r.remaining === 0) {
+      setSyncState("synced");
+      setSyncMsg(null);
+    } else {
+      setSyncState("pending");
+      setSyncMsg(r.lastError?.userMessage ?? "Pendiente");
+    }
+  }
+
+  async function onRetrySync() {
+    setSyncState("syncing");
+    setSyncMsg(null);
+    const url = await getBackendUrl();
+    if (!url) {
+      if (mounted.current) {
+        setSyncState("pending");
+        setSyncMsg("Backend sin configurar");
+      }
+      return;
+    }
+    try {
+      applySyncResult(await syncPending(url));
+    } catch {
+      if (mounted.current) {
+        setSyncState("pending");
+        setSyncMsg("Sin conexión");
+      }
+    }
+  }
+
   async function onFinish() {
     // Ninguna serie debe quedar con endedAt=null en el payload (ver closeOpenSets en el motor).
     const { hrAvg, hrMax } = aggregateHr(hr.getSamples());
@@ -568,10 +624,25 @@ export default function SesionScreen() {
       if (mounted.current) setFinishError(true);
       return; // no navegamos; la sesión sigue en activeSession para reintentar
     }
-    const url = await getBackendUrl();
-    if (url) void syncPending(url); // fire-and-forget; si falla queda en la cola
-    // No navegamos: mostramos el resumen; "Listo" navega a la home.
+    // No navegamos: mostramos el resumen al instante con "Sincronizando…"; el resultado del
+    // sync actualiza el cartel a "Guardado ✓" o "Pendiente de sincronizar — {motivo}".
+    setSyncState("syncing");
+    setSyncMsg(null);
     setFinishedSession(done);
+    const url = await getBackendUrl();
+    if (url) {
+      try {
+        applySyncResult(await syncPending(url));
+      } catch {
+        if (mounted.current) {
+          setSyncState("pending");
+          setSyncMsg("Sin conexión");
+        }
+      }
+    } else if (mounted.current) {
+      setSyncState("pending");
+      setSyncMsg("Backend sin configurar");
+    }
   }
 
   async function saveFinishedNotes() {
@@ -579,8 +650,18 @@ export default function SesionScreen() {
     const updated = setNotes(finishedSession, finishedNotes);
     setFinishedSession(updated);
     await enqueueSession(updated);
+    setSyncState("syncing");
     const url = await getBackendUrl();
-    if (url) void syncPending(url);
+    if (url) {
+      try {
+        applySyncResult(await syncPending(url));
+      } catch {
+        if (mounted.current) {
+          setSyncState("pending");
+          setSyncMsg("Sin conexión");
+        }
+      }
+    }
   }
 
   function onCancel() {
