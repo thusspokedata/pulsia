@@ -21,6 +21,11 @@ test("syncErrorFromResponse mapea el status al kind correcto", () => {
   expect(syncErrorFromResponse({ status: 409 } as Response).kind).toBe("conflict");
   expect(syncErrorFromResponse({ status: 503 } as Response).kind).toBe("server");
   expect(syncErrorFromResponse({ status: 418 } as Response).kind).toBe("unknown");
+  // 429 (rate limit) y 408 (request timeout) son reintentables → kind server.
+  expect(syncErrorFromResponse({ status: 429 } as Response).kind).toBe("server");
+  expect(syncErrorFromResponse({ status: 429 } as Response).retryable).toBe(true);
+  expect(syncErrorFromResponse({ status: 408 } as Response).kind).toBe("server");
+  expect(syncErrorFromResponse({ status: 408 } as Response).retryable).toBe(true);
 });
 
 test("syncErrorFromThrown trata cualquier excepción como network (red caída/abort)", () => {

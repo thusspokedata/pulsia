@@ -12,7 +12,7 @@ import { getLastWeights } from "../src/api/sessions";
 import { getActiveSession, setActiveSession, clearActiveSession } from "../src/storage/activeSession";
 import { getPauseState, setPauseState, clearPauseState, startPause, endPause, isPaused, totalPausedMs, type OpenPauseInterval } from "../src/storage/pauseState";
 import { getRestState, setRestState, clearRestState } from "../src/storage/restState";
-import { enqueueSession } from "../src/storage/pendingSessions";
+import { enqueueSession, getPendingSessions } from "../src/storage/pendingSessions";
 import { syncPending, type SyncResult } from "../src/sync/syncSessions";
 import { startSession, tapRep, adjustReps, endSet, editSet, skipExercise, finishSession, closeOpenSets, discardOpenSets, setNotes, substituteExercise, substituteInProgram } from "../src/session/engine";
 import { newSessionId } from "../src/session/id";
@@ -566,11 +566,14 @@ export default function SesionScreen() {
     void setRestState({ sessionId: sess.id, setStart: setStartRef.current, restUntil: null, restRemaining: restRemainingRef.current });
   }
 
-  // Traduce el resultado de syncPending al cartel de estado del resumen. `remaining === 0`
-  // (nada quedó en la cola) = guardado; si quedó algo, mostramos el motivo del último error.
-  function applySyncResult(r: SyncResult) {
+  // El cartel refleja SOLO la sesión recién terminada (su id), no toda la cola:
+  // una sesión vieja terminalmente inválida (400/409 que nunca sube) mantiene `remaining >= 1`
+  // para siempre y, con el criterio viejo, ensuciaría el estado de CADA sesión futura aunque
+  // ésta haya subido perfecto. Consultamos la cola local: si el id propio ya no está, se guardó.
+  async function reflectSyncFor(sessionId: string, r: SyncResult) {
+    const stillPending = (await getPendingSessions()).some((s) => s.id === sessionId);
     if (!mounted.current) return;
-    if (r.remaining === 0) {
+    if (!stillPending) {
       setSyncState("synced");
       setSyncMsg(null);
     } else {
@@ -580,6 +583,7 @@ export default function SesionScreen() {
   }
 
   async function onRetrySync() {
+    if (!finishedSession) return;
     setSyncState("syncing");
     setSyncMsg(null);
     const url = await getBackendUrl();
@@ -591,7 +595,8 @@ export default function SesionScreen() {
       return;
     }
     try {
-      applySyncResult(await syncPending(url));
+      const r = await syncPending(url);
+      await reflectSyncFor(finishedSession.id, r);
     } catch {
       if (mounted.current) {
         setSyncState("pending");
@@ -634,7 +639,8 @@ export default function SesionScreen() {
     const url = await getBackendUrl();
     if (url) {
       try {
-        applySyncResult(await syncPending(url));
+        const r = await syncPending(url);
+        await reflectSyncFor(done.id, r);
       } catch {
         if (mounted.current) {
           setSyncState("pending");
@@ -656,7 +662,8 @@ export default function SesionScreen() {
     const url = await getBackendUrl();
     if (url) {
       try {
-        applySyncResult(await syncPending(url));
+        const r = await syncPending(url);
+        await reflectSyncFor(updated.id, r);
       } catch {
         if (mounted.current) {
           setSyncState("pending");

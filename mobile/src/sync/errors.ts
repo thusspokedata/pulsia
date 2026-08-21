@@ -35,6 +35,7 @@ export function syncErrorFromResponse(res: Pick<Response, "status">): SyncError 
   if (s === 401 || s === 403) return new SyncError("auth", s);
   if (s === 400 || s === 422) return new SyncError("validation", s);
   if (s === 409) return new SyncError("conflict", s);
+  if (s === 429 || s === 408) return new SyncError("server", s); // reintentable (rate limit / timeout)
   if (s >= 500) return new SyncError("server", s);
   return new SyncError("unknown", s);
 }

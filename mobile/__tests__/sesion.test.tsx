@@ -43,11 +43,25 @@ jest.mock("../src/storage/restState", () => ({
 }));
 
 const mockEnqueue = jest.fn();
+// Cola local en memoria: enqueue hace upsert por id, getPendingSessions la lee. `reflectSyncFor`
+// consulta esta cola REAL (no `remaining`) para decidir el cartel del resumen.
+let mockQueue: any[] = [];
 jest.mock("../src/storage/pendingSessions", () => ({
-  enqueueSession: async (s: any) => mockEnqueue(s),
+  enqueueSession: async (s: any) => {
+    mockEnqueue(s);
+    mockQueue = [...mockQueue.filter((x: any) => x.id !== s.id), s];
+  },
+  getPendingSessions: async () => mockQueue,
+  removePendingSession: async (id: string) => { mockQueue = mockQueue.filter((x: any) => x.id !== id); },
 }));
 
-const mockSync = jest.fn(async (..._a: any[]): Promise<SyncResult> => ({ synced: 0, remaining: 0, lastError: null }));
+// Por defecto el sync sube TODA la cola (lo real: cada PUT OK borra su sesión de la cola).
+// Los tests que necesitan un fallo la sobreescriben con mockImplementationOnce.
+const mockSync = jest.fn(async (..._a: any[]): Promise<SyncResult> => {
+  const n = mockQueue.length;
+  mockQueue = [];
+  return { synced: n, remaining: 0, lastError: null };
+});
 jest.mock("../src/sync/syncSessions", () => ({ syncPending: (...a: any[]) => mockSync(...a) }));
 
 const mockBellPlay = jest.fn();
@@ -170,6 +184,7 @@ beforeEach(() => {
   mockActive = null;
   mockRestState = null;
   mockPauseState = null;
+  mockQueue = [];
   mockProgramId = "22222222-2222-4222-8222-222222222222";
   mockOneOffProgramId = "33333333-3333-4333-8333-333333333333";
   mockHrSamples = [];
@@ -253,7 +268,7 @@ test("tras terminar, si el sync falla muestra 'Pendiente de sincronizar' + botó
 });
 
 test("tras terminar, si el sync anda muestra 'Guardado ✓'", async () => {
-  mockSync.mockResolvedValueOnce({ synced: 1, remaining: 0, lastError: null });
+  // El sync (default) sube toda la cola: la sesión propia sale de la cola → "Guardado ✓".
   await render(<SesionScreen />);
   await waitFor(() => screen.getByTestId("finish"));
   await fireEvent.press(screen.getByTestId("finish"));
@@ -267,8 +282,26 @@ test("reintentar sincronización tras un fallo vuelve a llamar al sync y muestra
   await waitFor(() => screen.getByTestId("finish"));
   await fireEvent.press(screen.getByTestId("finish"));
   await waitFor(() => screen.getByTestId("retry-sync"));
-  mockSync.mockResolvedValueOnce({ synced: 1, remaining: 0, lastError: null });
+  // El reintento sube la sesión (sale de la cola) → "Guardado ✓".
+  mockSync.mockImplementationOnce(async () => { mockQueue = []; return { synced: 1, remaining: 0, lastError: null }; });
   await fireEvent.press(screen.getByTestId("retry-sync"));
+  await waitFor(() => expect(screen.getByText(/Guardado/i)).toBeTruthy());
+});
+
+test("si la sesión terminada sube pero queda OTRA ajena atascada en la cola, muestra 'Guardado ✓'", async () => {
+  // Sembramos una sesión AJENA terminalmente inválida (id distinto al de la sesión propia) que
+  // nunca sube: mantiene remaining >= 1 para siempre. El cartel debe reflejar SOLO la sesión propia.
+  mockQueue = [{ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }];
+  // El sync sube la propia (sale de la cola) pero deja la ajena (400 → nunca se descarta): remaining 1.
+  mockSync.mockImplementationOnce(async () => {
+    mockQueue = mockQueue.filter((s: any) => s.id !== RESUME_ID); // la propia sube; la ajena queda
+    return { synced: 1, remaining: mockQueue.length, lastError: new SyncError("validation", 400) };
+  });
+  await render(<SesionScreen />);
+  await waitFor(() => screen.getByTestId("finish"));
+  await fireEvent.press(screen.getByTestId("finish"));
+  // Con el criterio viejo (remaining === 0) esto mostraría "Pendiente" para siempre; el nuevo
+  // criterio consulta la cola por el id propio (que sí subió) → "Guardado ✓".
   await waitFor(() => expect(screen.getByText(/Guardado/i)).toBeTruthy());
 });
 
