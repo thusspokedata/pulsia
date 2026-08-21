@@ -10,6 +10,7 @@ import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 import { NutrientFlags } from "../../src/nutrition/NutrientFlags";
 import { SourceChip } from "../../src/nutrition/SourceChip";
+import { SegmentToggle } from "../../src/components/SegmentToggle";
 
 const MEAL_TYPES: MealType[] = ["desayuno", "almuerzo", "cena", "snack"];
 
@@ -52,7 +53,7 @@ export default function NuevaComidaScreen() {
           const reconstructed = m.items.map((it) => {
             const food = cat.find((f) => f.id === it.foodId);
             return food && allowedUnits(food).includes(it.quantityUnit)
-              ? { food, quantity: it.quantity, unit: it.quantityUnit }
+              ? { food, quantity: it.quantity, unit: it.quantityUnit, weighedCooked: it.weighedCooked ?? undefined }
               : null;
           });
           if (reconstructed.some((r) => r === null)) setNotEditable(true);
@@ -65,7 +66,9 @@ export default function NuevaComidaScreen() {
 
   function addFood(food: Food) {
     const unit = allowedUnits(food)[0];
-    setRows((rs) => [...rs, { food, quantity: unit === "unit" ? 1 : 100, unit }]);
+    // Default "pesé cocido" para los alimentos que tienen factor de cocción; el resto no usa el
+    // campo (queda undefined, mismo comportamiento de hoy).
+    setRows((rs) => [...rs, { food, quantity: unit === "unit" ? 1 : 100, unit, weighedCooked: food.cookingYield != null ? true : undefined }]);
     setQ("");
   }
   function setQty(i: number, v: string) {
@@ -74,6 +77,9 @@ export default function NuevaComidaScreen() {
   }
   function setUnit(i: number, unit: QuantityUnit) {
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, unit } : r)));
+  }
+  function setWeighedCooked(i: number, weighedCooked: boolean) {
+    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, weighedCooked } : r)));
   }
   function removeRow(i: number) { setRows((rs) => rs.filter((_, idx) => idx !== i)); }
 
@@ -159,7 +165,7 @@ export default function NuevaComidaScreen() {
 
       {/* Ítems agregados */}
       {rows.map((r, i) => {
-        const preview = r.quantity > 0 ? itemPreview(r.food, r.quantity, r.unit) : null;
+        const preview = r.quantity > 0 ? itemPreview(r.food, r.quantity, r.unit, r.weighedCooked) : null;
         return (
           <View key={`${r.food.id}-${i}`} style={{ backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.sm }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
@@ -179,6 +185,22 @@ export default function NuevaComidaScreen() {
               ))}
               {preview && <Text style={{ color: colors.textMuted, marginLeft: "auto" }}>{preview.kcal} kcal</Text>}
             </View>
+            {/* El per-100g de este alimento es SECO: el usuario tiene que decir si pesó el plato
+                cocido (default) o todavía seco, antes de cocinarlo. Solo aparece cuando el
+                alimento tiene factor de cocción — el resto del catálogo no lo necesita. */}
+            {r.food.cookingYield != null && (
+              <View style={{ gap: spacing.xs }}>
+                <Text style={{ color: colors.textMuted, fontSize: 12 }}>¿Cómo pesaste la porción?</Text>
+                <SegmentToggle
+                  options={[{ value: "cooked", label: "Pesé cocido" }, { value: "dry", label: "Pesé seco" }]}
+                  value={r.weighedCooked === false ? "dry" : "cooked"}
+                  onChange={(v) => setWeighedCooked(i, v === "cooked")}
+                />
+                <Text style={{ color: colors.icon, fontSize: 12 }}>
+                  El valor de este alimento es en seco; pesá el plato como lo comés.
+                </Text>
+              </View>
+            )}
           </View>
         );
       })}

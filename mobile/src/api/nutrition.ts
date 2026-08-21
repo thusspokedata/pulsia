@@ -4,6 +4,7 @@ import type {
   FoodInput,
   FoodExtraction,
   FoodIdentification,
+  CookingYieldEstimate,
   Meal,
   MealInput,
   NutritionGoalInput,
@@ -210,6 +211,18 @@ export async function applyAiMicros(baseUrl: string, foodId: string, food: FoodE
   });
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo completar el alimento con IA."));
   return (await res.json()) as UsdaRefreshResult;
+}
+
+/**
+ * Estima el factor de rendimiento (cocido ÷ seco) por el NOMBRE del alimento — no persiste nada,
+ * el usuario confirma/edita y recién el PATCH `/foods/:id` lo guarda (ver `updateFood`).
+ */
+export async function estimateCookingYield(baseUrl: string, name: string): Promise<CookingYieldEstimate> {
+  const res = await apiFetch(baseUrl, "/nutrition/foods/cooking-yield", {
+    method: "POST", body: JSON.stringify({ name }), timeoutMs: 60000,
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo estimar el factor de cocción."));
+  return (await res.json()) as CookingYieldEstimate;
 }
 
 export async function updateFood(baseUrl: string, id: string, input: FoodInput): Promise<Food> {

@@ -55,7 +55,7 @@ const OTRA_ENTRADA = { fdcId: 172421, description: "Lentils, sprouted, raw", dat
 const IDENTIFICACION: FoodIdentification = {
   name: "Lentejas cocidas", basis: "per_100g", kcal: 116, protein_g: 9, carbs_g: 20, fat_g: 0.4,
   saturated_fat_g: 0.1, sugars_g: 1.8, fiber_g: 7.9, sodium_mg: 238, cholesterol_mg: 0, water_ml: 69.6,
-  unitWeightG: null, sourceMacros: "ai", searchQuery: "lentils cooked boiled",
+  unitWeightG: null, sourceMacros: "ai", searchQuery: "lentils cooked boiled", cookingYield: null,
 };
 
 const propuesta = (over: Record<string, unknown> = {}) => ({

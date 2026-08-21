@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { snapshotItems, toFood, toMeal, insertWater, deleteWater, getGoalInput, upsertGoalInput, insertFood, getFood } from "./repository";
+import { snapshotItems, toFood, toMeal, insertWater, deleteWater, getGoalInput, upsertGoalInput, insertFood, getFood, resnapshotItemsOfFood } from "./repository";
 
 const banana = {
   id: "11111111-1111-4111-8111-111111111111", userId: "u", name: "Banana", basis: "per_100g",
@@ -73,6 +73,69 @@ test("snapshotItems escala y persiste colesterol y agua", () => {
   );
   // 1 unidad = 120g → factor 1.2 ; agua 75*1.2 = 90
   expect(items[0]).toMatchObject({ cholesterolMg: 0, waterMl: 90 });
+});
+
+test("snapshotItems aplica cookingYield cuando weighedCooked", () => {
+  const catalog = new Map<string, any>([["f1", {
+    id: "f1", name: "Pasta seca", basis: "per_100g", kcal: 350, proteinG: 12, carbsG: 70, fatG: 1.5,
+    unitWeightG: null, cookingYield: 2.2,
+    // ...resto de columnas de micros en null (nutrientsFromRow las lee)...
+  }]]);
+  const [snap] = snapshotItems(
+    [{ foodId: "f1", quantity: 220, quantityUnit: "g", weighedCooked: true }] as any,
+    catalog as any,
+  );
+  expect(snap.kcal).toBe(350);      // 220 cocidos / 2.2 = 100 secos → 350 kcal
+  expect(snap.grams).toBe(220);     // peso real pesado
+  expect(snap.weighedCooked).toBe(true);
+});
+
+test("snapshotItems sin weighedCooked no convierte (ítem viejo)", () => {
+  const catalog = new Map<string, any>([["f1", {
+    id: "f1", name: "Pasta seca", basis: "per_100g", kcal: 350, proteinG: 12, carbsG: 70, fatG: 1.5,
+    unitWeightG: null, cookingYield: 2.2,
+  }]]);
+  const [snap] = snapshotItems([{ foodId: "f1", quantity: 220, quantityUnit: "g" }] as any, catalog as any);
+  // Sin weighedCooked el default de foodMacrosForQuantity es cocido=true → 350. (Ver nota abajo.)
+  expect(snap.kcal).toBe(350);
+});
+
+// Mock mínimo de DbOrTx para resnapshotItemsOfFood: `listItemsOfFood` hace
+// select(...).from(mealItem).innerJoin(meal, ...).where(...) → resolvemos directo a `items`
+// (el join/filtro real ya lo cubren los tests de `listItemsOfFood` a nivel ruta); el UPDATE
+// devuelve {id, mealId} vía `returning()`, como hace drizzle de verdad.
+function fakeResnapshotDb(items: any[]) {
+  const updates: any[] = [];
+  const db: any = {
+    select: () => ({ from: () => ({ innerJoin: () => ({ where: async () => items }) }) }),
+    update: () => ({
+      set: (values: any) => ({
+        where: () => {
+          updates.push(values);
+          const p: any = Promise.resolve([]);
+          p.returning = async () => [{ id: items[0].id, mealId: items[0].mealId }];
+          return p;
+        },
+      }),
+    }),
+    _updates: updates,
+  };
+  return db;
+}
+
+test("resnapshotItemsOfFood preserva weighedCooked:false (no convierte, no se pisa a null)", async () => {
+  const items = [{ id: "mi1", mealId: "m1", quantity: 220, quantityUnit: "g", weighedCooked: false }];
+  const foodRow = {
+    id: "f1", name: "Pasta seca", basis: "per_100g", kcal: 350, proteinG: 12, carbsG: 70, fatG: 1.5,
+    unitWeightG: null, cookingYield: 2.2,
+  };
+  const db = fakeResnapshotDb(items);
+  const result = await resnapshotItemsOfFood(db, "u1", "f1", foodRow as any);
+  expect(result).toEqual({ mealsUpdated: 1, itemsUpdated: 1 });
+  const written = db._updates[0];
+  // "pesé seco" (weighedCooked:false) NO se convierte: 220 g tal cual → factor 2.2 → 350*2.2=770.
+  expect(written.kcal).toBe(770);
+  expect(written.weighedCooked).toBe(false);
 });
 
 test("insertWater mapea ml + loggedAt y devuelve WaterLog", async () => {

@@ -67,6 +67,7 @@ export function assembleFoodExtraction(id: FoodIdentification, usda: UsdaFoodRow
     sourceMacros: id.sourceMacros,
     sourceMicros: usda ? "usda" : null,
     usdaFdcId: usda?.fdcId ?? null,
+    cookingYield: id.cookingYield ?? null,
   };
   // Macros (4): siempre presentes. La 1ª llamada trae siempre un número, así que la mezcla nunca
   // devuelve null acá; el `?? 0` es un cinturón por si el input viniera roto (el schema exige un
@@ -101,6 +102,7 @@ export function assembleFoodWithAiMicros(id: FoodIdentification, micros: FoodMic
     sourceMacros: id.sourceMacros,
     sourceMicros: "ai",
     usdaFdcId: null,
+    cookingYield: id.cookingYield ?? null,
   };
   for (const key of MACRO_KEYS) out[key] = idRec[key] ?? 0;
   for (const key of NUTRIENT_KEYS) out[key] = microsRec[key] ?? null;

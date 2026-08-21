@@ -8,6 +8,8 @@ export type MacroSource = {
   carbs_g: number;
   fat_g: number;
   unitWeightG: number | null;
+  // cocido ÷ seco. null/ausente = el per-100g se aplica tal cual (comportamiento actual).
+  cookingYield?: number | null;
 } & NutrientValues;
 
 export type ScaledMacros = {
@@ -64,10 +66,23 @@ export function sumNullableMicro(values: Array<number | null | undefined>): numb
   return sumNutrient(values).value;
 }
 
+// Convierte los gramos que el usuario PESÓ a los gramos SECOS equivalentes, para aplicarles el
+// per-100g seco del alimento. Sólo convierte si el alimento tiene yield y se pesó cocido.
+// `cocidos = secos × yield` ⟹ `secos = cocidos / yield`.
+export function rawEquivalentGrams(grams: number, cookingYield: number | null | undefined, weighedCooked: boolean): number {
+  if (cookingYield == null || !weighedCooked) return grams;
+  return grams / cookingYield;
+}
+
 // Núcleo sin redondear: la usa foodMacrosForQuantity (abajo) y deriveRecipe, que necesita sumar
 // contribuciones crudas de varios ingredientes ANTES de redondear (sumar valores ya redondeados y
 // volver a escalar a por-100g introduce sesgo — ver deriveRecipe).
-export function foodMacrosRaw(food: MacroSource, quantity: number, unit: QuantityUnit): ScaledMacros {
+export function foodMacrosRaw(
+  food: MacroSource,
+  quantity: number,
+  unit: QuantityUnit,
+  opts?: { weighedCooked?: boolean },
+): ScaledMacros {
   // Guard de coherencia unidad/basis.
   if (unit === "unit") {
     if (food.unitWeightG == null) throw new Error("El alimento no tiene peso por unidad; cargá gramos/ml.");
@@ -77,7 +92,14 @@ export function foodMacrosRaw(food: MacroSource, quantity: number, unit: Quantit
     throw new Error("Unidad incoherente con el alimento (basis per_100g no se mide en ml).");
   }
   const grams = unit === "unit" ? quantity * (food.unitWeightG as number) : quantity;
-  const factor = grams / 100;
+  // Peso seco equivalente para el escalado; `grams` (el peso real pesado) se devuelve tal cual.
+  // cookingYield solo aplica a sólidos (per_100g): el schema ya lo bloquea para per_100ml, pero
+  // este guard protege contra una fila YA persistida que lo trajera de todos modos — dividir ml
+  // pesados por el yield estaría mal.
+  const scaleGrams = food.basis === "per_100g"
+    ? rawEquivalentGrams(grams, food.cookingYield, opts?.weighedCooked ?? true)
+    : grams;
+  const factor = scaleGrams / 100;
 
   // Recorre el REGISTRO, no una lista escrita a mano: agregar un nutriente al registro lo hace
   // escalar solo. Un nutriente ausente queda null — nunca 0, que afirmaría "no tiene".
@@ -99,8 +121,13 @@ export function foodMacrosRaw(food: MacroSource, quantity: number, unit: Quantit
 
 // Fuente única del cálculo: la usan el móvil (preview) y el backend (snapshot). Envuelve
 // foodMacrosRaw aplicando el redondeo de siempre — su salida no cambia.
-export function foodMacrosForQuantity(food: MacroSource, quantity: number, unit: QuantityUnit): ScaledMacros {
-  const raw = foodMacrosRaw(food, quantity, unit);
+export function foodMacrosForQuantity(
+  food: MacroSource,
+  quantity: number,
+  unit: QuantityUnit,
+  opts?: { weighedCooked?: boolean },
+): ScaledMacros {
+  const raw = foodMacrosRaw(food, quantity, unit, opts);
 
   const scaled = {} as Record<string, number | null>;
   for (const n of NUTRIENTS) {

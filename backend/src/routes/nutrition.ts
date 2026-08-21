@@ -31,6 +31,9 @@ const ExtractSchema = z.object({
 
 const DescribeSchema = z.object({ text: z.string().trim().min(2).max(100) });
 
+// Mismo tope que DescribeSchema.text: el nombre del alimento no paga por tokenizar una novela.
+const CookingYieldBodySchema = z.object({ name: z.string().trim().min(1).max(100) });
+
 // Re-mezcla manual: la identificación que ya se tenía + la fila de USDA que eligió el usuario.
 const AssembleSchema = z.object({
   identification: FoodIdentificationSchema,
@@ -198,6 +201,27 @@ export function nutritionRoutes(deps: AppDeps) {
     } catch (e) {
       console.warn("estimateFoodMicros falló:", (e as Error).message);
       return c.json({ error: "No se pudo estimar la información nutricional. Reintentá." }, 502);
+    }
+  });
+
+  // ---- Estimar el factor de cocción (retrofit; no persiste) ----
+  // Espeja /foods/ai-micros: la IA propone el factor cocido÷seco por el nombre; el usuario lo
+  // confirma/edita y recién el PATCH /foods/:id lo guarda.
+  r.post("/foods/cooking-yield", async (c) => {
+    const userId = c.get("userId");
+    const parsed = CookingYieldBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Body inválido", detail: parsed.error.issues }, 400);
+    const name = parsed.data.name;
+    if (!deps.aiClient.estimateCookingYield) return c.json({ error: "El servidor no soporta la estimación del factor de cocción." }, 500);
+    const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
+    const apiKey = resolveAiKey(settingsRow, deps.config);
+    if (!apiKey) return c.json({ error: "No hay API key de IA disponible." }, 400);
+    try {
+      const out = await deps.aiClient.estimateCookingYield({ name, apiKey });
+      return c.json({ cookingYield: out.cookingYield });
+    } catch (e) {
+      console.warn("estimateCookingYield falló:", (e as Error).message);
+      return c.json({ error: "No se pudo estimar el factor de cocción. Reintentá." }, 502);
     }
   });
 

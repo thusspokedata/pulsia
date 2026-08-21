@@ -3,7 +3,7 @@ import type { FoodIdentification } from "@pulsia/shared";
 
 const identificacion: FoodIdentification = {
   name: "Huevo frito", basis: "per_100g", kcal: 196, protein_g: 13.6, carbs_g: 0.8, fat_g: 14.8,
-  unitWeightG: 46, sourceMacros: "ai", searchQuery: "fried egg",
+  unitWeightG: 46, sourceMacros: "ai", searchQuery: "fried egg", cookingYield: null,
 };
 
 afterEach(() => { (global.fetch as unknown) = undefined; });

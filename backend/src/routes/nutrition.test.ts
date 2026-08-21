@@ -723,7 +723,7 @@ const ALMENDRA = {
 const HUEVO_ID = {
   name: "Huevo frito", basis: "per_100g" as const, kcal: 200, protein_g: 14, carbs_g: 1, fat_g: 15,
   saturated_fat_g: 4, sugars_g: 0.5, fiber_g: 0, sodium_mg: 200, cholesterol_mg: 370, water_ml: 60,
-  unitWeightG: 50, sourceMacros: "ai" as const, searchQuery: "egg whole cooked fried",
+  unitWeightG: 50, sourceMacros: "ai" as const, searchQuery: "egg whole cooked fried", cookingYield: null,
 };
 const HUEVO_FDC = 323294;
 const usdaCandidateRows = [
@@ -992,7 +992,7 @@ const itemsFixture = [
 
 const IDENT_ALMENDRA = {
   name: "Almendra", basis: "per_100g" as const, kcal: 579, protein_g: 21.2, carbs_g: 21.6, fat_g: 49.9,
-  unitWeightG: 1.2, sourceMacros: "ai" as const, searchQuery: "almonds raw",
+  unitWeightG: 1.2, sourceMacros: "ai" as const, searchQuery: "almonds raw", cookingYield: null,
 };
 
 const refreshAi = { ...aiClient, usdaSearchQuery: async () => "almonds raw", pickUsdaCandidate: async () => ALMENDRA_FDC };
@@ -1213,7 +1213,7 @@ test("POST /nutrition/foods/ai-micros arma la extracción con micros de IA (sour
   const app = createApp(deps(fakeDb()));
   const identification = {
     name: "Limonada casera", basis: "per_100ml", kcal: 40, protein_g: 0, carbs_g: 10, fat_g: 0,
-    unitWeightG: null, sourceMacros: "ai", searchQuery: "lemonade homemade",
+    unitWeightG: null, sourceMacros: "ai", searchQuery: "lemonade homemade", cookingYield: null,
   };
   const res = await app.request("/nutrition/foods/ai-micros", {
     method: "POST", headers: { "content-type": "application/json" },
@@ -1232,9 +1232,54 @@ test("POST /nutrition/foods/ai-micros con la IA rota devuelve 502 y no rompe", a
   const app = createApp(deps(fakeDb(), roto));
   const res = await app.request("/nutrition/foods/ai-micros", {
     method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ identification: { name: "x", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, sourceMacros: "ai", searchQuery: "x" } }),
+    body: JSON.stringify({ identification: { name: "x", basis: "per_100g", kcal: 1, protein_g: 0, carbs_g: 0, fat_g: 0, unitWeightG: null, sourceMacros: "ai", searchQuery: "x", cookingYield: null } }),
   });
   expect(res.status).toBe(502);
+});
+
+// ---- Estimar el factor de cocción (retrofit; no persiste) ----
+
+test("POST /nutrition/foods/cooking-yield devuelve la propuesta de la IA", async () => {
+  const conYield = { ...aiClient, estimateCookingYield: async () => ({ cookingYield: 2.5 }) };
+  const app = createApp(deps(fakeDb(), conYield));
+  const res = await app.request("/nutrition/foods/cooking-yield", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Arroz basmati seco" }),
+  });
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ cookingYield: 2.5 });
+});
+
+test("POST /nutrition/foods/cooking-yield 500 si el server no soporta la estimación", async () => {
+  // El aiClient de base (`aiClient`) no trae `estimateCookingYield`.
+  const app = createApp(deps(fakeDb()));
+  const res = await app.request("/nutrition/foods/cooking-yield", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "Pasta" }),
+  });
+  expect(res.status).toBe(500);
+});
+
+test("POST /nutrition/foods/cooking-yield rechaza un nombre vacío", async () => {
+  const conYield = { ...aiClient, estimateCookingYield: async () => ({ cookingYield: 2.5 }) };
+  const app = createApp(deps(fakeDb(), conYield));
+  const res = await app.request("/nutrition/foods/cooking-yield", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "  " }),
+  });
+  expect(res.status).toBe(400);
+});
+
+test("POST /nutrition/foods/cooking-yield: nombre larguísimo → 400 y NO llama a la IA", async () => {
+  let llamadas = 0;
+  const conYield = { ...aiClient, estimateCookingYield: async () => { llamadas++; return { cookingYield: 2.5 }; } };
+  const app = createApp(deps(fakeDb(), conYield));
+  const res = await app.request("/nutrition/foods/cooking-yield", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "x".repeat(101) }),
+  });
+  expect(res.status).toBe(400);
+  expect(llamadas).toBe(0);
 });
 
 // ---- Completar con IA (alimento guardado): proposal + apply ----

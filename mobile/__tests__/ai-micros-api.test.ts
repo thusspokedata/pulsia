@@ -3,7 +3,7 @@ import type { FoodIdentification } from "@pulsia/shared";
 
 const identificacion: FoodIdentification = {
   name: "Limonada casera", basis: "per_100ml", kcal: 40, protein_g: 0, carbs_g: 10, fat_g: 0,
-  unitWeightG: null, sourceMacros: "ai", searchQuery: "lemonade homemade",
+  unitWeightG: null, sourceMacros: "ai", searchQuery: "lemonade homemade", cookingYield: null,
 };
 
 afterEach(() => { (global.fetch as unknown) = undefined; });

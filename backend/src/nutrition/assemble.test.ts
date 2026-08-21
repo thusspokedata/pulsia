@@ -14,6 +14,7 @@ function baseId(overrides: Partial<FoodIdentification> = {}): FoodIdentification
     unitWeightG: 50,
     sourceMacros: "ai",
     searchQuery: "egg whole cooked fried",
+    cookingYield: null,
     ...overrides,
   };
 }
@@ -90,6 +91,17 @@ test("name/basis/unitWeightG salen SIEMPRE de id, aunque USDA tenga otra descrip
   expect(out.name).toBe("Banana");
   expect(out.basis).toBe("per_100g");
   expect(out.unitWeightG).toBe(120);
+});
+
+// FIX G: cookingYield no-nulo se propaga por ambos caminos de assemble (no solo el `null` de baseId).
+test("assembleFoodExtraction propaga cookingYield no-nulo al FoodExtraction", () => {
+  const out = assembleFoodExtraction(baseId({ cookingYield: 2.2 }), usdaRow({ ironMg: 1.9 }));
+  expect(out.cookingYield).toBe(2.2);
+});
+
+test("assembleFoodWithAiMicros propaga cookingYield no-nulo al FoodExtraction", () => {
+  const out = assembleFoodWithAiMicros(baseId({ cookingYield: 2.2 }), { iron_mg: 1.9 });
+  expect(out.cookingYield).toBe(2.2);
 });
 
 test("el resultado parsea contra FoodExtractionSchema (con y sin match)", () => {
