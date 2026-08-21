@@ -26,6 +26,7 @@ import { colors } from "../src/theme/tokens";
 import { setupRestNotifications } from "../src/notifications/setup";
 import { getBackendUrl } from "../src/storage/config";
 import { syncProfileToBackend } from "../src/profile/syncProfile";
+import { useSyncPendingSessions } from "../src/sync/useSyncPendingSessions";
 
 const queryClient = new QueryClient();
 
@@ -37,6 +38,9 @@ function Guarded() {
   // redirigir, así el `replace("/")` de otros flujos (fin de sesión, generar programa) puede volver
   // a Programa sin que lo pisemos hacia Nutrición. Ver src/auth/landing.ts.
   const landedRef = useRef(false);
+
+  // Re-sincroniza sesiones pendientes al abrir/enfocar la app cuando hay sesión (SES-1).
+  useSyncPendingSessions(status === "in");
 
   useEffect(() => {
     const inAuth = segments[0] === "login" || segments[0] === "registro";
