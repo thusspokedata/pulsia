@@ -54,3 +54,9 @@ test("exercisesOutOfScope: catalogId desconocido no es asunto de esta validació
   const lookup = fakeLookup({});
   expect(exercisesOutOfScope(workout(["back"], ["no_existe"]), lookup)).toEqual([]);
 });
+
+test("exercisesOutOfScope: ejercicio multi-grupo entra si ALGÚN primary coincide (no todos)", () => {
+  // peso muerto: primary hamstrings/glutes/back → en día de espalda debe estar EN objetivo.
+  const lookup = fakeLookup({ deadlift: ["hamstrings", "glutes", "back"] });
+  expect(exercisesOutOfScope(workout(["back"], ["deadlift"]), lookup)).toEqual([]);
+});
