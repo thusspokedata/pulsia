@@ -35,6 +35,13 @@ test("pendingSessions: enqueue hace upsert por id (no duplica)", async () => {
   expect(pend[0].notes).toBe("editada");
 });
 
+test("pendingSessions: conserva las sesiones válidas y saltea el ítem corrupto (no descarta toda la cola)", async () => {
+  await AsyncStorage.setItem("pulsia.pendingSessions", JSON.stringify([base, { garbage: true }]));
+  const pend = await getPendingSessions();
+  expect(pend.length).toBe(1);
+  expect(pend[0].id).toBe(base.id);
+});
+
 test("pendingSessions: enqueue de otro id agrega; remove saca por id", async () => {
   const other = { ...base, id: "33333333-3333-4333-8333-333333333333" } as WorkoutSession;
   await enqueueSession(session);
