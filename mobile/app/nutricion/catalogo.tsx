@@ -3,7 +3,7 @@ import { ScrollView, View, Text, TextInput, Pressable, Alert } from "react-nativ
 import { router, useFocusEffect } from "expo-router";
 import { getBackendUrl } from "../../src/storage/config";
 import { listFoods, deleteFood } from "../../src/api/nutrition";
-import { filterFoodsByNutrient, FLAGGED_NUTRIENTS, type Food, type FlaggedNutrient } from "@pulsia/shared";
+import { filterFoodsByNutrient, foldAccents, FLAGGED_NUTRIENTS, type Food, type FlaggedNutrient } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 import { SourceChip } from "../../src/nutrition/SourceChip";
@@ -80,7 +80,7 @@ export default function CatalogoScreen() {
 
   // El texto se aplica primero y el nutriente después, para que el filtro por nutriente opere
   // sobre lo que el usuario ya acotó con el buscador.
-  const byText = foods.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase()));
+  const byText = foods.filter((f) => foldAccents(f.name).includes(foldAccents(q.trim())));
   const result = nutrient ? filterFoodsByNutrient(byText, nutrient) : null;
   const filtered = result ? result.matches : byText;
   const missing = result ? result.unknown : [];

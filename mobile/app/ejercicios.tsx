@@ -1,14 +1,11 @@
 import { useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable, FlatList } from "react-native";
 import { router, Stack } from "expo-router";
-import { EXERCISE_CATALOG, exerciseNameEs, hasExerciseMedia } from "@pulsia/shared";
+import { EXERCISE_CATALOG, exerciseNameEs, foldAccents, hasExerciseMedia } from "@pulsia/shared";
 import { colors, spacing, radius } from "../src/theme/tokens";
 
-// Sin acentos ni mayúsculas: "prensa" encuentra "Prensa", y "biceps" encuentra "bíceps".
-// Los diacríticos van como \u0300-\u036f y NO como caracteres literales: un editor que
-// re-normalice el archivo a NFC rompería el rango en silencio.
-const norm = (s: string) =>
-  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+// Sin acentos ni mayusculas: "prensa" encuentra "Prensa", y "biceps" encuentra "biceps".
+const norm = foldAccents;
 
 export default function EjerciciosScreen() {
   const [q, setQ] = useState("");

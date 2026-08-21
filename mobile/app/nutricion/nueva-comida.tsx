@@ -5,6 +5,7 @@ import { getBackendUrl } from "../../src/storage/config";
 import { listFoods, createMeal, getMeal, updateMeal, deleteMeal } from "../../src/api/nutrition";
 import { buildMealInput, mealTotals, itemPreview, allowedUnits, combineDayAndTime, type MealRow } from "../../src/nutrition/mealForm";
 import { hhmm } from "../../src/session/metricDate";
+import { foldAccents } from "@pulsia/shared";
 import type { Food, MealType, QuantityUnit } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
@@ -114,7 +115,7 @@ export default function NuevaComidaScreen() {
   }
 
   const totals = mealTotals(rows);
-  const matches = q.trim() ? foods.filter((f) => f.name.toLowerCase().includes(q.trim().toLowerCase())) : [];
+  const matches = q.trim() ? foods.filter((f) => foldAccents(f.name).includes(foldAccents(q.trim()))) : [];
 
   if (loading) {
     return (
