@@ -55,7 +55,7 @@ export const FoodExtractionSchema = z.object({
   usdaFdcId: z.number().int().nullable().optional(),
   // cocido ÷ seco. null/ausente = alimento normal (per-100g se aplica tal cual, sin toggle).
   // !null = el per-100g es SECO; al pesar cocido se convierte a seco equivalente (ver macros.ts).
-  cookingYield: z.number().positive().nullable().optional(),
+  cookingYield: z.number().positive().max(10).nullable().optional(),
 });
 export type FoodExtraction = z.infer<typeof FoodExtractionSchema>;
 
@@ -84,7 +84,7 @@ export const FoodIdentificationSchema = z.object({
   // Frase de búsqueda en INGLÉS para matchear contra USDA.
   searchQuery: z.string().trim().min(1),
   // La IA estima el factor cocido÷seco si es un producto seco que absorbe agua; null si no aplica.
-  cookingYield: z.number().positive().nullable(),
+  cookingYield: z.number().positive().max(10).nullable(),
 });
 export type FoodIdentification = z.infer<typeof FoodIdentificationSchema>;
 
@@ -97,7 +97,7 @@ export type FoodMicrosEstimate = z.infer<typeof FoodMicrosEstimateSchema>;
 
 // Lo que la IA devuelve al estimar el factor de cocción de un alimento seco. null = no aplica.
 export const CookingYieldEstimateSchema = z.object({
-  cookingYield: z.number().positive().nullable(),
+  cookingYield: z.number().positive().max(10).nullable(),
 });
 export type CookingYieldEstimate = z.infer<typeof CookingYieldEstimateSchema>;
 
@@ -133,7 +133,15 @@ const recipeSourceConsistent = (data: { sourceMacros: string; recipe?: unknown |
   (data.sourceMacros === "recipe") === (data.recipe != null);
 const recipeSourceMessage = { message: "sourceMacros 'recipe' requiere recipe, y recipe requiere sourceMacros 'recipe'." } as const;
 
-export const FoodInputSchema = FoodInputObjectSchema.refine(recipeSourceConsistent, recipeSourceMessage);
+// cookingYield (cocido÷seco) solo tiene sentido para sólidos: un per_100ml con cookingYield
+// no-nulo dividiría los ml pesados por el yield y rompería los macros (ver macros.ts).
+const cookingYieldOnlyForSolids = (data: { basis: string; cookingYield?: number | null }) =>
+  data.cookingYield == null || data.basis === "per_100g";
+const cookingYieldMessage = { message: "cookingYield solo aplica a alimentos per_100g (sólidos)." } as const;
+
+export const FoodInputSchema = FoodInputObjectSchema
+  .refine(recipeSourceConsistent, recipeSourceMessage)
+  .refine(cookingYieldOnlyForSolids, cookingYieldMessage);
 export type FoodInput = z.infer<typeof FoodInputSchema>;
 
 // Alimento persistido / devuelto por el backend.
@@ -143,7 +151,9 @@ export const FoodSchema = FoodInputObjectSchema.extend({
   // Sólo lectura: lo setea el backend (no viene en el alta/edición). true si el alimento lo creó
   // quien hace el request. Es la base del catálogo compartido entre usuarios.
   mine: z.boolean().optional(),
-}).refine(recipeSourceConsistent, recipeSourceMessage);
+})
+  .refine(recipeSourceConsistent, recipeSourceMessage)
+  .refine(cookingYieldOnlyForSolids, cookingYieldMessage);
 export type Food = z.infer<typeof FoodSchema>;
 
 // Un ítem al crear una comida (lo que manda el móvil): referencia + cantidad cruda.
@@ -152,7 +162,8 @@ export const MealItemInputSchema = z.object({
   quantity: z.number().positive(),
   quantityUnit: QuantityUnitSchema,
   // true = el usuario pesó la porción COCIDA (aplica la conversión si el food tiene cookingYield).
-  // Ausente/undefined = comportamiento actual (sin conversión).
+  // Ausente/undefined ⟹ se trata como cocido: SÍ se convierte si el alimento tiene cookingYield
+  // (el default real, en snapshotItems/foodMacrosForQuantity, es `?? true`, no "sin conversión").
   weighedCooked: z.boolean().optional(),
 });
 export type MealItemInput = z.infer<typeof MealItemInputSchema>;

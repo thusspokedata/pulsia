@@ -357,4 +357,45 @@ describe("cookingYield / weighedCooked", () => {
     expect(CookingYieldEstimateSchema.safeParse({ cookingYield: null }).success).toBe(true);
     expect(CookingYieldEstimateSchema.safeParse({}).success).toBe(false);
   });
+
+  // FIX D: tope server-side (la UI usa 1-4; 10 deja margen, pero un 1000 es un dedazo/bug).
+  it("FoodExtractionSchema rechaza cookingYield > 10", () => {
+    expect(FoodExtractionSchema.safeParse({ ...baseExtraction, cookingYield: 1000 }).success).toBe(false);
+  });
+  it("FoodIdentificationSchema rechaza cookingYield > 10", () => {
+    const r = FoodIdentificationSchema.safeParse({
+      name: "Banana", basis: "per_100g", kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3,
+      unitWeightG: 120, sourceMacros: "ai", searchQuery: "banana raw", cookingYield: 1000,
+    });
+    expect(r.success).toBe(false);
+  });
+  it("CookingYieldEstimateSchema rechaza cookingYield > 10", () => {
+    expect(CookingYieldEstimateSchema.safeParse({ cookingYield: 1000 }).success).toBe(false);
+  });
+
+  // FIX C: cookingYield no-nulo solo tiene sentido para sólidos (per_100g); un líquido con
+  // cookingYield dividiría ml por el yield y rompería los macros.
+  it("FoodInputSchema rechaza cookingYield no-nulo en un per_100ml", () => {
+    const r = FoodInputSchema.safeParse({
+      name: "Leche", basis: "per_100ml", kcal: 42, protein_g: 3.4, carbs_g: 5, fat_g: 1,
+      unitWeightG: null, sourceMacros: "label", sourceMicros: null, cookingYield: 2.2,
+    });
+    expect(r.success).toBe(false);
+  });
+  it("FoodInputSchema acepta per_100ml con cookingYield null/ausente", () => {
+    const conNull = FoodInputSchema.safeParse({
+      name: "Leche", basis: "per_100ml", kcal: 42, protein_g: 3.4, carbs_g: 5, fat_g: 1,
+      unitWeightG: null, sourceMacros: "label", sourceMicros: null, cookingYield: null,
+    });
+    expect(conNull.success).toBe(true);
+    const { cookingYield: _omitido, ...sinCampo } = {
+      name: "Leche", basis: "per_100ml", kcal: 42, protein_g: 3.4, carbs_g: 5, fat_g: 1,
+      unitWeightG: null, sourceMacros: "label", sourceMicros: null, cookingYield: null,
+    };
+    expect(FoodInputSchema.safeParse(sinCampo).success).toBe(true);
+  });
+  it("FoodInputSchema acepta per_100g con cookingYield no-nulo (caso válido de siempre)", () => {
+    const r = FoodInputSchema.safeParse({ ...baseExtraction, cookingYield: 2.2, sourceMicros: null });
+    expect(r.success).toBe(true);
+  });
 });

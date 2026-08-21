@@ -235,4 +235,15 @@ describe("foodMacrosForQuantity con cookingYield", () => {
     const m = foodMacrosForQuantity(normal, 220, "g");
     expect(m.kcal).toBe(770);
   });
+  it("basis per_100ml con cookingYield (fila inválida persistida) NO convierte — guard defensivo", () => {
+    // cookingYield solo tiene sentido para sólidos (per_100g); una fila per_100ml con cookingYield
+    // no debería existir (el schema lo bloquea), pero si una fila ya persistida lo trajera, no hay
+    // que dividir los ml pesados por el yield.
+    const bebidaInvalida = {
+      basis: "per_100ml", kcal: 350, protein_g: 12, carbs_g: 70, fat_g: 1.5,
+      unitWeightG: null, cookingYield: 2.2,
+    } as MacroSource;
+    const m = foodMacrosForQuantity(bebidaInvalida, 220, "ml");
+    expect(m.kcal).toBe(770); // 220 ml tal cual, SIN dividir por el yield
+  });
 });

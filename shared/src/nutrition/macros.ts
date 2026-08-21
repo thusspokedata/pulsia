@@ -93,7 +93,12 @@ export function foodMacrosRaw(
   }
   const grams = unit === "unit" ? quantity * (food.unitWeightG as number) : quantity;
   // Peso seco equivalente para el escalado; `grams` (el peso real pesado) se devuelve tal cual.
-  const scaleGrams = rawEquivalentGrams(grams, food.cookingYield, opts?.weighedCooked ?? true);
+  // cookingYield solo aplica a sólidos (per_100g): el schema ya lo bloquea para per_100ml, pero
+  // este guard protege contra una fila YA persistida que lo trajera de todos modos — dividir ml
+  // pesados por el yield estaría mal.
+  const scaleGrams = food.basis === "per_100g"
+    ? rawEquivalentGrams(grams, food.cookingYield, opts?.weighedCooked ?? true)
+    : grams;
   const factor = scaleGrams / 100;
 
   // Recorre el REGISTRO, no una lista escrita a mano: agregar un nutriente al registro lo hace
