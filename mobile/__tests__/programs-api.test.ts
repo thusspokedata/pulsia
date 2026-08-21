@@ -10,7 +10,7 @@ const validProgram = { name: "Plan", weeks: [{ weekNumber: 1, workouts: [] }] };
 const validOneOffProgram = {
   name: "Entreno puntual",
   weeks: [{ weekNumber: 1, workouts: [
-    { dayLabel: "D1", location: "home", focus: "chest", exercises: [
+    { dayLabel: "D1", location: "home", targetMuscles: ["chest"], exercises: [
       { catalogId: "pushup", garminName: "Push Up", sets: 3, reps: "10-12", targetLoad: "RPE 7", restSeconds: 60, notes: "" },
     ] },
   ] }],

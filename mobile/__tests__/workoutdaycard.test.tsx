@@ -7,7 +7,7 @@ jest.mock("expo-router", () => ({ router: { push: (...a: unknown[]) => mockPush(
 beforeEach(() => mockPush.mockClear());
 
 const workout = {
-  dayLabel: "Día 1 - Empuje", location: "gym", focus: "chest",
+  dayLabel: "Día 1 - Empuje", location: "gym", targetMuscles: ["chest"],
   exercises: [
     { catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 4, reps: "8-10", targetLoad: "RPE 8", restSeconds: 120, notes: "" },
     { catalogId: "overhead_press", garminName: "Overhead Press", sets: 3, reps: "10", targetLoad: "RPE 7", restSeconds: 90, notes: "" },
@@ -16,7 +16,7 @@ const workout = {
 
 // kettlebell_squat existe en el catálogo pero Everkinetic no cubre kettlebell.
 const workoutSinMedia = {
-  dayLabel: "Día 2 - Pierna", location: "gym", focus: "legs",
+  dayLabel: "Día 2 - Pierna", location: "gym", targetMuscles: ["quads"],
   exercises: [
     { catalogId: "kettlebell_squat", garminName: "Kettlebell Squat", sets: 3, reps: "10", targetLoad: "20kg", restSeconds: 90, notes: "" },
   ],
