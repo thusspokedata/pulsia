@@ -106,21 +106,25 @@ export function sessionsRoutes(deps: AppDeps) {
 
   r.put("/:id", async (c) => {
     const id = c.req.param("id");
+    const userId = c.get("userId");
+    // Log de una línea por salida para diagnosticar 4xx de sync en `docker logs` (no hay logger global).
+    const log = (status: number) => console.log(`PUT /sessions ${id} user=${userId} status=${status}`);
     let raw: unknown;
     try {
       raw = await c.req.json();
     } catch {
+      log(400);
       return c.json({ error: "JSON inválido" }, 400);
     }
     const parsed = WorkoutSessionSchema.safeParse(raw);
-    if (!parsed.success) return c.json({ error: parsed.error.issues }, 400);
-    if (parsed.data.id !== id) return c.json({ error: "el id de la URL no coincide con el del body" }, 400);
-    const userId = c.get("userId");
+    if (!parsed.success) { log(400); return c.json({ error: parsed.error.issues }, 400); }
+    if (parsed.data.id !== id) { log(400); return c.json({ error: "el id de la URL no coincide con el del body" }, 400); }
     // El id de sesión es PK global: si ya pertenece a otro usuario, rechazamos (evita un 500 por
     // choque de constraint y que un id ajeno se use como blanco).
     const owner = await getSessionOwnerId(deps.db, id);
-    if (owner && owner !== userId) return c.json({ error: "esa sesión pertenece a otro usuario" }, 409);
+    if (owner && owner !== userId) { log(409); return c.json({ error: "esa sesión pertenece a otro usuario" }, 409); }
     await upsertSession(deps.db, userId, parsed.data);
+    log(200);
     return c.json({ id }, 200);
   });
 

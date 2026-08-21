@@ -279,3 +279,20 @@ test("POST /sessions/from-fit con id no-UUID se rechaza en el borde (antes de de
   // borde, un id no-UUID caería al safeParse del ws ("...sesión inválida"), no acá.
   expect((await res.json()).error).toBe("id inválido");
 });
+
+test("PUT /sessions loguea userId + id + status (200)", async () => {
+  const logs: string[] = [];
+  const spy = console.log;
+  console.log = (...a: unknown[]) => { logs.push(a.map(String).join(" ")); };
+  try {
+    const app = createApp(deps(fakeDb(null, null, [])) as any);
+    const res = await app.request(`/sessions/${SID}`, {
+      method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(validSession),
+    });
+    expect(res.status).toBe(200);
+  } finally { console.log = spy; }
+  const line = logs.find((l) => l.includes("PUT /sessions") && l.includes(SID));
+  expect(line).toBeTruthy();
+  expect(line).toContain("200");
+  expect(line).toContain(SINGLE_USER_ID);
+});
