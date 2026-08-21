@@ -86,3 +86,9 @@ test("buildGenerationPrompt sin progreso queda intacto", () => {
   const out = buildGenerationPrompt(profile);
   expect(out).not.toContain("Progreso medido");
 });
+
+test("el prompt pide targetMuscles por día y coherencia ejercicio↔objetivo", () => {
+  const p = buildGenerationPrompt(profile);
+  expect(p).toContain("targetMuscles");
+  expect(p.toLowerCase()).toContain("objetivo del día");
+});
