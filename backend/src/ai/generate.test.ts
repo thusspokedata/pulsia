@@ -10,7 +10,7 @@ const profile: TrainingProfile = {
 
 const validProgram: Program = {
   name: "Plan", weeks: [{ weekNumber: 1, workouts: [
-    { dayLabel: "D1", location: "gym", focus: "chest", exercises: [
+    { dayLabel: "D1", location: "gym", targetMuscles: ["chest"], exercises: [
       { catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 3, reps: "8-10", targetLoad: "RPE 7", restSeconds: 90, notes: "" },
     ] },
   ] }],
