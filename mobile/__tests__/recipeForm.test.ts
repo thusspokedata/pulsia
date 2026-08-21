@@ -52,3 +52,14 @@ test("filterIngredientMatches: filtra por nombre y excluye el alimento en edici�
   // query vacía → sin resultados
   expect(filterIngredientMatches(foods, "   ")).toEqual([]);
 });
+
+test("filterIngredientMatches: insensible a acentos en ambas direcciones", () => {
+  const foods = [
+    { id: "f1", name: "Plátano" },
+    { id: "f2", name: "Platano maduro" },
+  ] as any;
+  // sin acento en el query encuentra el nombre acentuado
+  expect(filterIngredientMatches(foods, "platano").map((f: any) => f.id)).toEqual(["f1", "f2"]);
+  // con acento en el query encuentra el nombre sin acento
+  expect(filterIngredientMatches(foods, "plátano").map((f: any) => f.id)).toEqual(["f1", "f2"]);
+});

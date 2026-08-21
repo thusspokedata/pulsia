@@ -1,4 +1,4 @@
-import { deriveRecipe } from "@pulsia/shared";
+import { deriveRecipe, foldAccents } from "@pulsia/shared";
 import type { Food, FoodInput } from "@pulsia/shared";
 import type { MealRow } from "./mealForm";
 
@@ -46,7 +46,7 @@ export function parseQuantityInput(v: string): number {
 // excluyen `excludeFoodId` — la receta que se está editando no puede agregarse a sí misma como
 // ingrediente. Query vacía → sin resultados.
 export function filterIngredientMatches(foods: Food[], query: string, excludeFoodId?: string): Food[] {
-  const q = query.trim().toLowerCase();
+  const q = foldAccents(query.trim());
   if (q === "") return [];
-  return foods.filter((f) => f.id !== excludeFoodId && f.name.toLowerCase().includes(q));
+  return foods.filter((f) => f.id !== excludeFoodId && foldAccents(f.name).includes(q));
 }
