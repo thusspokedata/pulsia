@@ -6,6 +6,7 @@ import {
   EcgAnalysisSchema,
   FoodIdentificationSchema,
   FoodMicrosEstimateSchema,
+  CookingYieldEstimateSchema,
   ReportOutputSchema,
   SupplementExtractionSchema,
   AiPlanOutputSchema,
@@ -15,7 +16,7 @@ import { buildGenerationPrompt } from "./prompt";
 import { buildOneOffPrompt, type OneOffArgs } from "./oneoff";
 import { buildMemoryUpdatePrompt } from "./memory";
 import { buildEcgPrompt } from "./ecg";
-import { buildFoodPrompt, buildPickCandidatePrompt, buildSearchQueryPrompt, buildFoodMicrosPrompt } from "./nutrition";
+import { buildFoodPrompt, buildPickCandidatePrompt, buildSearchQueryPrompt, buildFoodMicrosPrompt, buildCookingYieldPrompt } from "./nutrition";
 import { buildReportPrompt } from "./report";
 import {
   buildSupplementExtractPrompt,
@@ -70,6 +71,8 @@ export interface AiClient {
     basis: import("@pulsia/shared").FoodBasis;
     apiKey: string;
   }): Promise<import("@pulsia/shared").FoodMicrosEstimate>;
+  // Estima el factor de rendimiento (cocido ÷ seco) de un alimento seco. null si no aplica.
+  estimateCookingYield?(input: { name: string; apiKey: string }): Promise<import("@pulsia/shared").CookingYieldEstimate>;
   extractSupplement?(input: {
     imageBase64: string;
     mediaType: string;
@@ -342,6 +345,22 @@ export class AnthropicAiClient implements AiClient {
       content: [{ type: "text", text: buildFoodMicrosPrompt(name, basis) }],
       truncatedMsg: "La respuesta se truncó al estimar los micronutrientes.",
       missingMsg: "La IA no devolvió los micronutrientes.",
+    });
+  }
+
+  // Estima el factor de rendimiento (cocido ÷ seco) de un alimento seco. null si no aplica.
+  async estimateCookingYield({ name, apiKey }: { name: string; apiKey: string }) {
+    const client = new Anthropic({ apiKey });
+    return callStructuredTool({
+      client,
+      model: "claude-opus-4-8",
+      maxTokens: 256,
+      schema: CookingYieldEstimateSchema,
+      toolName: "return_cooking_yield",
+      description: "Devuelve el factor de rendimiento cocido÷seco del alimento, o null si no aplica.",
+      content: [{ type: "text", text: buildCookingYieldPrompt(name) }],
+      truncatedMsg: "La respuesta se truncó al estimar el factor de cocción.",
+      missingMsg: "La IA no devolvió el factor de cocción.",
     });
   }
 

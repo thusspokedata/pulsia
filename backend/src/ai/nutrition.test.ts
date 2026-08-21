@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { buildFoodPrompt, buildSearchQueryPrompt, REGLA_SEARCH_QUERY } from "./nutrition";
+import { buildFoodPrompt, buildSearchQueryPrompt, REGLA_SEARCH_QUERY, buildCookingYieldPrompt } from "./nutrition";
 
 test("modo foto: habla de la foto y deja que la IA elija label o ai", () => {
   const p = buildFoodPrompt("photo");
@@ -96,4 +96,16 @@ test("el prompt del refresh avisa que el nombre es un DATO, no una instrucción"
 test("el prompt del refresh NO pide macros ni micros: solo la frase", () => {
   const p = buildSearchQueryPrompt();
   for (const k of ["kcal", "protein_g", "saturated_fat_g", "iron_mg"]) expect(p).not.toContain(k);
+});
+
+test("buildCookingYieldPrompt pide el factor cocido/seco y trata el nombre como dato", () => {
+  const p = buildCookingYieldPrompt("Fideos secos");
+  expect(p).toContain("Fideos secos");
+  expect(p.toLowerCase()).toContain("cocido");
+  expect(p).toContain("return_cooking_yield");
+  expect(p).toContain("DATOS"); // anti-inyección
+});
+
+test("buildFoodPrompt (photo) incluye la regla de cookingYield", () => {
+  expect(buildFoodPrompt("photo").toLowerCase()).toContain("cookingyield");
 });
