@@ -56,3 +56,21 @@ test("mezcla: sube la buena, deja la mala", async () => {
   expect(r.remaining).toBe(1);
   expect((await getPendingSessions()).map((s) => s.id)).toEqual(["33333333-3333-4333-8333-333333333333"]);
 });
+
+test("dos syncPending concurrentes se serializan (nunca dos PUT en vuelo a la vez)", async () => {
+  await enqueueSession(mk("11111111-1111-4111-8111-111111111111"));
+  await enqueueSession(mk("33333333-3333-4333-8333-333333333333"));
+  let inFlight = 0, maxInFlight = 0;
+  global.fetch = jest.fn().mockImplementation(async () => {
+    inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((r) => setTimeout(r, 5));
+    inFlight--;
+    return { ok: true, status: 200, json: async () => ({}) };
+  }) as any;
+  const [a, b] = await Promise.all([syncPending(URL), syncPending(URL)]);
+  expect(maxInFlight).toBe(1);
+  // la cola quedó vacía y no hubo doble-borrado que rompa nada
+  expect((await getPendingSessions()).length).toBe(0);
+  // ambos resultados son coherentes (el 1º sube las 2; el 2º encuentra 0 pendientes)
+  expect(a.synced + b.synced).toBeGreaterThanOrEqual(2);
+});
