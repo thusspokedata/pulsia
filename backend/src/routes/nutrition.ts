@@ -31,6 +31,9 @@ const ExtractSchema = z.object({
 
 const DescribeSchema = z.object({ text: z.string().trim().min(2).max(100) });
 
+// Mismo tope que DescribeSchema.text: el nombre del alimento no paga por tokenizar una novela.
+const CookingYieldBodySchema = z.object({ name: z.string().trim().min(1).max(100) });
+
 // Re-mezcla manual: la identificación que ya se tenía + la fila de USDA que eligió el usuario.
 const AssembleSchema = z.object({
   identification: FoodIdentificationSchema,
@@ -206,9 +209,9 @@ export function nutritionRoutes(deps: AppDeps) {
   // confirma/edita y recién el PATCH /foods/:id lo guarda.
   r.post("/foods/cooking-yield", async (c) => {
     const userId = c.get("userId");
-    const body = await c.req.json().catch(() => null);
-    const name = typeof body?.name === "string" ? body.name.trim() : "";
-    if (name.length === 0) return c.json({ error: "Falta el nombre del alimento." }, 400);
+    const parsed = CookingYieldBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Body inválido", detail: parsed.error.issues }, 400);
+    const name = parsed.data.name;
     if (!deps.aiClient.estimateCookingYield) return c.json({ error: "El servidor no soporta la estimación del factor de cocción." }, 500);
     const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
     const apiKey = resolveAiKey(settingsRow, deps.config);

@@ -1270,6 +1270,18 @@ test("POST /nutrition/foods/cooking-yield rechaza un nombre vacío", async () =>
   expect(res.status).toBe(400);
 });
 
+test("POST /nutrition/foods/cooking-yield: nombre larguísimo → 400 y NO llama a la IA", async () => {
+  let llamadas = 0;
+  const conYield = { ...aiClient, estimateCookingYield: async () => { llamadas++; return { cookingYield: 2.5 }; } };
+  const app = createApp(deps(fakeDb(), conYield));
+  const res = await app.request("/nutrition/foods/cooking-yield", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "x".repeat(101) }),
+  });
+  expect(res.status).toBe(400);
+  expect(llamadas).toBe(0);
+});
+
 // ---- Completar con IA (alimento guardado): proposal + apply ----
 const postAiProposal = (app: any, id = FOOD_ID) =>
   app.request(`/nutrition/foods/${id}/ai-micros-proposal`, { method: "POST" });

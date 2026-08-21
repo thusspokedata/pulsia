@@ -93,6 +93,17 @@ test("name/basis/unitWeightG salen SIEMPRE de id, aunque USDA tenga otra descrip
   expect(out.unitWeightG).toBe(120);
 });
 
+// FIX G: cookingYield no-nulo se propaga por ambos caminos de assemble (no solo el `null` de baseId).
+test("assembleFoodExtraction propaga cookingYield no-nulo al FoodExtraction", () => {
+  const out = assembleFoodExtraction(baseId({ cookingYield: 2.2 }), usdaRow({ ironMg: 1.9 }));
+  expect(out.cookingYield).toBe(2.2);
+});
+
+test("assembleFoodWithAiMicros propaga cookingYield no-nulo al FoodExtraction", () => {
+  const out = assembleFoodWithAiMicros(baseId({ cookingYield: 2.2 }), { iron_mg: 1.9 });
+  expect(out.cookingYield).toBe(2.2);
+});
+
 test("el resultado parsea contra FoodExtractionSchema (con y sin match)", () => {
   expect(FoodExtractionSchema.safeParse(assembleFoodExtraction(baseId(), usdaRow({ ironMg: 2 }))).success).toBe(true);
   expect(FoodExtractionSchema.safeParse(assembleFoodExtraction(baseId(), null)).success).toBe(true);

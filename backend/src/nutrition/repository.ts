@@ -212,6 +212,7 @@ export interface ItemDeAlimento {
   mealId: string;
   quantity: number;
   quantityUnit: string;
+  weighedCooked: boolean | null;
 }
 
 /**
@@ -223,7 +224,7 @@ export interface ItemDeAlimento {
  */
 export async function listItemsOfFood(db: DbOrTx, userId: string, foodId: string): Promise<ItemDeAlimento[]> {
   return db
-    .select({ id: mealItem.id, mealId: mealItem.mealId, quantity: mealItem.quantity, quantityUnit: mealItem.quantityUnit })
+    .select({ id: mealItem.id, mealId: mealItem.mealId, quantity: mealItem.quantity, quantityUnit: mealItem.quantityUnit, weighedCooked: mealItem.weighedCooked })
     .from(mealItem)
     .innerJoin(meal, eq(meal.id, mealItem.mealId))
     .where(and(eq(mealItem.foodId, foodId), eq(meal.userId, userId)));
@@ -252,7 +253,12 @@ export async function resnapshotItemsOfFood(
   const items = await listItemsOfFood(db, userId, foodId);
   if (items.length === 0) return { mealsUpdated: 0, itemsUpdated: 0 };
   const snapped = snapshotItems(
-    items.map((it) => ({ foodId, quantity: it.quantity, quantityUnit: it.quantityUnit as QuantityUnit })),
+    items.map((it) => ({
+      foodId, quantity: it.quantity, quantityUnit: it.quantityUnit as QuantityUnit,
+      // `?? undefined`: preserva `false` (pesó seco, no convertir) y colapsa `null` (ítem viejo)
+      // a "ausente" — MealItemInput no acepta `null`, solo `boolean | undefined`.
+      weighedCooked: it.weighedCooked ?? undefined,
+    })),
     new Map([[foodId, row]]),
   );
   const comidas = new Set<string>();
