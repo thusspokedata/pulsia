@@ -24,6 +24,7 @@ import { restNotificationPlan, scheduleRestBell, cancelRestBell } from "../src/s
 import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
 import { parsePlannedReps } from "../src/session/plannedReps";
 import { colors, radius, spacing } from "../src/theme/tokens";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { summarize } from "../src/session/summary";
 import { SessionSummary } from "../src/components/SessionSummary";
 import { NotesEditor } from "../src/components/NotesEditor";
@@ -85,6 +86,7 @@ function setStartFor(s: WorkoutSession, ref: number): number {
 
 export default function SesionScreen() {
   const params = useLocalSearchParams<{ week: string; dayLabel: string; location: string; oneOff?: string }>();
+  const insets = useSafeAreaInsets();
   const [session, setSession] = useState<WorkoutSession | null>(null);
   const [weight, setWeight] = useState("");
   const [rpe, setRpe] = useState("");
@@ -339,7 +341,7 @@ export default function SesionScreen() {
 
   if (finishedSession) {
     return (
-      <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
+      <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg, paddingBottom: insets.bottom + spacing.xl }}>
         <SessionSummary summary={summarize(finishedSession)} />
         <NotesEditor value={finishedNotes} onChangeText={setFinishedNotes} onBlur={saveFinishedNotes} />
         {syncState === "syncing" && (
@@ -365,9 +367,9 @@ export default function SesionScreen() {
         <Pressable
           testID="summary-done"
           onPress={() => router.replace("/")}
-          style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", marginTop: spacing.md }}
+          style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.lg, alignItems: "center", marginTop: spacing.md }}
         >
-          <Text style={{ color: "#fff" }}>Listo</Text>
+          <Text style={{ color: "#fff", fontSize: 17, fontWeight: "700" }}>Listo</Text>
         </Pressable>
       </ScrollView>
     );
