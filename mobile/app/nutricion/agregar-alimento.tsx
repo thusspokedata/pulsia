@@ -5,7 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { getBackendUrl } from "../../src/storage/config";
 import {
   extractFood, describeFood, createFood, getFood, updateFood,
-  getUsdaEntry, assembleUsdaFood, aiMicrosForFood, type UsdaEntry,
+  getUsdaEntry, assembleUsdaFood, aiMicrosForFood, estimateCookingYield, type UsdaEntry,
 } from "../../src/api/nutrition";
 import { NUTRIENT_KEYS } from "@pulsia/shared";
 import type { FoodBasis, FoodExtraction, FoodIdentification, NutrientValues, SourceMacros, SourceMicros } from "@pulsia/shared";
@@ -67,10 +67,16 @@ type Form = {
   saturated_fat_g: string; sugars_g: string; fiber_g: string; salt_g: string;
   cholesterol_mg: string; water_ml: string;
   unitWeightG: string; sourceMacros: SourceMacros;
+  cookingYield: string; // cocido ÷ seco; "" = null (alimento normal, no cambia de peso al cocinarse)
 };
 // El alta arranca en "manual": si el usuario no toca la IA, el dato lo está cargando él. Antes
 // arrancaba en "estimate", que era el mismo valor que dejaba la IA — no se podían distinguir.
-const EMPTY: Form = { name: "", basis: "per_100g", kcal: "", protein_g: "", carbs_g: "", fat_g: "", saturated_fat_g: "", sugars_g: "", fiber_g: "", salt_g: "", cholesterol_mg: "", water_ml: "", unitWeightG: "", sourceMacros: "manual" };
+const EMPTY: Form = { name: "", basis: "per_100g", kcal: "", protein_g: "", carbs_g: "", fat_g: "", saturated_fat_g: "", sugars_g: "", fiber_g: "", salt_g: "", cholesterol_mg: "", water_ml: "", unitWeightG: "", sourceMacros: "manual", cookingYield: "" };
+
+// Rango razonable del factor de cocción: por debajo de 1 el "cocido" pesaría menos que el seco
+// (no tiene sentido), y por encima de 4 ya es casi seguro un error de tipeo.
+const MIN_COOKING_YIELD = 1;
+const MAX_COOKING_YIELD = 4;
 
 export default function AgregarAlimentoScreen() {
   const screenPad = useScreenPadding(spacing.lg);
@@ -97,6 +103,11 @@ export default function AgregarAlimentoScreen() {
   const [corrigiendo, setCorrigiendo] = useState(false);
   const [remezclando, setRemezclando] = useState(false);
   const [estimandoIA, setEstimandoIA] = useState(false);
+  const [estimandoYield, setEstimandoYield] = useState(false);
+  // Una receta deriva sus macros/micros de sus ingredientes: el factor de cocción es una decisión
+  // del alimento SIMPLE que se pesa cocido, y no aplica acá (además, este formulario nunca debería
+  // recibir una receta — "Editar" la manda a crear-comida.tsx — pero el guard queda por las dudas).
+  const [isRecipe, setIsRecipe] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -109,6 +120,7 @@ export default function AgregarAlimentoScreen() {
           // donde olvidarse de un campo nuevo.
           const f = await getFood(url, foodId);
           prefillFrom(f);
+          setIsRecipe(f.recipe != null);
           // La descripción de la entrada de USDA NO viaja con el alimento (que solo persiste el
           // `usdaFdcId`): se resuelve aparte, igual que en el detalle del catálogo. Va en su
           // propio catch porque es un adorno — si falla, el chip cae al id y la edición sigue.
@@ -137,6 +149,7 @@ export default function AgregarAlimentoScreen() {
       fiber_g: numStr(ex.fiber_g), salt_g: saltFieldFromSodiumMg(ex.sodium_mg),
       cholesterol_mg: numStr(ex.cholesterol_mg), water_ml: numStr(ex.water_ml),
       unitWeightG: ex.unitWeightG == null ? "" : String(ex.unitWeightG), sourceMacros: ex.sourceMacros,
+      cookingYield: numStr(ex.cookingYield),
     });
     setCarried(carriedFrom(ex));
     if (entrada !== undefined) setEntradaUsda(entrada);
@@ -198,6 +211,8 @@ export default function AgregarAlimentoScreen() {
         // schema no admite "manual": se manda "ai" y NO se toca `form.sourceMacros`.
         sourceMacros: form.sourceMacros === "label" ? "label" : "ai",
         searchQuery: identification.searchQuery,
+        // Idem: no se usa de la respuesta (que solo trae micros), pero el schema lo exige.
+        cookingYield: optNum(form.cookingYield),
       };
       const ex = await aiMicrosForFood(baseUrl.current, idReq);
       setCarried(carriedFrom(ex)); // los 24 micros no editables + sourceMicros "ai" + usdaFdcId null
@@ -255,6 +270,25 @@ export default function AgregarAlimentoScreen() {
     }
   }
 
+  /**
+   * "Estimar con IA" del factor de cocción: le pasa el NOMBRE del alimento (el que el usuario ve
+   * en este formulario, no necesariamente el guardado) y precarga el campo. No persiste nada — el
+   * usuario puede editar el número antes de guardar, y recién `save()` lo manda al PATCH.
+   */
+  async function onEstimateYield() {
+    setError(null);
+    if (!baseUrl.current || form.name.trim() === "") return;
+    setEstimandoYield(true);
+    try {
+      const res = await estimateCookingYield(baseUrl.current, form.name.trim());
+      setForm((f) => ({ ...f, cookingYield: res.cookingYield == null ? "" : String(res.cookingYield) }));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setEstimandoYield(false);
+    }
+  }
+
   async function save() {
     setError(null);
     const saltG = optNum(form.salt_g);
@@ -270,9 +304,15 @@ export default function AgregarAlimentoScreen() {
       cholesterol_mg: optNum(form.cholesterol_mg), water_ml: optNum(form.water_ml),
       unitWeightG: form.unitWeightG.trim() === "" ? null : num(form.unitWeightG),
       sourceMacros: form.sourceMacros, sourceMicros: carried.sourceMicros, usdaFdcId: carried.usdaFdcId,
+      // Una receta nunca tiene factor de cocción propio (el campo ni se muestra para ella): se
+      // fuerza null en vez de confiar en que el form quedó vacío.
+      cookingYield: isRecipe || form.cookingYield.trim() === "" ? null : num(form.cookingYield),
     };
     if (!input.name || [input.kcal, input.protein_g, input.carbs_g, input.fat_g].some((n) => Number.isNaN(n) || n < 0)) {
       setError("Completá nombre y macros (kcal/proteína/carbos/grasa) con números válidos."); return;
+    }
+    if (input.cookingYield != null && (Number.isNaN(input.cookingYield) || input.cookingYield < MIN_COOKING_YIELD || input.cookingYield > MAX_COOKING_YIELD)) {
+      setError(`El factor de cocción tiene que ser un número entre ${MIN_COOKING_YIELD} y ${MAX_COOKING_YIELD}.`); return;
     }
     // Los micros son opcionales: si el usuario tipeó algo, tiene que ser un número >= 0.
     // La sal se valida en SAL, no en sodio: el mensaje de error tiene que hablar del campo que el
@@ -443,6 +483,37 @@ export default function AgregarAlimentoScreen() {
       {field(`Colesterol (mg, opcional)`, "cholesterol_mg", "numeric")}
       {field(`Agua (ml por 100${form.basis === "per_100ml" ? "ml" : "g"}, opcional)`, "water_ml", "numeric")}
       {field("Peso por unidad (opcional)", "unitWeightG", "numeric")}
+
+      {/* Una receta deriva sus valores de sus ingredientes: no tiene un factor de cocción propio
+          (ver el guard de `isRecipe` más arriba). Para el resto del catálogo, dejarlo vacío es lo
+          mismo que hoy — el alimento no cambia de peso al cocinarse. */}
+      {!isRecipe && (
+        <View style={{ gap: spacing.xs }}>
+          <Text style={{ color: colors.textMuted, fontSize: 13 }}>Factor de cocción (cocido ÷ seco, opcional)</Text>
+          <View style={{ flexDirection: "row", gap: spacing.sm, alignItems: "center" }}>
+            <TextInput
+              value={form.cookingYield}
+              onChangeText={(v) => setForm((f) => ({ ...f, cookingYield: v }))}
+              keyboardType="numeric"
+              placeholder="p.ej. 2.2"
+              placeholderTextColor={colors.icon}
+              style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.md, color: colors.text }}
+            />
+            <Pressable
+              testID="estimar-yield"
+              accessibilityRole="button"
+              onPress={() => void onEstimateYield()}
+              disabled={estimandoYield || form.name.trim() === ""}
+              style={{ backgroundColor: colors.accentSoft, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md, opacity: estimandoYield || form.name.trim() === "" ? 0.5 : 1 }}
+            >
+              <Text style={{ color: colors.accentText, fontWeight: "600" }}>{estimandoYield ? "Estimando…" : "Estimar con IA"}</Text>
+            </Pressable>
+          </View>
+          <Text style={{ color: colors.icon, fontSize: 12 }}>
+            Dejalo vacío si el alimento no cambia de peso al cocinarse.
+          </Text>
+        </View>
+      )}
 
       {/* Spec: la vista "full" del semáforo vive solo en modo edición. En alta, `fat_g` recién
           escrito puede ser "" — y `num("")` da 0, no NaN — así que mostrarla acá pintaría
