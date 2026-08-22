@@ -58,15 +58,16 @@ export async function generateProgramForProfile(input: {
   memory?: string;
   progressSummary?: string;
   ecgSummary?: string;
+  workObjective?: string;
   oneOff?: OneOffArgs;
 }): Promise<Program> {
-  const { profile, apiKey, model, ai, historySummary, memory, progressSummary, ecgSummary, oneOff } = input;
+  const { profile, apiKey, model, ai, historySummary, memory, progressSummary, ecgSummary, workObjective, oneOff } = input;
 
   // Fase A: generación con reintento por catalogIds inexistentes (invariante: todos los IDs válidos).
   let program: Program | null = null;
   let lastBad: string[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
-    const candidate = await ai.generateProgram({ profile, apiKey, model, historySummary, memory, progressSummary, ecgSummary, oneOff });
+    const candidate = await ai.generateProgram({ profile, apiKey, model, historySummary, memory, progressSummary, ecgSummary, workObjective, oneOff });
     lastBad = unknownCatalogIds(candidate);
     if (lastBad.length === 0) { program = candidate; break; }
   }

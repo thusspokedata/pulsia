@@ -3,6 +3,7 @@ import type { Program, TrainingProfile } from "@pulsia/shared";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   ProgramSchema,
+  ProgramGenerationSchema,
   EcgAnalysisSchema,
   FoodIdentificationSchema,
   FoodMicrosEstimateSchema,
@@ -36,6 +37,7 @@ export interface AiClient {
     memory?: string;
     progressSummary?: string;
     ecgSummary?: string;
+    workObjective?: string;
     oneOff?: OneOffArgs;
   }): Promise<Program>;
   updateMemory?(input: {
@@ -181,7 +183,7 @@ export async function callStructuredToolWithSearch<S extends z.ZodType>({
 }
 
 export class AnthropicAiClient implements AiClient {
-  async generateProgram({ profile, apiKey, model, historySummary, memory, progressSummary, ecgSummary, oneOff }: {
+  async generateProgram({ profile, apiKey, model, historySummary, memory, progressSummary, ecgSummary, workObjective, oneOff }: {
     profile: TrainingProfile;
     apiKey: string;
     model: string;
@@ -189,19 +191,20 @@ export class AnthropicAiClient implements AiClient {
     memory?: string;
     progressSummary?: string;
     ecgSummary?: string;
+    workObjective?: string;
     oneOff?: OneOffArgs;
   }): Promise<Program> {
     const client = new Anthropic({ apiKey });
     const content = oneOff
       ? buildOneOffPrompt(profile, oneOff)
-      : buildGenerationPrompt(profile, historySummary, memory, progressSummary, ecgSummary);
+      : buildGenerationPrompt(profile, historySummary, memory, progressSummary, ecgSummary, workObjective);
     return callStructuredTool({
       client,
       model,
       maxTokens: 16000,
-      schema: ProgramSchema,
+      schema: oneOff ? ProgramSchema : ProgramGenerationSchema,
       toolName: "return_program",
-      description: "Devuelve el programa de entrenamiento generado.",
+      description: "Devuelve el programa de entrenamiento generado (con rationale por día y global).",
       content,
       truncatedMsg: "La respuesta de la IA se truncó por max_tokens. Reducí el alcance del programa o subí max_tokens.",
       missingMsg: "La IA no devolvió un programa estructurado",

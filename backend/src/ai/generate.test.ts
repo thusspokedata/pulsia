@@ -108,6 +108,15 @@ test("Fase B: si la reparación lanza (error IA) → conserva el día original, 
   expect(result.weeks[0].workouts[0].exercises.length).toBe(2);
 });
 
+test("generateProgramForProfile pasa el workObjective al cliente", async () => {
+  let seen: any = null;
+  const ai: AiClient = {
+    generateProgram: async (input: any) => { seen = input; return { name: "P", rationale: "g", weeks: [] }; },
+  };
+  await generateProgramForProfile({ profile, apiKey: "k", model: "m", ai, workObjective: "mi norte" });
+  expect(seen.workObjective).toBe("mi norte");
+});
+
 test("Fase B: no corre para generaciones oneOff (el pedido ya fija el objetivo)", async () => {
   let calls = 0;
   const badDay: Program = JSON.parse(JSON.stringify(programBadDay));
