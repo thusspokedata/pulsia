@@ -2,6 +2,11 @@ import { getExerciseById, exercisesOutOfScope, type Program, type TrainingProfil
 import type { AiClient } from "./client";
 import type { OneOffArgs } from "./oneoff";
 
+// Nota honesta y genérica que reemplaza al rationale de un día re-planeado por la Fase B (la
+// reparación por oneOff no emite rationale, y el previo describiría ejercicios ya reemplazados).
+export const AUTO_ADJUST_RATIONALE =
+  "Este día se ajustó automáticamente para respetar el objetivo muscular del día.";
+
 function unknownCatalogIds(program: Program): string[] {
   const bad: string[] = [];
   for (const w of program.weeks)
@@ -82,11 +87,11 @@ export async function generateProgramForProfile(input: {
       for (const workout of week.workouts) {
         if (exercisesOutOfScope(workout, getExerciseById).length === 0) continue;
         const repaired = await repairDayExercises({ workout, profile, apiKey, model, ai });
-        // Al reemplazar los ejercicios, el `rationale` del día queda CLEARED a propósito (no
-        // conservado): el oneOff de la reparación usa buildOneOffPrompt, que nunca pide/emite
-        // rationale, así que cualquier rationale previo describiría ejercicios que ya no están.
-        // La UI cae a su fallback "regenerá" en vez de mostrar una justificación stale.
-        if (repaired) { workout.exercises = repaired; workout.rationale = undefined; }
+        // Al reemplazar los ejercicios, el `rationale` previo describiría ejercicios que ya no
+        // están (el oneOff de la reparación usa buildOneOffPrompt, que no emite rationale). No se
+        // conserva (sería stale) ni se vacía (mostraría el fallback "regenerá" en un plan recién
+        // generado): se pone una nota honesta y genérica del ajuste automático.
+        if (repaired) { workout.exercises = repaired; workout.rationale = AUTO_ADJUST_RATIONALE; }
       }
     }
   }
