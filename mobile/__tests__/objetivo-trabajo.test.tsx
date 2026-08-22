@@ -3,9 +3,9 @@ import ObjetivoTrabajoScreen from "../app/objetivo-trabajo";
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
 jest.mock("../src/storage/config", () => ({ getBackendUrl: async () => "http://x" }));
-const mockGet = jest.fn(async () => "mi norte");
-const mockPut = jest.fn(async (_u: string, c: string) => c);
-const mockDraft = jest.fn(async () => "borrador IA");
+const mockGet = jest.fn((..._a: any[]): Promise<string> => Promise.resolve("mi norte"));
+const mockPut = jest.fn((...a: any[]): Promise<string> => Promise.resolve(a[1]));
+const mockDraft = jest.fn((..._a: any[]): Promise<string> => Promise.resolve("borrador IA"));
 jest.mock("../src/api/objective", () => ({
   getObjective: (...a: any[]) => mockGet(...a),
   putObjective: (...a: any[]) => mockPut(...a),
