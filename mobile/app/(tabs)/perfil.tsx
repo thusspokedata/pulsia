@@ -231,6 +231,13 @@ export default function PerfilScreen() {
       >
         <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: "600" }}>Objetivo de trabajo →</Text>
       </Pressable>
+      <Pressable
+        testID="perfil-plan-trabajo-link"
+        onPress={() => router.push("/plan-trabajo")}
+        style={{ alignItems: "center", paddingVertical: spacing.sm }}
+      >
+        <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: "600" }}>Plan de trabajo (el porqué) →</Text>
+      </Pressable>
 
       <View>
         <Text style={label}>¿Querés que la app arme un plan de entrenamiento?</Text>
