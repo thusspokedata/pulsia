@@ -87,3 +87,19 @@ test("ProgramGenerationSchema EXIGE rationale por día aunque el global esté", 
   });
   expect(r.success).toBe(false);
 });
+
+test("ProgramGenerationSchema rechaza rationale global whitespace-only", () => {
+  const r = ProgramGenerationSchema.safeParse({
+    name: "P", rationale: "   ",
+    weeks: [{ weekNumber: 1, workouts: [{ ...day, rationale: "d" }] }],
+  });
+  expect(r.success).toBe(false);
+});
+
+test("ProgramGenerationSchema rechaza rationale de día whitespace-only", () => {
+  const r = ProgramGenerationSchema.safeParse({
+    name: "P", rationale: "g",
+    weeks: [{ weekNumber: 1, workouts: [{ ...day, rationale: "   " }] }],
+  });
+  expect(r.success).toBe(false);
+});

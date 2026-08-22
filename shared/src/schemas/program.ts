@@ -39,10 +39,10 @@ export const ProgramSchema = z.object({
 
 // Variante ESTRICTA usada SOLO por la generación completa (no oneOff): fuerza a la IA a emitir el
 // rationale global y el de cada día. El objeto resultante sigue siendo asignable a `Program`.
-const StrictWorkoutSchema = WorkoutSchema.extend({ rationale: z.string().min(1) });
+const StrictWorkoutSchema = WorkoutSchema.extend({ rationale: z.string().trim().min(1) });
 const StrictWeekSchema = WeekSchema.extend({ workouts: z.array(StrictWorkoutSchema) });
 export const ProgramGenerationSchema = ProgramSchema.extend({
-  rationale: z.string().min(1),
+  rationale: z.string().trim().min(1),
   weeks: z.array(StrictWeekSchema).min(1).max(12),
 });
 
