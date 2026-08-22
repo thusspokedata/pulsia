@@ -224,6 +224,13 @@ export default function PerfilScreen() {
       >
         <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: "600" }}>Qué sabe la IA de mí →</Text>
       </Pressable>
+      <Pressable
+        testID="perfil-objetivo-link"
+        onPress={() => router.push("/objetivo-trabajo")}
+        style={{ alignItems: "center", paddingVertical: spacing.sm }}
+      >
+        <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: "600" }}>Objetivo de trabajo →</Text>
+      </Pressable>
 
       <View>
         <Text style={label}>¿Querés que la app arme un plan de entrenamiento?</Text>
