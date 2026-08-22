@@ -10,6 +10,7 @@ import type { MiddlewareHandler } from "hono";
 import { requireAuth } from "./auth/middleware";
 import { sessionsRoutes } from "./routes/sessions";
 import { memoryRoutes } from "./routes/memory";
+import { objectiveRoutes } from "./routes/objective";
 import { appReleaseRoutes } from "./routes/appRelease";
 import { metricsRoutes } from "./routes/metrics";
 import { ecgRoutes } from "./routes/ecg";
@@ -61,6 +62,8 @@ export function createApp(deps: AppDeps) {
   app.use("/profile/*", auth);
   app.use("/memory", auth);
   app.use("/memory/*", auth);
+  app.use("/objective", auth);
+  app.use("/objective/*", auth);
   app.use("/app", auth);
   app.use("/app/*", auth);
   app.use("/sessions", auth);
@@ -80,6 +83,7 @@ export function createApp(deps: AppDeps) {
   app.route("/profile", profileRoutes(deps));
   app.route("/sessions", sessionsRoutes(deps));
   app.route("/memory", memoryRoutes(deps));
+  app.route("/objective", objectiveRoutes(deps));
   app.route("/app", appReleaseRoutes(deps));
   app.route("/metrics", metricsRoutes(deps));
   app.route("/ecg", ecgRoutes(deps));
