@@ -18,3 +18,14 @@ test("carga el objetivo y permite sugerir con IA", async () => {
   fireEvent.press(getByText(/Sugerir con IA/i));
   await waitFor(() => expect(getByTestId("objetivo-input").props.value).toBe("borrador IA"));
 });
+
+test("Guardar llama a putObjective con el contenido editado", async () => {
+  const { getByTestId, getByText } = await render(<ObjetivoTrabajoScreen />);
+  await waitFor(() => expect(getByTestId("objetivo-input").props.value).toBe("mi norte"));
+
+  fireEvent.changeText(getByTestId("objetivo-input"), "nuevo objetivo editado");
+  await waitFor(() => expect(getByTestId("objetivo-input").props.value).toBe("nuevo objetivo editado"));
+  fireEvent.press(getByText(/^Guardar$/i));
+
+  await waitFor(() => expect(mockPut).toHaveBeenCalledWith("http://x", "nuevo objetivo editado"));
+});

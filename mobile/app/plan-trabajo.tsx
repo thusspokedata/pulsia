@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { ScrollView, View, Text, TextInput, Pressable } from "react-native";
+import { useEffect, useState } from "react";
+import { ScrollView, View, Text } from "react-native";
 import { buildGoalRationale, type Program } from "@pulsia/shared";
 import { getBackendUrl } from "../src/storage/config";
-import { getObjective, putObjective, draftObjective } from "../src/api/objective";
 import { getStoredProgram } from "../src/storage/program";
 import { loadDailyGoalContext } from "../src/nutrition/dailyGoal";
+import ObjectiveEditor from "../src/components/ObjectiveEditor";
 import { colors, radius, spacing } from "../src/theme/tokens";
 import { useScreenPadding } from "../src/theme/screen";
 
@@ -15,19 +15,12 @@ const bullet = { color: colors.textMuted, fontSize: 13, lineHeight: 19 } as cons
 /**
  * Pantalla global "Plan de trabajo": junta en un solo lugar el objetivo (editable), la meta
  * nutricional con su porqué determinista, y el programa actual con su porqué (global + por día,
- * de TODAS las semanas). No inventa cálculos propios: reusa getObjective/putObjective/draftObjective
- * (Fase 1), loadDailyGoalContext + buildGoalRationale (Fase 2) y getStoredProgram (el programa vive
- * en AsyncStorage, no hay endpoint "último programa").
+ * de TODAS las semanas). No inventa cálculos propios: reusa ObjectiveEditor (Fase 1),
+ * loadDailyGoalContext + buildGoalRationale (Fase 2) y getStoredProgram (el programa vive en
+ * AsyncStorage, no hay endpoint "último programa").
  */
 export default function PlanTrabajoScreen() {
   const screenPad = useScreenPadding(spacing.xl);
-  const baseUrl = useRef<string | null>(null);
-
-  // Objetivo de trabajo (editable inline, misma UX que objetivo-trabajo.tsx).
-  const [objectiveContent, setObjectiveContent] = useState("");
-  const [objectiveLoading, setObjectiveLoading] = useState(true);
-  const [objectiveBusy, setObjectiveBusy] = useState<null | "save" | "draft">(null);
-  const [objectiveError, setObjectiveError] = useState<string | null>(null);
 
   // Meta nutricional + su porqué.
   const [goalLines, setGoalLines] = useState<string[] | null>(null);
@@ -41,13 +34,8 @@ export default function PlanTrabajoScreen() {
   useEffect(() => {
     (async () => {
       const url = await getBackendUrl();
-      baseUrl.current = url;
-      if (!url) { setObjectiveError("Configurá el backend"); setObjectiveLoading(false); setGoalLoading(false); }
+      if (!url) { setGoalLoading(false); }
       else {
-        try { setObjectiveContent(await getObjective(url)); }
-        catch { setObjectiveError("No se pudo cargar el objetivo"); }
-        finally { setObjectiveLoading(false); }
-
         try {
           const ctx = await loadDailyGoalContext(url);
           if (ctx.goalResult?.status === "ok" && ctx.goalInput) {
@@ -68,21 +56,6 @@ export default function PlanTrabajoScreen() {
     })();
   }, []);
 
-  async function onObjectiveDraft() {
-    const url = baseUrl.current; if (!url) return;
-    setObjectiveBusy("draft"); setObjectiveError(null);
-    try { setObjectiveContent(await draftObjective(url)); }
-    catch { setObjectiveError("No se pudo sugerir el objetivo"); }
-    finally { setObjectiveBusy(null); }
-  }
-  async function onObjectiveSave() {
-    const url = baseUrl.current; if (!url) return;
-    setObjectiveBusy("save"); setObjectiveError(null);
-    try { setObjectiveContent(await putObjective(url, objectiveContent)); }
-    catch { setObjectiveError("No se pudo guardar el objetivo"); }
-    finally { setObjectiveBusy(null); }
-  }
-
   // Rationales del programa: se consideran TODAS las semanas, no solo la primera —
   // de lo contrario un rationale que solo existe en una semana posterior queda oculto
   // y la pantalla puede mostrar erróneamente la nota de "regenerá el plan".
@@ -97,28 +70,7 @@ export default function PlanTrabajoScreen() {
       {/* 1. Objetivo de trabajo */}
       <View style={{ gap: spacing.md }}>
         <Text style={sectionTitle}>Objetivo de trabajo</Text>
-        {objectiveError && <Text style={{ color: colors.danger, fontSize: 12 }}>{objectiveError}</Text>}
-        {objectiveLoading ? (
-          <Text style={{ color: colors.textMuted }}>Cargando…</Text>
-        ) : (
-          <TextInput
-            testID="objetivo-input"
-            value={objectiveContent}
-            onChangeText={setObjectiveContent}
-            multiline
-            placeholder="Ej: recomposición en 12 semanas, priorizar fuerza en tren superior…"
-            placeholderTextColor={colors.textMuted}
-            style={{ backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, color: colors.text, fontSize: 14, minHeight: 120, textAlignVertical: "top" }}
-          />
-        )}
-        <Pressable testID="objetivo-sugerir" onPress={onObjectiveDraft} disabled={objectiveBusy != null || objectiveLoading || !baseUrl.current}
-          style={{ borderColor: colors.accent, borderWidth: 1, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center", opacity: objectiveBusy || !baseUrl.current ? 0.6 : 1 }}>
-          <Text style={{ color: colors.accentText, fontWeight: "600" }}>{objectiveBusy === "draft" ? "Sugiriendo…" : "Sugerir con IA"}</Text>
-        </Pressable>
-        <Pressable testID="objetivo-guardar" onPress={onObjectiveSave} disabled={objectiveBusy != null || objectiveLoading || !baseUrl.current}
-          style={{ backgroundColor: colors.accent, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center", opacity: objectiveBusy || !baseUrl.current ? 0.6 : 1 }}>
-          <Text style={{ color: "#fff", fontWeight: "600" }}>{objectiveBusy === "save" ? "Guardando…" : "Guardar"}</Text>
-        </Pressable>
+        <ObjectiveEditor />
       </View>
 
       {/* 2. Meta nutricional + su porqué */}
