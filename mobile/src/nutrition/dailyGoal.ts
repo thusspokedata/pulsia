@@ -1,5 +1,5 @@
 import { computeNutritionGoal } from "@pulsia/shared";
-import type { NutritionGoalResult, TrainingProfile } from "@pulsia/shared";
+import type { NutritionGoalInput, NutritionGoalResult, TrainingProfile } from "@pulsia/shared";
 import { getNutritionGoal } from "../api/nutrition";
 import { getProfile } from "../storage/profile";
 import { getLatestMetrics } from "../api/metrics";
@@ -8,6 +8,10 @@ export interface DailyGoalContext {
   profile: TrainingProfile | null;
   weightKg?: number;
   goalResult: NutritionGoalResult | null;
+  // El insumo crudo (objective/rateKgPerWeek/manualKcal) que ya se buscó para computar goalResult.
+  // Se expone para que pantallas como Plan de trabajo puedan reconstruir buildGoalRationale(...) sin
+  // volver a pedir el objetivo por su cuenta (una sola fuente de verdad para el "porqué" de la meta).
+  goalInput: NutritionGoalInput | null;
 }
 
 /**
@@ -37,5 +41,5 @@ export async function loadDailyGoalContext(url: string): Promise<DailyGoalContex
         objective: goalInput.objective, rateKgPerWeek: goalInput.rateKgPerWeek, manualKcal: goalInput.manualKcal,
       })
     : null;
-  return { profile, weightKg, goalResult };
+  return { profile, weightKg, goalResult, goalInput: goalInput ?? null };
 }

@@ -35,7 +35,7 @@ export function useNutritionDay(offset: number): NutritionDay {
   const baseUrl = useRef<string | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [water, setWater] = useState<WaterLog[]>([]);
-  const [goalCtx, setGoalCtx] = useState<DailyGoalContext>({ profile: null, goalResult: null });
+  const [goalCtx, setGoalCtx] = useState<DailyGoalContext>({ profile: null, goalResult: null, goalInput: null });
   const [daySessions, setDaySessions] = useState<SessionListItem[]>([]);
   const [dayCardio, setDayCardio] = useState<CardioBurnInput[]>([]);
   const [supplementNutrients, setSupplementNutrients] = useState<Partial<Record<NutrientKey, number>>>({});
