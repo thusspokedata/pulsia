@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { ProgramSchema } from "./program";
+import { ProgramSchema, ProgramGenerationSchema } from "./program";
 
 test("acepta un programa válido de 1 semana", () => {
   const program = {
@@ -59,4 +59,31 @@ test("rechaza catalogId vacío en un ejercicio", () => {
       ] }] }],
     }),
   ).toThrow();
+});
+
+const day = { dayLabel: "D1", location: "gym", targetMuscles: ["back"], exercises: [] };
+
+test("ProgramSchema acepta programas viejos SIN rationale", () => {
+  const r = ProgramSchema.safeParse({ name: "P", weeks: [{ weekNumber: 1, workouts: [day] }] });
+  expect(r.success).toBe(true);
+});
+
+test("ProgramSchema acepta rationale opcional", () => {
+  const r = ProgramSchema.safeParse({ name: "P", rationale: "porqué global", weeks: [{ weekNumber: 1, workouts: [{ ...day, rationale: "porqué del día" }] }] });
+  expect(r.success).toBe(true);
+});
+
+test("ProgramGenerationSchema EXIGE rationale global y por día", () => {
+  const sinRat = ProgramGenerationSchema.safeParse({ name: "P", weeks: [{ weekNumber: 1, workouts: [day] }] });
+  expect(sinRat.success).toBe(false);
+  const conRat = ProgramGenerationSchema.safeParse({ name: "P", rationale: "g", weeks: [{ weekNumber: 1, workouts: [{ ...day, rationale: "d" }] }] });
+  expect(conRat.success).toBe(true);
+});
+
+test("ProgramGenerationSchema EXIGE rationale por día aunque el global esté", () => {
+  const r = ProgramGenerationSchema.safeParse({
+    name: "P", rationale: "global presente",
+    weeks: [{ weekNumber: 1, workouts: [day] }], // day SIN rationale
+  });
+  expect(r.success).toBe(false);
 });

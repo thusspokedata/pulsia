@@ -20,6 +20,7 @@ export function buildGenerationPrompt(
   memory?: string,
   progressSummary?: string,
   ecgSummary?: string,
+  workObjective?: string,
 ): string {
   const allEquipment = Array.from(
     new Set<Equipment>([...profile.gymEquipment, ...profile.homeEquipment]),
@@ -52,6 +53,14 @@ export function buildGenerationPrompt(
     "4. Respetá las limitaciones del atleta.",
     "5. Generá un programa de 2 semanas, con un máximo de 5 ejercicios por día.",
     "6. Cada día representa un OBJETIVO de entrenamiento. Por cada día emití el campo targetMuscles con los grupos musculares que entrena ese día (p.ej. un día de espalda y bíceps: [\"back\",\"biceps\"]). Cada ejercicio del día debe entrenar principalmente al menos uno de esos grupos (su primaryMuscles). No mezcles grupos ajenos al objetivo del día (p.ej. no pongas un ejercicio de pierna en un día de espalda/bíceps). Los ejercicios full_body pueden ir en cualquier día.",
+    "7. Emití además, en lenguaje claro y conciso (español): un campo `rationale` a nivel del programa (por qué este plan sirve al objetivo del atleta) y un campo `rationale` por cada día (qué grupos entrena, por qué esos ejercicios/series, cómo se conecta con el objetivo). Máximo ~2 frases por rationale.",
+    ...(workObjective && workObjective.trim()
+      ? [
+          "",
+          "Objetivo de trabajo del atleta (el norte fijado por la persona): justificá cada día y el programa contra este objetivo.",
+          workObjective,
+        ]
+      : []),
     ...(historySummary && historySummary.trim()
       ? [
           "",

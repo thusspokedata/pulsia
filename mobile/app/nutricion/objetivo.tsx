@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, View, Text, TextInput, Pressable } from "react-native";
 import { router } from "expo-router";
-import { computeNutritionGoal, type NutritionObjective } from "@pulsia/shared";
+import { buildGoalRationale, computeNutritionGoal, type NutritionObjective } from "@pulsia/shared";
 import { getProfile } from "../../src/storage/profile";
 import { getBackendUrl } from "../../src/storage/config";
 import { getLatestMetrics } from "../../src/api/metrics";
@@ -55,12 +55,13 @@ export default function ObjetivoScreen() {
   }, []);
 
   const manual = manualKcal.trim() === "" ? null : Number(manualKcal.replace(",", "."));
-  const result = computeNutritionGoal({
+  const goalArgs = {
     sex: profile?.sex, age: profile?.age, heightCm: profile?.heightCm, weightKg,
     activityLevel: profile?.activityLevel,
     objective, rateKgPerWeek: objective === "maintain" ? 0 : Number(rate),
     manualKcal: manual != null && Number.isFinite(manual) && manual > 0 ? manual : null,
-  });
+  };
+  const result = computeNutritionGoal(goalArgs);
 
   async function save() {
     if (!baseUrl.current) { setError("No se pudo conectar con el servidor."); return; }
@@ -113,6 +114,15 @@ export default function ObjetivoScreen() {
           </>
         )}
       </View>
+
+      {result.status === "ok" && (
+        <View style={card}>
+          <Text style={{ color: colors.text, fontWeight: "600" }}>¿Por qué esta meta?</Text>
+          {buildGoalRationale(result, goalArgs).lines.map((line, i) => (
+            <Text key={i} style={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>• {line}</Text>
+          ))}
+        </View>
+      )}
 
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
       <Pressable onPress={save} disabled={saving} style={{ backgroundColor: colors.accent, borderRadius: radius.md, padding: spacing.md, alignItems: "center", opacity: saving ? 0.6 : 1 }}>

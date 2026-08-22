@@ -1,6 +1,7 @@
-import { test, expect } from "bun:test";
+import { test, expect, mock } from "bun:test";
 import { z } from "zod";
 import type Anthropic from "@anthropic-ai/sdk";
+import type { TrainingProfile } from "@pulsia/shared";
 import { callStructuredTool, callStructuredToolWithSearch } from "./client";
 
 const EsquemaTest = z.object({ nombre: z.string(), series: z.number() });
@@ -126,4 +127,77 @@ test("callStructuredToolWithSearch tira 'trunc' si se cortó por max_tokens", as
     client, model: "m", maxTokens: 100, schema: microsSchema, toolName: "return_food_micros",
     description: "d", content: "prompt", truncatedMsg: "trunc", missingMsg: "missing",
   })).rejects.toThrow("trunc");
+});
+
+// --- AnthropicAiClient.generateProgram: la selección de schema (oneOff ? ProgramSchema : ProgramGenerationSchema) ---
+// AnthropicAiClient construye `new Anthropic(...)` internamente (no es inyectable como los tests de
+// arriba, que le pasan un `client` fake a callStructuredTool). Para ejercitar la línea real hay que
+// mockear el módulo del SDK: cualquier regresión en el ternario, o que ProgramGenerationSchema deje
+// de ser estricto, pasaría desapercibida sin esto (los fakes de AiClient de otros tests bypasean Zod).
+let capturedCreateReq: any = null;
+mock.module("@anthropic-ai/sdk", () => ({
+  default: class FakeAnthropicSdk {
+    messages: { create: (req: unknown) => Promise<unknown> };
+    constructor() {
+      this.messages = {
+        create: async (req: unknown) => {
+          capturedCreateReq = req;
+          return {
+            stop_reason: "tool_use",
+            content: [
+              {
+                type: "tool_use",
+                id: "tu_1",
+                name: "return_program",
+                // Programa SIN rationale en ningún nivel (ni global ni por día): parsea con
+                // ProgramSchema (lenient) pero NO con ProgramGenerationSchema (estricto).
+                input: {
+                  name: "P",
+                  weeks: [
+                    {
+                      weekNumber: 1,
+                      workouts: [
+                        { dayLabel: "D1", location: "gym", targetMuscles: ["chest"], exercises: [] },
+                      ],
+                    },
+                  ],
+                },
+              },
+            ],
+          };
+        },
+      };
+    }
+  },
+}));
+
+const programProfile: TrainingProfile = {
+  experience: "beginner",
+  goal: "general_fitness",
+  daysPerWeek: 2,
+  sessionMinutes: 45,
+  gymEquipment: [],
+  homeEquipment: [],
+  limitations: [],
+};
+
+test("generateProgram completo (sin oneOff) usa el schema ESTRICTO: rechaza un programa sin rationale", async () => {
+  const { AnthropicAiClient } = await import("./client");
+  const client = new AnthropicAiClient();
+  await expect(
+    client.generateProgram({ profile: programProfile, apiKey: "k", model: "m" }),
+  ).rejects.toThrow();
+  expect(capturedCreateReq.model).toBe("m");
+});
+
+test("generateProgram oneOff usa el schema LENIENTE: acepta el mismo programa sin rationale", async () => {
+  const { AnthropicAiClient } = await import("./client");
+  const client = new AnthropicAiClient();
+  const result = await client.generateProgram({
+    profile: programProfile,
+    apiKey: "k",
+    model: "m",
+    oneOff: { location: "gym", focus: ["chest"], sessionMinutes: 45, equipment: [] },
+  });
+  expect(result.name).toBe("P");
 });

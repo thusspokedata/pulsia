@@ -4,6 +4,7 @@ import { programs, generationJobs, settings } from "../db/schema";
 import { getRecentSessions, getSessionsSince } from "../sessions/repository";
 import { buildTrainingHistorySummary } from "../ai/history";
 import { getMemory } from "../memory/repository";
+import { getWorkObjective } from "../objective/repository";
 import { refreshAthleteMemory } from "../memory/service";
 import { generateProgramForProfile } from "../ai/generate";
 import { buildProgressSummary, PROGRESS_WINDOW_MS } from "../ai/progress";
@@ -26,6 +27,7 @@ export async function runGenerationJob(
     const recent = await getRecentSessions(deps.db, userId, 6);
     const historySummary = buildTrainingHistorySummary(recent);
     const memory = await getMemory(deps.db, userId);
+    const workObjective = await getWorkObjective(deps.db, userId);
     const since = Date.now() - PROGRESS_WINDOW_MS;
     const [metrics, sessionsForProgress] = await Promise.all([
       getMetricsSince(deps.db, userId, since),
@@ -39,7 +41,7 @@ export async function runGenerationJob(
       const recordings = await priorEcgFor(deps.db, userId);
       ecgSummary = buildEcgSummary(recordings) || undefined;
     }
-    const program = await generateProgramForProfile({ profile, apiKey, model, ai: deps.aiClient, historySummary, memory, progressSummary, ecgSummary });
+    const program = await generateProgramForProfile({ profile, apiKey, model, ai: deps.aiClient, historySummary, memory, progressSummary, ecgSummary, workObjective });
     const inserted = await deps.db
       .insert(programs)
       .values({ userId, name: program.name, data: program, profileSnapshot: profile })

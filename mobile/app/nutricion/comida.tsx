@@ -52,7 +52,7 @@ export default function ComidaDetalleScreen() {
   const screenPad = useScreenPadding(spacing.lg);
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [meal, setMeal] = useState<Meal | null>(null);
-  const [goalCtx, setGoalCtx] = useState<DailyGoalContext>({ profile: null, goalResult: null });
+  const [goalCtx, setGoalCtx] = useState<DailyGoalContext>({ profile: null, goalResult: null, goalInput: null });
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {

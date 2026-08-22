@@ -58,15 +58,16 @@ export async function generateProgramForProfile(input: {
   memory?: string;
   progressSummary?: string;
   ecgSummary?: string;
+  workObjective?: string;
   oneOff?: OneOffArgs;
 }): Promise<Program> {
-  const { profile, apiKey, model, ai, historySummary, memory, progressSummary, ecgSummary, oneOff } = input;
+  const { profile, apiKey, model, ai, historySummary, memory, progressSummary, ecgSummary, workObjective, oneOff } = input;
 
   // Fase A: generación con reintento por catalogIds inexistentes (invariante: todos los IDs válidos).
   let program: Program | null = null;
   let lastBad: string[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
-    const candidate = await ai.generateProgram({ profile, apiKey, model, historySummary, memory, progressSummary, ecgSummary, oneOff });
+    const candidate = await ai.generateProgram({ profile, apiKey, model, historySummary, memory, progressSummary, ecgSummary, workObjective, oneOff });
     lastBad = unknownCatalogIds(candidate);
     if (lastBad.length === 0) { program = candidate; break; }
   }
@@ -81,6 +82,9 @@ export async function generateProgramForProfile(input: {
       for (const workout of week.workouts) {
         if (exercisesOutOfScope(workout, getExerciseById).length === 0) continue;
         const repaired = await repairDayExercises({ workout, profile, apiKey, model, ai });
+        // Solo se reemplazan los ejercicios: el `rationale` del día (si lo hubiera) queda igual a
+        // propósito — el oneOff de la reparación usa buildOneOffPrompt, que nunca pide/emite
+        // rationale, así que no hay uno "nuevo" con el que reemplazarlo.
         if (repaired) workout.exercises = repaired;
       }
     }
