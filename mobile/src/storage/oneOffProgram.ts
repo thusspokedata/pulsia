@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ProgramSchema, type Program } from "@pulsia/shared";
+import { ProgramSchema, migrateLegacyProgramShape, type Program } from "@pulsia/shared";
 
 const PROGRAM_KEY = "pulsia.oneOffProgram";
 const ID_KEY = "pulsia.oneOffProgramId";
@@ -8,7 +8,7 @@ export async function getStoredOneOffProgram(): Promise<Program | null> {
   const raw = await AsyncStorage.getItem(PROGRAM_KEY);
   if (!raw) return null;
   try {
-    const parsed = ProgramSchema.safeParse(JSON.parse(raw));
+    const parsed = ProgramSchema.safeParse(migrateLegacyProgramShape(JSON.parse(raw)));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
