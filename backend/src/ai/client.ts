@@ -15,6 +15,7 @@ import {
 import { buildGenerationPrompt } from "./prompt";
 import { buildOneOffPrompt, type OneOffArgs } from "./oneoff";
 import { buildMemoryUpdatePrompt } from "./memory";
+import { buildWorkObjectiveDraftPrompt } from "./objective";
 import { buildEcgPrompt } from "./ecg";
 import { buildFoodPrompt, buildPickCandidatePrompt, buildSearchQueryPrompt, buildFoodMicrosPrompt, buildCookingYieldPrompt } from "./nutrition";
 import { buildReportPrompt } from "./report";
@@ -41,6 +42,13 @@ export interface AiClient {
     current: string;
     historySummary: string;
     progressSummary?: string;
+    apiKey: string;
+    model: string;
+  }): Promise<string>;
+  draftWorkObjective?(input: {
+    profile: TrainingProfile;
+    memory: string;
+    nutritionObjective: string;
     apiKey: string;
     model: string;
   }): Promise<string>;
@@ -216,6 +224,23 @@ export class AnthropicAiClient implements AiClient {
     const block = res.content.find((b) => b.type === "text");
     const text = block && block.type === "text" ? block.text.trim() : "";
     return text || current;
+  }
+
+  async draftWorkObjective({ profile, memory, nutritionObjective, apiKey, model }: {
+    profile: TrainingProfile;
+    memory: string;
+    nutritionObjective: string;
+    apiKey: string;
+    model: string;
+  }): Promise<string> {
+    const client = new Anthropic({ apiKey });
+    const res = await client.messages.create({
+      model,
+      max_tokens: 512,
+      messages: [{ role: "user", content: buildWorkObjectiveDraftPrompt({ profile, memory, nutritionObjective }) }],
+    });
+    const block = res.content.find((b) => b.type === "text");
+    return block && block.type === "text" ? block.text.trim() : "";
   }
 
   async interpretEcg({ pdfBase64, apiKey, historySummary }: {
