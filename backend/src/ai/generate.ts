@@ -34,7 +34,15 @@ async function repairDayExercises(input: {
     });
     const day = repaired.weeks[0]?.workouts[0];
     if (!day) return null;
-    if (day.exercises.some((ex) => !getExerciseById(ex.catalogId))) return null;
+    // Solo se acepta la reparación si es válida Y realmente queda dentro del objetivo del día:
+    // un catalogId inexistente, o un ejercicio válido pero fuera de targetMuscles, hace que se
+    // conserve el día original (Fase B nunca reemplaza con un día peor). Si queda sin arreglar,
+    // el usuario lo ajusta con el selector de alternativas de la app.
+    const replacement = { ...workout, exercises: day.exercises };
+    if (
+      day.exercises.some((ex) => !getExerciseById(ex.catalogId)) ||
+      exercisesOutOfScope(replacement, getExerciseById).length > 0
+    ) return null;
     return day.exercises;
   } catch {
     return null;

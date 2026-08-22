@@ -85,6 +85,22 @@ test("Fase B: reparación que mete un catalogId inexistente → conserva el día
   expect(result.weeks[0].workouts[0].exercises.map((e) => e.catalogId)).toEqual(["barbell_row", "barbell_front_squat"]);
 });
 
+test("Fase B: reparación válida pero AÚN fuera de objetivo → conserva el día original", async () => {
+  const badDay: Program = JSON.parse(JSON.stringify(programBadDay));
+  // la reparación devuelve un ejercicio de pierna (quads), válido pero fuera de [back,biceps]
+  const repairedStillBad: Program = {
+    name: "Reparado", weeks: [{ weekNumber: 1, workouts: [
+      { dayLabel: "x", location: "gym", targetMuscles: ["back", "biceps"], exercises: [
+        { catalogId: "barbell_front_squat", garminName: "Barbell Front Squat", sets: 3, reps: "8", targetLoad: "RPE 7", restSeconds: 90, notes: "" },
+      ] },
+    ] }],
+  };
+  const ai: AiClient = { generateProgram: async (input) => (input.oneOff ? repairedStillBad : badDay) };
+  const result = await generateProgramForProfile({ profile, apiKey: "k", model: "m", ai });
+  // no se acepta la reparación fuera de objetivo → queda el día original (2 ejercicios)
+  expect(result.weeks[0].workouts[0].exercises.map((e) => e.catalogId)).toEqual(["barbell_row", "barbell_front_squat"]);
+});
+
 test("Fase B: si la reparación lanza (error IA) → conserva el día original, no falla la generación", async () => {
   const badDay: Program = JSON.parse(JSON.stringify(programBadDay));
   const ai: AiClient = { generateProgram: async (input) => { if (input.oneOff) throw new Error("IA caída"); return badDay; } };
