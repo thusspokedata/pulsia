@@ -14,10 +14,10 @@ const bullet = { color: colors.textMuted, fontSize: 13, lineHeight: 19 } as cons
 
 /**
  * Pantalla global "Plan de trabajo": junta en un solo lugar el objetivo (editable), la meta
- * nutricional con su porqué determinista, y el programa actual con su porqué (global + por día).
- * No inventa cálculos propios: reusa getObjective/putObjective/draftObjective (Fase 1),
- * loadDailyGoalContext + buildGoalRationale (Fase 2) y getStoredProgram (el programa vive en
- * AsyncStorage, no hay endpoint "último programa").
+ * nutricional con su porqué determinista, y el programa actual con su porqué (global + por día,
+ * de TODAS las semanas). No inventa cálculos propios: reusa getObjective/putObjective/draftObjective
+ * (Fase 1), loadDailyGoalContext + buildGoalRationale (Fase 2) y getStoredProgram (el programa vive
+ * en AsyncStorage, no hay endpoint "último programa").
  */
 export default function PlanTrabajoScreen() {
   const screenPad = useScreenPadding(spacing.xl);
@@ -83,8 +83,11 @@ export default function PlanTrabajoScreen() {
     finally { setObjectiveBusy(null); }
   }
 
-  const firstWeekWorkouts = program?.weeks[0]?.workouts ?? [];
-  const hasAnyDayRationale = firstWeekWorkouts.some((w) => !!w.rationale);
+  // Rationales del programa: se consideran TODAS las semanas, no solo la primera —
+  // de lo contrario un rationale que solo existe en una semana posterior queda oculto
+  // y la pantalla puede mostrar erróneamente la nota de "regenerá el plan".
+  const weeks = program?.weeks ?? [];
+  const hasAnyDayRationale = weeks.some((wk) => wk.workouts.some((w) => !!w.rationale));
   const hasProgramRationale = !!program?.rationale || hasAnyDayRationale;
 
   return (
@@ -152,14 +155,21 @@ export default function PlanTrabajoScreen() {
                 <Text style={bullet}>{program.rationale}</Text>
               </View>
             )}
-            {firstWeekWorkouts.map((w, i) => (
-              <View key={i} style={card}>
-                <Text style={{ color: colors.text, fontWeight: "600" }}>{w.dayLabel}</Text>
-                {w.rationale ? (
-                  <Text style={bullet}>{w.rationale}</Text>
-                ) : (
-                  <Text style={bullet}>Regenerá el plan para ver el porqué de este día.</Text>
+            {weeks.map((wk) => (
+              <View key={wk.weekNumber} style={{ gap: spacing.md }}>
+                {weeks.length > 1 && (
+                  <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: "600" }}>Semana {wk.weekNumber}</Text>
                 )}
+                {wk.workouts.map((w, i) => (
+                  <View key={i} style={card}>
+                    <Text style={{ color: colors.text, fontWeight: "600" }}>{w.dayLabel}</Text>
+                    {w.rationale ? (
+                      <Text style={bullet}>{w.rationale}</Text>
+                    ) : (
+                      <Text style={bullet}>Regenerá el plan para ver el porqué de este día.</Text>
+                    )}
+                  </View>
+                ))}
               </View>
             ))}
           </>

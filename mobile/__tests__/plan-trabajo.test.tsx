@@ -77,6 +77,30 @@ const programWithRationale: Program = {
   ],
 };
 
+const programWithRationaleOnlyInWeek2: Program = {
+  name: "Programa B",
+  weeks: [
+    {
+      weekNumber: 1,
+      workouts: [
+        { dayLabel: "Día 1 - Empuje", location: "gym", targetMuscles: ["chest"], exercises: [] },
+      ],
+    },
+    {
+      weekNumber: 2,
+      workouts: [
+        {
+          dayLabel: "Día 1 - Empuje",
+          location: "gym",
+          targetMuscles: ["chest"],
+          exercises: [],
+          rationale: "Semana 2: subimos volumen porque toleraste bien la semana 1.",
+        },
+      ],
+    },
+  ],
+};
+
 const programWithoutRationale: Program = {
   name: "Programa Viejo",
   weeks: [
@@ -102,6 +126,18 @@ test("programa CON rationale: muestra el porqué global y el porqué del día", 
 
   await waitFor(() => expect(getByText(/Priorizamos tren superior/i)).toBeTruthy());
   expect(getByText(/Empuje porque el objetivo prioriza press de banca/i)).toBeTruthy();
+});
+
+test("programa con rationale SOLO en la semana 2: se muestra (no solo weeks[0])", async () => {
+  (getStoredProgram as jest.Mock).mockResolvedValue(programWithRationaleOnlyInWeek2);
+
+  const { getByText, queryByText } = await render(<PlanTrabajoScreen />);
+
+  await waitFor(() => expect(getByText(/Semana 2: subimos volumen/i)).toBeTruthy());
+  expect(getByText(/^Semana 2$/)).toBeTruthy();
+  // La nota de gating a nivel programa ("regenerá para ver el porqué de CADA día") no debe
+  // aparecer: hay al menos un rationale (el de la semana 2), aunque esté fuera de weeks[0].
+  expect(queryByText(/Regenerá el plan para ver el porqué de cada día/i)).toBeNull();
 });
 
 test("programa SIN rationale (plan viejo): muestra la nota de regenerar", async () => {
