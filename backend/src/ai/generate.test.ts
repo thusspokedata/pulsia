@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { generateProgramForProfile } from "./generate";
+import { generateProgramForProfile, AUTO_ADJUST_RATIONALE } from "./generate";
 import type { AiClient } from "./client";
 import type { Program, TrainingProfile } from "@pulsia/shared";
 
@@ -76,6 +76,24 @@ test("Fase B: un día malo → 1 reparación; reemplaza ejercicios y preserva me
   expect(day.exercises.map((e) => e.catalogId)).toEqual(["barbell_row"]);
 });
 
+test("Fase B: un día reparado reemplaza su rationale stale por la nota de ajuste automático", async () => {
+  const badDay: Program = JSON.parse(JSON.stringify(programBadDay));
+  badDay.weeks[0].workouts[0].rationale = "justificación de los ejercicios ORIGINALES (ahora reemplazados)";
+  const ai: AiClient = { generateProgram: async (input) => (input.oneOff ? repairedDayProgram : badDay) };
+  const result = await generateProgramForProfile({ profile, apiKey: "k", model: "m", ai });
+  expect(result.weeks[0].workouts[0].rationale).toBe(AUTO_ADJUST_RATIONALE);
+});
+
+test("Fase B: un día NO reparado conserva su rationale", async () => {
+  const ai: AiClient = { generateProgram: async () => {
+    const withRationale: Program = JSON.parse(JSON.stringify(validProgram));
+    withRationale.weeks[0].workouts[0].rationale = "porqué del día, intacto";
+    return withRationale;
+  } };
+  const result = await generateProgramForProfile({ profile, apiKey: "k", model: "m", ai });
+  expect(result.weeks[0].workouts[0].rationale).toBe("porqué del día, intacto");
+});
+
 test("Fase B: reparación que mete un catalogId inexistente → conserva el día original", async () => {
   const badDay: Program = JSON.parse(JSON.stringify(programBadDay));
   const repairedBad: Program = JSON.parse(JSON.stringify(repairedDayProgram));
@@ -106,6 +124,15 @@ test("Fase B: si la reparación lanza (error IA) → conserva el día original, 
   const ai: AiClient = { generateProgram: async (input) => { if (input.oneOff) throw new Error("IA caída"); return badDay; } };
   const result = await generateProgramForProfile({ profile, apiKey: "k", model: "m", ai });
   expect(result.weeks[0].workouts[0].exercises.length).toBe(2);
+});
+
+test("generateProgramForProfile pasa el workObjective al cliente", async () => {
+  let seen: any = null;
+  const ai: AiClient = {
+    generateProgram: async (input: any) => { seen = input; return { name: "P", rationale: "g", weeks: [] }; },
+  };
+  await generateProgramForProfile({ profile, apiKey: "k", model: "m", ai, workObjective: "mi norte" });
+  expect(seen.workObjective).toBe("mi norte");
 });
 
 test("Fase B: no corre para generaciones oneOff (el pedido ya fija el objetivo)", async () => {

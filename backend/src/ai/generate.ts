@@ -2,6 +2,11 @@ import { getExerciseById, exercisesOutOfScope, type Program, type TrainingProfil
 import type { AiClient } from "./client";
 import type { OneOffArgs } from "./oneoff";
 
+// Nota honesta y genérica que reemplaza al rationale de un día re-planeado por la Fase B (la
+// reparación por oneOff no emite rationale, y el previo describiría ejercicios ya reemplazados).
+export const AUTO_ADJUST_RATIONALE =
+  "Este día se ajustó automáticamente para respetar el objetivo muscular del día.";
+
 function unknownCatalogIds(program: Program): string[] {
   const bad: string[] = [];
   for (const w of program.weeks)
@@ -58,15 +63,16 @@ export async function generateProgramForProfile(input: {
   memory?: string;
   progressSummary?: string;
   ecgSummary?: string;
+  workObjective?: string;
   oneOff?: OneOffArgs;
 }): Promise<Program> {
-  const { profile, apiKey, model, ai, historySummary, memory, progressSummary, ecgSummary, oneOff } = input;
+  const { profile, apiKey, model, ai, historySummary, memory, progressSummary, ecgSummary, workObjective, oneOff } = input;
 
   // Fase A: generación con reintento por catalogIds inexistentes (invariante: todos los IDs válidos).
   let program: Program | null = null;
   let lastBad: string[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
-    const candidate = await ai.generateProgram({ profile, apiKey, model, historySummary, memory, progressSummary, ecgSummary, oneOff });
+    const candidate = await ai.generateProgram({ profile, apiKey, model, historySummary, memory, progressSummary, ecgSummary, workObjective, oneOff });
     lastBad = unknownCatalogIds(candidate);
     if (lastBad.length === 0) { program = candidate; break; }
   }
@@ -81,7 +87,11 @@ export async function generateProgramForProfile(input: {
       for (const workout of week.workouts) {
         if (exercisesOutOfScope(workout, getExerciseById).length === 0) continue;
         const repaired = await repairDayExercises({ workout, profile, apiKey, model, ai });
-        if (repaired) workout.exercises = repaired;
+        // Al reemplazar los ejercicios, el `rationale` previo describiría ejercicios que ya no
+        // están (el oneOff de la reparación usa buildOneOffPrompt, que no emite rationale). No se
+        // conserva (sería stale) ni se vacía (mostraría el fallback "regenerá" en un plan recién
+        // generado): se pone una nota honesta y genérica del ajuste automático.
+        if (repaired) { workout.exercises = repaired; workout.rationale = AUTO_ADJUST_RATIONALE; }
       }
     }
   }

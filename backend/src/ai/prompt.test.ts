@@ -92,3 +92,14 @@ test("el prompt pide targetMuscles por día y coherencia ejercicio↔objetivo", 
   expect(p).toContain("targetMuscles");
   expect(p.toLowerCase()).toContain("objetivo del día");
 });
+
+test("el prompt incluye el objetivo de trabajo cuando se pasa", () => {
+  const p = buildGenerationPrompt(profile, undefined, undefined, undefined, undefined, "recomposición en 12 semanas");
+  expect(p).toContain("recomposición en 12 semanas");
+  expect(p.toLowerCase()).toContain("rationale"); // pide justificación
+});
+
+test("sin workObjective el prompt no incluye el bloque de objetivo de trabajo", () => {
+  const p = buildGenerationPrompt(profile);
+  expect(p).not.toContain("Objetivo de trabajo del atleta");
+});

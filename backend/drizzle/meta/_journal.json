@@ -218,6 +218,13 @@
       "when": 1787295136232,
       "tag": "0030_talented_gunslinger",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1787395516309,
+      "tag": "0031_flimsy_hardball",
+      "breakpoints": true
     }
   ]
 }
