@@ -42,6 +42,7 @@ export * from "./nutrition/nutrients";
 export * from "./nutrition/derived";
 export * from "./nutrition/macros";
 export * from "./nutrition/goal";
+export * from "./nutrition/goalRationale";
 export * from "./nutrition/exerciseBurn";
 export * from "./nutrition/references";
 export * from "./nutrition/references.efsa";
