@@ -33,3 +33,10 @@ test("upsertWorkObjective trunca contenido excesivamente largo (cota defensiva)"
   await upsertWorkObjective(db, "u1", "x".repeat(10000));
   expect(db._get().content.length).toBeLessThanOrEqual(MAX_OBJECTIVE_CHARS);
 });
+
+test("upsertWorkObjective REEMPLAZA el contenido existente, no lo acumula", async () => {
+  const db = fakeDb("bajar grasa manteniendo fuerza");
+  await upsertWorkObjective(db, "u1", "recomposición 12 semanas");
+  expect(db._get().content).toBe("recomposición 12 semanas");
+  expect(await getWorkObjective(db, "u1")).toBe("recomposición 12 semanas");
+});
