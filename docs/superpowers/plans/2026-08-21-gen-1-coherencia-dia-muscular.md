@@ -431,7 +431,7 @@ test("Fase B: reparación que mete un catalogId inexistente → conserva el día
   const ai: AiClient = { generateProgram: async (input) => (input.oneOff ? repairedBad : programBadDay) };
   const result = await generateProgramForProfile({ profile, apiKey: "k", model: "m", ai });
   // el día original queda tal cual (con sus 2 ejercicios, incluida la pierna): el usuario lo ajusta en la app
-  expect(result.weeks[0].workouts[0].exercises.map((e) => e.catalogId)).toEqual(["barbell_row", "barbell_squat"]);
+  expect(result.weeks[0].workouts[0].exercises.map((e) => e.catalogId)).toEqual(["barbell_row", "barbell_front_squat"]);
 });
 
 test("Fase B: si la reparación lanza (error IA) → conserva el día original, no falla la generación", async () => {
@@ -596,4 +596,4 @@ git commit -S -m "chore(gen-1): verificación integral (typecheck + suite)" || e
 - **Cobertura del spec:** ① schema (Task 1) · ② función pura (Task 2) · ③ reparación por día (Task 5) · ④ prompt (Task 4) · oneoff emite targetMuscles (Task 3). ✅
 - **Sin placeholders:** todos los pasos traen código/comandos reales. ✅
 - **Consistencia de tipos:** `targetMuscles: MuscleGroup[]`, `exercisesOutOfScope(workout, lookup)`, `repairDayExercises(...)`, `OneOffArgs.focus` (array) intactos. ✅
-- **Riesgo abierto (para el implementador):** confirmar los catalogIds usados en los fixtures de `generate.test.ts` contra `exercises.data.ts` (que `barbell_row`≈back y `barbell_squat`≈quads existan; si no, sustituir por ids reales de esos grupos).
+- **catalogIds de los fixtures** verificados contra `exercises.data.ts`: `barbell_row`=primary `["back"]`, `barbell_front_squat`=primary `["quads"]`.
