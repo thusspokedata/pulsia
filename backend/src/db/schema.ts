@@ -44,6 +44,12 @@ export const athleteMemory = pgTable("athlete_memory", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const workObjective = pgTable("work_objective", {
+  userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").default("").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const bodyMetric = pgTable("body_metric", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
