@@ -79,3 +79,11 @@ test("ProgramGenerationSchema EXIGE rationale global y por día", () => {
   const conRat = ProgramGenerationSchema.safeParse({ name: "P", rationale: "g", weeks: [{ weekNumber: 1, workouts: [{ ...day, rationale: "d" }] }] });
   expect(conRat.success).toBe(true);
 });
+
+test("ProgramGenerationSchema EXIGE rationale por día aunque el global esté", () => {
+  const r = ProgramGenerationSchema.safeParse({
+    name: "P", rationale: "global presente",
+    weeks: [{ weekNumber: 1, workouts: [day] }], // day SIN rationale
+  });
+  expect(r.success).toBe(false);
+});
