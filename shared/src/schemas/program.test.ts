@@ -11,7 +11,7 @@ test("acepta un programa válido de 1 semana", () => {
           {
             dayLabel: "Día 1 - Empuje",
             location: "gym",
-            focus: "chest",
+            targetMuscles: ["chest"],
             exercises: [
               {
                 catalogId: "barbell_bench_press",
@@ -36,7 +36,7 @@ test("rechaza location inválida", () => {
   expect(() =>
     ProgramSchema.parse({
       name: "x",
-      weeks: [{ weekNumber: 1, workouts: [{ dayLabel: "d", location: "park", focus: "back", exercises: [] }] }],
+      weeks: [{ weekNumber: 1, workouts: [{ dayLabel: "d", location: "park", targetMuscles: ["back"], exercises: [] }] }],
     }),
   ).toThrow();
 });
@@ -54,7 +54,7 @@ test("rechaza catalogId vacío en un ejercicio", () => {
   expect(() =>
     ProgramSchema.parse({
       name: "Plan",
-      weeks: [{ weekNumber: 1, workouts: [{ dayLabel: "d", location: "gym", focus: "chest", exercises: [
+      weeks: [{ weekNumber: 1, workouts: [{ dayLabel: "d", location: "gym", targetMuscles: ["chest"], exercises: [
         { catalogId: "", garminName: "Barbell Bench Press", sets: 3, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90, notes: "" },
       ] }] }],
     }),

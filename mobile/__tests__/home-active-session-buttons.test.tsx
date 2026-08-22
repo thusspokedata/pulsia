@@ -14,10 +14,10 @@ let mockActive: any = null;
 jest.mock("../src/storage/activeSession", () => ({ getActiveSession: async () => mockActive }));
 
 jest.mock("../src/storage/program", () => {
-  const mkWorkout = (dayLabel: string, focus: string) => ({
+  const mkWorkout = (dayLabel: string, muscle: string) => ({
     dayLabel,
     location: "gym",
-    focus,
+    targetMuscles: [muscle],
     exercises: [{ catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 2, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90, notes: "" }],
   });
   const program = {

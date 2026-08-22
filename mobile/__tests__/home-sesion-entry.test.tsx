@@ -16,7 +16,7 @@ jest.mock("../src/storage/activeSession", () => ({ getActiveSession: async () =>
 const program = {
   name: "Plan",
   weeks: [{ weekNumber: 1, workouts: [{
-    dayLabel: "Día 1", location: "gym", focus: "chest",
+    dayLabel: "Día 1", location: "gym", targetMuscles: ["chest"],
     exercises: [{ catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 2, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90, notes: "" }],
   }] }],
 };

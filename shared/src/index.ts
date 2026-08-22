@@ -20,6 +20,8 @@ export * from "./schemas/profile";
 export * from "./schemas/catalog";
 export * from "./schemas/oneoff";
 export * from "./schemas/program";
+export * from "./schemas/programScope";
+export * from "./schemas/programMigration";
 export * from "./catalog/exercises";
 export { exerciseMediaFor, hasExerciseMedia, type ExerciseMedia } from "./catalog/exerciseMedia";
 export * from "./schemas/session";

@@ -8,8 +8,8 @@ const program = {
   name: "Plan Hipertrofia",
   weeks: [
     { weekNumber: 1, workouts: [
-      { dayLabel: "Día 1 (Gym)", location: "gym", focus: "chest", exercises: [{ catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 4, reps: "8-10", targetLoad: "RPE 8", restSeconds: 120, notes: "" }] },
-      { dayLabel: "Día 1 (Casa)", location: "home", focus: "chest", exercises: [{ catalogId: "push_up", garminName: "Push-Up", sets: 4, reps: "12", targetLoad: "peso corporal", restSeconds: 90, notes: "" }] },
+      { dayLabel: "Día 1 (Gym)", location: "gym", targetMuscles: ["chest"], exercises: [{ catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 4, reps: "8-10", targetLoad: "RPE 8", restSeconds: 120, notes: "" }] },
+      { dayLabel: "Día 1 (Casa)", location: "home", targetMuscles: ["chest"], exercises: [{ catalogId: "push_up", garminName: "Push-Up", sets: 4, reps: "12", targetLoad: "peso corporal", restSeconds: 90, notes: "" }] },
     ] },
     { weekNumber: 2, workouts: [] },
   ],

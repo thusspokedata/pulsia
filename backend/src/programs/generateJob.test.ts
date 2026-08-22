@@ -2,7 +2,7 @@ import { test, expect } from "bun:test";
 import { runGenerationJob } from "./generateJob";
 
 const profile: any = { experience: "beginner", goal: "general_fitness", daysPerWeek: 2, sessionMinutes: 45, gymEquipment: ["barbell"], homeEquipment: ["bodyweight"], limitations: [] };
-const program = { name: "Plan", weeks: [{ weekNumber: 1, workouts: [{ dayLabel: "D1", location: "gym", focus: "chest", exercises: [{ catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 3, reps: "8-10", targetLoad: "RPE 7", restSeconds: 90, notes: "" }] }] }] };
+const program = { name: "Plan", weeks: [{ weekNumber: 1, workouts: [{ dayLabel: "D1", location: "gym", targetMuscles: ["chest"], exercises: [{ catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 3, reps: "8-10", targetLoad: "RPE 7", restSeconds: 90, notes: "" }] }] }] };
 
 // fakeDb que registra el update del job y sirve datos mínimos.
 function fakeDb() {

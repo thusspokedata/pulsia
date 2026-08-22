@@ -51,6 +51,7 @@ export function buildGenerationPrompt(
     "3. Aplicá progresión semana a semana (cargas/series/reps).",
     "4. Respetá las limitaciones del atleta.",
     "5. Generá un programa de 2 semanas, con un máximo de 5 ejercicios por día.",
+    "6. Cada día representa un OBJETIVO de entrenamiento. Por cada día emití el campo targetMuscles con los grupos musculares que entrena ese día (p.ej. un día de espalda y bíceps: [\"back\",\"biceps\"]). Cada ejercicio del día debe entrenar principalmente al menos uno de esos grupos (su primaryMuscles). No mezcles grupos ajenos al objetivo del día (p.ej. no pongas un ejercicio de pierna en un día de espalda/bíceps). Los ejercicios full_body pueden ir en cualquier día.",
     ...(historySummary && historySummary.trim()
       ? [
           "",

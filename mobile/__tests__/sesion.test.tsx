@@ -104,7 +104,7 @@ jest.mock("../src/storage/programId", () => ({ getStoredProgramId: async () => m
 const baseProgram = {
   name: "Plan",
   weeks: [{ weekNumber: 1, workouts: [{
-    dayLabel: "Día 1", location: "gym", focus: "chest",
+    dayLabel: "Día 1", location: "gym", targetMuscles: ["chest"],
     exercises: [{ catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 2, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90, notes: "" }],
   }] }],
 };
@@ -112,7 +112,7 @@ const baseProgram = {
 const twoExerciseProgram = {
   name: "Plan",
   weeks: [{ weekNumber: 1, workouts: [{
-    dayLabel: "Día 1", location: "gym", focus: "chest",
+    dayLabel: "Día 1", location: "gym", targetMuscles: ["chest"],
     exercises: [
       { catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 2, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90, notes: "" },
       { catalogId: "barbell_back_squat", garminName: "Barbell Back Squat", sets: 2, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90, notes: "" },
@@ -130,7 +130,7 @@ jest.mock("../src/storage/program", () => ({
 const oneOffProgram = {
   name: "Puntual",
   weeks: [{ weekNumber: 1, workouts: [{
-    dayLabel: "Puntual: Pecho", location: "gym", focus: "chest",
+    dayLabel: "Puntual: Pecho", location: "gym", targetMuscles: ["chest"],
     exercises: [{ catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 2, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90, notes: "" }],
   }] }],
 };
@@ -227,7 +227,7 @@ test("el ejercicio activo SIN ilustración no ofrece el acceso", async () => {
   mockProgram = {
     name: "Sin media",
     weeks: [{ weekNumber: 1, workouts: [{
-      dayLabel: "Día 1", location: "gym", focus: "legs",
+      dayLabel: "Día 1", location: "gym", targetMuscles: ["quads"],
       exercises: [{ catalogId: "kettlebell_squat", garminName: "Kettlebell Squat", sets: 2, reps: "10", targetLoad: "20kg", restSeconds: 90, notes: "" }],
     }] }],
   } as any;

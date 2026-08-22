@@ -6,7 +6,7 @@ const program = {
   weeks: [{
     weekNumber: 1,
     workouts: [{
-      dayLabel: "Día 1", location: "gym", focus: "chest",
+      dayLabel: "Día 1", location: "gym", targetMuscles: ["chest"],
       exercises: [
         { catalogId: "barbell_bench_press", garminName: "Barbell Bench Press", sets: 3, reps: "8-10", targetLoad: "RPE 8", restSeconds: 90, notes: "" },
         { catalogId: "incline_dip", garminName: "Incline Dip", sets: 3, reps: "12", targetLoad: "peso corporal", restSeconds: 60, notes: "" },
