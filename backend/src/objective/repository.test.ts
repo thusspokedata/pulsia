@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { getWorkObjective, upsertWorkObjective } from "./repository";
+import { getWorkObjective, upsertWorkObjective, MAX_OBJECTIVE_CHARS } from "./repository";
 
 function fakeDb(initial: string | null) {
   let row = initial == null ? null : { userId: "u1", content: initial };
@@ -26,4 +26,10 @@ test("upsertWorkObjective persiste el contenido", async () => {
   const db = fakeDb(null);
   await upsertWorkObjective(db, "u1", "recomposición 12 semanas");
   expect(db._get().content).toBe("recomposición 12 semanas");
+});
+
+test("upsertWorkObjective trunca contenido excesivamente largo (cota defensiva)", async () => {
+  const db = fakeDb(null);
+  await upsertWorkObjective(db, "u1", "x".repeat(10000));
+  expect(db._get().content.length).toBeLessThanOrEqual(MAX_OBJECTIVE_CHARS);
 });
