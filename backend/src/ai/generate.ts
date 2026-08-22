@@ -82,10 +82,11 @@ export async function generateProgramForProfile(input: {
       for (const workout of week.workouts) {
         if (exercisesOutOfScope(workout, getExerciseById).length === 0) continue;
         const repaired = await repairDayExercises({ workout, profile, apiKey, model, ai });
-        // Solo se reemplazan los ejercicios: el `rationale` del día (si lo hubiera) queda igual a
-        // propósito — el oneOff de la reparación usa buildOneOffPrompt, que nunca pide/emite
-        // rationale, así que no hay uno "nuevo" con el que reemplazarlo.
-        if (repaired) workout.exercises = repaired;
+        // Al reemplazar los ejercicios, el `rationale` del día queda CLEARED a propósito (no
+        // conservado): el oneOff de la reparación usa buildOneOffPrompt, que nunca pide/emite
+        // rationale, así que cualquier rationale previo describiría ejercicios que ya no están.
+        // La UI cae a su fallback "regenerá" en vez de mostrar una justificación stale.
+        if (repaired) { workout.exercises = repaired; workout.rationale = undefined; }
       }
     }
   }

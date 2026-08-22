@@ -76,6 +76,24 @@ test("Fase B: un día malo → 1 reparación; reemplaza ejercicios y preserva me
   expect(day.exercises.map((e) => e.catalogId)).toEqual(["barbell_row"]);
 });
 
+test("Fase B: un día reparado limpia su rationale (queda stale si no)", async () => {
+  const badDay: Program = JSON.parse(JSON.stringify(programBadDay));
+  badDay.weeks[0].workouts[0].rationale = "justificación de los ejercicios ORIGINALES (ahora reemplazados)";
+  const ai: AiClient = { generateProgram: async (input) => (input.oneOff ? repairedDayProgram : badDay) };
+  const result = await generateProgramForProfile({ profile, apiKey: "k", model: "m", ai });
+  expect(result.weeks[0].workouts[0].rationale).toBeUndefined();
+});
+
+test("Fase B: un día NO reparado conserva su rationale", async () => {
+  const ai: AiClient = { generateProgram: async () => {
+    const withRationale: Program = JSON.parse(JSON.stringify(validProgram));
+    withRationale.weeks[0].workouts[0].rationale = "porqué del día, intacto";
+    return withRationale;
+  } };
+  const result = await generateProgramForProfile({ profile, apiKey: "k", model: "m", ai });
+  expect(result.weeks[0].workouts[0].rationale).toBe("porqué del día, intacto");
+});
+
 test("Fase B: reparación que mete un catalogId inexistente → conserva el día original", async () => {
   const badDay: Program = JSON.parse(JSON.stringify(programBadDay));
   const repairedBad: Program = JSON.parse(JSON.stringify(repairedDayProgram));
