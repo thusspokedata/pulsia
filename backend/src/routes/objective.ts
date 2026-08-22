@@ -16,8 +16,8 @@ export function objectiveRoutes(deps: AppDeps) {
   r.put("/", async (c) => {
     const userId = c.get("userId");
     const body = await c.req.json().catch(() => ({}));
-    const content = typeof body?.content === "string" ? body.content : "";
-    await upsertWorkObjective(deps.db, userId, content);
+    if (typeof body?.content !== "string") return c.json({ error: "content debe ser un string." }, 400);
+    await upsertWorkObjective(deps.db, userId, body.content);
     return c.json({ content: await getWorkObjective(deps.db, userId) });
   });
 
