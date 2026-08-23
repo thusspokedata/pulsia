@@ -22,8 +22,25 @@ export const NUTRIENT_REFERENCE_KIND = {
 // kcal, y por eso no vive en NUTRIENT_REFERENCES. 9 kcal por gramo de grasa; 1 decimal, como el
 // resto de los micros (ver sumNullableMicro en macros.ts).
 export function saturatedFatRefG(goalKcal: number): number {
+  return fatTypeRefG(FAT_TYPE_PERCENT_KCAL.saturated_fat_g.pct, goalKcal);
+}
+
+// Umbrales AHA (American Heart Association) por tipo de grasa, como % de la energía total.
+// "max" = límite a no pasar; "recommended" = piso deseable, nunca pinta como excedido.
+// omega3_g no tiene % de kcal fijado por la AHA (se recomienda en gramos absolutos según
+// contexto clínico), por eso su pct es null: la UI muestra la barra sin umbral.
+export const FAT_TYPE_PERCENT_KCAL = {
+  saturated_fat_g: { pct: 0.1, kind: "max" },
+  trans_fat_g: { pct: 0.02, kind: "max" },
+  omega6_g: { pct: 0.1, kind: "max" },
+  monounsaturated_fat_g: { pct: 0.15, kind: "recommended" },
+  omega3_g: { pct: null, kind: "recommended" },
+} as const;
+
+// Deriva gramos desde un % de la energía total (9 kcal por gramo de grasa), a 1 decimal.
+export function fatTypeRefG(pct: number, goalKcal: number): number {
   // Number.isFinite además de <= 0: NaN <= 0 es false, así que sin el guard un NaN se colaría
   // hasta la UI (la meta de kcal puede llegar de un parseo del móvil).
   if (!Number.isFinite(goalKcal) || goalKcal <= 0) return 0;
-  return Math.round(((goalKcal * 0.1) / 9) * 10) / 10;
+  return Math.round(((goalKcal * pct) / 9) * 10) / 10;
 }
