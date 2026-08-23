@@ -10,18 +10,20 @@ import { NUTRIENT_KEYS, type FoodExtraction, type FoodIdentification, type FoodM
 import type { UsdaFoodRow } from "../usda/matcher";
 import { nutrientColumn } from "./columns";
 
-// Lo que la IA aporta (los 10 del §5.2): los 4 macros + los 6 micros legibles de una etiqueta.
+// Lo que la IA aporta (13 keys, ampliado de los 10 del §5.2 original): los 4 macros + los 9
+// micros legibles de una etiqueta (los 6 de siempre más trans/mono/poliinsaturadas — NUT-14).
 // Fuente ÚNICA; los otros dos conjuntos se derivan de acá.
 export const AI_PROVIDED_KEYS = [
   "kcal", "protein_g", "carbs_g", "fat_g",
-  "saturated_fat_g", "sugars_g", "fiber_g", "sodium_mg", "cholesterol_mg", "water_ml",
+  "saturated_fat_g", "trans_fat_g", "monounsaturated_fat_g", "polyunsaturated_fat_g",
+  "sugars_g", "fiber_g", "sodium_mg", "cholesterol_mg", "water_ml",
 ] as const;
 
 const AI_SET = new Set<string>(AI_PROVIDED_KEYS);
 const REGISTRO = new Set<string>(NUTRIENT_KEYS);
 
 // Macros = los que la IA aporta y NO están en el registro de micronutrientes (los 4 núcleo,
-// no-nullable). Micros de etiqueta = los que SÍ están en el registro (los 6).
+// no-nullable). Micros de etiqueta = los que SÍ están en el registro (los 9).
 const MACRO_KEYS = AI_PROVIDED_KEYS.filter((k) => !REGISTRO.has(k));
 const LABEL_MICRO_KEYS = AI_PROVIDED_KEYS.filter((k) => REGISTRO.has(k));
 
