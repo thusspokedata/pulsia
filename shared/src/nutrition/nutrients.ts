@@ -20,6 +20,9 @@ export interface NutrientDef {
 export const NUTRIENTS = [
   // --- Grasas ---
   { key: "saturated_fat_g", label: "Grasas saturadas", unit: "g", group: "grasas", decimals: 1 },
+  { key: "trans_fat_g", label: "Grasas trans", unit: "g", group: "grasas", decimals: 2 },
+  { key: "monounsaturated_fat_g", label: "Grasas monoinsaturadas", unit: "g", group: "grasas", decimals: 1 },
+  { key: "polyunsaturated_fat_g", label: "Grasas poliinsaturadas", unit: "g", group: "grasas", decimals: 1 },
   { key: "omega3_g", label: "Omega-3", unit: "g", group: "grasas", decimals: 2 },
   { key: "omega6_g", label: "Omega-6", unit: "g", group: "grasas", decimals: 2 },
   { key: "cholesterol_mg", label: "Colesterol", unit: "mg", group: "grasas", decimals: 1 },
