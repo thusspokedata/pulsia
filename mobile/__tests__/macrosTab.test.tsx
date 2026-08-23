@@ -16,12 +16,18 @@ const summaryWithMacros = (): NutritionDaySummary => {
 
 beforeEach(() => jest.clearAllMocks());
 
-test("cada macro es tappable y navega a su desglose de alimentos, con el offset del día", async () => {
+test("proteína y carbos navegan a su desglose de alimentos, con el offset del día", async () => {
   await render(<MacrosTab summary={summaryWithMacros()} goalView={null} offset={3} />);
   await fireEvent.press(screen.getByTestId("macro-row-protein"));
   expect(router.push).toHaveBeenCalledWith("/nutricion/macro?macro=protein&offset=3");
+  await fireEvent.press(screen.getByTestId("macro-row-carbs"));
+  expect(router.push).toHaveBeenCalledWith("/nutricion/macro?macro=carbs&offset=3");
+});
+
+test("grasa navega al desglose por tipo (grasas.tsx), no al ranking genérico de alimentos", async () => {
+  await render(<MacrosTab summary={summaryWithMacros()} goalView={null} offset={3} />);
   await fireEvent.press(screen.getByTestId("macro-row-fat"));
-  expect(router.push).toHaveBeenCalledWith("/nutricion/macro?macro=fat&offset=3");
+  expect(router.push).toHaveBeenCalledWith("/nutricion/grasas?offset=3");
 });
 
 test("muestra el hint de que se puede tocar un macro", async () => {
