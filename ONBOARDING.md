@@ -13,7 +13,7 @@
 
 ## 0-HISTORIAL. Historial de sesiones (archivado)
 
-Los bloques `§0-*` con el detalle cronológico de cada sesión entregada (`✅ HECHO`, del 2026-07-09 al 2026-08-17) se movieron a **[`docs/ONBOARDING-HISTORY.md`](docs/ONBOARDING-HISTORY.md)** — ahí está el "porqué" de cada feature, los PRs, los bugs cazados y las lecciones. Este documento sigue con la referencia estable (§1 en adelante). **Nota:** cualquier mención `§0-…` que aparezca a lo largo de este handoff (p.ej. `§0-PERFIL`, `§0-WEB-HEATMAP`, `§0b`) refiere a una sección de ese archivo de historial, no de este documento.
+Los bloques `§0-*` con el detalle cronológico de cada sesión entregada (`✅ HECHO`, del 2026-07-09 al 2026-08-22) se movieron a **[`docs/ONBOARDING-HISTORY.md`](docs/ONBOARDING-HISTORY.md)** — ahí está el "porqué" de cada feature, los PRs, los bugs cazados y las lecciones. Este documento sigue con la referencia estable (§1 en adelante). **Nota:** cualquier mención `§0-…` que aparezca a lo largo de este handoff (p.ej. `§0-PERFIL`, `§0-WEB-HEATMAP`, `§0b`) refiere a una sección de ese archivo de historial, no de este documento.
 
 ## 1. Qué es Pulsia
 
