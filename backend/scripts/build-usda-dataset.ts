@@ -155,6 +155,9 @@ export const MAPEO_NUTRIENTES: Record<number, { clave: string; unidadUsda: strin
   1004: { clave: "fat_g", unidadUsda: "G" }, // Total lipid (fat)
   // --- Grasas ---
   1258: { clave: "saturated_fat_g", unidadUsda: "G" }, // Fatty acids, total saturated
+  1257: { clave: "trans_fat_g", unidadUsda: "G" }, // Fatty acids, total trans
+  1292: { clave: "monounsaturated_fat_g", unidadUsda: "G" }, // Fatty acids, total monounsaturated
+  1293: { clave: "polyunsaturated_fat_g", unidadUsda: "G" }, // Fatty acids, total polyunsaturated
   1253: { clave: "cholesterol_mg", unidadUsda: "MG" }, // Cholesterol
   // --- Carbohidratos ---
   2000: { clave: "sugars_g", unidadUsda: "G" }, // Total Sugars

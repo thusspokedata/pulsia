@@ -223,6 +223,12 @@ describe("verificarUnidades", () => {
     // Si alguien agrega un nutriente a NUTRIENTS y se olvida de mapearlo, esto lo caza.
     expect(verificarUnidades(nutrientesOk())).toEqual([]);
   });
+
+  test("MAPEO_NUTRIENTES incluye mono/poli/trans con unidad correcta", () => {
+    expect(MAPEO_NUTRIENTES[1292]).toEqual({ clave: "monounsaturated_fat_g", unidadUsda: "G" });
+    expect(MAPEO_NUTRIENTES[1293]).toEqual({ clave: "polyunsaturated_fat_g", unidadUsda: "G" });
+    expect(MAPEO_NUTRIENTES[1257]).toEqual({ clave: "trans_fat_g", unidadUsda: "G" });
+  });
 });
 
 describe("construirFila", () => {
