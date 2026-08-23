@@ -124,15 +124,16 @@ export interface FoodRank {
   source: "food" | "supplement";
 }
 
-// Qué alimentos aportaron un nutriente, de mayor a menor. Agrupa por nombre: el mismo alimento
-// comido en 5 comidas distintas es UNA fila, que es como se piensa ("¿cuánto queso comí?").
-// Los ítems sin el dato (null) o en 0 no entran ni al ranking ni al total: un alimento que no
-// aporta nada no enseña nada, y contarlo como 0 solo ensucia la lista.
-export function foodsHighestIn(meals: Meal[], nutrient: RankNutrient): FoodRank[] {
+// Núcleo del ranking, compartido por comida-por-micro (foodsHighestIn) y comida-por-macro
+// (foodsByMacro). Agrupa por nombre: el mismo alimento comido en 5 comidas distintas es UNA fila,
+// que es como se piensa ("¿cuánto queso comí?"). Los ítems sin el dato (null) o en 0 no entran ni
+// al ranking ni al total: un alimento que no aporta nada no enseña nada, y contarlo como 0 solo
+// ensucia la lista. `valueOf` decide qué aporte se rankea (el sodio→sal, un macro, un micro…).
+function rankFoods(meals: Meal[], valueOf: (item: MealItem) => number | null): FoodRank[] {
   const by = new Map<string, { amount: number; grams: number }>();
   for (const m of meals) {
     for (const item of m.items) {
-      const v = rankAmount(item, nutrient);
+      const v = valueOf(item);
       if (v == null || v <= 0) continue;
       const acc = by.get(item.foodName) ?? { amount: 0, grams: 0 };
       by.set(item.foodName, { amount: acc.amount + v, grams: acc.grams + item.grams });
@@ -150,4 +151,22 @@ export function foodsHighestIn(meals: Meal[], nutrient: RankNutrient): FoodRank[
     }))
     // Desempate por nombre: sin esto el orden depende del de inserción y la lista baila.
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
+}
+
+// Qué alimentos aportaron un nutriente, de mayor a menor.
+export function foodsHighestIn(meals: Meal[], nutrient: RankNutrient): FoodRank[] {
+  return rankFoods(meals, (item) => rankAmount(item, nutrient));
+}
+
+// Los macros que se pueden rankear. NO son NutrientKey (no están en el registro de nutrientes),
+// pero SÍ son campos del ítem, guardados en gramos absolutos de la porción — el snapshot de
+// MealItem los trae siempre (a diferencia de los micros, que pueden faltar).
+export type MacroRankKey = "protein_g" | "carbs_g" | "fat_g";
+
+// Qué alimentos aportaron un MACRO (proteína/carbos/grasa) en el día, de mayor a menor, con los
+// gramos aportados del macro y el % sobre el total del día. Misma mecánica que foodsHighestIn,
+// pero por macro: separado a propósito de RankNutrient, que es solo micros (+ sal) y arrastra el
+// combinado con suplementos — los suplementos no aportan macros.
+export function foodsByMacro(meals: Meal[], macro: MacroRankKey): FoodRank[] {
+  return rankFoods(meals, (item) => item[macro]);
 }

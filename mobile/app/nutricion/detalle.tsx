@@ -49,7 +49,7 @@ export default function DetalleDiaScreen() {
           offset={offset}
         />
       )}
-      {tab === "macros" && <MacrosTab summary={summary} goalView={goalView} />}
+      {tab === "macros" && <MacrosTab summary={summary} goalView={goalView} offset={offset} />}
 
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
     </ScrollView>
