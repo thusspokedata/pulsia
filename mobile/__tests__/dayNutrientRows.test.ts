@@ -110,10 +110,11 @@ test("la referencia EFSA del día está personalizada por sexo", () => {
   expect(refDe({ sex: "female", age: 35 })).toBe(16);
 });
 
-test("el día muestra los 30 nutrientes, no 5", () => {
+test("el día muestra los 33 nutrientes, no 5", () => {
+  // 33 = las 30 originales + trans_fat_g/monounsaturated_fat_g/polyunsaturated_fat_g (NUT-14).
   const keys = filasDe([item({})]).map((r) => r.key);
-  expect(keys.length).toBe(30);
-  expect(new Set(keys).size).toBe(30);
+  expect(keys.length).toBe(33);
+  expect(new Set(keys).size).toBe(33);
   for (const k of ["zinc_mg", "vitamin_c_mg", "omega3_g", "water_ml"]) expect(keys).toContain(k);
 });
 
@@ -161,7 +162,7 @@ test("la fila de sal hereda el parcial del sodio", () => {
 
 test("un día vacío no rompe: todas las filas sin dato y sin porcentaje", () => {
   const filas = buildDayNutrientRows(buildNutritionDaySummary([], []), persona, 2200).flatMap((s) => s.rows);
-  expect(filas.length).toBe(30);
+  expect(filas.length).toBe(33);
   expect(filas.every((r) => r.value === null && r.pct === null)).toBe(true);
 });
 
