@@ -1,4 +1,5 @@
-import { View, Text } from "react-native";
+import { View, Text, Pressable } from "react-native";
+import { router } from "expo-router";
 import { macroSplit, type MacroSlice } from "@pulsia/shared";
 import type { GoalView } from "../goalView";
 import type { NutritionDaySummary } from "../daySummary";
@@ -15,9 +16,12 @@ const MACRO_COLORS: Record<MacroSlice["key"], string> = {
 interface Props {
   summary: NutritionDaySummary;
   goalView: GoalView | null;
+  // Necesario para pedir las comidas del mismo día al abrir el desglose "qué alimentos aportan
+  // este macro" (convención del repo: offset positivo = pasado).
+  offset: number;
 }
 
-export function MacrosTab({ summary, goalView }: Props) {
+export function MacrosTab({ summary, goalView, offset }: Props) {
   const { dayTotals } = summary;
   // La meta de macros sale de goalView, que ya la trae en gramos por macro.
   const meta =
@@ -59,11 +63,20 @@ export function MacrosTab({ summary, goalView }: Props) {
         />
       </View>
       {slices.map((s) => (
-        <LegendRow key={s.key} color={MACRO_COLORS[s.key]} label={s.label}>
-          {s.g} g · {s.pctActual}%
-          {s.pctTarget != null ? ` · meta ${s.pctTarget}%` : ""}
-        </LegendRow>
+        <Pressable
+          key={s.key}
+          testID={`macro-row-${s.key}`}
+          onPress={() => router.push(`/nutricion/macro?macro=${s.key}&offset=${offset}`)}
+        >
+          <LegendRow color={MACRO_COLORS[s.key]} label={s.label}>
+            {s.g} g · {s.pctActual}%
+            {s.pctTarget != null ? ` · meta ${s.pctTarget}%` : ""}
+          </LegendRow>
+        </Pressable>
       ))}
+      <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: spacing.xs }}>
+        Tocá un macro para ver qué alimentos lo aportan.
+      </Text>
     </Card>
   );
 }

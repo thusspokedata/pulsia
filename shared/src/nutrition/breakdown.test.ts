@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { caloriesByMeal, macroSplit, foodsHighestIn } from "./breakdown";
+import { caloriesByMeal, macroSplit, foodsHighestIn, foodsByMacro } from "./breakdown";
 import type { Meal } from "../schemas/nutrition";
 
 const meal = (mealType: Meal["mealType"], kcals: number[]): Meal =>
@@ -158,4 +158,46 @@ test("todas las filas de foodsHighestIn llevan source 'food'", () => {
   const ranked = foodsHighestIn(meals, "cholesterol_mg");
   expect(ranked.length).toBeGreaterThan(0);
   expect(ranked.every((f) => f.source === "food")).toBe(true);
+});
+
+// ---------------------------------------------------------------------------------------------
+// NUT-13: qué alimentos aportan cada MACRO (proteína/carbos/grasa) en el detalle del día. Los
+// macros NO están en el registro de nutrientes (no son NutrientKey), pero SÍ son campos del ítem,
+// guardados en gramos absolutos de la porción — así que se rankean con la misma mecánica.
+// ---------------------------------------------------------------------------------------------
+
+test("foodsByMacro ordena por aporte del macro, de mayor a menor", () => {
+  const meals = [itemsMeal([it("Arroz", 100, { protein_g: 3 }), it("Pollo", 150, { protein_g: 45 })])];
+  expect(foodsByMacro(meals, "protein_g").map((f) => f.name)).toEqual(["Pollo", "Arroz"]);
+});
+
+test("foodsByMacro suma el mismo alimento y calcula el % sobre el total del macro en el día", () => {
+  const meals = [
+    itemsMeal([it("Pollo", 100, { protein_g: 30 })]),
+    itemsMeal([it("Pollo", 50, { protein_g: 15 }), it("Arroz", 100, { protein_g: 5 })]),
+  ];
+  expect(foodsByMacro(meals, "protein_g")).toEqual([
+    { name: "Pollo", amount: 45, grams: 150, pctOfTotal: 90, source: "food" },
+    { name: "Arroz", amount: 5, grams: 100, pctOfTotal: 10, source: "food" },
+  ]);
+});
+
+test("foodsByMacro descarta los aportes en 0 (un alimento que no aporta el macro no enseña nada)", () => {
+  const meals = [itemsMeal([it("Aceite", 20, { fat_g: 20 }), it("Lechuga", 50, { fat_g: 0 })])];
+  expect(foodsByMacro(meals, "fat_g").map((f) => f.name)).toEqual(["Aceite"]);
+});
+
+test("foodsByMacro empata por nombre para que la lista no baile", () => {
+  const meals = [itemsMeal([it("Zapallo", 100, { carbs_g: 5 }), it("Arveja", 100, { carbs_g: 5 })])];
+  expect(foodsByMacro(meals, "carbs_g").map((f) => f.name)).toEqual(["Arveja", "Zapallo"]);
+});
+
+test("foodsByMacro sin comidas, o sin aporte del macro → lista vacía", () => {
+  expect(foodsByMacro([], "protein_g")).toEqual([]);
+  expect(foodsByMacro([itemsMeal([it("Agua", 250, { protein_g: 0 })])], "protein_g")).toEqual([]);
+});
+
+test("foodsByMacro redondea el aporte a 1 decimal, igual que foodsHighestIn", () => {
+  const meals = [itemsMeal([it("Palta", 70, { fat_g: 10.25 })])];
+  expect(foodsByMacro(meals, "fat_g")[0].amount).toBe(10.3);
 });
