@@ -41,7 +41,7 @@ test("fatTypeRefG deriva gramos desde % de kcal (9 kcal/g)", () => {
 });
 
 test("saturatedFatRefG delega en fatTypeRefG con el pct de FAT_TYPE_PERCENT_KCAL.saturated_fat_g", () => {
-  expect(saturatedFatRefG(2000)).toBe(fatTypeRefG(0.06, 2000));
+  expect(saturatedFatRefG(2000)).toBe(fatTypeRefG(FAT_TYPE_PERCENT_KCAL.saturated_fat_g.pct, 2000));
 });
 
 test("FAT_TYPE_PERCENT_KCAL: política AHA (saturada max 6%, trans avoid, omega6/mono/omega3 recommended)", () => {
