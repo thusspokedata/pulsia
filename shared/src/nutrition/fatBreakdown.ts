@@ -14,7 +14,7 @@ export interface FatBar {
   type: FatType;
   label: string;
   grams: number;
-  kind: "max" | "recommended";
+  kind: "max" | "recommended" | "avoid";
   thresholdG: number | null;
   withinG: number;
   overG: number;
@@ -29,6 +29,18 @@ export function fatBreakdown(fats: FatGrams, goalKcal: number | null): FatBar[] 
     const raw = fats[type];
     const grams = typeof raw === "number" && Number.isFinite(raw) ? raw : 0;
     const spec = FAT_TYPE_PERCENT_KCAL[type];
+    if (spec.kind === "avoid") {
+      return {
+        type,
+        label: LABELS.get(type)!,
+        grams,
+        kind: "avoid",
+        thresholdG: null,
+        withinG: 0,
+        overG: grams,
+        exceeded: grams > 0,
+      };
+    }
     const thresholdG = spec.pct != null && kcalOk ? fatTypeRefG(spec.pct, goalKcal as number) : null;
     if (spec.kind === "recommended" || thresholdG == null) {
       return {

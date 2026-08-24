@@ -233,14 +233,14 @@ test("el colesterol de la comida se compara contra la referencia de la OMS", asy
   expect(screen.getByTestId("nutr-cholesterol_mg-pct")).toHaveTextContent(/^50 %$/);
 });
 
-test("las saturadas de la comida se comparan contra el 10 % de la meta de kcal", async () => {
-  // La OMS acota las saturadas al 10 % de la ENERGÍA: la referencia depende de la meta diaria,
-  // que esta pantalla ya tiene (2200 kcal del objetivo mockeado) → 2200 × 0,1 / 9 = 24,4 g.
+test("las saturadas de la comida se comparan contra el 6 % de la meta de kcal (AHA)", async () => {
+  // La AHA acota las saturadas al 6 % de la ENERGÍA: la referencia depende de la meta diaria,
+  // que esta pantalla ya tiene (2200 kcal del objetivo mockeado) → 2200 × 0,06 / 9 = 14,7 g.
   mockComida(comida([item({ foodName: "Manteca", saturated_fat_g: 12.2 })]));
   await render(<ComidaDetalleScreen />);
 
-  await waitFor(() => expect(screen.getByTestId("nutr-saturated_fat_g-amount")).toHaveTextContent(/^12\.2 \/ 24\.4 g$/));
-  expect(screen.getByTestId("nutr-saturated_fat_g-pct")).toHaveTextContent(/^50 %$/);
+  await waitFor(() => expect(screen.getByTestId("nutr-saturated_fat_g-amount")).toHaveTextContent(/^12\.2 \/ 14\.7 g$/));
+  expect(screen.getByTestId("nutr-saturated_fat_g-pct")).toHaveTextContent(/^83 %$/);
 });
 
 test("el aporte de la comida se muestra contra la meta del día", async () => {

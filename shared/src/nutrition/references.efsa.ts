@@ -125,7 +125,7 @@ const EFSA: Partial<Record<NutrientKey, EfsaEntry>> = {
 // Nutrientes del registro dejados en `null` explícito (EFSA no da un valor transcribible en la
 // unidad de la clave, o ya están cubiertos por references.ts para no mostrar dos referencias):
 //   - saturated_fat_g : EFSA = "ALAP" (as low as possible), sin número. Cubierto por
-//                       saturatedFatRefG() en references.ts (10 % de la energía).
+//                       saturatedFatRefG() en references.ts (6 % de la energía, AHA).
 //   - omega3_g        : EFSA da ALA como % de energía (0.5 E%) y EPA+DHA 250 mg/d; no hay un único
 //                       gramaje de omega-3 total. → null.
 //   - omega6_g        : EFSA da LA (linoleico) como % de energía (4 E%); sin gramaje fijo. → null.

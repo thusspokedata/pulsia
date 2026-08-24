@@ -17,7 +17,7 @@ interface Props {
 }
 
 export function NutrientesTab({ summary, goalView, persona, offset }: Props) {
-  // Las saturadas se acotan al 10% de la ENERGÍA, así que su referencia sale de la meta de kcal.
+  // Las saturadas se acotan al 6% de la ENERGÍA (AHA), así que su referencia sale de la meta de kcal.
   const goalKcal = goalView?.status === "ok" ? goalView.kcal!.meta : null;
   const secciones = buildDayNutrientRows(summary, persona, goalKcal);
   // "Hay suplemento" también es dato: un día sin ningún alimento cargado pero con un suplemento

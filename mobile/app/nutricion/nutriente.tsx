@@ -128,7 +128,7 @@ export default function NutrienteScreen() {
 
   const series = dailyNutrientSeries(meals, nutrient);
   // Solo llevan línea de referencia los nutrientes con un valor público FIJO. Quedan sin línea
-  // las saturadas (10% de la energía → dependen de la meta de kcal) y las vitaminas y minerales
+  // las saturadas (6% de la energía, AHA → dependen de la meta de kcal) y las vitaminas y minerales
   // (referencia EFSA → depende del sexo y la edad del perfil): esta pantalla no carga ni la meta
   // ni el perfil, y dibujar una línea genérica sería peor que no dibujar ninguna.
   const refKey = nutrient as keyof typeof NUTRIENT_REFERENCES;

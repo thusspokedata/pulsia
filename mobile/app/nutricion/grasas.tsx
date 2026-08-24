@@ -7,8 +7,10 @@ import { colors, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 
 // Verdes las "buenas" (mono/omega3/omega6, entran en el reparto sano de grasas) y ámbar las de
-// "comer menos" (saturada/trans) — mismo criterio de color que el semáforo nutricional. El
-// excedente en sí es SIEMPRE rojo (lo pinta FatSplitBar), independientemente de este tono base.
+// "comer menos" (saturada) — mismo criterio de color que el semáforo nutricional. El excedente en
+// sí es SIEMPRE rojo (lo pinta FatSplitBar), independientemente de este tono base. Trans queda acá
+// en "caution" mismo, pero baseColorDe la pisa a rojo antes de llegar a este lookup: es "avoid",
+// no un simple "comer menos".
 const FAT_TONE: Record<FatType, "good" | "caution"> = {
   monounsaturated_fat_g: "good",
   omega6_g: "good",
@@ -18,6 +20,7 @@ const FAT_TONE: Record<FatType, "good" | "caution"> = {
 };
 
 function baseColorDe(bar: FatBar): string {
+  if (bar.kind === "avoid") return colors.danger;
   return FAT_TONE[bar.type] === "good" ? colors.success : colors.warning;
 }
 
@@ -31,9 +34,10 @@ function redondear(n: number, type: FatType): number {
 }
 
 // fillPct/overPct de cada barra según el tipo de umbral. Los "max" con tope se parten en la línea
-// del umbral (igual que el resto de la app); los "recommended" con referencia (mono) nunca
-// muestran excedente aunque se pasen; y sin umbral (omega3, o sin meta de kcal) se compara contra
-// el que más aporta ESE día, para que la barra siga teniendo sentido visual.
+// del umbral (igual que el resto de la app); los "recommended" con referencia (mono/omega6) nunca
+// muestran excedente aunque se pasen; y sin umbral (omega3, trans "avoid", o sin meta de kcal) se
+// compara contra el que más aporta ESE día, para que la barra siga teniendo sentido visual — el
+// rojo de "avoid" ya lo da baseColorDe, no hace falta un segmento de excedente aparte.
 function segmentsDe(bar: FatBar, maxGrams: number): { fillPct: number; overPct: number } {
   if (bar.kind === "max" && bar.thresholdG != null) return barSegments(bar.grams, bar.thresholdG, "limit");
   if (bar.kind === "recommended" && bar.thresholdG != null) return barSegments(bar.grams, bar.thresholdG, "floor");
@@ -44,9 +48,11 @@ function segmentsDe(bar: FatBar, maxGrams: number): { fillPct: number; overPct: 
 // El hint bajo la barra: el mensaje depende del tipo de referencia, no solo de si hay número.
 // Omega3 no tiene tope (la AHA no fija %), así que su hint es siempre el mismo texto cualitativo.
 function hintDe(bar: FatBar): string | null {
+  if (bar.kind === "avoid") return "evitá — lo más bajo posible";
   if (bar.type === "omega3_g") return "cuanto más, mejor";
   if (bar.thresholdG == null) return null; // sin meta de kcal cargada: no hay umbral que mostrar
-  return bar.kind === "max" ? `máx ${bar.thresholdG} g` : `recomendado ~${bar.thresholdG} g`;
+  if (bar.kind === "max") return `máx ${bar.thresholdG} g`;
+  return bar.type === "omega6_g" ? `al menos ~${bar.thresholdG} g` : `recomendado ~${bar.thresholdG} g`;
 }
 
 export default function GrasasScreen() {

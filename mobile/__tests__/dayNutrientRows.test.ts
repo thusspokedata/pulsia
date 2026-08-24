@@ -46,11 +46,11 @@ test("colesterol conserva la referencia de 300 mg como LÍMITE", () => {
   expect(f.kind).toBe("max");
 });
 
-test("saturadas se acotan al 10% de la ENERGÍA, no a gramos fijos", () => {
-  // 2200 kcal → 220 kcal de saturadas → 24,4 g. Con otra meta de kcal la referencia CAMBIA: un
+test("saturadas se acotan al 6% de la ENERGÍA (AHA), no a gramos fijos", () => {
+  // 2200 kcal → 132 kcal de saturadas → 14,7 g. Con otra meta de kcal la referencia CAMBIA: un
   // test con una sola meta pasaría igual con un número fijo hardcodeado.
-  expect(fila([item({ saturated_fat_g: 18 })], "saturated_fat_g", 2200).ref).toBe(24.4);
-  expect(fila([item({ saturated_fat_g: 18 })], "saturated_fat_g", 1800).ref).toBe(20);
+  expect(fila([item({ saturated_fat_g: 18 })], "saturated_fat_g", 2200).ref).toBe(14.7);
+  expect(fila([item({ saturated_fat_g: 18 })], "saturated_fat_g", 1800).ref).toBe(12);
   expect(fila([item({ saturated_fat_g: 18 })], "saturated_fat_g", 2200).kind).toBe("max");
 });
 

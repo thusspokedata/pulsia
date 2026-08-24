@@ -4,6 +4,7 @@ import GrasasScreen from "../app/nutricion/grasas";
 import { buildNutritionDaySummary } from "../src/nutrition/daySummary";
 import { useNutritionDay } from "../src/nutrition/useNutritionDay";
 import { FAT_BAR_ORDER } from "@pulsia/shared";
+import { colors } from "../src/theme/tokens";
 
 let mockOffset = "0";
 jest.mock("expo-router", () => ({
@@ -55,12 +56,23 @@ test("renderiza las 5 filas en el orden de FAT_BAR_ORDER", async () => {
 test("la fila de saturada muestra el excedente y el texto 'te pasaste'", async () => {
   await render(<GrasasScreen />);
   expect(screen.getByTestId("fat-bar-saturated_fat_g-over")).toBeTruthy();
-  expect(screen.getByText(/te pasaste/)).toBeTruthy();
+  expect(screen.getAllByText(/te pasaste/).length).toBeGreaterThan(0);
 });
 
 test("la fila de mono (recomendada) no tiene segmento de excedente", async () => {
   await render(<GrasasScreen />);
   expect(screen.queryByTestId("fat-bar-monounsaturated_fat_g-over")).toBeNull();
+});
+
+test("trans (avoid): cualquier cantidad > 0 se marca como excedida y la barra es roja, no ámbar", async () => {
+  await render(<GrasasScreen />);
+  // avoid no tiene umbral (thresholdG null) → no hay segmento "-over" partido en una línea; el
+  // rojo viene de baseColorDe pintando TODA la barra, no de un segmento de excedente aparte.
+  expect(screen.queryByTestId("fat-bar-trans_fat_g-over")).toBeNull();
+  expect(screen.getByTestId("fat-bar-trans_fat_g").props.style.backgroundColor).toBe(colors.danger);
+  expect(screen.getByText("evitá — lo más bajo posible")).toBeTruthy();
+  // 2 filas exceden con este fixture: saturada (30g > 13.3g) y trans (1g > 0, avoid).
+  expect(screen.getAllByText(/te pasaste/)).toHaveLength(2);
 });
 
 test("tocar una fila navega a nutriente.tsx con key=<tipo> y el offset del día", async () => {

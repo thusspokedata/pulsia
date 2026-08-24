@@ -16,17 +16,26 @@ test("FAT_BAR_ORDER es el orden del owner", () => {
 test("grasa max que se pasa", () => {
   const sat = fatBreakdown(fats, 2000).find((b) => b.type === "saturated_fat_g")!;
   expect(sat.kind).toBe("max");
-  expect(sat.thresholdG).toBe(22.2);
+  expect(sat.thresholdG).toBe(13.3);
   expect(sat.exceeded).toBe(true);
-  expect(sat.overG).toBeCloseTo(7.8, 5);
-  expect(sat.withinG).toBe(22.2);
+  expect(sat.overG).toBeCloseTo(16.7, 5);
+  expect(sat.withinG).toBe(13.3);
 });
 
-test("grasa max por debajo del umbral", () => {
+test("grasa avoid: cualquier cantidad > 0 se marca como excedida, sin umbral", () => {
   const trans = fatBreakdown(fats, 2000).find((b) => b.type === "trans_fat_g")!;
+  expect(trans.kind).toBe("avoid");
+  expect(trans.thresholdG).toBeNull();
+  expect(trans.exceeded).toBe(true);
+  expect(trans.overG).toBe(1);
+  expect(trans.withinG).toBe(0);
+});
+
+test("grasa avoid: 0 gramos no excede", () => {
+  const trans = fatBreakdown({ ...fats, trans_fat_g: 0 }, 2000).find((b) => b.type === "trans_fat_g")!;
   expect(trans.exceeded).toBe(false);
   expect(trans.overG).toBe(0);
-  expect(trans.withinG).toBe(1);
+  expect(trans.withinG).toBe(0);
 });
 
 test("recommended nunca excede; omega-3 sin umbral", () => {
@@ -40,11 +49,15 @@ test("recommended nunca excede; omega-3 sin umbral", () => {
   expect(bars.find((b) => b.type === "omega3_g")!.thresholdG).toBeNull();
 });
 
-test("sin meta: thresholdG null, nada excede", () => {
+test("sin meta: thresholdG null, nada excede salvo avoid (independiente de la meta)", () => {
   for (const b of fatBreakdown(fats, null)) {
     expect(b.thresholdG).toBeNull();
-    expect(b.exceeded).toBe(false);
-    expect(b.overG).toBe(0);
+    if (b.kind === "avoid") {
+      expect(b.exceeded).toBe(b.grams > 0);
+    } else {
+      expect(b.exceeded).toBe(false);
+      expect(b.overG).toBe(0);
+    }
   }
 });
 

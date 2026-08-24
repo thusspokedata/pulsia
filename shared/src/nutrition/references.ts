@@ -18,7 +18,7 @@ export const NUTRIENT_REFERENCE_KIND = {
   cholesterol_mg: "max",
 } as const;
 
-// Saturadas: la OMS las acota al 10% de la ENERGÍA, no a gramos fijos → depende de la meta de
+// Saturadas: la AHA las acota al 6% de la ENERGÍA, no a gramos fijos → depende de la meta de
 // kcal, y por eso no vive en NUTRIENT_REFERENCES. 9 kcal por gramo de grasa; 1 decimal, como el
 // resto de los micros (ver sumNullableMicro en macros.ts).
 export function saturatedFatRefG(goalKcal: number): number {
@@ -26,13 +26,15 @@ export function saturatedFatRefG(goalKcal: number): number {
 }
 
 // Umbrales AHA (American Heart Association) por tipo de grasa, como % de la energía total.
-// "max" = límite a no pasar; "recommended" = piso deseable, nunca pinta como excedido.
-// omega3_g no tiene % de kcal fijado por la AHA (se recomienda en gramos absolutos según
-// contexto clínico), por eso su pct es null: la UI muestra la barra sin umbral.
+// "max" = límite a no pasar (pasarse pinta el excedente en rojo); "recommended" = piso deseable,
+// nunca pinta como excedido; "avoid" = evitar por completo, cualquier cantidad se marca (sin %
+// fijo, por eso pct es null). omega3_g tampoco tiene % de kcal fijado por la AHA (se recomienda
+// en gramos absolutos según contexto clínico), por eso su pct es null también, pero su kind es
+// "recommended": la UI muestra la barra sin umbral y nunca la marca como excedida.
 export const FAT_TYPE_PERCENT_KCAL = {
-  saturated_fat_g: { pct: 0.1, kind: "max" },
-  trans_fat_g: { pct: 0.02, kind: "max" },
-  omega6_g: { pct: 0.1, kind: "max" },
+  saturated_fat_g: { pct: 0.06, kind: "max" }, // AHA: <6% de la energía (antes 10% OMS)
+  trans_fat_g: { pct: null, kind: "avoid" }, // AHA: evitar / lo más bajo posible; sin % fijo
+  omega6_g: { pct: 0.05, kind: "recommended" }, // AHA: piso ~5-10% de energía; modelado como piso 5%
   monounsaturated_fat_g: { pct: 0.15, kind: "recommended" },
   omega3_g: { pct: null, kind: "recommended" },
 } as const;
