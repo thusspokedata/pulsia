@@ -67,6 +67,10 @@ test("las reglas nutricionales son las MISMAS en los dos modos: no pueden diverg
     expect(p).toMatch(/sugars_g/);
     expect(p).toMatch(/fiber_g/);
     expect(p).toMatch(/sodium_mg/);
+    // Tipos de grasa (trans/mono/poli): si la etiqueta los trae, se piden por 100; si no, null.
+    expect(p).toMatch(/trans_fat_g/);
+    expect(p).toMatch(/monounsaturated_fat_g/);
+    expect(p).toMatch(/polyunsaturated_fat_g/);
     // Colesterol en mg y agua, que siempre se estima.
     expect(p).toMatch(/cholesterol_mg/);
     expect(p).toMatch(/MILIGRAMOS/);

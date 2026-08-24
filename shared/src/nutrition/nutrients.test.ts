@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { NUTRIENTS, NUTRIENT_KEYS, NutrientKeySchema, nutrientsByGroup } from "./nutrients";
 
-test("hay 30 micronutrientes", () => {
-  expect(NUTRIENTS.length).toBe(30);
+test("hay 33 micronutrientes", () => {
+  expect(NUTRIENTS.length).toBe(33);
 });
 
 test("las claves son únicas", () => {
@@ -24,6 +24,9 @@ test("cada grupo tiene la cantidad esperada", () => {
   const g = nutrientsByGroup();
   expect(g.grasas.map((n) => n.key)).toEqual([
     "saturated_fat_g",
+    "trans_fat_g",
+    "monounsaturated_fat_g",
+    "polyunsaturated_fat_g",
     "omega3_g",
     "omega6_g",
     "cholesterol_mg",
@@ -42,4 +45,15 @@ test("NutrientKeySchema acepta cada clave del registro", () => {
 
 test("NutrientKeySchema rechaza una clave que no existe", () => {
   expect(NutrientKeySchema.safeParse("magnesio").success).toBe(false);
+});
+
+test("grasas incluye mono/poli/trans", () => {
+  const byKey = new Map(NUTRIENTS.map((n) => [n.key, n]));
+  for (const key of ["monounsaturated_fat_g", "polyunsaturated_fat_g", "trans_fat_g"] as const) {
+    const def = byKey.get(key);
+    expect(def).toBeDefined();
+    expect(def!.group).toBe("grasas");
+    expect(def!.unit).toBe("g");
+  }
+  expect(NUTRIENT_KEYS).toContain("trans_fat_g");
 });

@@ -42,7 +42,7 @@ export function referenciasOms(goalKcal: number | null): Partial<Record<Nutrient
     sugars_g: { value: NUTRIENT_REFERENCES.sugars_g, kind: NUTRIENT_REFERENCE_KIND.sugars_g },
     fiber_g: { value: NUTRIENT_REFERENCES.fiber_g, kind: NUTRIENT_REFERENCE_KIND.fiber_g },
     cholesterol_mg: { value: NUTRIENT_REFERENCES.cholesterol_mg, kind: NUTRIENT_REFERENCE_KIND.cholesterol_mg },
-    // La OMS acota las saturadas al 10% de la ENERGÍA, no a gramos fijos: sin meta de kcal no hay
+    // La AHA acota las saturadas al 6% de la ENERGÍA, no a gramos fijos: sin meta de kcal no hay
     // referencia honesta que mostrar, y el `null` explícito impide que herede otra.
     saturated_fat_g:
       goalKcal != null

@@ -19,6 +19,9 @@ export const usdaFood = pgTable("usda_food", {
   // que en `food`/`meal_item`. El test de schema.test.ts verifica que no se desincronicen.
   // Grasas
   saturatedFatG: real("saturated_fat_g"),
+  transFatG: real("trans_fat_g"),
+  monounsaturatedFatG: real("monounsaturated_fat_g"),
+  polyunsaturatedFatG: real("polyunsaturated_fat_g"),
   omega3G: real("omega3_g"),
   omega6G: real("omega6_g"),
   cholesterolMg: real("cholesterol_mg"),

@@ -109,6 +109,9 @@ export const food = pgTable("food", {
   // columna acá, fallan. ---
   // Grasas
   saturatedFatG: real("saturated_fat_g"),
+  transFatG: real("trans_fat_g"),
+  monounsaturatedFatG: real("monounsaturated_fat_g"),
+  polyunsaturatedFatG: real("polyunsaturated_fat_g"),
   omega3G: real("omega3_g"),
   omega6G: real("omega6_g"),
   cholesterolMg: real("cholesterol_mg"),
@@ -183,6 +186,9 @@ export const mealItem = pgTable("meal_item", {
   // source_macros/source_micros/usda_fdc_id: el ítem guarda valores, no la procedencia.
   // La paridad con el registro la guarda nutrition/columns.test.ts (ver el comentario en `food`).
   saturatedFatG: real("saturated_fat_g"),
+  transFatG: real("trans_fat_g"),
+  monounsaturatedFatG: real("monounsaturated_fat_g"),
+  polyunsaturatedFatG: real("polyunsaturated_fat_g"),
   omega3G: real("omega3_g"),
   omega6G: real("omega6_g"),
   cholesterolMg: real("cholesterol_mg"),

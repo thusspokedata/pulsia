@@ -72,6 +72,24 @@ export function Bar({
   );
 }
 
+// Barra bicolor de un tipo de grasa: color base (verde/ámbar, según convenga) hasta `fillPct` y,
+// SOLO si te pasaste, rojo (`colors.danger`) el excedente. A diferencia de `Bar`, el color base es
+// configurable: las grasas "buenas" (mono/omega3/omega6) van en verde y las de "comer menos"
+// (saturada/trans) en ámbar, pero el excedente es SIEMPRE rojo — es la misma semántica del
+// semáforo nutricional, no un color más de la paleta de macros.
+export function FatSplitBar({
+  fillPct, overPct, baseColor, height = 8, testID,
+}: { fillPct: number; overPct: number; baseColor: string; height?: number; testID?: string }) {
+  return (
+    <View style={{ height, borderRadius: height / 2, backgroundColor: colors.surfaceMuted, overflow: "hidden", flexDirection: "row" }}>
+      <View testID={testID} style={{ width: `${fillPct}%`, height, backgroundColor: baseColor }} />
+      {overPct > 0 && (
+        <View testID={testID ? `${testID}-over` : undefined} style={{ width: `${overPct}%`, height, backgroundColor: colors.danger }} />
+      )}
+    </View>
+  );
+}
+
 export interface BarSegments3 { foodPct: number; supplementPct: number; overPct: number; }
 
 // Generaliza barSegments a 3 vías: comida (teal) + suplemento (violeta) + excedente (ámbar). El

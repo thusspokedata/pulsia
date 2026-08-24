@@ -115,7 +115,7 @@ test("cada micro se compara contra su referencia; pasarse de un LÍMITE avisa", 
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
   expect(screen.getByText("40 / 50 g")).toBeTruthy(); // azúcares, ref fija
   expect(screen.getByText("210 / 300 mg")).toBeTruthy(); // colesterol
-  expect(screen.getByText("18 / 24.4 g")).toBeTruthy(); // saturadas: 10% de 2200 kcal / 9
+  expect(screen.getByText("18 / 14.7 g")).toBeTruthy(); // saturadas: 6% AHA de 2200 kcal / 9
 });
 
 test("la fibra es un PISO: llegar a la referencia no avisa", async () => {
@@ -171,7 +171,7 @@ test("micro sin dato: lo dice y no dibuja barra", async () => {
   expect(screen.queryByTestId("nutr-fiber_g-bar")).toBeNull();
 });
 
-test("meta incompleta: saturadas se muestra sin referencia (el 10% depende de la meta de kcal)", async () => {
+test("meta incompleta: saturadas se muestra sin referencia (el 6% depende de la meta de kcal)", async () => {
   mockDay({ goalView: { status: "incomplete", missing: ["peso"] } });
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));

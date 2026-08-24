@@ -111,10 +111,13 @@ test("el resultado parsea contra FoodExtractionSchema (con y sin match)", () => 
 
 test("AI_PROVIDED_KEYS y vitaminas/minerales particionan el registro sin huecos ni solapes", () => {
   const enRegistro = new Set<string>(NUTRIENT_KEYS);
-  // los 6 micros de etiqueta están todos en el registro
+  // los 9 micros de etiqueta están todos en el registro (NUT-14: sumó trans/mono/poliinsaturadas)
   const labelMicros = AI_PROVIDED_KEYS.filter((k) => enRegistro.has(k));
   expect([...labelMicros].sort()).toEqual(
-    ["cholesterol_mg", "fiber_g", "saturated_fat_g", "sodium_mg", "sugars_g", "water_ml"],
+    [
+      "cholesterol_mg", "fiber_g", "monounsaturated_fat_g", "polyunsaturated_fat_g",
+      "saturated_fat_g", "sodium_mg", "sugars_g", "trans_fat_g", "water_ml",
+    ],
   );
   // los 4 macros NO están en el registro
   expect(AI_PROVIDED_KEYS.filter((k) => !enRegistro.has(k)).sort()).toEqual(
@@ -126,7 +129,33 @@ test("AI_PROVIDED_KEYS y vitaminas/minerales particionan el registro sin huecos 
   expect(VITAMIN_MINERAL_KEYS.some((k) => AI_PROVIDED_KEYS.includes(k as (typeof AI_PROVIDED_KEYS)[number]))).toBe(false);
 });
 
-test("assembleFoodWithAiMicros: los 30 nutrientes salen del estimado, sourceMicros ai, usdaFdcId null", () => {
+// La costura: trans/mono/poliinsaturadas leídas de una etiqueta (sourceMacros "label") tienen que
+// SOBREVIVIR el ensamblado, no perderse pisadas por un null de USDA. Antes de este seam caían en
+// VITAMIN_MINERAL_KEYS (USDA-only) y assembleFoodExtraction las descartaba en silencio.
+test("label con match: trans/mono/poli de la etiqueta se PERSISTEN, no las pisa el null de USDA", () => {
+  const out = assembleFoodExtraction(
+    baseId({
+      sourceMacros: "label",
+      trans_fat_g: 0.3,
+      monounsaturated_fat_g: 5.1,
+      polyunsaturated_fat_g: 2.4,
+    }),
+    usdaRow({ transFatG: null, monounsaturatedFatG: null, polyunsaturatedFatG: null }),
+  );
+  expect(out.trans_fat_g).toBe(0.3);
+  expect(out.monounsaturated_fat_g).toBe(5.1);
+  expect(out.polyunsaturated_fat_g).toBe(2.4);
+});
+
+test("label con match donde la etiqueta NO trae trans_fat_g (null): cae a USDA", () => {
+  const out = assembleFoodExtraction(
+    baseId({ sourceMacros: "label", trans_fat_g: null }),
+    usdaRow({ transFatG: 0.1 }),
+  );
+  expect(out.trans_fat_g).toBe(0.1); // la etiqueta no la cubre → rellena USDA
+});
+
+test("assembleFoodWithAiMicros: los 33 nutrientes salen del estimado, sourceMicros ai, usdaFdcId null", () => {
   const micros: FoodMicrosEstimate = { vitamin_c_mg: 12, iron_mg: 1.9, calcium_mg: 62, selenium_mcg: null };
   const out = assembleFoodWithAiMicros(baseId({ kcal: 200, saturated_fat_g: 4 }), micros);
   expect(out.vitamin_c_mg).toBe(12);
@@ -134,7 +163,7 @@ test("assembleFoodWithAiMicros: los 30 nutrientes salen del estimado, sourceMicr
   expect(out.calcium_mg).toBe(62);
   expect(out.selenium_mcg).toBeNull();          // el estimado dijo null explícito
   expect(out.zinc_mg).toBeNull();               // el estimado lo omitió → null, no 0
-  expect(out.saturated_fat_g).toBeNull();       // los 6 micros de etiqueta TAMBIÉN salen del estimado (acá omitido)
+  expect(out.saturated_fat_g).toBeNull();       // los 9 micros de etiqueta TAMBIÉN salen del estimado (acá omitido)
   expect(out.sourceMicros).toBe("ai");
   expect(out.usdaFdcId).toBeNull();
 });

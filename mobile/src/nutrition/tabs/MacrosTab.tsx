@@ -66,7 +66,13 @@ export function MacrosTab({ summary, goalView, offset }: Props) {
         <Pressable
           key={s.key}
           testID={`macro-row-${s.key}`}
-          onPress={() => router.push(`/nutricion/macro?macro=${s.key}&offset=${offset}`)}
+          onPress={() =>
+            router.push(
+              s.key === "fat"
+                ? `/nutricion/grasas?offset=${offset}`
+                : `/nutricion/macro?macro=${s.key}&offset=${offset}`,
+            )
+          }
         >
           <LegendRow color={MACRO_COLORS[s.key]} label={s.label}>
             {s.g} g · {s.pctActual}%

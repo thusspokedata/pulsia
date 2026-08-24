@@ -182,16 +182,20 @@ test("FoodIdentificationSchema exige searchQuery no vacío", () => {
   expect(FoodIdentificationSchema.safeParse({ ...identificacion, searchQuery: "   " }).success).toBe(false);
 });
 
+const MICROS_DE_ETIQUETA = [
+  "saturated_fat_g", "trans_fat_g", "monounsaturated_fat_g", "polyunsaturated_fat_g",
+  "sugars_g", "fiber_g", "sodium_mg", "cholesterol_mg", "water_ml",
+];
+
 test("FoodIdentificationSchema NO le pide vitaminas ni minerales a la IA", () => {
   // El corazón de la feature: la IA identifica, USDA aporta los micros. Si un vitamin_/mineral
   // apareciera en el schema de identificación, le estaríamos pidiendo al modelo que los invente.
   const claves = Object.keys(FoodIdentificationSchema.shape);
-  const microsUsda = NUTRIENT_KEYS.filter(
-    (k) => !["saturated_fat_g", "sugars_g", "fiber_g", "sodium_mg", "cholesterol_mg", "water_ml"].includes(k),
-  );
+  const microsUsda = NUTRIENT_KEYS.filter((k) => !MICROS_DE_ETIQUETA.includes(k));
   for (const k of microsUsda) expect(claves).not.toContain(k);
-  // Y sí conserva los 6 micros de etiqueta.
-  for (const k of ["saturated_fat_g", "sugars_g", "fiber_g", "sodium_mg", "cholesterol_mg", "water_ml"]) {
+  // Y sí conserva los 9 micros de etiqueta (saturadas, trans, mono/poliinsaturadas, azúcares,
+  // fibra, sodio, colesterol, agua).
+  for (const k of MICROS_DE_ETIQUETA) {
     expect(claves).toContain(k);
   }
 });
