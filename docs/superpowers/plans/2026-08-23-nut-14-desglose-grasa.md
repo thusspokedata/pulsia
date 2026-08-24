@@ -12,7 +12,7 @@
 - Saturada: `max` 10 % · Trans: `max` 2 % · Omega-6: `max` 10 % (pintan el excedente en rojo).
 - Monoinsaturada: `recommended` 15 % (marca de referencia, NUNCA pinta alerta) · Omega-3: `recommended`, sin tope (barra toda verde).
 
-**Decisiones del owner (ya resueltas):** 5 barras (mono/omega-6/omega-3/saturada/trans), backfill del catálogo base USDA, paleta coherente con el semáforo (verde=recomendado/dentro, rojo=excedente de las "comer menos"). Mono y omega-3 nunca pintan alerta.
+**Decisiones del owner (ya resueltas):** 5 barras (mono/omega-6/omega-3/saturada/trans), backfill del catálogo base USDA **aprobado por el owner pero pendiente de ejecución** (paso operativo, requiere los CSV crudos de USDA; ver Fase 4 / "Backfill"), paleta coherente con el semáforo (verde=recomendado/dentro, rojo=excedente de las "comer menos"). Mono y omega-3 nunca pintan alerta.
 
 ---
 
@@ -536,9 +536,9 @@ Expected: PASS. Arreglar cualquier fixture/snapshot que enumere nutrientes (p.ej
 
 - [ ] **Step 1: Averiguar cómo obtener `goalKcal`** en una pantalla suelta. Buscar: `grep -rn "goalKcal\|useGoal\|goalView\|GoalView" mobile/src/nutrition`. La dona (`MacrosTab`) recibe `goalView`; la pantalla nueva debe traer la meta calórica por el mismo hook/endpoint que usa la pestaña Nutrición. Si la meta requiere el perfil, reusar ese hook.
 
-- [ ] **Step 2: Escribir el test** — con `meals` mockeados y `goalKcal` dado, la pantalla renderiza 5 barras en `FAT_BAR_ORDER`, muestra "te pasaste" en las que exceden, y cada barra es `Pressable` que navega a `/nutricion/nutriente?nutrient=<type>`.
+- [ ] **Step 2: Escribir el test** — con `meals` mockeados y `goalKcal` dado, la pantalla renderiza 5 barras en `FAT_BAR_ORDER`, muestra "te pasaste" en las que exceden, y cada barra es `Pressable` que navega a `/nutricion/nutriente?key=<type>`.
 
-- [ ] **Step 3: Implementar** usando `useMealsRange(1, offset)` + `fatBreakdown(dayTotals, goalKcal)`. Los gramos por tipo salen de sumar los `meal_item` del día (mismo `dayTotals`/summary que usa la pestaña; o sumar con el helper de sumas del registro). Cada barra: label, `grams` + unidad, umbral (`· máx N g` para `max`, `· ref N g` para mono, nada para omega-3), `SplitBar`, y `Pressable` → `router.push(\`/nutricion/nutriente?nutrient=${type}&offset=${offset}\`)`. Texto guía: "Tocá un tipo de grasa para ver qué alimentos lo aportan." Mensaje cuando excede: "Te pasaste del máximo recomendado".
+- [ ] **Step 3: Implementar** usando `useMealsRange(1, offset)` + `fatBreakdown(dayTotals, goalKcal)`. Los gramos por tipo salen de sumar los `meal_item` del día (mismo `dayTotals`/summary que usa la pestaña; o sumar con el helper de sumas del registro). Cada barra: label, `grams` + unidad, umbral (`· máx N g` para `max`, `· ref N g` para mono, nada para omega-3), `SplitBar`, y `Pressable` → `router.push(\`/nutricion/nutriente?key=${type}&offset=${offset}\`)`. Texto guía: "Tocá un tipo de grasa para ver qué alimentos lo aportan." Mensaje cuando excede: "Te pasaste del máximo recomendado".
 
 - [ ] **Step 4: Correr** → `cd mobile && npm test -- --runInBand grasas`
 

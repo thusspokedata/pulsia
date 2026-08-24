@@ -90,7 +90,7 @@ export function assembleFoodExtraction(id: FoodIdentification, usda: UsdaFoodRow
 
 /**
  * Mezcla PURA para el camino "que la IA complete": el usuario descartó USDA, así que TODO el bloque
- * de micros (los 30 del registro, incluidos los 6 de etiqueta) sale del estimado de la IA — fuente
+ * de micros (los 33 del registro, incluidos los 9 de etiqueta) sale del estimado de la IA — fuente
  * única y coherente. Los macros salen de la identificación, intactos (no se re-estiman). Marca
  * `sourceMicros: "ai"` y `usdaFdcId: null` para no mentir sobre la procedencia.
  */

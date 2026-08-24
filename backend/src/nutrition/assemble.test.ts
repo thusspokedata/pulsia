@@ -155,7 +155,7 @@ test("label con match donde la etiqueta NO trae trans_fat_g (null): cae a USDA",
   expect(out.trans_fat_g).toBe(0.1); // la etiqueta no la cubre → rellena USDA
 });
 
-test("assembleFoodWithAiMicros: los 30 nutrientes salen del estimado, sourceMicros ai, usdaFdcId null", () => {
+test("assembleFoodWithAiMicros: los 33 nutrientes salen del estimado, sourceMicros ai, usdaFdcId null", () => {
   const micros: FoodMicrosEstimate = { vitamin_c_mg: 12, iron_mg: 1.9, calcium_mg: 62, selenium_mcg: null };
   const out = assembleFoodWithAiMicros(baseId({ kcal: 200, saturated_fat_g: 4 }), micros);
   expect(out.vitamin_c_mg).toBe(12);
@@ -163,7 +163,7 @@ test("assembleFoodWithAiMicros: los 30 nutrientes salen del estimado, sourceMicr
   expect(out.calcium_mg).toBe(62);
   expect(out.selenium_mcg).toBeNull();          // el estimado dijo null explícito
   expect(out.zinc_mg).toBeNull();               // el estimado lo omitió → null, no 0
-  expect(out.saturated_fat_g).toBeNull();       // los 6 micros de etiqueta TAMBIÉN salen del estimado (acá omitido)
+  expect(out.saturated_fat_g).toBeNull();       // los 9 micros de etiqueta TAMBIÉN salen del estimado (acá omitido)
   expect(out.sourceMicros).toBe("ai");
   expect(out.usdaFdcId).toBeNull();
 });
