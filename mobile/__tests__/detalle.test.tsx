@@ -74,7 +74,7 @@ test("calorías justo en la meta: dice 'meta cumplida', igual que los macros (no
 test("tocar Nutrientes cambia de pestaña y muestra los micros", async () => {
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
-  expect(screen.getByText("Azúcares")).toBeTruthy();
+  expect(screen.getByText("Azúcares libres")).toBeTruthy();
   expect(screen.getByText("Colesterol")).toBeTruthy();
   expect(screen.queryByText("2100 ml")).toBeNull(); // el Resumen ya no está montado
 });
@@ -96,7 +96,7 @@ test("un micro sin dato dice 'sin dato' en vez de desaparecer de la tabla", asyn
   mockDay({ summary: dia([diaBase({ sugars_g: null })]) });
   await render(<DetalleDiaScreen />);
   await fireEvent.press(screen.getByTestId("seg-nutrientes"));
-  expect(screen.getByText("Azúcares")).toBeTruthy(); // la fila sigue estando
+  expect(screen.getByText("Azúcares libres")).toBeTruthy(); // la fila sigue estando
   expect(screen.getByTestId("nutr-sugars_g-amount")).toHaveTextContent(/^sin dato$/);
 });
 

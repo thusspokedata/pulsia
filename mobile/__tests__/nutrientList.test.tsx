@@ -53,6 +53,41 @@ test("un cero medido NO es 'sin dato': muestra 0 y su barra", async () => {
   expect(screen.getByTestId("nutr-sugars_g-bar")).toBeTruthy();
 });
 
+test("azúcar: el caption del split aclara el total y cuánto es intrínseco (fruta que no cuenta)", async () => {
+  const rows = [fila({
+    key: "sugars_g", label: "Azúcares libres", unit: "g", value: 8, ref: 50, pct: 16, kind: "max",
+    split: { total: 40, intrinsic: 32, free: 8 },
+  })];
+  await render(<NutrientList sections={secciones({ carbohidratos: rows })} />);
+  expect(screen.getByTestId("nutr-sugars_g-split")).toHaveTextContent(
+    /Azúcar total 40 g · 32 g de fruta\/verdura entera no cuenta/,
+  );
+});
+
+test("azúcar: sin intrínseco (todo libre) NO muestra el caption: no hay nada que aclarar", async () => {
+  const rows = [fila({
+    key: "sugars_g", label: "Azúcares libres", unit: "g", value: 40, ref: 50, pct: 80, kind: "max",
+    split: { total: 40, intrinsic: 0, free: 40 },
+  })];
+  await render(<NutrientList sections={secciones({ carbohidratos: rows })} />);
+  expect(screen.queryByTestId("nutr-sugars_g-split")).toBeNull();
+});
+
+test("azúcar: sin total conocido (split.total null) NO muestra el caption", async () => {
+  const rows = [fila({
+    key: "sugars_g", label: "Azúcares libres", unit: "g", value: 8, ref: 50, pct: 16, kind: "max",
+    split: { total: null, intrinsic: null, free: 8 },
+  })];
+  await render(<NutrientList sections={secciones({ carbohidratos: rows })} />);
+  expect(screen.queryByTestId("nutr-sugars_g-split")).toBeNull();
+});
+
+test("una fila común sin split no renderiza caption de azúcar", async () => {
+  const rows = [fila({ key: "fiber_g", label: "Fibra", unit: "g", value: 15, ref: 30, pct: 50, kind: "min" })];
+  await render(<NutrientList sections={secciones({ carbohidratos: rows })} />);
+  expect(screen.queryByTestId("nutr-fiber_g-split")).toBeNull();
+});
+
 test("en modo catálogo (sin referencia) muestra el valor sin '/ Y' y sin porcentaje", async () => {
   const rows = [fila({ key: "iron_mg", label: "Hierro", unit: "mg", value: 5.5 })];
   await render(<NutrientList sections={secciones({ grasas: rows })} />);

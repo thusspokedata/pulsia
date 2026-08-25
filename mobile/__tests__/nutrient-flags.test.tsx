@@ -110,7 +110,9 @@ test("full muestra los seis nutrientes, con su etiqueta, su valor y el chip corr
   // saturadas, colesterol), warn (sal), y neutral (azúcar, fibra — bajo pero sin chip de texto
   // propio, cae al fallback "ok"). El quinto estado, unknown, lo cubre el test de abajo.
   const { getByText, getAllByText } = await render(<NutrientFlags food={quesoCrema} variant="full" />);
-  for (const n of FLAGGED_NUTRIENTS) getByText(NUTRIENT_LABELS[n]);
+  // El azúcar se etiqueta "Azúcares libres" en full (el valor que muestra ya es libre): no cuenta
+  // la fruta/verdura entera, así que decir "azúcar" a secas mentiría. El resto usa NUTRIENT_LABELS.
+  for (const n of FLAGGED_NUTRIENTS) getByText(n === "sugars_g" ? "Azúcares libres" : NUTRIENT_LABELS[n]);
   getByText("34 g"); // grasa
   getByText("20 g"); // saturadas
   getByText("3.2 g"); // azúcar

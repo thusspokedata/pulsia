@@ -3,7 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import AgregarAlimentoScreen from "../app/nutricion/agregar-alimento";
 import {
   assembleUsdaFood, createFood, describeFood, extractFood, getFood, getUsdaEntry, searchUsdaFoods,
-  aiMicrosForFood,
+  aiMicrosForFood, updateFood,
 } from "../src/api/nutrition";
 import { useLocalSearchParams } from "expo-router";
 
@@ -51,6 +51,9 @@ const ALMENDRA = {
   unitWeightG: 1.2, sourceMacros: "ai", sourceMicros: "usda", usdaFdcId: 170567,
   // Un micro de USDA que el formulario NO edita: sirve para probar que sobrevive al guardado.
   vitamin_e_mg: 25.6,
+  // Metadata de azúcar que el form no edita: la almendra es fruto seco entero → azúcar intrínseco,
+  // con 0 g de agregado. Ambos tienen que sobrevivir al guardado (create y update).
+  sugarClass: "intrinsic", added_sugars_g: 0,
   candidates: CANDIDATOS, identification: IDENTIFICACION,
 };
 
@@ -225,6 +228,34 @@ test("elegir otro candidato y guardar persiste los micros del NUEVO, no los del 
   expect(input.sourceMicros).toBe("usda");
   // Y los micros que el form SÍ edita también son los nuevos.
   expect(input.fiber_g).toBe(10.3);
+});
+
+test("el alta round-trippea sugarClass y added_sugars_g del alimento clasificado por IA", async () => {
+  // Un alimento clasificado por la IA (aquí, almendra → intrinsic + 0 g agregado): al guardar, la
+  // clase y el agregado tienen que viajar en el payload. Sin `sugarClass: sugarClassCargado`, el
+  // PATCH del backend haría `?? null` y la clase se PERDERÍA (fruta que vuelve a marcar "azúcar
+  // alto"). `added_sugars_g` viaja por `...carried.micros` (micro del registro que el form no edita).
+  await altaConMatch();
+  await fireEvent.press(screen.getByText("Guardar en el catálogo"));
+  await waitFor(() => expect(createFood).toHaveBeenCalled());
+  const input = (createFood as jest.Mock).mock.calls[0][1];
+  expect(input.sugarClass).toBe("intrinsic");
+  expect(input.added_sugars_g).toBe(0);
+});
+
+test("editar un alimento ya clasificado guarda su sugarClass, no la borra", async () => {
+  // El bug: EDITAR un alimento con clase la borraba, porque el input no la incluía y el backend
+  // hace `?? null`. La clase se cargó en prefillFrom desde getFood y tiene que volver en el update.
+  (useLocalSearchParams as jest.Mock).mockReturnValue({ foodId: "abc" });
+  (getFood as jest.Mock).mockResolvedValue({ ...ALMENDRA, id: "abc", createdAt: 1, sugarClass: "free", added_sugars_g: 3.1, candidates: undefined, identification: undefined });
+
+  await render(<AgregarAlimentoScreen />);
+  await waitFor(() => expect(screen.getByDisplayValue("Almendra")).toBeTruthy());
+  await fireEvent.press(screen.getByText("Guardar cambios"));
+  await waitFor(() => expect(updateFood).toHaveBeenCalled());
+  const input = (updateFood as jest.Mock).mock.calls[0][2];
+  expect(input.sugarClass).toBe("free");
+  expect(input.added_sugars_g).toBe(3.1);
 });
 
 test("si el candidato no está en la lista, se busca en USDA y se elige de los resultados", async () => {

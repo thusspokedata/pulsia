@@ -25,6 +25,7 @@ import { createDb } from "../src/db/client";
 import { food, usdaFood } from "../src/db/schema";
 import { insertFood } from "../src/nutrition/repository";
 import { foodInputFromUsdaRow } from "../src/nutrition/fromUsda";
+import { classifySugar } from "../src/nutrition/classifySugar";
 import type { UsdaFoodRow } from "../src/usda/matcher";
 import { SEED_FOODS, type SeedFood } from "./seed-food-catalog.data";
 
@@ -32,6 +33,16 @@ export interface SeedPlan {
   toInsert: { food: SeedFood; row: UsdaFoodRow }[];
   skippedExisting: SeedFood[]; // el nombre ya está en el catálogo
   missingUsda: SeedFood[]; // el fdcId no está en usda_food (dataset viejo, o fdcId mal curado)
+}
+
+// PURO: arma el FoodInput completo de un seed desde su fila de USDA, agregándole la clase de
+// azúcar (override manual del data si existe; si no, la deriva `classifySugar` con nombre + desc
+// USDA). Único punto de armado: dry-run e inserción usan exactamente lo mismo.
+export function buildSeedFoodInput(f: SeedFood, row: UsdaFoodRow) {
+  return {
+    ...foodInputFromUsdaRow(row, { name: f.name, basis: f.basis, unitWeightG: f.unitWeightG }),
+    sugarClass: f.sugarClass ?? classifySugar(f.name, f.usda),
+  };
 }
 
 // PURO: decide qué sembrar sin tocar la base. `existingNames` son los nombres del catálogo actual;
@@ -104,8 +115,8 @@ async function main() {
     if (dryRun) {
       console.log("\n[dry-run] A insertar (valores YA armados, con negativos recortados):");
       for (const { food: f, row } of plan.toInsert) {
-        const input = foodInputFromUsdaRow(row, { name: f.name, basis: f.basis, unitWeightG: f.unitWeightG });
-        console.log(`  + ${f.name}  ←  ${row.description}  (${input.kcal} kcal, P${input.protein_g} C${input.carbs_g} G${input.fat_g})`);
+        const input = buildSeedFoodInput(f, row);
+        console.log(`  + ${f.name}  ←  ${row.description}  (${input.kcal} kcal, P${input.protein_g} C${input.carbs_g} G${input.fat_g}, azúcar ${input.sugarClass ?? "—"})`);
       }
       console.log("\n[dry-run] No se escribió nada.");
       return;
@@ -113,7 +124,7 @@ async function main() {
 
     let inserted = 0;
     for (const { food: f, row } of plan.toInsert) {
-      await insertFood(db, ownerId, foodInputFromUsdaRow(row, { name: f.name, basis: f.basis, unitWeightG: f.unitWeightG }));
+      await insertFood(db, ownerId, buildSeedFoodInput(f, row));
       inserted++;
     }
     console.log(`\nInsertados ${inserted} alimentos bajo ${ownerId}.`);

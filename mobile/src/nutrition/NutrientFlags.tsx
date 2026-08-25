@@ -72,7 +72,10 @@ export function NutrientFlags({
             style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}
           >
             <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-              {NUTRIENT_LABELS[f.nutrient]}
+              {/* El valor que muestra el semáforo ya es azúcar LIBRE (Phase A: nutrientValue juzga
+                  libres, no el total), así que la etiqueta tiene que decir "Azúcares libres" para no
+                  mentir. Los chips compactos no se tocan. */}
+              {f.nutrient === "sugars_g" ? "Azúcares libres" : NUTRIENT_LABELS[f.nutrient]}
             </Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
               <Text style={{ color: colors.text, fontSize: 12 }}>

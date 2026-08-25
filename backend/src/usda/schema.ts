@@ -27,6 +27,7 @@ export const usdaFood = pgTable("usda_food", {
   cholesterolMg: real("cholesterol_mg"),
   // Carbohidratos
   sugarsG: real("sugars_g"),
+  addedSugarsG: real("added_sugars_g"),
   fiberG: real("fiber_g"),
   waterMl: real("water_ml"),
   // Vitaminas

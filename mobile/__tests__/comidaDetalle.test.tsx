@@ -215,6 +215,35 @@ test("los azúcares de la comida se comparan contra la referencia de la OMS", as
   expect(screen.getByTestId("nutr-sugars_g-pct")).toHaveTextContent(/^50 %$/);
 });
 
+test("una comida de PURA FRUTA ENTERA mide LIBRES: no marca excedente y muestra el split", async () => {
+  // 60 g de azúcar total, todo intrínseco (fruta entera): los LIBRES son 0. La fila muestra 0/50 y
+  // NO puede aparecer el aviso de "te pasaste". Si el detalle midiera el total (60/50) marcaría
+  // excedente con 0 g de libre: es justo lo que este fix arregla. Mutación: sacar la sustitución
+  // por `filaDeAzucar` deja la fila del total → 60/50 → aparece la alerta de carbohidratos.
+  mockComida(comida([item({ foodName: "Manzana", carbs_g: 60, sugars_g: 40, sugarClass: "intrinsic" }),
+    item({ id: "33333333-3333-4333-8333-333333333333", foodName: "Pera", carbs_g: 20, sugars_g: 20, sugarClass: "intrinsic" })]));
+  await render(<ComidaDetalleScreen />);
+
+  await waitFor(() => expect(screen.getByText("Azúcares libres")).toBeTruthy());
+  expect(screen.getByTestId("nutr-sugars_g-amount")).toHaveTextContent(/^0 \/ 50 g$/);
+  expect(screen.getByTestId("nutr-sugars_g-pct")).toHaveTextContent(/^0 %$/);
+  // El split aclara que los 60 g de total son intrínsecos y no cuentan.
+  expect(screen.getByTestId("nutr-sugars_g-split")).toHaveTextContent(/60 g.*no cuenta/);
+  // Carbohidratos arranca abierto: si midiera el total, el excedente dispararía esta alerta.
+  expect(screen.queryByTestId("nutr-grupo-carbohidratos-alerta")).toBeNull();
+});
+
+test("una comida con azúcar LIBRE (jugo) sí lo cuenta y puede excederse", async () => {
+  // El espejo del anterior: un jugo (free) sí es azúcar libre. 60 g → 120 % → excedente. Sin este
+  // caso, una fila fija en 0 pasaría verde el test de arriba.
+  mockComida(comida([item({ foodName: "Jugo de naranja", carbs_g: 60, sugars_g: 60, sugarClass: "free" })]));
+  await render(<ComidaDetalleScreen />);
+
+  await waitFor(() => expect(screen.getByTestId("nutr-sugars_g-amount")).toHaveTextContent(/^60 \/ 50 g$/));
+  expect(screen.getByTestId("nutr-sugars_g-pct")).toHaveTextContent(/^120 %$/);
+  expect(screen.getByTestId("nutr-grupo-carbohidratos-alerta")).toBeTruthy();
+});
+
 test("la fibra de la comida se compara contra la referencia de la OMS, y es un PISO", async () => {
   mockComida(comida([item({ foodName: "Lentejas", fiber_g: 45 })]));
   await render(<ComidaDetalleScreen />);

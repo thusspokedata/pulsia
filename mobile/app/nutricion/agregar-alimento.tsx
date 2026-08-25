@@ -8,7 +8,7 @@ import {
   getUsdaEntry, assembleUsdaFood, aiMicrosForFood, estimateCookingYield, type UsdaEntry,
 } from "../../src/api/nutrition";
 import { NUTRIENT_KEYS } from "@pulsia/shared";
-import type { FoodBasis, FoodExtraction, FoodIdentification, NutrientValues, SourceMacros, SourceMicros } from "@pulsia/shared";
+import type { FoodBasis, FoodExtraction, FoodIdentification, NutrientValues, SourceMacros, SourceMicros, SugarClass } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 import { SourceChip } from "../../src/nutrition/SourceChip";
@@ -83,6 +83,11 @@ export default function AgregarAlimentoScreen() {
   const baseUrl = useRef<string | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
   const [carried, setCarried] = useState<Carried>(NO_CARRIED);
+  // La CLASE de azúcar del alimento cargado (intrinsic/free/mixed). El formulario NO la edita, pero
+  // el semáforo la necesita para no marcar la fruta entera como "azúcar alto": sin ella, foodFlags
+  // trata el azúcar total como libre (conservador) y penaliza la fruta. Se captura en prefillFrom
+  // (igual que `carried`) porque llega junto con el resto del alimento, por cualquier camino de carga.
+  const [sugarClassCargado, setSugarClassCargado] = useState<SugarClass | null>(null);
   const [foodText, setFoodText] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -152,6 +157,7 @@ export default function AgregarAlimentoScreen() {
       cookingYield: numStr(ex.cookingYield),
     });
     setCarried(carriedFrom(ex));
+    setSugarClassCargado(ex.sugarClass ?? null);
     if (entrada !== undefined) setEntradaUsda(entrada);
   }
 
@@ -304,6 +310,11 @@ export default function AgregarAlimentoScreen() {
       cholesterol_mg: optNum(form.cholesterol_mg), water_ml: optNum(form.water_ml),
       unitWeightG: form.unitWeightG.trim() === "" ? null : num(form.unitWeightG),
       sourceMacros: form.sourceMacros, sourceMicros: carried.sourceMicros, usdaFdcId: carried.usdaFdcId,
+      // La CLASE de azúcar viaja de vuelta intacta (el form no la edita). Sin esto, el PATCH del
+      // backend hace `sugarClass: input.sugarClass ?? null`: guardar un alimento clasificado por IA
+      // perdería su clase, y editar uno ya clasificado la BORRARÍA. (`added_sugars_g` ya viaja por
+      // `...carried.micros`: es un micro del registro que el form no edita.)
+      sugarClass: sugarClassCargado,
       // Una receta nunca tiene factor de cocción propio (el campo ni se muestra para ella): se
       // fuerza null en vez de confiar en que el form quedó vacío.
       cookingYield: isRecipe || form.cookingYield.trim() === "" ? null : num(form.cookingYield),
@@ -538,6 +549,12 @@ export default function AgregarAlimentoScreen() {
               sodium_mg: sodiumMg,
               cholesterol_mg: optNum(form.cholesterol_mg),
               fiber_g: optNum(form.fiber_g),
+              // Azúcar LIBRE, no total: la clase y el agregado salen del ALIMENTO CARGADO (no del
+              // form, que no los edita), para que el semáforo no marque la fruta entera como
+              // "azúcar alto". `sugarClass` se captura en prefillFrom; `added_sugars_g` viaja en
+              // `carried` (no es uno de los seis micros de etiqueta).
+              sugarClass: sugarClassCargado,
+              added_sugars_g: carried.micros.added_sugars_g ?? null,
             }}
           />
         </View>

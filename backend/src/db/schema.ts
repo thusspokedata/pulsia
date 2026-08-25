@@ -117,6 +117,7 @@ export const food = pgTable("food", {
   cholesterolMg: real("cholesterol_mg"),
   // Carbohidratos
   sugarsG: real("sugars_g"),
+  addedSugarsG: real("added_sugars_g"), // azúcar agregada (USDA nº 1235, escaso → muchas veces null)
   fiberG: real("fiber_g"),
   waterMl: real("water_ml"),
   // Vitaminas
@@ -148,6 +149,8 @@ export const food = pgTable("food", {
   // Procedencia partida: los macros y los micros pueden venir de fuentes distintas.
   sourceMacros: text("source_macros").notNull(), // 'label' | 'ai' | 'manual' | 'usda'
   sourceMicros: text("source_micros"),           // 'usda' | 'ai' | null (null = sin match USDA)
+  // Clase del azúcar (intrinsic|free|mixed): metadata del alimento, NO un nutriente escalable.
+  sugarClass: text("sugar_class"),
   usdaFdcId: integer("usda_fdc_id"),             // fila de USDA de la que salieron los micros
   // Composición de una receta: { items:[{foodId,quantity,unit}], cookedWeightG }. null = alimento
   // común (no receta). La per-100g del Food ya está derivada en las columnas de macros/micros; esto
@@ -193,6 +196,7 @@ export const mealItem = pgTable("meal_item", {
   omega6G: real("omega6_g"),
   cholesterolMg: real("cholesterol_mg"),
   sugarsG: real("sugars_g"),
+  addedSugarsG: real("added_sugars_g"),
   fiberG: real("fiber_g"),
   waterMl: real("water_ml"),
   vitaminAMcg: real("vitamin_a_mcg"),
@@ -218,6 +222,8 @@ export const mealItem = pgTable("meal_item", {
   seleniumMcg: real("selenium_mcg"),
   sodiumMg: real("sodium_mg"),
   zincMg: real("zinc_mg"),
+  // Snapshot de la clase del azúcar del alimento (metadata categórica, NO escala con la cantidad).
+  sugarClass: text("sugar_class"),
   weighedCooked: boolean("weighed_cooked"), // true = se pesó cocido; null = ítem viejo / sin conversión
 }, (t) => ({
   byMeal: index("meal_item_meal_idx").on(t.mealId),

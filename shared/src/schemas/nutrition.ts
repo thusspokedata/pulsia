@@ -23,6 +23,12 @@ export type SourceMacros = z.infer<typeof SourceMacrosSchema>;
 export const SourceMicrosSchema = z.enum(["usda", "ai"]).nullable();
 export type SourceMicros = z.infer<typeof SourceMicrosSchema>;
 
+// Cómo tratar el azúcar de un alimento para el límite OMS de azúcares LIBRES:
+// intrinsic = fruta/verdura ENTERA (su azúcar NO cuenta) · free = jugo/seco/puré/miel/jarabe/dulce
+// (todo su azúcar es libre) · mixed = procesado con intrínseco + agregado (lo agregado cuenta).
+export const SugarClassSchema = z.enum(["intrinsic", "free", "mixed"]);
+export type SugarClass = z.infer<typeof SugarClassSchema>;
+
 // Macros por 100g/100ml. Obligatorios y no-nullable: son el núcleo, y a diferencia de los
 // micros siempre hay un valor (aunque sea estimado).
 const macrosPer100 = {
@@ -32,7 +38,7 @@ const macrosPer100 = {
   fat_g: z.number().nonnegative(),
 };
 
-// Los 30 nutrientes salen del REGISTRO, no de una lista repetida acá: agregar uno en
+// Los 34 nutrientes salen del REGISTRO, no de una lista repetida acá: agregar uno en
 // nutrients.ts lo agrega al schema, al escalado y a las sumas de una sola vez.
 // Todos OPCIONALES + nullable: la IA puede omitirlos, un alimento sin match en USDA los deja
 // vacíos, y los alimentos/comidas viejos no los tienen. `null` es "no sabemos", que NO es 0.
@@ -56,13 +62,16 @@ export const FoodExtractionSchema = z.object({
   // cocido ÷ seco. null/ausente = alimento normal (per-100g se aplica tal cual, sin toggle).
   // !null = el per-100g es SECO; al pesar cocido se convierte a seco equivalente (ver macros.ts).
   cookingYield: z.number().positive().max(10).nullable().optional(),
+  // Cómo tratar el azúcar de este alimento para el límite OMS de azúcares LIBRES. Metadata del
+  // alimento (NO escala con la cantidad); ver freeSugars.ts.
+  sugarClass: SugarClassSchema.nullable().optional(),
 });
 export type FoodExtraction = z.infer<typeof FoodExtractionSchema>;
 
 // Lo que la 1ª llamada de IA devuelve: identifica el alimento y da una frase de búsqueda. NO
 // incluye vitaminas ni minerales — esos los aporta USDA. Los "micros de etiqueta" (saturadas,
-// trans, mono/poliinsaturadas, azúcares, fibra, sodio, colesterol, agua) SÍ los da, porque son
-// los 9 legibles de una etiqueta nutricional.
+// trans, mono/poliinsaturadas, azúcares, azúcar agregada, fibra, sodio, colesterol, agua) SÍ los
+// da, porque son los 10 legibles de una etiqueta nutricional.
 export const FoodIdentificationSchema = z.object({
   name: z.string().trim().min(1),
   basis: FoodBasisSchema,
@@ -77,6 +86,7 @@ export const FoodIdentificationSchema = z.object({
   monounsaturated_fat_g: z.number().nonnegative().nullable().optional(),
   polyunsaturated_fat_g: z.number().nonnegative().nullable().optional(),
   sugars_g: z.number().nonnegative().nullable().optional(),
+  added_sugars_g: z.number().nonnegative().nullable().optional(),
   fiber_g: z.number().nonnegative().nullable().optional(),
   sodium_mg: z.number().nonnegative().nullable().optional(),
   cholesterol_mg: z.number().nonnegative().nullable().optional(),
@@ -88,10 +98,12 @@ export const FoodIdentificationSchema = z.object({
   searchQuery: z.string().trim().min(1),
   // La IA estima el factor cocido÷seco si es un producto seco que absorbe agua; null si no aplica.
   cookingYield: z.number().positive().max(10).nullable(),
+  // Cómo tratar el azúcar de este alimento para el límite OMS de azúcares LIBRES (ver freeSugars.ts).
+  sugarClass: SugarClassSchema.nullable().optional(),
 });
 export type FoodIdentification = z.infer<typeof FoodIdentificationSchema>;
 
-// Lo que estima la IA cuando el usuario descarta USDA: SOLO el bloque de micronutrientes (los 30
+// Lo que estima la IA cuando el usuario descarta USDA: SOLO el bloque de micronutrientes (los 34
 // del registro), por 100 g/ml, todos nullable/opcionales. NO incluye macros: esos ya existen en la
 // identificación/alimento y no se re-estiman. Se deriva de `nutrientFields` (misma fuente que el
 // resto del schema) para que un nutriente nuevo caiga solo.
@@ -191,6 +203,8 @@ export const MealItemSchema = z.object({
   ...macrosPer100,
   ...nutrientFields,
   weighedCooked: z.boolean().nullable().optional(),
+  // Metadata del alimento snapshoteada al ítem (NO escala con la cantidad); ver freeSugars.ts.
+  sugarClass: SugarClassSchema.nullable().optional(),
 });
 export type MealItem = z.infer<typeof MealItemSchema>;
 

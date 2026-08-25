@@ -232,6 +232,13 @@
       "when": 1787514536517,
       "tag": "0032_petite_black_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1787661829831,
+      "tag": "0033_groovy_gunslinger",
+      "breakpoints": true
     }
   ]
 }

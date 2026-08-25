@@ -101,8 +101,8 @@ export function macroSplit(comido: MacroGrams, meta: MacroGrams | null): MacroSl
 
 // Los micros que se pueden rankear: TODOS los del registro (el snapshot de MealItem los guarda a
 // todos) más `salt_g`, que no es una columna sino un derivado del sodio. Se abrió del puñado de 5
-// original porque la pestaña del día pasó a mostrar los 30 y cualquiera de ellos puede pedir su
-// desglose de "qué alimentos lo aportan"; limitar el ranking dejaría 25 filas mudas.
+// original porque la pestaña del día pasó a mostrar los 34 y cualquiera de ellos puede pedir su
+// desglose de "qué alimentos lo aportan"; limitar el ranking dejaría el resto de filas mudas.
 export type RankNutrient = NutrientKey | "salt_g";
 
 // `salt_g` no es un campo del ítem: el snapshot guarda SODIO. El ranking sigue hablando en SAL

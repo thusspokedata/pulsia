@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { planSeed } from "./seed-food-catalog";
-import type { SeedFood } from "./seed-food-catalog.data";
+import { buildSeedFoodInput, planSeed } from "./seed-food-catalog";
+import { SEED_FOODS, type SeedFood } from "./seed-food-catalog.data";
 import type { UsdaFoodRow } from "../src/usda/matcher";
 
 function row(fdcId: number): UsdaFoodRow {
@@ -43,4 +43,17 @@ test("todo nuevo con fila USDA → todo a insertar, con su fila", () => {
   expect(plan.toInsert[0].row.fdcId).toBe(2);
   expect(plan.skippedExisting).toHaveLength(0);
   expect(plan.missingUsda).toHaveLength(0);
+});
+
+test("buildSeedFoodInput deriva la clase de azúcar: una fruta del seed queda intrinsic", () => {
+  const fruta = SEED_FOODS.find((f) => f.name === "Fresas");
+  expect(fruta).toBeDefined();
+  const input = buildSeedFoodInput(fruta!, row(fruta!.fdcId));
+  expect(input.sugarClass).toBe("intrinsic");
+});
+
+test("buildSeedFoodInput: el override manual del data gana sobre el clasificador", () => {
+  // "Manzana" clasificaría intrinsic, pero un override manual mixed debe ganar.
+  const conOverride: SeedFood = { ...seed("Manzana", 5), sugarClass: "mixed" };
+  expect(buildSeedFoodInput(conOverride, row(5)).sugarClass).toBe("mixed");
 });

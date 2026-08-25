@@ -17,7 +17,7 @@
 //
 // `basis` es "per_100g" para todos (los aceites también: USDA reporta el aceite por 100 g).
 
-import type { FoodBasis } from "@pulsia/shared";
+import type { FoodBasis, SugarClass } from "@pulsia/shared";
 
 export interface SeedFood {
   /** Nombre en español, tal como aparece en el catálogo. */
@@ -28,6 +28,11 @@ export interface SeedFood {
   fdcId: number;
   /** Descripción USDA de esa fila, para revisar el mapeo de un vistazo (no se persiste). */
   usda: string;
+  /**
+   * Override manual de la clase de azúcar. Opcional: si se omite, el seed la deriva con
+   * `classifySugar(name, usda)`. Sólo hace falta cuando el clasificador se equivoca.
+   */
+  sugarClass?: SugarClass;
 }
 
 export const SEED_FOODS: SeedFood[] = [

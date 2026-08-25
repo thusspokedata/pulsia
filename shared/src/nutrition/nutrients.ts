@@ -28,6 +28,7 @@ export const NUTRIENTS = [
   { key: "cholesterol_mg", label: "Colesterol", unit: "mg", group: "grasas", decimals: 1 },
   // --- Carbohidratos ---
   { key: "sugars_g", label: "Azúcares", unit: "g", group: "carbohidratos", decimals: 1 },
+  { key: "added_sugars_g", label: "Azúcar agregada", unit: "g", group: "carbohidratos", decimals: 1 },
   { key: "fiber_g", label: "Fibra", unit: "g", group: "carbohidratos", decimals: 1 },
   // --- Vitaminas (14) ---
   { key: "vitamin_a_mcg", label: "Vitamina A", unit: "mcg", group: "vitaminas", decimals: 1 },

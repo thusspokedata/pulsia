@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { NUTRIENTS, NUTRIENT_KEYS, NutrientKeySchema, nutrientsByGroup } from "./nutrients";
 
-test("hay 33 micronutrientes", () => {
-  expect(NUTRIENTS.length).toBe(33);
+test("hay 34 micronutrientes", () => {
+  expect(NUTRIENTS.length).toBe(34);
 });
 
 test("las claves son únicas", () => {

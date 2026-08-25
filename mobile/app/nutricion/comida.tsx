@@ -9,11 +9,13 @@ import { loadDailyGoalContext, type DailyGoalContext } from "../../src/nutrition
 import { buildGoalView, macroTargetLabel } from "../../src/nutrition/goalView";
 import {
   buildNutrientRows,
+  filaDeAzucar,
   filaDeSal,
   separarValoresYParciales,
+  sustituirAzucar,
   sustituirSodioPorSal,
 } from "../../src/nutrition/nutrientRows";
-import { sumarNutrientesDeItems } from "../../src/nutrition/daySummary";
+import { sumarAzucarLibreDeItems, sumarNutrientesDeItems } from "../../src/nutrition/daySummary";
 import { referenciasOms } from "../../src/nutrition/dayNutrientRows";
 import { NutrientList } from "../../src/nutrition/NutrientList";
 import { Card, SectionTitle, Bar } from "../../src/nutrition/tabs/ui";
@@ -95,7 +97,11 @@ export default function ComidaDetalleScreen() {
   const { values: nutrientes, partial: parciales } = separarValoresYParciales(sumas);
   // La meta de kcal del día: es lo que hace calculable el techo de saturadas (10 % de la energía).
   const goalKcal = goalView?.status === "ok" ? goalView.kcal!.meta : null;
-  const secciones = sustituirSodioPorSal(
+  // El azúcar LIBRE de ESTA comida (mismo helper que el total del día): la fila mide libres, no el
+  // total, para no marcar excedente cuando el azúcar es intrínseco (pura fruta entera). Una comida
+  // no tiene aporte de suplemento, así que supplementFree va en null.
+  const libre = sumarAzucarLibreDeItems(items);
+  const conSal = sustituirSodioPorSal(
     buildNutrientRows(nutrientes, { sex: profile?.sex, age: profile?.age }, {
       partial: parciales,
       // Las MISMAS 5 referencias de la OMS que la pestaña del día (azúcares, fibra, colesterol,
@@ -118,6 +124,13 @@ export default function ComidaDetalleScreen() {
     // Hereda el `partial` DEL SODIO: es el mismo dato en otra unidad, así que si el sodio de la
     // comida tenía agujeros, la sal también (mismo criterio que dayNutrientRows.ts).
     filaDeSal(sumas.sodium_mg.value, NUTRIENT_REFERENCES.salt_g, sumas.sodium_mg.partial),
+  );
+  // La fila de `sugars_g` (total) se sustituye por la de azúcares LIBRES, igual que en la pestaña
+  // del día: compara contra el límite OMS (50 g) solo la parte que cuenta. El total viaja en `split`
+  // para que la UI aclare cuánto era intrínseco (fruta/verdura entera, que no suma).
+  const secciones = sustituirAzucar(
+    conSal,
+    filaDeAzucar(libre.value, sumas.sugars_g.value, NUTRIENT_REFERENCES.sugars_g, libre.partial, null),
   );
 
   return (

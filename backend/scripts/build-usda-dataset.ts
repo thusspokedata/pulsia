@@ -161,6 +161,7 @@ export const MAPEO_NUTRIENTES: Record<number, { clave: string; unidadUsda: strin
   1253: { clave: "cholesterol_mg", unidadUsda: "MG" }, // Cholesterol
   // --- Carbohidratos ---
   2000: { clave: "sugars_g", unidadUsda: "G" }, // Total Sugars
+  1235: { clave: "added_sugars_g", unidadUsda: "G" }, // Sugars, added
   1079: { clave: "fiber_g", unidadUsda: "G" }, // Fiber, total dietary
   // Water viene en G y nuestra clave es `water_ml`. NO es un error de unidad: la densidad del agua
   // es 1 g/ml, así que 1 g = 1 ml exacto. Se copia tal cual, sin factor.

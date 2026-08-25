@@ -2,7 +2,7 @@ import { and, asc, eq, gte, lte, inArray } from "drizzle-orm";
 import { food, meal, mealItem, waterLog, nutritionGoal } from "../db/schema";
 import { foodMacrosForQuantity } from "@pulsia/shared";
 import { nutrientsFromRow, nutrientsToColumns } from "./columns";
-import type { Food, FoodInput, Meal, MealItem, MealItemInput, MealInput, NutritionGoalInput, QuantityUnit, Recipe, WaterLog, WaterLogInput } from "@pulsia/shared";
+import type { Food, FoodInput, Meal, MealItem, MealItemInput, MealInput, NutritionGoalInput, QuantityUnit, Recipe, SugarClass, WaterLog, WaterLogInput } from "@pulsia/shared";
 import type { Db, DbOrTx } from "../db/client";
 
 type FoodRow = typeof food.$inferSelect;
@@ -28,6 +28,8 @@ export function toFood(row: FoodRow): Food {
     // Solo presente si es una receta: un alimento común no debe ganar una clave `recipe: null`
     // que rompa comparaciones exactas de tests/clientes existentes.
     ...(row.recipe ? { recipe: row.recipe as Recipe } : {}),
+    // Idéntico patrón: solo cuando hay clase (no null), para no romper comparaciones exactas.
+    ...(row.sugarClass ? { sugarClass: row.sugarClass as SugarClass } : {}),
   };
 }
 
@@ -40,6 +42,8 @@ export function toMeal(row: MealRow, items: MealItemRow[]): Meal {
       kcal: it.kcal, protein_g: it.proteinG, carbs_g: it.carbsG, fat_g: it.fatG,
       weighedCooked: it.weighedCooked ?? null,
       ...nutrientsFromRow(it),
+      // Metadata categórica del alimento, snapshoteada; solo presente si no es null.
+      ...(it.sugarClass ? { sugarClass: it.sugarClass as SugarClass } : {}),
     })),
   };
 }
@@ -68,6 +72,9 @@ export function snapshotItems(items: MealItemInput[], catalog: Map<string, FoodR
       grams: m.grams, kcal: m.kcal, proteinG: m.protein_g, carbsG: m.carbs_g, fatG: m.fat_g,
       weighedCooked: it.weighedCooked ?? null,
       ...nutrientsToColumns(m),
+      // Clase del azúcar: se snapshotea DEL FOOD tal cual (categórica; NO pasa por
+      // foodMacrosForQuantity, que solo escala números).
+      sugarClass: f.sugarClass ?? null,
     };
   });
 }
@@ -82,6 +89,7 @@ export async function insertFood(db: Db, userId: string, input: FoodInput): Prom
     usdaFdcId: input.usdaFdcId ?? null,
     recipe: input.recipe ?? null,
     cookingYield: input.cookingYield ?? null,
+    sugarClass: input.sugarClass ?? null,
     ...nutrientsToColumns(input),
   }).returning();
   return toFood(row);
@@ -127,6 +135,7 @@ export async function updateFoodRow(db: DbOrTx, userId: string, id: string, inpu
     usdaFdcId: input.usdaFdcId ?? null,
     recipe: input.recipe ?? null,
     cookingYield: input.cookingYield ?? null,
+    sugarClass: input.sugarClass ?? null,
     ...nutrientsToColumns(input),
   }).where(and(eq(food.id, id), eq(food.userId, userId))).returning();
   return rows[0] ?? null;
