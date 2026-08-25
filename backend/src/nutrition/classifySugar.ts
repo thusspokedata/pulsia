@@ -1,7 +1,10 @@
 // Clasificador PURO del azúcar de un alimento para el límite OMS de azúcares LIBRES (NUT-10).
 //
 // Decide, por el NOMBRE (+ la descripción USDA si la hay), si el azúcar del alimento es:
-//   · "free"      → jugo, fruta seca, puré/compota, miel, jarabe, azúcar, dulce: TODO su azúcar es libre.
+//   · "free"      → jugo, fruta seca, puré/compota, miel, jarabe, azúcar, dulce, POSTRE inequívoco
+//                   (torta, brownie, muffin, cheesecake…) y batido/licuado de fruta: TODO su azúcar
+//                   es libre. Los términos AMBIGUOS savory (tarta, pastel, budín, galleta) se dejan
+//                   AFUERA a propósito: tienen versiones saladas comunes (ver FREE_PALABRAS).
 //   · "intrinsic" → fruta o verdura ENTERA: su azúcar es natural y NO cuenta como libre.
 //   · null        → no sabemos (conservador; el motor tratará el total como libre salvo added_sugars_g).
 //
@@ -28,6 +31,15 @@ const FREE_PREFIJOS = [
   "compota", "membrillo",
   "helado", "refresco", "gaseosa",
   "seco", "seca",
+  // Postres/dulces INEQUÍVOCOS (todo su azúcar es agregada). Van de prefijo porque no hay palabra
+  // savory que arranque con ellos, y así admiten plurales/variantes:
+  //   · "bizcoch" (recortado) pesca "bizcocho" Y "bizcochuelo" (torta esponjosa dulce); "bizcocho"
+  //     entero NO alcanzaría "bizcochuelo" (diverge en la 8ª letra: bizcoch-o vs bizcoch-uelo).
+  //   · "muffin"/"cupcake"/"brownie"/"cheesecake"/"streusel"/"tiramisu" no tienen homónimo salado.
+  "streusel", "bizcoch", "brownie", "muffin", "cheesecake", "cupcake", "tiramisu",
+  // Batidos/licuados de fruta: la OMS los cuenta como azúcar LIBRE, igual que el jugo (la fibra se
+  // rompe al licuar). Sin esto, "Batido de mango" caería en produce ("mango") → intrinsic.
+  "batido", "smoothie", "licuado", "milkshake",
   // El PURÉ/compota de FRUTA es free (todo su azúcar es libre): sin esto "Puré de manzana"
   // caería en produce ("manzana") y se marcaría intrinsic, sub-avisando el azúcar libre. Un
   // "puré de papa" también daría free, pero su azúcar es ~0 así que es inocuo (conservador);
@@ -39,11 +51,22 @@ const FREE_PREFIJOS = [
 // ("jamon"), que NO es dulce; exacto lo evita. "nectar" está acá y NO en los prefijos: como
 // palabra exacta pesca el néctar SUELTO (bebida azucarada, "Néctar de durazno" → free) pero no el
 // prefijo de "nectarina", que es una fruta ENTERA (intrinsic, listada en PRODUCE).
-const FREE_PALABRAS = ["jam", "nectar"];
+// "torta" (= pastel dulce) va acá como palabra EXACTA (con plural: "torta"/"tortas"), NO de
+// prefijo. La palabra exacta evita pescar cualquier token savory más largo que ARRANQUE con
+// "torta" (p.ej. "tortazo"), que un prefijo sí atraparía. ("tortilla" no arranca con "torta"
+// —diverge en la 5ª letra, tort-i vs tort-a— así que ni exacto ni prefijo la pescan; queda
+// intrinsic por "papa".) Caso real del backfill: "Torta de manzana con streusel" quedaba
+// intrinsic por la fruta y escondía la azúcar agregada; ahora torta gana (free).
+const FREE_PALABRAS = ["jam", "nectar", "torta"];
 
 // FREE, frases literales (substring): "dulce de leche", "dulce de membrillo". "dulce" solo NO
 // alcanza (sería demasiado amplio).
 const FREE_FRASES = ["dulce de"];
+
+// DELIBERADAMENTE AFUERA de free (ambiguos savory): "tarta" (tarta de verduras), "pastel" (pastel
+// de papa/carne), "budin" (budín de verduras/carne) y "galleta" (galleta salada) tienen versiones
+// saladas comunes. Marcarlos free daría un falso positivo de azúcar libre en esos platos salados;
+// se dejan sin clasificar por su nombre (caerán en produce si nombran una verdura, o null).
 
 // PRODUCE ENTERA (intrinsic): frutas y verduras genuinas. Se matchea como palabra completa con
 // plural opcional (-s/-es) para no pescar el patrón dentro de otra palabra ("col" no debe pescar

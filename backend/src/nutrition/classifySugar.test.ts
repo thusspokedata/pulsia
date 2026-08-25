@@ -78,3 +78,56 @@ test("el PURÉ de fruta es free (todo su azúcar es libre), no intrinsic por la 
   expect(classifySugar("Puré de manzana")).toBe("free");
   expect(classifySugar("Puree de pera")).toBe("free");
 });
+
+test("TORTA (postre) es free aunque nombre una fruta — no la esconde como intrinsic", () => {
+  // Caso real del backfill: la fruta pescaba PRODUCE ("manzana"/"frutilla") y quedaba intrinsic,
+  // escondiendo el azúcar AGREGADA del postre (intrinsic → libre = 0). "torta" gana antes (free).
+  // "torta" es palabra EXACTA (con plural), NO prefijo: como prefijo pescaría "tortilla" (savory).
+  // Mutación: si se saca "torta" de FREE_PALABRAS, estos dan "intrinsic" y el test rompe.
+  expect(classifySugar("Torta de manzana con streusel")).toBe("free");
+  expect(classifySugar("Torta de chocolate con crema y frutilla")).toBe("free");
+  expect(classifySugar("Tortas")).toBe("free"); // plural
+});
+
+test("'tortilla' (savory) NO es free — queda intrinsic por 'papa'", () => {
+  // La tortilla de papa es salada: su azúcar es ~0 y NO debe caer en free. "tortilla" no arranca
+  // con "torta" (diverge en la 5ª letra), así que ni palabra exacta ni prefijo la pescan; gana
+  // "papa" (produce) → intrinsic. Guarda contra que alguien agregue "tort"/"torti" a free.
+  expect(classifySugar("Tortilla de papa")).toBe("intrinsic");
+});
+
+test("'torta' es palabra EXACTA, no prefijo — no pesca tokens savory más largos ('tortazo')", () => {
+  // Un token que ARRANCA con "torta" pero no ES "torta" (p.ej. "tortazo", golpe/estropicio) NO
+  // debe caer en free. La palabra exacta (\btorta s?\b) lo excluye; un prefijo lo atraparía.
+  // Mutación: mover "torta" de FREE_PALABRAS a FREE_PREFIJOS hace que esto dé "free" y rompe.
+  expect(classifySugar("Tortazo")).toBeNull();
+});
+
+test("postres inequívocos (prefijo) → free", () => {
+  expect(classifySugar("Streusel de avena")).toBe("free");
+  expect(classifySugar("Brownie de chocolate")).toBe("free");
+  expect(classifySugar("Muffin de arándanos")).toBe("free"); // arándano es produce, pero muffin gana
+  expect(classifySugar("Cheesecake de frutilla")).toBe("free");
+  expect(classifySugar("Cupcake")).toBe("free");
+  expect(classifySugar("Tiramisú")).toBe("free");
+  // "bizcocho" es prefijo a propósito: pesca también "bizcochuelo" (torta esponjosa, dulce).
+  expect(classifySugar("Bizcocho")).toBe("free");
+  expect(classifySugar("Bizcochuelo")).toBe("free");
+});
+
+test("batidos/licuados de fruta → free (la OMS los cuenta como libres, igual que el jugo)", () => {
+  expect(classifySugar("Batido de mango")).toBe("free"); // mango es produce, pero batido gana
+  expect(classifySugar("Smoothie de frutilla")).toBe("free");
+  expect(classifySugar("Licuado de banana")).toBe("free");
+  expect(classifySugar("Milkshake de vainilla")).toBe("free");
+});
+
+test("términos ambiguos savory se dejan AFUERA de free (tarta/pastel/budín/galleta)", () => {
+  // "tarta de verduras", "pastel de papa", "budín de verduras", "galleta salada" son savory: NO
+  // se agregan a free. Acá verificamos que NO caen en free (quedan intrinsic si nombran produce,
+  // o null si no). Si alguien agregara "tarta"/"pastel"/"budin"/"galleta" a free, esto rompe.
+  expect(classifySugar("Tarta de verduras")).not.toBe("free");
+  expect(classifySugar("Pastel de papa")).not.toBe("free");
+  expect(classifySugar("Budín de verduras")).not.toBe("free");
+  expect(classifySugar("Galleta salada")).not.toBe("free");
+});
