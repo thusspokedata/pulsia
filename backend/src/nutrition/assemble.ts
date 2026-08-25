@@ -9,21 +9,22 @@
 import { NUTRIENT_KEYS, type FoodExtraction, type FoodIdentification, type FoodMicrosEstimate } from "@pulsia/shared";
 import type { UsdaFoodRow } from "../usda/matcher";
 import { nutrientColumn } from "./columns";
+import { classifySugar } from "./classifySugar";
 
-// Lo que la IA aporta (13 keys, ampliado de los 10 del §5.2 original): los 4 macros + los 9
-// micros legibles de una etiqueta (los 6 de siempre más trans/mono/poliinsaturadas — NUT-14).
-// Fuente ÚNICA; los otros dos conjuntos se derivan de acá.
+// Lo que la IA aporta (14 keys, ampliado de los 10 del §5.2 original): los 4 macros + los 10
+// micros legibles de una etiqueta (los 6 de siempre, más trans/mono/poliinsaturadas de NUT-14 y
+// azúcar agregada de NUT-10). Fuente ÚNICA; los otros dos conjuntos se derivan de acá.
 export const AI_PROVIDED_KEYS = [
   "kcal", "protein_g", "carbs_g", "fat_g",
   "saturated_fat_g", "trans_fat_g", "monounsaturated_fat_g", "polyunsaturated_fat_g",
-  "sugars_g", "fiber_g", "sodium_mg", "cholesterol_mg", "water_ml",
+  "sugars_g", "added_sugars_g", "fiber_g", "sodium_mg", "cholesterol_mg", "water_ml",
 ] as const;
 
 const AI_SET = new Set<string>(AI_PROVIDED_KEYS);
 const REGISTRO = new Set<string>(NUTRIENT_KEYS);
 
 // Macros = los que la IA aporta y NO están en el registro de micronutrientes (los 4 núcleo,
-// no-nullable). Micros de etiqueta = los que SÍ están en el registro (los 9).
+// no-nullable). Micros de etiqueta = los que SÍ están en el registro (los 10).
 const MACRO_KEYS = AI_PROVIDED_KEYS.filter((k) => !REGISTRO.has(k));
 const LABEL_MICRO_KEYS = AI_PROVIDED_KEYS.filter((k) => REGISTRO.has(k));
 
@@ -70,6 +71,9 @@ export function assembleFoodExtraction(id: FoodIdentification, usda: UsdaFoodRow
     sourceMicros: usda ? "usda" : null,
     usdaFdcId: usda?.fdcId ?? null,
     cookingYield: id.cookingYield ?? null,
+    // Clase del azúcar: la IA la manda si pudo; si la omitió, cae al clasificador determinista
+    // sobre el nombre + la descripción de la fila de USDA elegida (más pistas que solo el nombre).
+    sugarClass: id.sugarClass ?? classifySugar(id.name, usda?.description ?? null) ?? null,
   };
   // Macros (4): siempre presentes. La 1ª llamada trae siempre un número, así que la mezcla nunca
   // devuelve null acá; el `?? 0` es un cinturón por si el input viniera roto (el schema exige un
@@ -90,7 +94,7 @@ export function assembleFoodExtraction(id: FoodIdentification, usda: UsdaFoodRow
 
 /**
  * Mezcla PURA para el camino "que la IA complete": el usuario descartó USDA, así que TODO el bloque
- * de micros (los 33 del registro, incluidos los 9 de etiqueta) sale del estimado de la IA — fuente
+ * de micros (los 34 del registro, incluidos los 10 de etiqueta) sale del estimado de la IA — fuente
  * única y coherente. Los macros salen de la identificación, intactos (no se re-estiman). Marca
  * `sourceMicros: "ai"` y `usdaFdcId: null` para no mentir sobre la procedencia.
  */
@@ -105,6 +109,8 @@ export function assembleFoodWithAiMicros(id: FoodIdentification, micros: FoodMic
     sourceMicros: "ai",
     usdaFdcId: null,
     cookingYield: id.cookingYield ?? null,
+    // Sin USDA acá; el clasificador trabaja solo con el nombre (la IA gana si la mandó).
+    sugarClass: id.sugarClass ?? classifySugar(id.name, null) ?? null,
   };
   for (const key of MACRO_KEYS) out[key] = idRec[key] ?? 0;
   for (const key of NUTRIENT_KEYS) out[key] = microsRec[key] ?? null;

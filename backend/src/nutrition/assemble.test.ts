@@ -111,11 +111,12 @@ test("el resultado parsea contra FoodExtractionSchema (con y sin match)", () => 
 
 test("AI_PROVIDED_KEYS y vitaminas/minerales particionan el registro sin huecos ni solapes", () => {
   const enRegistro = new Set<string>(NUTRIENT_KEYS);
-  // los 9 micros de etiqueta están todos en el registro (NUT-14: sumó trans/mono/poliinsaturadas)
+  // los 10 micros de etiqueta están todos en el registro (NUT-14 sumó trans/mono/poliinsaturadas;
+  // NUT-10 sumó added_sugars_g)
   const labelMicros = AI_PROVIDED_KEYS.filter((k) => enRegistro.has(k));
   expect([...labelMicros].sort()).toEqual(
     [
-      "cholesterol_mg", "fiber_g", "monounsaturated_fat_g", "polyunsaturated_fat_g",
+      "added_sugars_g", "cholesterol_mg", "fiber_g", "monounsaturated_fat_g", "polyunsaturated_fat_g",
       "saturated_fat_g", "sodium_mg", "sugars_g", "trans_fat_g", "water_ml",
     ],
   );
@@ -155,7 +156,53 @@ test("label con match donde la etiqueta NO trae trans_fat_g (null): cae a USDA",
   expect(out.trans_fat_g).toBe(0.1); // la etiqueta no la cubre → rellena USDA
 });
 
-test("assembleFoodWithAiMicros: los 33 nutrientes salen del estimado, sourceMicros ai, usdaFdcId null", () => {
+// La costura de NUT-10: added_sugars_g leído de una etiqueta (sourceMacros "label") tiene que
+// SOBREVIVIR el ensamblado, no perderse pisado por el null de USDA (mismo caso que trans/mono/poli).
+test("label con match: added_sugars_g de la etiqueta se PERSISTE, no lo pisa el null de USDA", () => {
+  const out = assembleFoodExtraction(
+    baseId({ sourceMacros: "label", added_sugars_g: 4.5 }),
+    usdaRow({ addedSugarsG: null }),
+  );
+  expect(out.added_sugars_g).toBe(4.5);
+});
+
+test("label con match donde la etiqueta NO trae added_sugars_g (null): cae a USDA", () => {
+  const out = assembleFoodExtraction(
+    baseId({ sourceMacros: "label", added_sugars_g: null }),
+    usdaRow({ addedSugarsG: 2.1 }),
+  );
+  expect(out.added_sugars_g).toBe(2.1); // la etiqueta no la cubre → rellena USDA
+});
+
+// sugarClass: gana la de la IA cuando la mandó; si no, la deriva el clasificador determinista
+// sobre el nombre (+ la descripción de USDA).
+test("sugarClass: la clase que mandó la IA GANA sobre el clasificador", () => {
+  // El nombre "Jugo de naranja" clasificaría como free, pero la IA dijo mixed → gana la IA.
+  const out = assembleFoodExtraction(
+    baseId({ name: "Jugo de naranja", sugarClass: "mixed" }),
+    null,
+  );
+  expect(out.sugarClass).toBe("mixed");
+});
+
+test("sugarClass: si la IA la omite, la deriva el clasificador (nombre + descripción USDA)", () => {
+  // La IA no mandó sugarClass; el nombre "Manzana" → intrinsic por el clasificador.
+  const outFruta = assembleFoodExtraction(baseId({ name: "Manzana", sugarClass: undefined }), null);
+  expect(outFruta.sugarClass).toBe("intrinsic");
+  // Nombre sin pistas pero la descripción de USDA revela que es un jugo → free.
+  const outDesc = assembleFoodExtraction(
+    baseId({ name: "Bebida", sugarClass: undefined }),
+    usdaRow({ description: "Orange juice, raw" }),
+  );
+  expect(outDesc.sugarClass).toBe("free");
+});
+
+test("assembleFoodWithAiMicros: sugarClass de la IA gana; si falta, cae al clasificador del nombre", () => {
+  expect(assembleFoodWithAiMicros(baseId({ name: "Jugo de naranja", sugarClass: "mixed" }), {}).sugarClass).toBe("mixed");
+  expect(assembleFoodWithAiMicros(baseId({ name: "Manzana", sugarClass: undefined }), {}).sugarClass).toBe("intrinsic");
+});
+
+test("assembleFoodWithAiMicros: los 34 nutrientes salen del estimado, sourceMicros ai, usdaFdcId null", () => {
   const micros: FoodMicrosEstimate = { vitamin_c_mg: 12, iron_mg: 1.9, calcium_mg: 62, selenium_mcg: null };
   const out = assembleFoodWithAiMicros(baseId({ kcal: 200, saturated_fat_g: 4 }), micros);
   expect(out.vitamin_c_mg).toBe(12);
