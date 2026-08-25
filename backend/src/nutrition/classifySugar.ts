@@ -38,8 +38,11 @@ const FREE_PREFIJOS = [
   //   · "muffin"/"cupcake"/"brownie"/"cheesecake"/"streusel"/"tiramisu" no tienen homónimo salado.
   "streusel", "bizcoch", "brownie", "muffin", "cheesecake", "cupcake", "tiramisu",
   // Batidos/licuados de fruta: la OMS los cuenta como azúcar LIBRE, igual que el jugo (la fibra se
-  // rompe al licuar). Sin esto, "Batido de mango" caería en produce ("mango") → intrinsic.
-  "batido", "smoothie", "licuado", "milkshake",
+  // rompe al licuar). "smoothie"/"milkshake" van de prefijo (inequívocos en español). En cambio
+  // "batido"/"licuado" son AMBIGUOS: "batido" también describe textura láctea ("Queso fresco batido
+  // light" = cottage cheese, cuyo azúcar es LACTOSA intrínseca, NO libre). Por eso van como FRASES
+  // que exigen " de " (ver FREE_FRASES), no de prefijo suelto.
+  "smoothie", "milkshake",
   // El PURÉ/compota de FRUTA es free (todo su azúcar es libre): sin esto "Puré de manzana"
   // caería en produce ("manzana") y se marcaría intrinsic, sub-avisando el azúcar libre. Un
   // "puré de papa" también daría free, pero su azúcar es ~0 así que es inocuo (conservador);
@@ -60,8 +63,10 @@ const FREE_PREFIJOS = [
 const FREE_PALABRAS = ["jam", "nectar", "torta"];
 
 // FREE, frases literales (substring): "dulce de leche", "dulce de membrillo". "dulce" solo NO
-// alcanza (sería demasiado amplio).
-const FREE_FRASES = ["dulce de"];
+// alcanza (sería demasiado amplio). "batido de"/"licuado de" pescan el batido/licuado DE fruta
+// (free, la OMS lo cuenta como el jugo) exigiendo la preposición, para NO pescar "queso batido"
+// (lactosa intrínseca) — ver la nota en FREE_PREFIJOS.
+const FREE_FRASES = ["dulce de", "batido de", "licuado de"];
 
 // DELIBERADAMENTE AFUERA de free (ambiguos savory): "tarta" (tarta de verduras), "pastel" (pastel
 // de papa/carne), "budin" (budín de verduras/carne) y "galleta" (galleta salada) tienen versiones

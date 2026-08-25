@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import type { SugarClass } from "@pulsia/shared";
-import { planSugarClass, type FoodToClassify } from "./backfill-sugar-class";
+import {
+  candidateConditions,
+  planSugarClass,
+  type FoodToClassify,
+} from "./backfill-sugar-class";
 
 const f = (
   id: string,
@@ -78,6 +82,20 @@ test("reclassify: current='free' que el clasificador da null → NO se toca (no 
   expect(plan.toSet).toHaveLength(0);
   expect(plan.unchanged).toHaveLength(0);
   expect(plan.unclassified.map((x) => x.name)).toEqual(["Postre misterioso"]);
+});
+
+// --- Selección de candidatos (WHERE) según el modo ---
+
+test("modo NORMAL: NO incluye ya-clasificadas y NO excluye source_micros='ai'", () => {
+  // El filtro anti-IA solo tiene sentido en reclassify. En modo normal hay que clasificar TODAS las
+  // filas sugar_class IS NULL, incluidas las de IA (p.ej. "Manzana" cargada por "que la IA
+  // complete", source_micros='ai', que quedó con sugar_class NULL); si no, la fruta seguiría alto.
+  // Mutación: aplicar excludeAi siempre (excludeAi: true acá) rompe este test.
+  expect(candidateConditions(false)).toEqual({ includeClassified: false, excludeAi: false });
+});
+
+test("modo --reclassify: incluye ya-clasificadas y excluye source_micros='ai'", () => {
+  expect(candidateConditions(true)).toEqual({ includeClassified: true, excludeAi: true });
 });
 
 test("idempotencia de reclassify: correr sobre el resultado ya corregido no cambia nada", () => {

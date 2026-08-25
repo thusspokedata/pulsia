@@ -24,7 +24,9 @@
 //     alimentos con micros de IA (`source_micros = 'ai'`) pudieron recibir su sugar_class con
 //     conocimiento de la ETIQUETA real (algo que el clasificador por-nombre no ve), así que se dejan
 //     INTACTOS para no pisar esa señal. No hay forma 100% de distinguir el origen del sugar_class,
-//     así que usamos source_micros como proxy conservador.
+//     así que usamos source_micros como proxy conservador. Este filtro NO se aplica en modo normal:
+//     ahí clasificamos TODAS las filas sugar_class IS NULL (incluidas las de IA con clase NULL), o
+//     una fruta cargada por IA seguiría marcando azúcar alto.
 //   · Idempotente: correr --reclassify dos veces no cambia nada la segunda vez (las ya corregidas
 //     coinciden con el clasificador → unchanged).
 //
@@ -67,6 +69,22 @@ export interface SugarClassPlan {
 //   · da una clase != current → `toSet` (setear/corregir), con `from` = clase previa.
 // `current` default null hace que el modo normal (sólo filas NULL) se comporte como antes: cualquier
 // clase difiere de null → toSet. Se testea sin DB.
+// Qué filas selecciona el WHERE según el modo (PURO, single source of truth del criterio):
+//   · includeClassified: además de las NULL, incluir las ya clasificadas (intrinsic/free) para
+//     re-evaluarlas. Solo en --reclassify.
+//   · excludeAi: excluir source_micros='ai'. SOLO en --reclassify: la IA pudo poner sugar_class con
+//     conocimiento de la ETIQUETA (algo que el clasificador por-nombre no ve), y no queremos
+//     pisarlo. En modo NORMAL (solo NULL) NO se filtra: una fila de IA con sugar_class NULL y
+//     nombre clasificable (p.ej. "Manzana", source_micros='ai') DEBE clasificarse, o la fruta
+//     seguiría marcando azúcar alto.
+export interface CandidateConditions {
+  includeClassified: boolean;
+  excludeAi: boolean;
+}
+export function candidateConditions(reclassify: boolean): CandidateConditions {
+  return { includeClassified: reclassify, excludeAi: reclassify };
+}
+
 export function planSugarClass(foods: FoodToClassify[]): SugarClassPlan {
   const plan: SugarClassPlan = { toSet: [], unclassified: [], unchanged: [] };
   for (const f of foods) {
@@ -94,16 +112,20 @@ async function main() {
 
   const { db, sql } = createDb(dbUrl);
   try {
-    // Candidatos según el modo:
-    //   · normal:      sólo `sugar_class IS NULL`.
+    // Candidatos según el modo (ver candidateConditions):
+    //   · normal:      sólo `sugar_class IS NULL`, TODAS las filas (sin filtrar source_micros).
     //   · --reclassify: `sugar_class IS NULL OR sugar_class IN ('intrinsic','free')`, restringido a
     //                   filas con `source_micros = 'usda'` o NULL (nunca las de IA, que pudieron
-    //                   clasificar por etiqueta). El filtro por source_micros se aplica también en
-    //                   modo normal por consistencia (inocuo: las NULL de IA son raras y no re-tocan).
-    const clase: SQL = reclassify
+    //                   clasificar por etiqueta).
+    const cond = candidateConditions(reclassify);
+    const clase: SQL = cond.includeClassified
       ? (or(isNull(food.sugarClass), inArray(food.sugarClass, ["intrinsic", "free"])) as SQL)
       : isNull(food.sugarClass);
-    const noEsIA: SQL = or(eq(food.sourceMicros, "usda"), isNull(food.sourceMicros)) as SQL;
+    const filtros: SQL[] = [clase];
+    if (cond.excludeAi) {
+      filtros.push(or(eq(food.sourceMicros, "usda"), isNull(food.sourceMicros)) as SQL);
+    }
+    const where: SQL = filtros.length === 1 ? (filtros[0] as SQL) : (and(...filtros) as SQL);
 
     // LEFT JOIN a usda_food para traer la descripción en inglés (null si el food no tiene usdaFdcId
     // o su fdcId no está en el dataset actual). Traemos también el sugar_class actual (current).
@@ -116,7 +138,7 @@ async function main() {
       })
       .from(food)
       .leftJoin(usdaFood, eq(food.usdaFdcId, usdaFood.fdcId))
-      .where(and(clase, noEsIA));
+      .where(where);
 
     const candidates: FoodToClassify[] = rows.map((r) => ({
       id: r.id,

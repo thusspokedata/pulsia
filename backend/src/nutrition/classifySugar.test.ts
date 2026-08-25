@@ -116,10 +116,19 @@ test("postres inequívocos (prefijo) → free", () => {
 });
 
 test("batidos/licuados de fruta → free (la OMS los cuenta como libres, igual que el jugo)", () => {
-  expect(classifySugar("Batido de mango")).toBe("free"); // mango es produce, pero batido gana
+  expect(classifySugar("Batido de mango")).toBe("free"); // mango es produce, pero "batido de" gana
   expect(classifySugar("Smoothie de frutilla")).toBe("free");
   expect(classifySugar("Licuado de banana")).toBe("free");
   expect(classifySugar("Milkshake de vainilla")).toBe("free");
+});
+
+test("'batido'/'licuado' exigen ' de ' — 'Queso fresco batido' NO es free (lactosa intrínseca)", () => {
+  // Caso REAL del seed (seed-food-catalog.data.ts): "Queso fresco batido light" (cottage cheese).
+  // Su azúcar es LACTOSA láctea, que la OMS EXCLUYE de los azúcares libres. Si "batido" fuera
+  // prefijo suelto, lo marcaría free (mal). Como frase "batido de" (exige la preposición), el
+  // queso batido cae a null (conservador; ~3g de lactosa es inocuo) y sólo el batido/licuado DE
+  // fruta queda free. Mutación: volver "batido"/"licuado" a FREE_PREFIJOS rompe esto.
+  expect(classifySugar("Queso fresco batido light", "Cheese, cottage, lowfat, 1% milkfat")).toBeNull();
 });
 
 test("términos ambiguos savory se dejan AFUERA de free (tarta/pastel/budín/galleta)", () => {
