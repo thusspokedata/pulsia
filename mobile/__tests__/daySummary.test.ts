@@ -91,3 +91,43 @@ test("supplementNutrients arranca vacío: lo rellena el hook con lo que trae el 
   const s = buildNutritionDaySummary([], []);
   expect(s.supplementNutrients).toEqual({});
 });
+
+test("un día de pura FRUTA ENTERA: el total tiene azúcar, pero el libre es 0 (no cuenta para OMS)", () => {
+  // La fruta entera es sugarClass "intrinsic": nada de su azúcar es libre. `sugars_g` sigue siendo
+  // el total (mide 24), pero `sugarFree` es 0. Si el mutante contara el total como libre daría 24.
+  const meals = [meal([
+    item({ sugars_g: 12, sugarClass: "intrinsic" }),
+    item({ sugars_g: 12, sugarClass: "intrinsic" }),
+  ])];
+  const s = buildNutritionDaySummary(meals, []);
+  expect(s.nutrients.sugars_g.value).toBe(24);
+  expect(s.sugarFree.value).toBe(0);
+  expect(s.sugarFree.partial).toBe(false);
+});
+
+test("un día con un JUGO (free): el azúcar libre es el total del jugo", () => {
+  const meals = [meal([item({ sugars_g: 30, sugarClass: "free" })])];
+  const s = buildNutritionDaySummary(meals, []);
+  expect(s.sugarFree.value).toBe(30);
+});
+
+test("mixto con AGREGADO: el azúcar libre es el agregado, no el total", () => {
+  // sugarClass "mixed" con added conocido: libre = agregado (8), no el total (20). Un mutante que
+  // usara el total daría 20.
+  const meals = [meal([item({ sugars_g: 20, added_sugars_g: 8, sugarClass: "mixed" })])];
+  const s = buildNutritionDaySummary(meals, []);
+  expect(s.nutrients.sugars_g.value).toBe(20);
+  expect(s.sugarFree.value).toBe(8);
+});
+
+test("un ítem SIN dato de azúcar mezclado con otros: el libre del día queda parcial", () => {
+  // Uno declara azúcar (jugo), el otro no declara nada → freeSugarsG del segundo es null, y el
+  // total del día de azúcar libre es un piso, no un número exacto.
+  const meals = [meal([
+    item({ sugars_g: 30, sugarClass: "free" }),
+    item({}),
+  ])];
+  const s = buildNutritionDaySummary(meals, []);
+  expect(s.sugarFree.value).toBe(30);
+  expect(s.sugarFree.partial).toBe(true);
+});

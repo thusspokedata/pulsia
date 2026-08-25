@@ -1,4 +1,4 @@
-import { buildNutrientRows, filaDeSal, porcentaje } from "../src/nutrition/nutrientRows";
+import { buildNutrientRows, filaDeAzucar, filaDeSal, porcentaje, sustituirAzucar } from "../src/nutrition/nutrientRows";
 
 const persona = { sex: "male" as const, age: 35 };
 
@@ -213,4 +213,88 @@ test("filaDeSal: sin sodio de comida ni de suplemento sigue sin dato (comportami
   const f = filaDeSal(null, 5);
   expect(f.value).toBeNull();
   expect(f.pct).toBeNull();
+});
+
+// ---------------------------------------------------------------------------------------------
+// filaDeAzucar: la fila mide LIBRES, no el total. El total viaja en `split` solo para el render.
+// ---------------------------------------------------------------------------------------------
+
+test("filaDeAzucar: el value es el azúcar LIBRE, no el total", () => {
+  // 40 g de azúcar total, 10 libres: la fila muestra 10 (contra el techo OMS), no 40. Un mutante
+  // que pusiera el total en value daría 40.
+  const f = filaDeAzucar(10, 40, 50);
+  expect(f.key).toBe("sugars_g");
+  expect(f.label).toBe("Azúcares libres");
+  expect(f.unit).toBe("g");
+  expect(f.value).toBe(10);
+});
+
+test("filaDeAzucar: el split parte el total en intrínseco (total − libre) y libre", () => {
+  const f = filaDeAzucar(10, 40, 50);
+  expect(f.split).toEqual({ total: 40, intrinsic: 30, free: 10 });
+});
+
+test("filaDeAzucar: el pct se mide sobre los LIBRES contra la referencia, no sobre el total", () => {
+  // 10 libres / 50 = 20%. Con el total (40/50) daría 80%: la distinción es el punto de la feature.
+  const f = filaDeAzucar(10, 40, 50);
+  expect(f.pct).toBe(porcentaje(10, 50));
+  expect(f.pct).toBe(20);
+});
+
+test("filaDeAzucar: el kind es 'max' cuando hay referencia (es un techo, no un piso)", () => {
+  expect(filaDeAzucar(10, 40, 50).kind).toBe("max");
+});
+
+test("filaDeAzucar: sin referencia no hay kind ni pct", () => {
+  const f = filaDeAzucar(10, 40, null);
+  expect(f.kind).toBeNull();
+  expect(f.pct).toBeNull();
+});
+
+test("filaDeAzucar: pura fruta entera (libre 0) no excede aunque el total sea alto", () => {
+  const f = filaDeAzucar(0, 60, 50);
+  expect(f.value).toBe(0);
+  expect(f.pct).toBe(0);
+  expect(f.split).toEqual({ total: 60, intrinsic: 60, free: 0 });
+});
+
+test("filaDeAzucar: sin total conocido, intrinsic es null (no se puede restar de la nada)", () => {
+  const f = filaDeAzucar(10, null, 50);
+  expect(f.split).toEqual({ total: null, intrinsic: null, free: 10 });
+});
+
+test("filaDeAzucar: libre null y total null → intrinsic null", () => {
+  const f = filaDeAzucar(null, null, 50);
+  expect(f.split).toEqual({ total: null, intrinsic: null, free: null });
+});
+
+test("filaDeAzucar: el azúcar de suplemento cuenta como libre en el pct", () => {
+  // 5 libres de comida + 5 de suplemento = 10 / 50 = 20%.
+  const f = filaDeAzucar(5, 20, 50, false, 5);
+  expect(f.supplement).toBe(5);
+  expect(f.pct).toBe(porcentaje(10, 50));
+});
+
+test("filaDeAzucar: sin libre de comida pero con suplemento, el pct se calcula igual", () => {
+  const f = filaDeAzucar(null, null, 50, false, 10);
+  expect(f.value).toBeNull();
+  expect(f.pct).toBe(porcentaje(10, 50));
+});
+
+test("filaDeAzucar: la marca partial se conserva", () => {
+  expect(filaDeAzucar(10, 40, 50, true).partial).toBe(true);
+  expect(filaDeAzucar(10, 40, 50, false).partial).toBe(false);
+});
+
+test("sustituirAzucar: reemplaza la fila de sugars_g por la derivada, en su lugar", () => {
+  const secciones = buildNutrientRows({ sugars_g: 40 }, persona, {
+    refs: { sugars_g: { value: 50, kind: "max" } },
+  });
+  const derivada = filaDeAzucar(10, 40, 50);
+  const out = sustituirAzucar(secciones, derivada);
+  const f = fila(out, "sugars_g");
+  expect(f.label).toBe("Azúcares libres");
+  expect(f.value).toBe(10);
+  // sigue habiendo exactamente UNA fila con esa clave (se reemplazó, no se agregó)
+  expect(filas(out).filter((r) => r.key === "sugars_g").length).toBe(1);
 });

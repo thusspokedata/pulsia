@@ -25,11 +25,55 @@ const fila = (items: any[], key: string, goalKcal: number | null = 2200) =>
 // ---------------------------------------------------------------------------------------------
 
 test("azúcares conserva la referencia OMS de 50 g como LÍMITE", () => {
+  // Sin sugarClass ni agregado, el azúcar libre es conservador = el total (40), así que la fila de
+  // libres sigue mostrando 40 contra 50: la referencia y el % no cambian para el caso desconocido.
   const f = fila([item({ sugars_g: 40 })], "sugars_g");
   expect(f.value).toBe(40);
   expect(f.ref).toBe(50);
   expect(f.kind).toBe("max");
   expect(f.pct).toBe(80);
+});
+
+// ---------------------------------------------------------------------------------------------
+// NUT-10: la fila de azúcar del DÍA mide LIBRES (fruta/verdura entera no cuenta).
+// ---------------------------------------------------------------------------------------------
+
+test("un día de PURA FRUTA ENTERA no marca excedente de azúcar (libre 0 / 50)", () => {
+  // 60 g de azúcar total, todo intrínseco: el total supera los 50, pero los LIBRES son 0. La fila
+  // muestra 0 y no excede. Si midiera el total (60/50) marcaría excedente: es justo lo que evita.
+  const f = fila([item({ sugars_g: 60, sugarClass: "intrinsic" })], "sugars_g");
+  expect(f.label).toBe("Azúcares libres");
+  expect(f.value).toBe(0);
+  expect(f.ref).toBe(50);
+  expect(f.pct).toBe(0);
+  expect(f.split).toEqual({ total: 60, intrinsic: 60, free: 0 });
+});
+
+test("un día con DULCES (free) sí marca el azúcar libre alto", () => {
+  const f = fila([item({ sugars_g: 60, sugarClass: "free" })], "sugars_g");
+  expect(f.value).toBe(60);
+  expect(f.pct).toBe(120); // 60 / 50
+  expect(f.split).toEqual({ total: 60, intrinsic: 0, free: 60 });
+});
+
+test("el split viaja en la fila del día (total partido en intrínseco vs libre)", () => {
+  // Fruta entera (intrinsic, 30) + un mixto con agregado (total 20, added 8): total 50, libre 8.
+  const f = fila([
+    item({ sugars_g: 30, sugarClass: "intrinsic" }),
+    item({ sugars_g: 20, added_sugars_g: 8, sugarClass: "mixed" }),
+  ], "sugars_g");
+  expect(f.split!.total).toBe(50);
+  expect(f.split!.free).toBe(8);
+  expect(f.split!.intrinsic).toBe(42);
+  expect(f.value).toBe(8);
+});
+
+test("el azúcar de suplemento se cuenta como libre en el día", () => {
+  const summary = { ...dia([item({ sugars_g: 20, sugarClass: "free" })]), supplementNutrients: { sugars_g: 10 } };
+  const f = buildDayNutrientRows(summary, persona, 2200).flatMap((s) => s.rows).find((r) => r.key === "sugars_g")!;
+  expect(f.value).toBe(20);
+  expect(f.supplement).toBe(10);
+  expect(f.pct).toBe(60); // (20 + 10) / 50
 });
 
 test("fibra conserva la referencia OMS de 30 g y sigue siendo un PISO", () => {
@@ -110,11 +154,12 @@ test("la referencia EFSA del día está personalizada por sexo", () => {
   expect(refDe({ sex: "female", age: 35 })).toBe(16);
 });
 
-test("el día muestra los 33 nutrientes, no 5", () => {
-  // 33 = las 30 originales + trans_fat_g/monounsaturated_fat_g/polyunsaturated_fat_g (NUT-14).
+test("el día muestra los 34 nutrientes, no 5", () => {
+  // 34 = las 30 originales + trans_fat_g/monounsaturated_fat_g/polyunsaturated_fat_g (NUT-14)
+  // + added_sugars_g (NUT-10, azúcar agregada como nutriente propio del registro).
   const keys = filasDe([item({})]).map((r) => r.key);
-  expect(keys.length).toBe(33);
-  expect(new Set(keys).size).toBe(33);
+  expect(keys.length).toBe(34);
+  expect(new Set(keys).size).toBe(34);
   for (const k of ["zinc_mg", "vitamin_c_mg", "omega3_g", "water_ml"]) expect(keys).toContain(k);
 });
 
@@ -162,7 +207,7 @@ test("la fila de sal hereda el parcial del sodio", () => {
 
 test("un día vacío no rompe: todas las filas sin dato y sin porcentaje", () => {
   const filas = buildDayNutrientRows(buildNutritionDaySummary([], []), persona, 2200).flatMap((s) => s.rows);
-  expect(filas.length).toBe(33);
+  expect(filas.length).toBe(34);
   expect(filas.every((r) => r.value === null && r.pct === null)).toBe(true);
 });
 

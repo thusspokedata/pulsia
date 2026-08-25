@@ -43,7 +43,8 @@ export function NutrientesTab({ summary, goalView, persona, offset }: Props) {
       <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18 }}>
         Las referencias son públicas (EFSA según tu sexo y edad para vitaminas y minerales; OMS para azúcares, fibra,
         sal y colesterol; AHA para las saturadas, hasta 6% de la energía), no metas calculadas para vos. Las vitaminas, los minerales y la fibra son pisos a
-        alcanzar; azúcares, saturadas, sal y colesterol, límites a no pasar. “≥” significa que algún alimento del día no
+        alcanzar; azúcares, saturadas, sal y colesterol, límites a no pasar. El azúcar se mide como LIBRE: la fruta y la
+        verdura enteras no cuentan; sí los jugos, la fruta seca y el azúcar agregada. “≥” significa que algún alimento del día no
         declara ese nutriente, así que el total es un piso. Tocá un nutriente para ver qué alimentos lo aportan.
       </Text>
       {perfilIncompleto && (

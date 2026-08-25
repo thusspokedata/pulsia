@@ -1,4 +1,4 @@
-import { NUTRIENT_KEYS, saltGFromSodiumMg, sumNutrientByKey } from "@pulsia/shared";
+import { NUTRIENT_KEYS, freeSugarsG, saltGFromSodiumMg, sumNutrientByKey } from "@pulsia/shared";
 import type { Meal, MealItem, NutrientKey, NutrientSum, WaterLog } from "@pulsia/shared";
 
 export interface NutritionDaySummary {
@@ -11,6 +11,12 @@ export interface NutritionDaySummary {
   // `cholesterolMg` salen de acá: si se calcularan por separado, la pestaña de nutrientes y la
   // card del resumen podrían mostrar dos números distintos del mismo día.
   nutrients: Record<NutrientKey, NutrientSum>;
+  // Azúcar LIBRE del día (fruta/verdura entera NO cuenta; sí jugo, seco y agregado). Es el número
+  // que se compara contra el límite OMS (50 g). `nutrients.sugars_g` sigue siendo el TOTAL: el día
+  // muestra el total partido en intrínseco vs libre, y solo lo libre pesa contra la referencia.
+  // Se calcula por ítem con `freeSugarsG` y se suma con la misma mecánica que el resto (decimales
+  // del registro + marca `partial`), para no divergir de cómo se totaliza `sugars_g`.
+  sugarFree: NutrientSum;
   liquid: { total: number; drank: number; fromFood: number };
   // Aporte de los suplementos TOMADOS ese día, por nutriente (viene del backend, calculado con la
   // misma supplementMicros que el informe). Vacío si no hay plan/tomas. NO se mezcla en `nutrients`
@@ -56,7 +62,14 @@ export function buildNutritionDaySummary(meals: Meal[], water: WaterLog[]): Nutr
     saturated_fat_g: nutrients.saturated_fat_g.value, salt_g: saltG,
   };
   const cholesterolMg = nutrients.cholesterol_mg.value;
+  // Azúcar LIBRE por ítem (usa total + agregado + clase del ítem) y se suma con la MISMA mecánica
+  // que `sugars_g` (`sumNutrientByKey` con la clave "sugars_g": 1 decimal + `partial`). Un ítem sin
+  // dato de azúcar deja `null`, que marca el total como parcial igual que en el total del día.
+  const sugarFree = sumNutrientByKey(
+    items.map((it) => freeSugarsG({ sugars_g: it.sugars_g, added_sugars_g: it.added_sugars_g, sugarClass: it.sugarClass })),
+    "sugars_g",
+  );
   const fromFood = nutrients.water_ml.value ?? 0;
   const drank = water.reduce((a, w) => a + w.ml, 0);
-  return { dayTotals, cholesterolMg, nutrients, liquid: { total: Math.round(fromFood + drank), drank, fromFood }, supplementNutrients: {} };
+  return { dayTotals, cholesterolMg, nutrients, sugarFree, liquid: { total: Math.round(fromFood + drank), drank, fromFood }, supplementNutrients: {} };
 }

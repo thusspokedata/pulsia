@@ -33,6 +33,10 @@ export interface NutrientRow {
   // piso, no el número exacto. Solo tiene sentido en un total de varios ítems (el día); en un
   // alimento suelto siempre es false.
   partial: boolean;
+  // Metadata solo para el render del azúcar del día: la fila mide LIBRES (`value`), pero la UI
+  // quiere aclarar cuánto del TOTAL era intrínseco (fruta/verdura entera, que no cuenta). Ausente
+  // en toda otra fila; no cambia el comportamiento de las que no lo traen.
+  split?: { total: number | null; intrinsic: number | null; free: number | null };
 }
 
 export interface NutrientRowsOptions {
@@ -222,5 +226,58 @@ export function sustituirSodioPorSal(secciones: NutrientSection[], sal: Nutrient
   return secciones.map((s) => ({
     ...s,
     rows: s.rows.map((r) => (r.key === "sodium_mg" ? sal : r)),
+  }));
+}
+
+/**
+ * Fila de AZÚCAR que mide LIBRES, no el total. Sustituye a la fila de `sugars_g` del registro (que
+ * muestra el total) para que el día compare contra el límite OMS (50 g) solo la parte que cuenta:
+ * la fruta y la verdura ENTERA no suman, pero sí el jugo, la fruta seca y el azúcar agregada.
+ *
+ * Mismo patrón que `filaDeSal`: deriva una fila de un dato del registro, conserva la clave
+ * (`sugars_g`) para no romper la navegación ni los testID, y cuenta comida + suplemento en el %.
+ * El azúcar de suplemento se toma como libre (conservador: ante la duda, cuenta).
+ *
+ * `split` viaja para el render: la UI aclara cuánto del total era intrínseco (total − libre).
+ */
+export function filaDeAzucar(
+  free: number | null,
+  total: number | null,
+  ref: number | null,
+  partial = false,
+  supplementFree: number | null = null,
+): NutrientRow {
+  // Mismo criterio que filaDeSal: "hay suplemento" también es dato, y el % cuenta comida +
+  // suplemento aunque la comida no traiga azúcar libre ese día.
+  const haySuplemento = supplementFree != null && supplementFree > 0;
+  const totalConsumido = free != null || haySuplemento ? (free ?? 0) + (supplementFree ?? 0) : null;
+  return {
+    key: "sugars_g",
+    label: "Azúcares libres",
+    unit: "g",
+    value: free,
+    supplement: supplementFree,
+    ref,
+    pct: totalConsumido == null || ref == null ? null : porcentaje(totalConsumido, ref),
+    // Sin referencia no hay techo que exceder: el `kind` solo se lee para pintar el aviso y la
+    // barra, y las dos exigen `ref`.
+    kind: ref == null ? null : NUTRIENT_REFERENCE_KIND.sugars_g,
+    partial,
+    split: {
+      total,
+      intrinsic: total != null && free != null ? Math.max(0, total - free) : null,
+      free,
+    },
+  };
+}
+
+/**
+ * Cambia la fila de azúcar (total) por la de azúcares libres EN SU LUGAR, igual que
+ * `sustituirSodioPorSal`: conserva la posición en Carbohidratos y el conteo del grupo.
+ */
+export function sustituirAzucar(secciones: NutrientSection[], fila: NutrientRow): NutrientSection[] {
+  return secciones.map((s) => ({
+    ...s,
+    rows: s.rows.map((r) => (r.key === "sugars_g" ? fila : r)),
   }));
 }

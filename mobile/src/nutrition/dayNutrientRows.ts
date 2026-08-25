@@ -8,8 +8,10 @@ import type { NutrientKey, NutrientReference } from "@pulsia/shared";
 import type { NutritionDaySummary } from "./daySummary";
 import {
   buildNutrientRows,
+  filaDeAzucar,
   filaDeSal,
   separarValoresYParciales,
+  sustituirAzucar,
   sustituirSodioPorSal,
   type NutrientSection,
 } from "./nutrientRows";
@@ -39,6 +41,12 @@ import {
  */
 export function referenciasOms(goalKcal: number | null): Partial<Record<NutrientKey, NutrientReference | null>> {
   return {
+    // El límite OMS de `sugars_g` (50 g) es de azúcares LIBRES: la fruta y la verdura ENTERA no
+    // cuentan, sí el jugo, la fruta seca y el azúcar agregada. En el TOTAL DEL DÍA la fila de
+    // `sugars_g` se sustituye luego por `filaDeAzucar`, que mide libres (ver buildDayNutrientRows).
+    // LIMITACIÓN CONOCIDA: el detalle de UNA comida reusa este override pero AÚN muestra el total,
+    // no los libres (no separa por ítem). Se deja así en esta fase; el override sigue siendo el
+    // mismo valor de referencia (50 g), solo cambia contra qué se lo compara.
     sugars_g: { value: NUTRIENT_REFERENCES.sugars_g, kind: NUTRIENT_REFERENCE_KIND.sugars_g },
     fiber_g: { value: NUTRIENT_REFERENCES.fiber_g, kind: NUTRIENT_REFERENCE_KIND.fiber_g },
     cholesterol_mg: { value: NUTRIENT_REFERENCES.cholesterol_mg, kind: NUTRIENT_REFERENCE_KIND.cholesterol_mg },
@@ -81,8 +89,20 @@ export function buildDayNutrientRows(
   // comida: son el mismo hecho en otra unidad.
   const sodio = summary.nutrients.sodium_mg;
   const supplementSaltG = saltGFromSodiumMg(summary.supplementNutrients.sodium_mg ?? null);
-  return sustituirSodioPorSal(
+  const conSal = sustituirSodioPorSal(
     secciones,
     filaDeSal(sodio.value, NUTRIENT_REFERENCES.salt_g, sodio.partial, supplementSaltG),
+  );
+
+  // El azúcar se mide como LIBRE contra el límite OMS: la fila de `sugars_g` (total) se sustituye
+  // por la derivada, que compara solo la parte que cuenta (fruta/verdura entera no suma). El total
+  // viaja en `split` para que la UI aclare cuánto era intrínseco. El azúcar de suplemento se cuenta
+  // como libre (conservador: ante la duda, cuenta contra el techo).
+  const total = summary.nutrients.sugars_g.value;
+  const free = summary.sugarFree.value;
+  const supplementFree = summary.supplementNutrients.sugars_g ?? null;
+  return sustituirAzucar(
+    conSal,
+    filaDeAzucar(free, total, NUTRIENT_REFERENCES.sugars_g, summary.sugarFree.partial, supplementFree),
   );
 }

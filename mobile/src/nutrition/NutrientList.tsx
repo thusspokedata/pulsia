@@ -123,6 +123,14 @@ function Fila({ row, onPress }: { row: NutrientRow; onPress?: (key: NutrientRowK
           testID={`nutr-${row.key}-bar`}
         />
       )}
+      {/* Aclaración del azúcar: la Bar ya pinta LIBRES vs 50 (value es libre). El caption cuenta el
+          total y cuánto era intrínseco (fruta/verdura entera, que no cuenta). Solo si hay total y
+          algo intrínseco que aclarar: con intrinsic 0/null no hay nada que decir. */}
+      {row.split != null && row.split.total != null && row.split.intrinsic != null && row.split.intrinsic > 0 && (
+        <Text testID={`nutr-${row.key}-split`} style={{ color: colors.textMuted, fontSize: 11 }}>
+          {`Azúcar total ${fmt(row.split.total)} g · ${fmt(row.split.intrinsic)} g de fruta/verdura entera no cuenta`}
+        </Text>
+      )}
     </Pressable>
   );
 }
