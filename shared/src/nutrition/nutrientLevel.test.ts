@@ -231,6 +231,59 @@ test("el valor del chip de sal va en GRAMOS DE SAL, no en mg de sodio", () => {
   expect(sal.value).toBeLessThan(NUTRIENT_REFERENCES.salt_g); // 5 g/día de la OMS, misma unidad
 });
 
+// --- El semáforo de azúcar juzga LIBRES, no TOTALES ---
+// La OMS acota los azúcares LIBRES (<10% de la energía) y EXCLUYE el azúcar intrínseco de la
+// fruta/verdura ENTERA. nutrientValue traduce el total + sugarClass + added a azúcar LIBRE (ver
+// freeSugars.ts). Sin esta costura, la app marcaría la fruta entera como "azúcar alto".
+test("fruta ENTERA no es 'azúcar alto': su azúcar es intrínseco, no libre", () => {
+  const manzana = {
+    basis: "per_100g" as const,
+    fat_g: 0.2, saturated_fat_g: 0, sugars_g: 12, added_sugars_g: null,
+    sugarClass: "intrinsic" as const, sodium_mg: 1, cholesterol_mg: 0, fiber_g: 2.4,
+  };
+  // El azúcar LIBRE de la manzana es 0 → "low", y no aparece como bad/warn.
+  expect(nutrientValue(manzana, "sugars_g")).toBe(0);
+  const azucar = foodFlags(manzana).all.find((f) => f.nutrient === "sugars_g")!;
+  expect(azucar.level).toBe("low");
+  expect(foodFlags(manzana).notable.some((f) => f.nutrient === "sugars_g")).toBe(false);
+});
+
+test("un dulce (free) SÍ es 'azúcar alto': todo su azúcar es libre", () => {
+  const dulce = {
+    basis: "per_100g" as const,
+    fat_g: 5, saturated_fat_g: 3, sugars_g: 40, added_sugars_g: null,
+    sugarClass: "free" as const, sodium_mg: 30, cholesterol_mg: 0, fiber_g: 0,
+  };
+  expect(nutrientValue(dulce, "sugars_g")).toBe(40);
+  const azucar = foodFlags(dulce).all.find((f) => f.nutrient === "sugars_g")!;
+  expect(azucar.level).toBe("high");
+  expect(azucar.sentiment).toBe("bad");
+  expect(foodFlags(dulce).notable.some((f) => f.nutrient === "sugars_g")).toBe(true);
+});
+
+test("un mixto con poco agregado NO dispara 'azúcar alto' (cuenta lo libre, no el total)", () => {
+  const yogur = {
+    basis: "per_100g" as const,
+    fat_g: 3, saturated_fat_g: 2, sugars_g: 20, added_sugars_g: 2,
+    sugarClass: "mixed" as const, sodium_mg: 50, cholesterol_mg: 10, fiber_g: 0,
+  };
+  // Total 20 sería "medium"; libre 2 es "low".
+  expect(nutrientValue(yogur, "sugars_g")).toBe(2);
+  const azucar = foodFlags(yogur).all.find((f) => f.nutrient === "sugars_g")!;
+  expect(azucar.level).not.toBe("high");
+  expect(azucar.level).toBe("low");
+});
+
+test("sin sugarClass ni added, el azúcar TOTAL manda (conservador, comportamiento previo)", () => {
+  const galleta = {
+    basis: "per_100g" as const,
+    fat_g: 10, saturated_fat_g: 4, sugars_g: 30, // sin sugarClass ni added
+    sodium_mg: 200, cholesterol_mg: 5, fiber_g: 1,
+  };
+  expect(nutrientValue(galleta, "sugars_g")).toBe(30);
+  expect(foodFlags(galleta).all.find((f) => f.nutrient === "sugars_g")!.level).toBe("high");
+});
+
 test("un alimento sin nada destacable no genera ningún chip", () => {
   const lechuga = {
     basis: "per_100g" as const,

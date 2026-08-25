@@ -107,7 +107,7 @@ test("FoodExtractionSchema acepta todos los nutrientes del registro", () => {
   };
   const r = FoodExtractionSchema.safeParse(base);
   expect(r.success).toBe(true);
-  // No alcanza con que parsee: el schema tiene que CONSERVAR los 30. Si un nutriente del
+  // No alcanza con que parsee: el schema tiene que CONSERVAR los 34. Si un nutriente del
   // registro no estuviera en el schema, Zod lo descartaría en silencio y el safeParse
   // seguiría dando true.
   const parsed = r.success ? (r.data as Record<string, unknown>) : {};
@@ -184,7 +184,7 @@ test("FoodIdentificationSchema exige searchQuery no vacío", () => {
 
 const MICROS_DE_ETIQUETA = [
   "saturated_fat_g", "trans_fat_g", "monounsaturated_fat_g", "polyunsaturated_fat_g",
-  "sugars_g", "fiber_g", "sodium_mg", "cholesterol_mg", "water_ml",
+  "sugars_g", "added_sugars_g", "fiber_g", "sodium_mg", "cholesterol_mg", "water_ml",
 ];
 
 test("FoodIdentificationSchema NO le pide vitaminas ni minerales a la IA", () => {
@@ -193,8 +193,8 @@ test("FoodIdentificationSchema NO le pide vitaminas ni minerales a la IA", () =>
   const claves = Object.keys(FoodIdentificationSchema.shape);
   const microsUsda = NUTRIENT_KEYS.filter((k) => !MICROS_DE_ETIQUETA.includes(k));
   for (const k of microsUsda) expect(claves).not.toContain(k);
-  // Y sí conserva los 9 micros de etiqueta (saturadas, trans, mono/poliinsaturadas, azúcares,
-  // fibra, sodio, colesterol, agua).
+  // Y sí conserva los 10 micros de etiqueta (saturadas, trans, mono/poliinsaturadas, azúcares,
+  // azúcar agregada, fibra, sodio, colesterol, agua).
   for (const k of MICROS_DE_ETIQUETA) {
     expect(claves).toContain(k);
   }
@@ -217,7 +217,7 @@ test("MealItemSchema acepta micros snapshoteados o null", () => {
   expect(MealItemSchema.safeParse(legacy).success).toBe(true);
 });
 
-test("MealItemSchema también lleva los 30 nutrientes del registro", () => {
+test("MealItemSchema también lleva los 34 nutrientes del registro", () => {
   expect(Object.keys(MealItemSchema.shape)).toEqual(expect.arrayContaining([...NUTRIENT_KEYS]));
 });
 
@@ -242,7 +242,7 @@ test("NutritionGoalInputSchema acepta objetivo + ritmo, rechaza objetivo inváli
   expect(NutritionGoalInputSchema.safeParse({ objective: "lose", rateKgPerWeek: 0.25, manualKcal: -5 }).success).toBe(false);
 });
 
-test("FoodMicrosEstimateSchema acepta los 30 nutrientes nullable y omitidos", () => {
+test("FoodMicrosEstimateSchema acepta los 34 nutrientes nullable y omitidos", () => {
   expect(FoodMicrosEstimateSchema.safeParse({}).success).toBe(true); // todos opcionales
   expect(FoodMicrosEstimateSchema.safeParse({ vitamin_c_mg: 12, iron_mg: null }).success).toBe(true);
 });

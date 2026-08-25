@@ -4,7 +4,8 @@
 export const NUTRIENT_REFERENCES = {
   fiber_g: 30, // OMS/EFSA: ≥25–30 g/día
   salt_g: 5, // OMS: <5 g/día de sal
-  sugars_g: 50, // OMS: azúcares libres <10% de la energía (~50 g en una dieta de 2000 kcal)
+  sugars_g: 50, // OMS: azúcares LIBRES <10% de la energía (~50 g en 2000 kcal). El semáforo mide
+  //             azúcar LIBRE (ver freeSugars.ts): la fruta/verdura ENTERA NO cuenta contra esto.
   cholesterol_mg: 300, // referencia clásica de 300 mg/día
 } as const;
 

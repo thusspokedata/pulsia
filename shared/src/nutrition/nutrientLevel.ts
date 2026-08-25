@@ -1,5 +1,6 @@
-import type { FoodBasis } from "../schemas/nutrition";
+import type { FoodBasis, SugarClass } from "../schemas/nutrition";
 import { saltGFromSodiumMg } from "./derived";
+import { freeSugarsG } from "./freeSugars";
 
 // Los seis nutrientes que llevan semáforo. El ORDEN importa: desempata el orden de los chips
 // en la UI, así que cambiarlo cambia lo que ve el usuario.
@@ -125,6 +126,8 @@ export type FoodFlagsInput = {
   fat_g: number;
   saturated_fat_g?: number | null;
   sugars_g?: number | null;
+  added_sugars_g?: number | null;
+  sugarClass?: SugarClass | null;
   sodium_mg?: number | null;
   cholesterol_mg?: number | null;
   fiber_g?: number | null;
@@ -160,6 +163,16 @@ const SENTIMENT_RANK: Record<NutrientSentiment, number> = {
  */
 export function nutrientValue(food: FoodFlagsInput, nutrient: FlaggedNutrient): number | null {
   if (nutrient === "salt_g") return saltGFromSodiumMg(finite(food.sodium_mg));
+  // El semáforo de azúcar juzga los azúcares LIBRES (límite OMS), no el total: la fruta/verdura
+  // ENTERA no debe marcarse como "azúcar alto". La traducción total→libre vive en freeSugars.ts
+  // y depende de sugarClass + added_sugars_g; pasa acá, en el borde, no en los umbrales.
+  if (nutrient === "sugars_g") {
+    return freeSugarsG({
+      sugars_g: food.sugars_g,
+      added_sugars_g: food.added_sugars_g,
+      sugarClass: food.sugarClass,
+    });
+  }
   return finite(food[nutrient]);
 }
 
