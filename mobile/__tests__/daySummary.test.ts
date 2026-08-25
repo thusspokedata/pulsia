@@ -1,5 +1,5 @@
-import { buildNutritionDaySummary } from "../src/nutrition/daySummary";
-import type { Meal, WaterLog } from "@pulsia/shared";
+import { buildNutritionDaySummary, sumarAzucarLibreDeItems } from "../src/nutrition/daySummary";
+import type { Meal, MealItem, WaterLog } from "@pulsia/shared";
 
 const meal = (items: any[]): Meal => ({ id: "m", eatenAt: 1, mealType: null, note: null, items } as any);
 const item = (o: any) => ({ id: "i", foodId: null, foodName: "x", quantity: 1, quantityUnit: "g", grams: 100,
@@ -118,6 +118,21 @@ test("mixto con AGREGADO: el azúcar libre es el agregado, no el total", () => {
   const s = buildNutritionDaySummary(meals, []);
   expect(s.nutrients.sugars_g.value).toBe(20);
   expect(s.sugarFree.value).toBe(8);
+});
+
+test("sumarAzucarLibreDeItems: el helper exportado que comparten el día y el detalle de comida", () => {
+  // El mismo cálculo que usa buildNutritionDaySummary, ahora reusable por el detalle de UNA comida
+  // (antes el detalle mostraba el total y divergía). Fruta entera (intrinsic) no cuenta; el mixto
+  // aporta su agregado. total libre = 0 + 8 = 8, y el segundo sin dato lo deja parcial.
+  const items = [
+    { sugars_g: 30, sugarClass: "intrinsic" },
+    { sugars_g: 20, added_sugars_g: 8, sugarClass: "mixed" },
+  ] as MealItem[];
+  const sum = sumarAzucarLibreDeItems(items);
+  expect(sum.value).toBe(8);
+  expect(sum.partial).toBe(false);
+  // Un ítem sin dato de azúcar marca el total como piso.
+  expect(sumarAzucarLibreDeItems([...items, {} as MealItem]).partial).toBe(true);
 });
 
 test("un ítem SIN dato de azúcar mezclado con otros: el libre del día queda parcial", () => {

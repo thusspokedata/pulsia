@@ -44,6 +44,23 @@ export function sumarNutrientesDeItems(items: MealItem[]): Record<NutrientKey, N
   return nutrients;
 }
 
+/**
+ * Suma el azúcar LIBRE de una lista de ítems: `freeSugarsG` por ítem (usa total + agregado + clase)
+ * y se totaliza con la MISMA mecánica que `sugars_g` (`sumNutrientByKey` con la clave "sugars_g":
+ * 1 decimal + `partial`). Un ítem sin dato de azúcar deja `null`, que marca el total como parcial.
+ *
+ * Vive acá, exportado, porque lo usan DOS superficies: el TOTAL DEL DÍA y el detalle de UNA comida.
+ * Tenerlo dos veces era exactamente el bug de la sal (dos pantallas midiendo lo mismo con cuentas
+ * distintas): el día medía libres y el detalle mostraba el total, así una comida de pura fruta se
+ * veía como excedente de azúcar ahí y como 0 en la pestaña del día.
+ */
+export function sumarAzucarLibreDeItems(items: MealItem[]): NutrientSum {
+  return sumNutrientByKey(
+    items.map((it) => freeSugarsG({ sugars_g: it.sugars_g, added_sugars_g: it.added_sugars_g, sugarClass: it.sugarClass })),
+    "sugars_g",
+  );
+}
+
 export function buildNutritionDaySummary(meals: Meal[], water: WaterLog[]): NutritionDaySummary {
   const items = meals.flatMap((m) => m.items);
   const nutrients = sumarNutrientesDeItems(items);
@@ -62,13 +79,9 @@ export function buildNutritionDaySummary(meals: Meal[], water: WaterLog[]): Nutr
     saturated_fat_g: nutrients.saturated_fat_g.value, salt_g: saltG,
   };
   const cholesterolMg = nutrients.cholesterol_mg.value;
-  // Azúcar LIBRE por ítem (usa total + agregado + clase del ítem) y se suma con la MISMA mecánica
-  // que `sugars_g` (`sumNutrientByKey` con la clave "sugars_g": 1 decimal + `partial`). Un ítem sin
-  // dato de azúcar deja `null`, que marca el total como parcial igual que en el total del día.
-  const sugarFree = sumNutrientByKey(
-    items.map((it) => freeSugarsG({ sugars_g: it.sugars_g, added_sugars_g: it.added_sugars_g, sugarClass: it.sugarClass })),
-    "sugars_g",
-  );
+  // Azúcar LIBRE del día: el mismo helper que usa el detalle de UNA comida (ver arriba), para que
+  // las dos superficies midan con la misma cuenta.
+  const sugarFree = sumarAzucarLibreDeItems(items);
   const fromFood = nutrients.water_ml.value ?? 0;
   const drank = water.reduce((a, w) => a + w.ml, 0);
   return { dayTotals, cholesterolMg, nutrients, sugarFree, liquid: { total: Math.round(fromFood + drank), drank, fromFood }, supplementNutrients: {} };

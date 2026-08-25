@@ -20,7 +20,7 @@ function normalizar(s: string): string {
 // ("deshidrat" → "deshidratado"; "pasa" → "pasas"; "orejon" → "orejones"). El \b de arranque evita
 // pescar el patrón en medio de otra palabra.
 const FREE_PREFIJOS = [
-  "jugo", "zumo", "juice", "nectar",
+  "jugo", "zumo", "juice",
   "deshidrat", "pasa", "raisin", "orejon", "dried",
   "miel", "honey", "jarabe", "syrup", "sirope",
   "mermelada", "jalea", "confitura",
@@ -28,11 +28,18 @@ const FREE_PREFIJOS = [
   "compota", "membrillo",
   "helado", "refresco", "gaseosa",
   "seco", "seca",
+  // El PURÉ/compota de FRUTA es free (todo su azúcar es libre): sin esto "Puré de manzana"
+  // caería en produce ("manzana") y se marcaría intrinsic, sub-avisando el azúcar libre. Un
+  // "puré de papa" también daría free, pero su azúcar es ~0 así que es inocuo (conservador);
+  // lo que importa es que el puré de fruta NO quede intrinsic. Normalizado sin tilde: "puré"→"pure".
+  "pure", "puree",
 ];
 
 // FREE, palabra EXACTA (admite plural con -s): "jam" (inglés). Como prefijo pescaría "jamón"
-// ("jamon"), que NO es dulce; exacto lo evita.
-const FREE_PALABRAS = ["jam"];
+// ("jamon"), que NO es dulce; exacto lo evita. "nectar" está acá y NO en los prefijos: como
+// palabra exacta pesca el néctar SUELTO (bebida azucarada, "Néctar de durazno" → free) pero no el
+// prefijo de "nectarina", que es una fruta ENTERA (intrinsic, listada en PRODUCE).
+const FREE_PALABRAS = ["jam", "nectar"];
 
 // FREE, frases literales (substring): "dulce de leche", "dulce de membrillo". "dulce" solo NO
 // alcanza (sería demasiado amplio).
@@ -49,6 +56,10 @@ const PRODUCE_PALABRAS = [
   "mango", "pina", "anana", "papaya", "granada", "higo", "arandano", "frambuesa",
   "mora", "frutilla", "fresa", "maracuya", "guayaba", "caqui", "chirimoya",
   "physalis", "grosella",
+  // La nectarina/nectarine ENTERA es fruta (intrinsic). "nectarina" (ES) y "nectarine" (EN, para
+  // la descripción USDA "Nectarines, raw") como palabras completas: no las pesca el free porque
+  // "nectar" ahora es palabra exacta, no prefijo.
+  "nectarina", "nectarine",
   // Verduras
   "tomate", "zanahoria", "brocoli", "coliflor", "espinaca", "acelga", "lechuga",
   "rucula", "pepino", "calabacin", "zucchini", "zapallo", "calabaza", "pimiento",

@@ -52,3 +52,29 @@ test("'col' no pesca 'colacao' ni 'coliflor' por accidente", () => {
   expect(classifySugar("Coliflor")).toBe("intrinsic"); // listada aparte, intrinsic igual
   expect(classifySugar("Colacao")).toBeNull(); // NO es produce
 });
+
+test("la nectarina ENTERA es fruta → intrinsic, no free por 'nectar'", () => {
+  // "nectar" salió de los prefijos FREE justo para no pescar el PREFIJO de "nectarina": la
+  // nectarina entera es fruta y su azúcar es intrínseco. Si "nectar" siguiera de prefijo, esto
+  // daría "free" y sub-avisaría el azúcar libre al revés (marcaría libre lo que no lo es).
+  expect(classifySugar("Nectarina")).toBe("intrinsic");
+  expect(classifySugar("Nectarinas")).toBe("intrinsic"); // plural
+  // El nombre no da pistas; la descripción USDA (inglés) sí: nectarine entera → intrinsic.
+  expect(classifySugar("", "Nectarines, raw")).toBe("intrinsic");
+});
+
+test("'néctar' SUELTO (bebida) sigue siendo free por palabra exacta", () => {
+  // El néctar de fruta (bebida azucarada) es free. Como palabra exacta pesca "néctar"/"nectar"
+  // suelto pero NO el prefijo de "nectarina". Si "nectar" volviera a los prefijos, el test de
+  // arriba se rompe; si sale de las palabras, este se rompe.
+  expect(classifySugar("Néctar de durazno")).toBe("free");
+  expect(classifySugar("nectar")).toBe("free"); // suelto, sin tilde
+});
+
+test("el PURÉ de fruta es free (todo su azúcar es libre), no intrinsic por la fruta", () => {
+  // "Puré de manzana" caería en produce ("manzana") y se marcaría intrinsic, sub-avisando el
+  // azúcar libre del puré. El prefijo "pure"/"puree" lo gana antes. Si el prefijo no estuviera,
+  // esto daría "intrinsic".
+  expect(classifySugar("Puré de manzana")).toBe("free");
+  expect(classifySugar("Puree de pera")).toBe("free");
+});

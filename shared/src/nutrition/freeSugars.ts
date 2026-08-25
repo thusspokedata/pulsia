@@ -17,7 +17,9 @@ function finite(raw: unknown): number | null {
 /**
  * Azúcar LIBRE por la misma base que `sugars_g` (por 100 g/ml). `null` si no sabemos el total:
  * sin el total no se puede afirmar cuánto es libre. Reglas:
- *   intrinsic → 0 (fruta/verdura entera: nada es libre)
+ *   intrinsic → el AGREGADO conocido, o 0 (fruta/verdura entera: nada NATURAL es libre, pero si
+ *     igual trae un added_sugars_g finito y positivo —misclasificación heurística/IA— ese azúcar
+ *     agregado es REAL y no se descarta: el libre es al menos el agregado).
  *   free      → total (jugo/seco/puré/miel/jarabe/dulce: todo es libre)
  *   mixed / null / undefined → el AGREGADO si es un número finito; si no, el total (CONSERVADOR:
  *     ante la duda, contamos de más, no de menos).
@@ -26,16 +28,18 @@ function finite(raw: unknown): number | null {
 export function freeSugarsG(input: FreeSugarsInput): number | null {
   const total = finite(input.sugars_g);
   if (total === null) return null; // no sabemos el total → no sabemos los libres
+  const added = finite(input.added_sugars_g); // el agregado conocido, o null
 
   let free: number;
   if (input.sugarClass === "intrinsic") {
-    free = 0;
+    // Piso en el agregado conocido: la fruta entera no aporta azúcar libre NATURAL, pero un added
+    // finito y positivo (misclasificación) es azúcar agregada real que no puede perderse.
+    free = added ?? 0;
   } else if (input.sugarClass === "free") {
     free = total;
   } else {
     // mixed o sin clase: usar el agregado si se conoce, si no el total (conservador).
-    const added = finite(input.added_sugars_g);
-    free = added !== null ? added : total;
+    free = added ?? total;
   }
 
   return Math.min(Math.max(free, 0), total);

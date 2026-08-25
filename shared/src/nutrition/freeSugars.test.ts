@@ -64,3 +64,18 @@ test("intrinsic con sugars 0 → free 0 / intrinsic 0", () => {
   expect(freeSugarsG(x)).toBe(0);
   expect(intrinsicSugarsG(x)).toBe(0);
 });
+
+test("intrinsic con AGREGADO conocido: no descarta el added real (piso en el agregado)", () => {
+  // Si un alimento cae en "intrinsic" pero trae added_sugars_g finito y positivo (misclasificación
+  // heurística o de IA), ese azúcar agregado es REAL y no puede perderse. El libre es al menos el
+  // agregado. Un mutante que devolviera 0 directo (la rama vieja) daría 0.
+  const x = { sugars_g: 10, added_sugars_g: 3, sugarClass: "intrinsic" as const };
+  expect(freeSugarsG(x)).toBe(3);
+  expect(intrinsicSugarsG(x)).toBe(7);
+});
+
+test("intrinsic SIN added conocido sigue en 0 (sin cambio)", () => {
+  // El caso normal de la fruta entera: sin added, nada es libre.
+  const x = { sugars_g: 10, sugarClass: "intrinsic" as const };
+  expect(freeSugarsG(x)).toBe(0);
+});

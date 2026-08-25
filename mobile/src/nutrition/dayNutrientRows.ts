@@ -42,11 +42,10 @@ import {
 export function referenciasOms(goalKcal: number | null): Partial<Record<NutrientKey, NutrientReference | null>> {
   return {
     // El límite OMS de `sugars_g` (50 g) es de azúcares LIBRES: la fruta y la verdura ENTERA no
-    // cuentan, sí el jugo, la fruta seca y el azúcar agregada. En el TOTAL DEL DÍA la fila de
-    // `sugars_g` se sustituye luego por `filaDeAzucar`, que mide libres (ver buildDayNutrientRows).
-    // LIMITACIÓN CONOCIDA: el detalle de UNA comida reusa este override pero AÚN muestra el total,
-    // no los libres (no separa por ítem). Se deja así en esta fase; el override sigue siendo el
-    // mismo valor de referencia (50 g), solo cambia contra qué se lo compara.
+    // cuentan, sí el jugo, la fruta seca y el azúcar agregada. TANTO el total del día COMO el
+    // detalle de UNA comida sustituyen luego la fila de `sugars_g` por `filaDeAzucar`, que mide
+    // libres por ítem (ver buildDayNutrientRows y comida.tsx). Este override solo aporta el valor
+    // de referencia (50 g); contra qué se lo compara lo decide cada superficie con su `filaDeAzucar`.
     sugars_g: { value: NUTRIENT_REFERENCES.sugars_g, kind: NUTRIENT_REFERENCE_KIND.sugars_g },
     fiber_g: { value: NUTRIENT_REFERENCES.fiber_g, kind: NUTRIENT_REFERENCE_KIND.fiber_g },
     cholesterol_mg: { value: NUTRIENT_REFERENCES.cholesterol_mg, kind: NUTRIENT_REFERENCE_KIND.cholesterol_mg },
