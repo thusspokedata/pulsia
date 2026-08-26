@@ -246,6 +246,25 @@ test("sal: el aporte de suplementos llega como sodio y se convierte a gramos de 
   expect(screen.getByText("2 g · 67%")).toBeTruthy();
 });
 
+test("un nombre largo no pisa el monto: el nombre encoge y el monto reserva su ancho", async () => {
+  mockKey = "magnesium_mg";
+  const largo = "Doctor's Best, Omega 3 Fish Oil, 1000mg, 120 Weichkapseln";
+  (listMeals as jest.Mock).mockResolvedValue([meal([item("Espinaca", 100, null, { magnesium_mg: 30 })])]);
+  (getRangeNutrients as jest.Mock).mockResolvedValue({
+    totals: {},
+    byNutrient: { magnesium_mg: [{ supplementName: largo, amount: 90 }] },
+  });
+  await render(<NutrienteScreen />);
+  await waitFor(() => expect(screen.getByText(largo)).toBeTruthy());
+  // El nombre encoge dentro de su bloque flex:1; el monto no encoge (reserva su ancho).
+  expect(screen.getByTestId(`rank-${largo}-name`).props.style.flexShrink).toBe(1);
+  expect(screen.getByTestId(`rank-${largo}-amount`).props.style.flexShrink).toBe(0);
+  // Y ambos, chip y monto, se siguen renderizando.
+  expect(screen.getByText("suplemento")).toBeTruthy();
+  // Total combinado 120 mg: el suplemento (90) es 75%, la espinaca (30) es 25%.
+  expect(screen.getByText("90 mg · 75%")).toBeTruthy();
+});
+
 test("si falla la carga de suplementos, degrada limpio: muestra solo la comida", async () => {
   mockKey = "magnesium_mg";
   (listMeals as jest.Mock).mockResolvedValue([meal([item("Espinaca", 100, null, { magnesium_mg: 30 })])]);

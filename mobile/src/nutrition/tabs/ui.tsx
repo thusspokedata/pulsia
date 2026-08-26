@@ -78,11 +78,14 @@ export function Bar({
 // (saturada/trans) en ámbar, pero el excedente es SIEMPRE rojo — es la misma semántica del
 // semáforo nutricional, no un color más de la paleta de macros.
 export function FatSplitBar({
-  fillPct, overPct, baseColor, height = 8, testID,
-}: { fillPct: number; overPct: number; baseColor: string; height?: number; testID?: string }) {
+  fillPct, supplementPct = 0, overPct, baseColor, height = 8, testID,
+}: { fillPct: number; supplementPct?: number; overPct: number; baseColor: string; height?: number; testID?: string }) {
   return (
     <View style={{ height, borderRadius: height / 2, backgroundColor: colors.surfaceMuted, overflow: "hidden", flexDirection: "row" }}>
       <View testID={testID} style={{ width: `${fillPct}%`, height, backgroundColor: baseColor }} />
+      {supplementPct > 0 && (
+        <View testID={testID ? `${testID}-supp` : undefined} style={{ width: `${supplementPct}%`, height, backgroundColor: colors.supplement }} />
+      )}
       {overPct > 0 && (
         <View testID={testID ? `${testID}-over` : undefined} style={{ width: `${overPct}%`, height, backgroundColor: colors.danger }} />
       )}

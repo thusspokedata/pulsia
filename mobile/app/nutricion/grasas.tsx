@@ -38,11 +38,18 @@ function redondear(n: number, type: FatType): number {
 // muestran excedente aunque se pasen; y sin umbral (omega3, trans "avoid", o sin meta de kcal) se
 // compara contra el que más aporta ESE día, para que la barra siga teniendo sentido visual — el
 // rojo de "avoid" ya lo da baseColorDe, no hace falta un segmento de excedente aparte.
-function segmentsDe(bar: FatBar, maxGrams: number): { fillPct: number; overPct: number } {
-  if (bar.kind === "max" && bar.thresholdG != null) return barSegments(bar.grams, bar.thresholdG, "limit");
-  if (bar.kind === "recommended" && bar.thresholdG != null) return barSegments(bar.grams, bar.thresholdG, "floor");
-  const fillPct = maxGrams > 0 ? Math.min(100, Math.round((bar.grams / maxGrams) * 100)) : 0;
-  return { fillPct, overPct: 0 };
+function segmentsDe(bar: FatBar, maxGrams: number, suppG: number): { fillPct: number; suppPct: number; overPct: number } {
+  const base =
+    bar.kind === "max" && bar.thresholdG != null
+      ? barSegments(bar.grams, bar.thresholdG, "limit")
+      : bar.kind === "recommended" && bar.thresholdG != null
+        ? barSegments(bar.grams, bar.thresholdG, "floor")
+        : { fillPct: maxGrams > 0 ? Math.min(100, Math.round((bar.grams / maxGrams) * 100)) : 0, overPct: 0 };
+  // Violeta = porción del suplemento DENTRO de lo que entra en la barra, proporcional a los gramos.
+  const share = bar.grams > 0 ? suppG / bar.grams : 0;
+  let suppPct = suppG > 0 ? Math.max(1, Math.round(base.fillPct * share)) : 0;
+  suppPct = Math.min(suppPct, base.fillPct);
+  return { fillPct: base.fillPct - suppPct, suppPct, overPct: base.overPct };
 }
 
 // El hint bajo la barra: el mensaje depende del tipo de referencia, no solo de si hay número.
@@ -64,10 +71,12 @@ export default function GrasasScreen() {
   const goalKcal = goalView?.status === "ok" ? goalView.kcal!.meta : null;
   // Los gramos por tipo salen del registro del día (summary.nutrients), no de dayTotals: dayTotals
   // solo lleva los macros gruesos + saturada/sal, no mono/poli/omega/trans.
+  const supp = summary.supplementNutrients ?? {};
   const fatGrams: FatGrams = Object.fromEntries(
-    FAT_BAR_ORDER.map((t) => [t, summary.nutrients[t]?.value ?? null]),
+    FAT_BAR_ORDER.map((t) => [t, (summary.nutrients[t]?.value ?? 0) + (supp[t] ?? 0)]),
   ) as FatGrams;
   const bars = fatBreakdown(fatGrams, goalKcal);
+  const haySuplemento = FAT_BAR_ORDER.some((t) => (supp[t] ?? 0) > 0);
   const totalGrams = bars.reduce((a, b) => a + b.grams, 0);
   const maxGrams = Math.max(...bars.map((b) => b.grams), 1);
 
@@ -82,8 +91,15 @@ export default function GrasasScreen() {
       ) : (
         <Card>
           <SectionTitle>Desglose por tipo</SectionTitle>
+          {haySuplemento && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.supplement }} />
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>El violeta es el aporte de los suplementos.</Text>
+            </View>
+          )}
           {bars.map((bar) => {
-            const { fillPct, overPct } = segmentsDe(bar, maxGrams);
+            const suppG = supp[bar.type] ?? 0;
+            const { fillPct, suppPct, overPct } = segmentsDe(bar, maxGrams, suppG);
             const hint = hintDe(bar);
             return (
               <Pressable
@@ -96,7 +112,7 @@ export default function GrasasScreen() {
                   <Text style={{ color: colors.text, fontSize: 14, flex: 1 }}>{bar.label}</Text>
                   <Text style={{ color: colors.textMuted, fontSize: 13 }}>{redondear(bar.grams, bar.type)} g</Text>
                 </View>
-                <FatSplitBar fillPct={fillPct} overPct={overPct} baseColor={baseColorDe(bar)} testID={`fat-bar-${bar.type}`} />
+                <FatSplitBar fillPct={fillPct} supplementPct={suppPct} overPct={overPct} baseColor={baseColorDe(bar)} testID={`fat-bar-${bar.type}`} />
                 {(hint || bar.exceeded) && (
                   <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                     {hint && <Text style={{ color: colors.icon, fontSize: 11 }}>{hint}</Text>}
