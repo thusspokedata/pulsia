@@ -2,7 +2,7 @@ import { ScrollView, View, Text, Pressable } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { fatBreakdown, FAT_BAR_ORDER, NUTRIENTS, type FatType, type FatBar, type FatGrams } from "@pulsia/shared";
 import { useNutritionDay } from "../../src/nutrition/useNutritionDay";
-import { Card, SectionTitle, EmptyState, FatSplitBar, barSegments } from "../../src/nutrition/tabs/ui";
+import { Card, SectionTitle, EmptyState, FatSplitBar, barSegments3 } from "../../src/nutrition/tabs/ui";
 import { colors, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 
@@ -33,23 +33,25 @@ function redondear(n: number, type: FatType): number {
   return Math.round(n * f) / f;
 }
 
-// fillPct/overPct de cada barra según el tipo de umbral. Los "max" con tope se parten en la línea
-// del umbral (igual que el resto de la app); los "recommended" con referencia (mono/omega6) nunca
-// muestran excedente aunque se pasen; y sin umbral (omega3, trans "avoid", o sin meta de kcal) se
-// compara contra el que más aporta ESE día, para que la barra siga teniendo sentido visual — el
-// rojo de "avoid" ya lo da baseColorDe, no hace falta un segmento de excedente aparte.
+// Los 3 segmentos (comida turquesa/verde/ámbar según el tipo · suplemento violeta · excedente rojo)
+// salen de `barSegments3`, la MISMA función que usa el diario de nutrientes: reserva ancho para que
+// ningún segmento con valor > 0 se redondee a 0% y desaparezca (un aporte chico 100% de suplemento
+// tiene que seguir dibujando el violeta, no una barra vacía con la leyenda mintiendo). Los "max" con
+// tope se parten en la línea del umbral; los "recommended" con referencia (mono/omega6) y los sin
+// umbral (omega3, trans "avoid", o sin meta de kcal) usan "floor" — nunca muestran excedente: los
+// primeros porque pasarse es bueno, y en "avoid" el rojo lo pinta baseColorDe, no un segmento aparte.
+// Sin umbral se compara contra el que más aporta ESE día (`maxGrams`), para que la barra siga
+// teniendo sentido visual. `bar.grams` ya trae comida + suplemento sumados, así que la comida es el
+// resto.
 function segmentsDe(bar: FatBar, maxGrams: number, suppG: number): { fillPct: number; suppPct: number; overPct: number } {
-  const base =
+  const foodG = Math.max(0, bar.grams - suppG);
+  const { foodPct, supplementPct, overPct } =
     bar.kind === "max" && bar.thresholdG != null
-      ? barSegments(bar.grams, bar.thresholdG, "limit")
+      ? barSegments3(foodG, suppG, bar.thresholdG, "limit")
       : bar.kind === "recommended" && bar.thresholdG != null
-        ? barSegments(bar.grams, bar.thresholdG, "floor")
-        : { fillPct: maxGrams > 0 ? Math.min(100, Math.round((bar.grams / maxGrams) * 100)) : 0, overPct: 0 };
-  // Violeta = porción del suplemento DENTRO de lo que entra en la barra, proporcional a los gramos.
-  const share = bar.grams > 0 ? suppG / bar.grams : 0;
-  let suppPct = suppG > 0 ? Math.max(1, Math.round(base.fillPct * share)) : 0;
-  suppPct = Math.min(suppPct, base.fillPct);
-  return { fillPct: base.fillPct - suppPct, suppPct, overPct: base.overPct };
+        ? barSegments3(foodG, suppG, bar.thresholdG, "floor")
+        : barSegments3(foodG, suppG, maxGrams, "floor");
+  return { fillPct: foodPct, suppPct: supplementPct, overPct };
 }
 
 // El hint bajo la barra: el mensaje depende del tipo de referencia, no solo de si hay número.

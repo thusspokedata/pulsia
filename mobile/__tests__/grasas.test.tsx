@@ -107,6 +107,24 @@ test("sin suplementos no hay segmento violeta ni leyenda", async () => {
   expect(screen.queryByText("El violeta es el aporte de los suplementos.")).toBeNull();
 });
 
+test("un aporte chico 100% de suplemento (base redondearía a 0%) igual pinta el violeta", async () => {
+  // Regresión: mono sin comida (0 g) + una cápsula de 0.1 g contra el umbral floor (~33 g a 2000
+  // kcal) hace que el % base redondee a 0 (0.1/33·100 ≈ 0.3 → 0). Reservar ancho (barSegments3)
+  // evita que el violeta desaparezca dejando la barra vacía con la leyenda diciendo que hay
+  // suplemento.
+  mockDay({
+    summary: {
+      ...buildNutritionDaySummary(
+        [{ id: "m", eatenAt: 1, mealType: null, note: null, items: [item({ monounsaturated_fat_g: 0 })] } as any],
+        [],
+      ),
+      supplementNutrients: { monounsaturated_fat_g: 0.1 },
+    },
+  });
+  await render(<GrasasScreen />);
+  expect(screen.getByTestId("fat-bar-monounsaturated_fat_g-supp")).toBeTruthy();
+});
+
 test("un día sin grasa cae en el EmptyState", async () => {
   mockDay({
     summary: buildNutritionDaySummary(
