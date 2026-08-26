@@ -192,11 +192,11 @@ export default function NutrienteScreen() {
           {ranked.map((f) => (
             <View key={`${f.source}-${f.name}`} style={{ gap: 4, marginTop: spacing.sm }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1, flexWrap: "wrap" }}>
                   {f.source === "supplement" && (
                     <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.supplement }} />
                   )}
-                  <Text style={{ color: colors.text, fontSize: 14 }}>{f.name}</Text>
+                  <Text testID={`rank-${f.name}-name`} style={{ color: colors.text, fontSize: 14, flexShrink: 1 }}>{f.name}</Text>
                   {f.source === "supplement" && (
                     <View
                       style={{
@@ -210,7 +210,7 @@ export default function NutrienteScreen() {
                     </View>
                   )}
                 </View>
-                <Text style={{ color: colors.textMuted, fontSize: 13 }}>
+                <Text testID={`rank-${f.name}-amount`} style={{ color: colors.textMuted, fontSize: 13, flexShrink: 0, marginLeft: spacing.sm, textAlign: "right" }}>
                   {f.amount} {unit} · {f.pctOfTotal}%
                 </Text>
               </View>

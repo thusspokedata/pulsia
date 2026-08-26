@@ -82,6 +82,49 @@ test("tocar una fila navega a nutriente.tsx con key=<tipo> y el offset del día"
   expect(router.push).toHaveBeenCalledWith("/nutricion/nutriente?key=omega3_g&offset=5");
 });
 
+test("el aporte de suplementos suma al total del tipo y pinta el segmento violeta", async () => {
+  mockDay({
+    summary: { ...summaryConGrasas(), supplementNutrients: { omega3_g: 1.4 } },
+  });
+  await render(<GrasasScreen />);
+  // Comida omega3 = 2 g (item fixture) + suplemento 1.4 g = 3.4 g combinado.
+  expect(screen.getByText("3.4 g")).toBeTruthy();
+  // Y aparece el segmento violeta del suplemento dentro de esa barra.
+  expect(screen.getByTestId("fat-bar-omega3_g-supp")).toBeTruthy();
+});
+
+test("con aporte de suplemento aparece la leyenda violeta", async () => {
+  mockDay({
+    summary: { ...summaryConGrasas(), supplementNutrients: { omega3_g: 1.4 } },
+  });
+  await render(<GrasasScreen />);
+  expect(screen.getByText("El violeta es el aporte de los suplementos.")).toBeTruthy();
+});
+
+test("sin suplementos no hay segmento violeta ni leyenda", async () => {
+  await render(<GrasasScreen />);
+  expect(screen.queryAllByTestId(/-supp$/)).toHaveLength(0);
+  expect(screen.queryByText("El violeta es el aporte de los suplementos.")).toBeNull();
+});
+
+test("un aporte chico 100% de suplemento (base redondearía a 0%) igual pinta el violeta", async () => {
+  // Regresión: mono sin comida (0 g) + una cápsula de 0.1 g contra el umbral floor (~33 g a 2000
+  // kcal) hace que el % base redondee a 0 (0.1/33·100 ≈ 0.3 → 0). Reservar ancho (barSegments3)
+  // evita que el violeta desaparezca dejando la barra vacía con la leyenda diciendo que hay
+  // suplemento.
+  mockDay({
+    summary: {
+      ...buildNutritionDaySummary(
+        [{ id: "m", eatenAt: 1, mealType: null, note: null, items: [item({ monounsaturated_fat_g: 0 })] } as any],
+        [],
+      ),
+      supplementNutrients: { monounsaturated_fat_g: 0.1 },
+    },
+  });
+  await render(<GrasasScreen />);
+  expect(screen.getByTestId("fat-bar-monounsaturated_fat_g-supp")).toBeTruthy();
+});
+
 test("un día sin grasa cae en el EmptyState", async () => {
   mockDay({
     summary: buildNutritionDaySummary(

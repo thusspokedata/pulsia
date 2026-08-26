@@ -2,7 +2,7 @@ import { ScrollView, View, Text, Pressable } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { fatBreakdown, FAT_BAR_ORDER, NUTRIENTS, type FatType, type FatBar, type FatGrams } from "@pulsia/shared";
 import { useNutritionDay } from "../../src/nutrition/useNutritionDay";
-import { Card, SectionTitle, EmptyState, FatSplitBar, barSegments } from "../../src/nutrition/tabs/ui";
+import { Card, SectionTitle, EmptyState, FatSplitBar, barSegments3 } from "../../src/nutrition/tabs/ui";
 import { colors, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
 
@@ -33,16 +33,25 @@ function redondear(n: number, type: FatType): number {
   return Math.round(n * f) / f;
 }
 
-// fillPct/overPct de cada barra según el tipo de umbral. Los "max" con tope se parten en la línea
-// del umbral (igual que el resto de la app); los "recommended" con referencia (mono/omega6) nunca
-// muestran excedente aunque se pasen; y sin umbral (omega3, trans "avoid", o sin meta de kcal) se
-// compara contra el que más aporta ESE día, para que la barra siga teniendo sentido visual — el
-// rojo de "avoid" ya lo da baseColorDe, no hace falta un segmento de excedente aparte.
-function segmentsDe(bar: FatBar, maxGrams: number): { fillPct: number; overPct: number } {
-  if (bar.kind === "max" && bar.thresholdG != null) return barSegments(bar.grams, bar.thresholdG, "limit");
-  if (bar.kind === "recommended" && bar.thresholdG != null) return barSegments(bar.grams, bar.thresholdG, "floor");
-  const fillPct = maxGrams > 0 ? Math.min(100, Math.round((bar.grams / maxGrams) * 100)) : 0;
-  return { fillPct, overPct: 0 };
+// Los 3 segmentos (comida turquesa/verde/ámbar según el tipo · suplemento violeta · excedente rojo)
+// salen de `barSegments3`, la MISMA función que usa el diario de nutrientes: reserva ancho para que
+// ningún segmento con valor > 0 se redondee a 0% y desaparezca (un aporte chico 100% de suplemento
+// tiene que seguir dibujando el violeta, no una barra vacía con la leyenda mintiendo). Los "max" con
+// tope se parten en la línea del umbral; los "recommended" con referencia (mono/omega6) y los sin
+// umbral (omega3, trans "avoid", o sin meta de kcal) usan "floor" — nunca muestran excedente: los
+// primeros porque pasarse es bueno, y en "avoid" el rojo lo pinta baseColorDe, no un segmento aparte.
+// Sin umbral se compara contra el que más aporta ESE día (`maxGrams`), para que la barra siga
+// teniendo sentido visual. `bar.grams` ya trae comida + suplemento sumados, así que la comida es el
+// resto.
+function segmentsDe(bar: FatBar, maxGrams: number, suppG: number): { fillPct: number; suppPct: number; overPct: number } {
+  const foodG = Math.max(0, bar.grams - suppG);
+  const { foodPct, supplementPct, overPct } =
+    bar.kind === "max" && bar.thresholdG != null
+      ? barSegments3(foodG, suppG, bar.thresholdG, "limit")
+      : bar.kind === "recommended" && bar.thresholdG != null
+        ? barSegments3(foodG, suppG, bar.thresholdG, "floor")
+        : barSegments3(foodG, suppG, maxGrams, "floor");
+  return { fillPct: foodPct, suppPct: supplementPct, overPct };
 }
 
 // El hint bajo la barra: el mensaje depende del tipo de referencia, no solo de si hay número.
@@ -64,10 +73,12 @@ export default function GrasasScreen() {
   const goalKcal = goalView?.status === "ok" ? goalView.kcal!.meta : null;
   // Los gramos por tipo salen del registro del día (summary.nutrients), no de dayTotals: dayTotals
   // solo lleva los macros gruesos + saturada/sal, no mono/poli/omega/trans.
+  const supp = summary.supplementNutrients ?? {};
   const fatGrams: FatGrams = Object.fromEntries(
-    FAT_BAR_ORDER.map((t) => [t, summary.nutrients[t]?.value ?? null]),
+    FAT_BAR_ORDER.map((t) => [t, (summary.nutrients[t]?.value ?? 0) + (supp[t] ?? 0)]),
   ) as FatGrams;
   const bars = fatBreakdown(fatGrams, goalKcal);
+  const haySuplemento = FAT_BAR_ORDER.some((t) => (supp[t] ?? 0) > 0);
   const totalGrams = bars.reduce((a, b) => a + b.grams, 0);
   const maxGrams = Math.max(...bars.map((b) => b.grams), 1);
 
@@ -82,8 +93,15 @@ export default function GrasasScreen() {
       ) : (
         <Card>
           <SectionTitle>Desglose por tipo</SectionTitle>
+          {haySuplemento && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.supplement }} />
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>El violeta es el aporte de los suplementos.</Text>
+            </View>
+          )}
           {bars.map((bar) => {
-            const { fillPct, overPct } = segmentsDe(bar, maxGrams);
+            const suppG = supp[bar.type] ?? 0;
+            const { fillPct, suppPct, overPct } = segmentsDe(bar, maxGrams, suppG);
             const hint = hintDe(bar);
             return (
               <Pressable
@@ -96,7 +114,7 @@ export default function GrasasScreen() {
                   <Text style={{ color: colors.text, fontSize: 14, flex: 1 }}>{bar.label}</Text>
                   <Text style={{ color: colors.textMuted, fontSize: 13 }}>{redondear(bar.grams, bar.type)} g</Text>
                 </View>
-                <FatSplitBar fillPct={fillPct} overPct={overPct} baseColor={baseColorDe(bar)} testID={`fat-bar-${bar.type}`} />
+                <FatSplitBar fillPct={fillPct} supplementPct={suppPct} overPct={overPct} baseColor={baseColorDe(bar)} testID={`fat-bar-${bar.type}`} />
                 {(hint || bar.exceeded) && (
                   <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                     {hint && <Text style={{ color: colors.icon, fontSize: 11 }}>{hint}</Text>}
