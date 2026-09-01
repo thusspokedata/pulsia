@@ -12,7 +12,8 @@ import {
   type RankNutrient,
 } from "@pulsia/shared";
 import { useMealsRange } from "../../src/nutrition/useMealsRange";
-import { getRangeNutrients, getRangeNutrientsDaily } from "../../src/api/supplements";
+import { getRangeNutrients } from "../../src/api/supplements";
+import { useSupplementDaily } from "../../src/nutrition/useSupplementDaily";
 import { getBackendUrl } from "../../src/storage/config";
 import { dayBounds } from "../../src/nutrition/dayBounds";
 import { dateKey } from "../../src/session/dateKey";
@@ -98,40 +99,6 @@ function useSupplementRanks(days: number, offset: number, nutrient: RankNutrient
   }, [days, offset, nutrient]);
 
   return rows;
-}
-
-// El aporte de suplementos POR DÍA, en unidad FUENTE, para foldear en la curva "Evolución". Mismo
-// rango y misma `backendKey` que useSupplementRanks (para la sal se pide "sodium_mg": el fold en
-// dailyNutrientSeries convierte a sal sobre el sodio ya sumado con la comida). Sin esto, la curva
-// era food-only y contradecía la lista "De mayor a menor aporte", que sí suma el suplemento.
-// Misma degradación limpia (try/catch → {}) y misma limpieza con `cancelled` que useSupplementRanks.
-function useSupplementDaily(days: number, offset: number, nutrient: RankNutrient): Record<string, number | undefined> {
-  const [byDay, setByDay] = useState<Record<string, number | undefined>>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const url = await getBackendUrl();
-        const from = dateKey(dayBounds(offset + days - 1).noon);
-        const to = dateKey(dayBounds(offset).noon);
-        const { perDay } = await getRangeNutrientsDaily(url, from, to);
-        const backendKey = nutrient === "salt_g" ? "sodium_mg" : nutrient;
-        const next: Record<string, number | undefined> = {};
-        for (const [dayKey, sn] of Object.entries(perDay)) {
-          next[dayKey] = sn.totals[backendKey];
-        }
-        if (!cancelled) setByDay(next);
-      } catch {
-        if (!cancelled) setByDay({});
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [days, offset, nutrient]);
-
-  return byDay;
 }
 
 // 0 cuando no hay total: mismo criterio que `pct` en breakdown.ts (evita 0/0 → NaN).
