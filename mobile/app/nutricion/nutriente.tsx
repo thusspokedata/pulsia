@@ -12,7 +12,7 @@ import {
   type RankNutrient,
 } from "@pulsia/shared";
 import { useMealsRange } from "../../src/nutrition/useMealsRange";
-import { getRangeNutrients } from "../../src/api/supplements";
+import { getRangeNutrients, getRangeNutrientsDaily } from "../../src/api/supplements";
 import { getBackendUrl } from "../../src/storage/config";
 import { dayBounds } from "../../src/nutrition/dayBounds";
 import { dateKey } from "../../src/session/dateKey";
@@ -100,6 +100,40 @@ function useSupplementRanks(days: number, offset: number, nutrient: RankNutrient
   return rows;
 }
 
+// El aporte de suplementos POR DÍA, en unidad FUENTE, para foldear en la curva "Evolución". Mismo
+// rango y misma `backendKey` que useSupplementRanks (para la sal se pide "sodium_mg": el fold en
+// dailyNutrientSeries convierte a sal sobre el sodio ya sumado con la comida). Sin esto, la curva
+// era food-only y contradecía la lista "De mayor a menor aporte", que sí suma el suplemento.
+// Misma degradación limpia (try/catch → {}) y misma limpieza con `cancelled` que useSupplementRanks.
+function useSupplementDaily(days: number, offset: number, nutrient: RankNutrient): Record<string, number | undefined> {
+  const [byDay, setByDay] = useState<Record<string, number | undefined>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = await getBackendUrl();
+        const from = dateKey(dayBounds(offset + days - 1).noon);
+        const to = dateKey(dayBounds(offset).noon);
+        const { perDay } = await getRangeNutrientsDaily(url, from, to);
+        const backendKey = nutrient === "salt_g" ? "sodium_mg" : nutrient;
+        const next: Record<string, number | undefined> = {};
+        for (const [dayKey, sn] of Object.entries(perDay)) {
+          next[dayKey] = sn.totals[backendKey];
+        }
+        if (!cancelled) setByDay(next);
+      } catch {
+        if (!cancelled) setByDay({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [days, offset, nutrient]);
+
+  return byDay;
+}
+
 // 0 cuando no hay total: mismo criterio que `pct` en breakdown.ts (evita 0/0 → NaN).
 function pctOf(v: number, total: number): number {
   return total > 0 ? Math.round((v / total) * 100) : 0;
@@ -114,6 +148,7 @@ export default function NutrienteScreen() {
   const { meals, loading, error } = useMealsRange(days, offset);
   const foodRanked = foodsHighestIn(meals, nutrient);
   const supplementRanked = useSupplementRanks(days, offset, nutrient);
+  const supplementDaily = useSupplementDaily(days, offset, nutrient);
   // Se combina y se recalcula el % sobre el total COMBINADO (comida + suplemento): el % de cada
   // fila tiene que sumar 100 entre todas, no solo entre las de comida. Mismo desempate por nombre
   // que foodsHighestIn, para que la lista no baile entre renders.
@@ -126,7 +161,7 @@ export default function NutrienteScreen() {
   // sale con amount 0. Sin el guard, la barra del "que más aporta" haría 0/0 → width "NaN%".
   const maxAmount = ranked[0]?.amount || 1;
 
-  const series = dailyNutrientSeries(meals, nutrient);
+  const series = dailyNutrientSeries(meals, nutrient, supplementDaily);
   // Solo llevan línea de referencia los nutrientes con un valor público FIJO. Quedan sin línea
   // las saturadas (6% de la energía, AHA → dependen de la meta de kcal) y las vitaminas y minerales
   // (referencia EFSA → depende del sexo y la edad del perfil): esta pantalla no carga ni la meta
