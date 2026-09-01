@@ -1,11 +1,15 @@
 import { NUTRIENTS, type NutrientKey } from "./nutrients";
 import { foodMacrosRaw, type MacroSource } from "./macros";
-import type { QuantityUnit } from "../schemas/nutrition";
+import type { QuantityUnit, SugarClass } from "../schemas/nutrition";
 
 export interface RecipeIngredient {
   food: MacroSource;
   quantity: number;
   unit: QuantityUnit;
+  // Clase del azúcar del ingrediente (intrinsic|free|mixed). Va como campo HERMANO de `food`, no
+  // dentro de MacroSource: MacroSource es solo nutrientes escalables por cantidad, y sugarClass es
+  // metadata cualitativa que NO escala. null/undefined = desconocido.
+  sugarClass?: SugarClass | null;
 }
 
 type MacroBlock = { kcal: number; protein_g: number; carbs_g: number; fat_g: number } & Record<NutrientKey, number | null>;
@@ -15,6 +19,7 @@ export interface DerivedRecipe {
   effectiveWeightG: number;  // cookedWeightG ?? sumGrams
   total: MacroBlock;         // totales absolutos de toda la receta (para el preview)
   per100: MacroBlock;        // por 100 g (lo que se guarda como Food)
+  sugarClass: SugarClass | null; // clase de azúcar de la receta, compuesta desde sus ingredientes
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -62,5 +67,29 @@ export function deriveRecipe(ingredients: RecipeIngredient[], cookedWeightG: num
     total[n.key] = rawSum == null ? null : roundTo(rawSum, n.decimals);
     per100[n.key] = rawSum == null ? null : roundTo(rawSum * factor, n.decimals);
   }
-  return { sumGrams, effectiveWeightG, total, per100 };
+
+  // sugarClass de la receta compuesto desde el de sus ingredientes. El motor de azúcares LIBRES
+  // (freeSugars.ts) mira el sugarClass del Food: si la receta queda null, es conservador y cuenta
+  // TODO el azúcar como libre (una ensalada 100% fruta entera volvería a marcar "azúcar alto"). Por
+  // eso lo derivamos acá.
+  //
+  // Regla (3 vías) sobre los ingredientes que APORTAN azúcar — su sugars_g crudo escalado > 0. Un
+  // ingrediente sin azúcar (agua, pollo) no aporta clasificación y por eso se excluye: su sugarClass
+  // (o su ausencia) no debe contaminar el resultado.
+  //   - Ningún ingrediente aporta azúcar → null (no hay azúcar que clasificar).
+  //   - Todos los que aportan azúcar son "intrinsic" → "intrinsic".
+  //   - Todos los que aportan azúcar son "free" → "free".
+  //   - Cualquier otro caso (mezcla intrinsic+free, algún "mixed", o algún null/desconocido entre los
+  //     que aportan azúcar) → "mixed". Conservador: ante la duda contamos de más, igual criterio que
+  //     freeSugars.ts (mixed hace que se cuente parte como libre, no que se descarte).
+  const sugarClasses = ingredients
+    .filter((_, i) => typeof raw[i].sugars_g === "number" && (raw[i].sugars_g as number) > 0)
+    .map((ing) => ing.sugarClass ?? null);
+  let sugarClass: SugarClass | null;
+  if (sugarClasses.length === 0) sugarClass = null;
+  else if (sugarClasses.every((c) => c === "intrinsic")) sugarClass = "intrinsic";
+  else if (sugarClasses.every((c) => c === "free")) sugarClass = "free";
+  else sugarClass = "mixed";
+
+  return { sumGrams, effectiveWeightG, total, per100, sugarClass };
 }

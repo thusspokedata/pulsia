@@ -43,6 +43,46 @@ test("ingrediente inexistente en el catálogo → tira RecipeValidationError", (
   expect(() => applyRecipeDerivation(recetaInput() as any, catalog)).toThrow(RecipeValidationError);
 });
 
+// --- sugarClass compuesto desde los ingredientes (NUT-10b) ---
+const MANZANA_ID = "22222222-2222-4222-8222-222222222222";
+const MIEL_ID = "33333333-3333-4333-8333-333333333333";
+// Frutas enteras (azúcar intrínseco) y miel (azúcar libre), ambas con sugarsG > 0.
+const manzanaRow = {
+  id: MANZANA_ID, userId: "u", name: "Manzana", basis: "per_100g",
+  kcal: 52, proteinG: 0.3, carbsG: 14, fatG: 0.2, unitWeightG: null, createdAt: new Date(0),
+  sourceMacros: "usda", sourceMicros: null, usdaFdcId: 1, sugarClass: "intrinsic",
+  saturatedFatG: null, sugarsG: 10, fiberG: null, sodiumMg: null, ironMg: null, calciumMg: null,
+};
+const mielRow = {
+  id: MIEL_ID, userId: "u", name: "Miel", basis: "per_100g",
+  kcal: 304, proteinG: 0.3, carbsG: 82, fatG: 0, unitWeightG: null, createdAt: new Date(0),
+  sourceMacros: "usda", sourceMicros: null, usdaFdcId: 2, sugarClass: "free",
+  saturatedFatG: null, sugarsG: 82, fiberG: null, sodiumMg: null, ironMg: null, calciumMg: null,
+};
+
+test("receta de puras frutas intrinsic → sugarClass 'intrinsic'", () => {
+  const catalog = new Map<string, any>([[MANZANA_ID, manzanaRow as any]]);
+  const input = recetaInput({
+    name: "Ensalada de fruta",
+    recipe: { items: [{ foodId: MANZANA_ID, quantity: 300, unit: "g" as const }], cookedWeightG: null },
+  });
+  const out = applyRecipeDerivation(input as any, catalog);
+  expect(out.sugarClass).toBe("intrinsic");
+});
+
+test("receta mezclando fruta (intrinsic) + miel (free) → sugarClass 'mixed'", () => {
+  const catalog = new Map<string, any>([[MANZANA_ID, manzanaRow as any], [MIEL_ID, mielRow as any]]);
+  const input = recetaInput({
+    name: "Fruta con miel",
+    recipe: { items: [
+      { foodId: MANZANA_ID, quantity: 200, unit: "g" as const },
+      { foodId: MIEL_ID, quantity: 30, unit: "g" as const },
+    ], cookedWeightG: null },
+  });
+  const out = applyRecipeDerivation(input as any, catalog);
+  expect(out.sugarClass).toBe("mixed");
+});
+
 test("alimento común (sin recipe) se devuelve intacto", () => {
   const input = {
     name: "Banana", basis: "per_100g" as const, kcal: 89, protein_g: 1.1, carbs_g: 23, fat_g: 0.3,

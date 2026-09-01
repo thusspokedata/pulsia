@@ -1,4 +1,4 @@
-import { deriveRecipe, type Food, type FoodInput } from "@pulsia/shared";
+import { deriveRecipe, type Food, type FoodInput, type SugarClass } from "@pulsia/shared";
 import { nutrientsFromRow } from "./columns";
 import { food } from "../db/schema";
 
@@ -24,11 +24,15 @@ export function applyRecipeDerivation(input: FoodInput, catalog: Map<string, Foo
       },
       quantity: it.quantity,
       unit: it.unit,
+      // Metadata de azúcar del ingrediente (no escala): la receta compone su sugarClass con esto.
+      sugarClass: (f.sugarClass ?? null) as SugarClass | null,
     };
   });
   let per100: ReturnType<typeof deriveRecipe>["per100"];
+  let derived: ReturnType<typeof deriveRecipe>;
   try {
-    per100 = deriveRecipe(ingredients, input.recipe.cookedWeightG).per100;
+    derived = deriveRecipe(ingredients, input.recipe.cookedWeightG);
+    per100 = derived.per100;
   } catch (e) {
     throw new RecipeValidationError((e as Error).message);
   }
@@ -39,6 +43,7 @@ export function applyRecipeDerivation(input: FoodInput, catalog: Map<string, Foo
     ...per100, // kcal + macros + 30 nutrientes por 100 g
     unitWeightG: null,
     sourceMacros: "recipe",
+    sugarClass: derived.sugarClass, // clase de azúcar compuesta desde los ingredientes
     sourceMicros: null,
     usdaFdcId: null,
   };
