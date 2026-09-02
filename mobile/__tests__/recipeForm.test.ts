@@ -32,6 +32,36 @@ test("buildRecipeFoodInput arma un FoodInput per-100g con recipe y sourceMacros 
   expect(input.recipe?.cookedWeightG).toBe(500);
 });
 
+// NUT-10b: la clase de azúcar de la receta se compone desde la de sus ingredientes. Sin reenviar
+// `sugarClass`, una ensalada 100% fruta entera caería en "mixed" y volvería a marcar "azúcar alto".
+const manzana = { id: "f3", name: "Manzana", basis: "per_100g" as const, kcal: 52, protein_g: 0.3, carbs_g: 14, fat_g: 0.2, unitWeightG: null, sourceMacros: "usda" as const, sourceMicros: "usda" as const, createdAt: 0, sugars_g: 10, sugarClass: "intrinsic" as const } as any;
+const miel = { id: "f4", name: "Miel", basis: "per_100g" as const, kcal: 304, protein_g: 0.3, carbs_g: 82, fat_g: 0, unitWeightG: null, sourceMacros: "usda" as const, sourceMicros: "usda" as const, createdAt: 0, sugars_g: 82, sugarClass: "free" as const } as any;
+
+test("recipeTotals: receta 100% fruta entera → sugarClass intrinsic (reenvía la clase del ingrediente)", () => {
+  const t = recipeTotals([
+    { food: manzana, quantity: 100, unit: "g" },
+    { food: manzana, quantity: 150, unit: "g" },
+  ], null);
+  expect(t.sugarClass).toBe("intrinsic");
+});
+
+test("recipeTotals: fruta + miel → mixed; ingrediente sin azúcar (agua) no contamina", () => {
+  expect(recipeTotals([
+    { food: manzana, quantity: 100, unit: "g" },
+    { food: miel, quantity: 20, unit: "g" },
+    { food: agua, quantity: 100, unit: "ml" },
+  ], null).sugarClass).toBe("mixed");
+});
+
+test("buildRecipeFoodInput incluye el sugarClass compuesto de la receta", () => {
+  const input = buildRecipeFoodInput({
+    name: "Ensalada de frutas",
+    rows: [{ food: manzana, quantity: 200, unit: "g" }],
+    cookedWeightG: null,
+  });
+  expect(input.sugarClass).toBe("intrinsic");
+});
+
 test("parseQuantityInput: número normal, coma decimal, y rechazo de no-finitos", () => {
   expect(parseQuantityInput("100")).toBe(100);
   expect(parseQuantityInput("1,5")).toBe(1.5);

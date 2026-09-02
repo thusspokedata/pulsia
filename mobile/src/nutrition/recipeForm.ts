@@ -6,7 +6,11 @@ import type { MealRow } from "./mealForm";
 // pesa igual que un ítem de una comida.
 export function recipeTotals(rows: MealRow[], cookedWeightG: number | null) {
   return deriveRecipe(
-    rows.map((r) => ({ food: r.food, quantity: r.quantity, unit: r.unit })),
+    // `sugarClass` es metadata del alimento (no escala), y va como campo hermano de `food`: sin
+    // reenviarlo, todo ingrediente con azúcar caería en la rama "desconocido" → "mixed", el mismo
+    // bug de NUT-10b del lado del cliente. El server igual re-deriva la receta con autoridad, pero
+    // así la derivación client-side (previews/totales) coincide con la persistida.
+    rows.map((r) => ({ food: r.food, quantity: r.quantity, unit: r.unit, sugarClass: r.food.sugarClass })),
     cookedWeightG,
   );
 }
@@ -23,6 +27,7 @@ export function buildRecipeFoodInput(args: {
     name: args.name.trim(),
     basis: "per_100g",
     ...d.per100, // kcal + protein_g/carbs_g/fat_g + los 30 nutrientes por 100 g
+    sugarClass: d.sugarClass, // clase de azúcar compuesta desde los ingredientes (el server la re-deriva igual)
     unitWeightG: null,
     sourceMacros: "recipe",
     sourceMicros: null,

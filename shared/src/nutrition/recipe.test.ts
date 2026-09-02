@@ -62,3 +62,58 @@ it("un ingrediente con cookingYield NO se convierte al derivar la receta", () =>
   // 100 g × 350/100 = 350 kcal (sin dividir por 2.2).
   expect(r.total.kcal).toBe(350);
 });
+
+// --- sugarClass compuesto desde los ingredientes (NUT-10b) ---
+// Frutas enteras (azúcar intrínseco) y un dulce (azúcar libre); todos con sugars_g > 0.
+const manzana = { basis: "per_100g" as const, kcal: 52, protein_g: 0.3, carbs_g: 14, fat_g: 0.2, unitWeightG: null, sugars_g: 10 };
+const pera = { basis: "per_100g" as const, kcal: 57, protein_g: 0.4, carbs_g: 15, fat_g: 0.1, unitWeightG: null, sugars_g: 10 };
+const miel = { basis: "per_100g" as const, kcal: 304, protein_g: 0.3, carbs_g: 82, fat_g: 0, unitWeightG: null, sugars_g: 82 };
+
+test("sugarClass: todos los que aportan azúcar son intrinsic → 'intrinsic'", () => {
+  const d = deriveRecipe([
+    { food: manzana, quantity: 150, unit: "g", sugarClass: "intrinsic" },
+    { food: pera, quantity: 150, unit: "g", sugarClass: "intrinsic" },
+  ], null);
+  expect(d.sugarClass).toBe("intrinsic");
+});
+
+test("sugarClass: todos los que aportan azúcar son free → 'free'", () => {
+  const d = deriveRecipe([
+    { food: miel, quantity: 50, unit: "g", sugarClass: "free" },
+  ], null);
+  expect(d.sugarClass).toBe("free");
+});
+
+test("sugarClass: mezcla intrinsic + free → 'mixed'", () => {
+  const d = deriveRecipe([
+    { food: manzana, quantity: 150, unit: "g", sugarClass: "intrinsic" },
+    { food: miel, quantity: 30, unit: "g", sugarClass: "free" },
+  ], null);
+  expect(d.sugarClass).toBe("mixed");
+});
+
+test("sugarClass: un ingrediente con azúcar y sugarClass null/undefined → 'mixed' (conservador)", () => {
+  const d = deriveRecipe([
+    { food: manzana, quantity: 150, unit: "g", sugarClass: "intrinsic" },
+    { food: pera, quantity: 150, unit: "g" }, // aporta azúcar pero sugarClass desconocido
+  ], null);
+  expect(d.sugarClass).toBe("mixed");
+});
+
+test("sugarClass: ningún ingrediente aporta azúcar → null", () => {
+  const d = deriveRecipe([
+    { food: pollo, quantity: 200, unit: "g" }, // sugars_g ausente
+    { food: agua, quantity: 300, unit: "ml" }, // sin micros
+  ], null);
+  expect(d.sugarClass).toBeNull();
+});
+
+test("sugarClass: solo cuentan los que aportan azúcar; un ingrediente 'mixed' SIN azúcar no contamina", () => {
+  // Pollo con sugars_g 0 marcado 'mixed' — no aporta azúcar, así que se excluye; la fruta manda.
+  const polloMixSinAzucar = { basis: "per_100g" as const, kcal: 165, protein_g: 31, carbs_g: 0, fat_g: 3.6, unitWeightG: null, sugars_g: 0 };
+  const d = deriveRecipe([
+    { food: manzana, quantity: 150, unit: "g", sugarClass: "intrinsic" },
+    { food: polloMixSinAzucar, quantity: 200, unit: "g", sugarClass: "mixed" },
+  ], null);
+  expect(d.sugarClass).toBe("intrinsic");
+});
