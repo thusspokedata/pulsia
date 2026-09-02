@@ -24,11 +24,27 @@ function sourceValue(item: MealItem, nutrient: RankNutrient): number | null | un
   return nutrient === "salt_g" ? item.sodium_mg : item[nutrient];
 }
 
+// Redondeo a 1 decimal, mismo criterio que el promedio de abajo. Se aplica al total combinado
+// (comida + suplemento) porque el aporte del suplemento puede venir con decimales largos del
+// backend, y arrastrarlos a la curva mostraría "12,3999" donde la lista de aportes muestra 12,4.
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
 // Total diario de un micro. Un día sin comidas, o con comidas pero sin NINGÚN ítem que declare el
 // dato, no genera punto: no es lo mismo "comí 0" que "no sé", y dibujar un 0 mentiría a favor.
 // Un 0 declarado sí es un punto. `sumNullableMicro` es el mismo helper que arma el total del día
 // en la pestaña Nutrientes, así que la curva no puede contradecir ese número.
-export function dailyNutrientSeries(meals: Meal[], nutrient: RankNutrient): NutrientSeries {
+//
+// `supplementByDay` (opcional): el aporte de los suplementos tomados ese día, por dateKey, en la
+// MISMA unidad FUENTE que `sourceValue` — para `salt_g` es SODIO (mg), no sal; el resto en su
+// unidad propia. Sin este fold, la curva "Evolución" quedaba food-only y contradecía la lista "De
+// mayor a menor aporte" (que sí suma el suplemento): un nutriente que viene casi todo de una
+// pastilla dibujaba una curva plana y baja. Cuando es `undefined`, el comportamiento es idéntico
+// al anterior (retrocompatibilidad): la unión de días es solo la de `meals` y no se suma nada.
+export function dailyNutrientSeries(
+  meals: Meal[],
+  nutrient: RankNutrient,
+  supplementByDay?: Record<string, number | null | undefined>,
+): NutrientSeries {
   const byDay = new Map<string, (number | null | undefined)[]>();
   for (const m of meals) {
     const key = dateKey(m.eatenAt);
@@ -37,14 +53,29 @@ export function dailyNutrientSeries(meals: Meal[], nutrient: RankNutrient): Nutr
     byDay.set(key, acc);
   }
 
+  // Unión de días: los de las comidas MÁS los que solo tienen aporte de suplemento. Un día
+  // solo-suplemento (tomaste la pastilla pero no registraste comida) DEBE generar punto y contar
+  // para el promedio: es un día CON registro del nutriente; omitirlo subestimaría el promedio
+  // justo en los nutrientes que dependen del suplemento, que es el caso que este ticket arregla.
+  const keys = new Set<string>(byDay.keys());
+  if (supplementByDay) for (const k of Object.keys(supplementByDay)) keys.add(k);
+
   const points: XY[] = [];
-  for (const [key, values] of byDay) {
-    // La sal se convierte sobre el sodio YA SUMADO del día, no ítem por ítem: redondear cada
-    // conversión a 1 decimal desvía el total (dos ítems de 50 mg darían 0,2 g en vez de 0,3).
-    // Es el mismo número que muestra el total del día, así que la curva no puede contradecirlo.
-    const summed = sumNullableMicro(values);
-    const total = nutrient === "salt_g" ? saltGFromSodiumMg(summed) : summed;
-    if (total == null) continue;
+  for (const key of keys) {
+    // `summedFood` es null si ese día no hubo NINGÚN ítem con el dato (o no hubo comida). `supp`
+    // es el aporte del suplemento en unidad fuente (sodio para la sal). Si ninguno de los dos
+    // tiene dato, no hay punto: "no sé" no es lo mismo que "0".
+    const summedFood = sumNullableMicro(byDay.get(key) ?? []);
+    const supp = supplementByDay?.[key];
+    if (summedFood == null && supp == null) continue;
+
+    // El sodio de comida y de suplemento se SUMA y recién ahí se convierte a sal: convertir cada
+    // fuente por separado y sumar las sales desviaría el total por el redondeo a 1 decimal (mismo
+    // motivo por el que la sal del día se convierte sobre el sodio ya sumado, no ítem por ítem).
+    // Así la curva coincide con el total combinado que muestra la lista de aportes.
+    const combinedSource = (summedFood ?? 0) + (supp ?? 0);
+    const total = nutrient === "salt_g" ? saltGFromSodiumMg(combinedSource) : round1(combinedSource);
+    if (total == null) continue; // combinedSource siempre es número acá, pero mantiene el tipo prolijo
     points.push({ x: noonOf(key), y: total });
   }
   points.sort((a, b) => a.x - b.x); // el backend no garantiza el orden de las comidas

@@ -13,6 +13,7 @@ import {
 } from "@pulsia/shared";
 import { useMealsRange } from "../../src/nutrition/useMealsRange";
 import { getRangeNutrients } from "../../src/api/supplements";
+import { useSupplementDaily } from "../../src/nutrition/useSupplementDaily";
 import { getBackendUrl } from "../../src/storage/config";
 import { dayBounds } from "../../src/nutrition/dayBounds";
 import { dateKey } from "../../src/session/dateKey";
@@ -114,6 +115,7 @@ export default function NutrienteScreen() {
   const { meals, loading, error } = useMealsRange(days, offset);
   const foodRanked = foodsHighestIn(meals, nutrient);
   const supplementRanked = useSupplementRanks(days, offset, nutrient);
+  const supplementDaily = useSupplementDaily(days, offset, nutrient);
   // Se combina y se recalcula el % sobre el total COMBINADO (comida + suplemento): el % de cada
   // fila tiene que sumar 100 entre todas, no solo entre las de comida. Mismo desempate por nombre
   // que foodsHighestIn, para que la lista no baile entre renders.
@@ -126,7 +128,7 @@ export default function NutrienteScreen() {
   // sale con amount 0. Sin el guard, la barra del "que más aporta" haría 0/0 → width "NaN%".
   const maxAmount = ranked[0]?.amount || 1;
 
-  const series = dailyNutrientSeries(meals, nutrient);
+  const series = dailyNutrientSeries(meals, nutrient, supplementDaily);
   // Solo llevan línea de referencia los nutrientes con un valor público FIJO. Quedan sin línea
   // las saturadas (6% de la energía, AHA → dependen de la meta de kcal) y las vitaminas y minerales
   // (referencia EFSA → depende del sexo y la edad del perfil): esta pantalla no carga ni la meta
