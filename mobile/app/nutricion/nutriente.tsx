@@ -3,6 +3,8 @@ import { ScrollView, View, Text, Pressable, ActivityIndicator } from "react-nati
 import { router, useLocalSearchParams } from "expo-router";
 import {
   foodsHighestIn,
+  nutrientValueOf,
+  expandRecipe,
   saltGFromSodiumMg,
   NUTRIENTS,
   NUTRIENT_REFERENCES,
@@ -12,6 +14,7 @@ import {
   type RankNutrient,
 } from "@pulsia/shared";
 import { useMealsRange } from "../../src/nutrition/useMealsRange";
+import { useFoodCatalog } from "../../src/nutrition/useFoodCatalog";
 import { getRangeNutrients } from "../../src/api/supplements";
 import { useSupplementDaily } from "../../src/nutrition/useSupplementDaily";
 import { getBackendUrl } from "../../src/storage/config";
@@ -129,6 +132,33 @@ export default function NutrienteScreen() {
   // sale con amount 0. Sin el guard, la barra del "que más aporta" haría 0/0 → width "NaN%".
   const maxAmount = ranked[0]?.amount || 1;
 
+  const catalog = useFoodCatalog();
+  const [open, setOpen] = useState<Set<string>>(new Set());
+
+  // Sub-filas de una receta expandible, o null si la fila no es expandible (suplemento, sin foodId,
+  // no es receta, incompleta, o no aporta). SÓLO filas de comida: un suplemento no tiene receta.
+  const expansionFor = (f: FoodRank) => {
+    if (f.source !== "food" || f.foodId == null) return null;
+    const food = catalog.get(f.foodId);
+    if (!food?.recipe) return null;
+    const { contributions, complete } = expandRecipe(
+      food.recipe.items,
+      (id) => {
+        const g = catalog.get(id);
+        return g ? { ...g, name: g.name } : null;
+      },
+      nutrientValueOf(nutrient),
+    );
+    if (!complete || contributions.length === 0) return null;
+    const sum = contributions.reduce((a, c) => a + c.value, 0);
+    if (sum <= 0) return null;
+    return contributions.map((c) => ({
+      name: c.name,
+      amount: Math.round((c.value / sum) * f.amount * 10) / 10,
+      pct: Math.round((c.value / sum) * 100),
+    }));
+  };
+
   const series = dailyNutrientSeries(meals, nutrient, supplementDaily);
   // Solo llevan línea de referencia los nutrientes con un valor público FIJO. Quedan sin línea
   // las saturadas (6% de la energía, AHA → dependen de la meta de kcal) y las vitaminas y minerales
@@ -192,10 +222,28 @@ export default function NutrienteScreen() {
           <SectionTitle>De mayor a menor aporte</SectionTitle>
           {/* La barra mide contra el que MÁS aporta, no contra un total: lo que se compara acá es
               un alimento contra otro ("el huevo pesa el doble que el queso"), no contra una meta. */}
-          {ranked.map((f) => (
+          {ranked.map((f) => {
+            const sub = expansionFor(f);
+            const isOpen = f.foodId != null && open.has(f.foodId);
+            return (
             <View key={`${f.source}-${f.name}`} style={{ gap: 4, marginTop: spacing.sm }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1, flexWrap: "wrap" }}>
+                  {sub && (
+                    <Pressable
+                      testID={`rank-expand-${f.name}`}
+                      onPress={() =>
+                        setOpen((prev) => {
+                          const next = new Set(prev);
+                          if (f.foodId != null) (next.has(f.foodId) ? next.delete(f.foodId) : next.add(f.foodId));
+                          return next;
+                        })
+                      }
+                      hitSlop={8}
+                    >
+                      <Text style={{ color: colors.textMuted, fontSize: 13 }}>{isOpen ? "▾" : "▸"}</Text>
+                    </Pressable>
+                  )}
                   {f.source === "supplement" && (
                     <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.supplement }} />
                   )}
@@ -220,8 +268,19 @@ export default function NutrienteScreen() {
               <Bar value={f.amount} target={maxAmount} testID={`rank-${f.name}-bar`} />
               {/* Los suplementos no tienen "gramos comidos": no hay porción que bajar. */}
               {f.source === "food" && <Text style={{ color: colors.icon, fontSize: 11 }}>{f.grams} g</Text>}
+              {sub && isOpen && (
+                <View style={{ marginLeft: spacing.lg, marginTop: 2, gap: 2 }}>
+                  {sub.map((s) => (
+                    <View key={s.name} style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                      <Text style={{ color: colors.textMuted, fontSize: 13, flex: 1 }}>{s.name}</Text>
+                      <Text style={{ color: colors.icon, fontSize: 12 }}>{s.amount} {unit} · {s.pct}%</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
-          ))}
+            );
+          })}
         </Card>
       )}
 
