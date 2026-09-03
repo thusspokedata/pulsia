@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import { caloriesByMeal, macroSplit, foodsHighestIn, foodsByMacro } from "./breakdown";
+import { macroValueOf, nutrientValueOf } from "./breakdown";
 import type { Meal } from "../schemas/nutrition";
 
 const meal = (mealType: Meal["mealType"], kcals: number[]): Meal =>
@@ -200,4 +201,15 @@ test("foodsByMacro sin comidas, o sin aporte del macro → lista vacía", () => 
 test("foodsByMacro redondea el aporte a 1 decimal, igual que foodsHighestIn", () => {
   const meals = [itemsMeal([it("Palta", 70, { fat_g: 10.25 })])];
   expect(foodsByMacro(meals, "fat_g")[0].amount).toBe(10.3);
+});
+
+test("macroValueOf devuelve el campo del macro", () => {
+  expect(macroValueOf("protein_g")({ protein_g: 12, carbs_g: 3, fat_g: 1 } as any)).toBe(12);
+});
+
+test("nutrientValueOf convierte sodio a sal para salt_g", () => {
+  // saltGFromSodiumMg(1000) = 2.5 g
+  expect(nutrientValueOf("salt_g")({ sodium_mg: 1000 } as any)).toBeCloseTo(2.5, 5);
+  expect(nutrientValueOf("calcium_mg")({ calcium_mg: 40 } as any)).toBe(40);
+  expect(nutrientValueOf("calcium_mg")({ calcium_mg: null } as any)).toBe(null);
 });
