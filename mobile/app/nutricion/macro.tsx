@@ -48,6 +48,7 @@ export default function MacroScreen() {
     const sum = contributions.reduce((a, c) => a + c.value, 0);
     if (sum <= 0) return null;
     return contributions.map((c) => ({
+      foodId: c.foodId,
       name: c.name,
       amount: Math.round((c.value / sum) * rowAmount * 10) / 10,
       pct: Math.round((c.value / sum) * 100),
@@ -82,6 +83,8 @@ export default function MacroScreen() {
                     {sub && (
                       <Pressable
                         testID={`macro-expand-${f.name}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Ver ingredientes de ${f.name}`}
                         onPress={() =>
                           setOpen((prev) => {
                             const next = new Set(prev);
@@ -105,7 +108,7 @@ export default function MacroScreen() {
                 {sub && isOpen && (
                   <View style={{ marginLeft: spacing.lg, marginTop: 2, gap: 2 }}>
                     {sub.map((s) => (
-                      <View key={s.name} style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                      <View key={s.foodId} style={{ flexDirection: "row", justifyContent: "space-between" }}>
                         <Text style={{ color: colors.textMuted, fontSize: 13, flex: 1 }}>{s.name}</Text>
                         <Text style={{ color: colors.icon, fontSize: 12 }}>{s.amount} g · {s.pct}%</Text>
                       </View>
