@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { ScrollView, View, Text, Pressable, ActivityIndicator } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { foodsByMacro, type MacroRankKey } from "@pulsia/shared";
+import { foodsByMacro, macroValueOf, expandRecipe, type MacroRankKey } from "@pulsia/shared";
 import { useMealsRange } from "../../src/nutrition/useMealsRange";
+import { useFoodCatalog } from "../../src/nutrition/useFoodCatalog";
 import { Card, SectionTitle, EmptyState, Bar } from "../../src/nutrition/tabs/ui";
 import { colors, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
@@ -22,10 +24,35 @@ export default function MacroScreen() {
   const offset = Number(offsetParam ?? 0) || 0;
   // Por día, siempre: NUT-13 es el desglose del día (el rango multi-día quedó fuera de alcance).
   const { meals, loading, error } = useMealsRange(1, offset);
+  const catalog = useFoodCatalog();
+  const [open, setOpen] = useState<Set<string>>(new Set());
   const ranked = foodsByMacro(meals, field);
   // El aporte se redondea a 1 decimal, así que un alimento con trazas sale con amount 0; el guard
   // evita 0/0 → width "NaN%" en la barra del que más aporta (mismo criterio que nutriente.tsx).
   const maxAmount = ranked[0]?.amount || 1;
+
+  // Devuelve las sub-filas de una receta expandible, o null si la fila no es expandible.
+  const expansionFor = (foodId: string | null, rowAmount: number) => {
+    if (foodId == null) return null;
+    const food = catalog.get(foodId);
+    if (!food?.recipe) return null;
+    const { contributions, complete } = expandRecipe(
+      food.recipe.items,
+      (id) => {
+        const f = catalog.get(id);
+        return f ? { ...f, name: f.name } : null;
+      },
+      macroValueOf(field),
+    );
+    if (!complete || contributions.length === 0) return null;
+    const sum = contributions.reduce((a, c) => a + c.value, 0);
+    if (sum <= 0) return null;
+    return contributions.map((c) => ({
+      name: c.name,
+      amount: Math.round((c.value / sum) * rowAmount * 10) / 10,
+      pct: Math.round((c.value / sum) * 100),
+    }));
+  };
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ ...screenPad, gap: spacing.md }}>
@@ -45,18 +72,49 @@ export default function MacroScreen() {
           <SectionTitle>De mayor a menor aporte</SectionTitle>
           {/* La barra mide contra el que MÁS aporta, no contra una meta: se compara un alimento
               contra otro ("el pollo aporta el doble de proteína que el arroz"). */}
-          {ranked.map((f) => (
-            <View key={f.name} style={{ gap: 4, marginTop: spacing.sm }}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
-                <Text style={{ color: colors.text, fontSize: 14, flex: 1 }}>{f.name}</Text>
-                <Text style={{ color: colors.textMuted, fontSize: 13 }}>
-                  {f.amount} g · {f.pctOfTotal}%
-                </Text>
+          {ranked.map((f) => {
+            const sub = expansionFor(f.foodId, f.amount);
+            const isOpen = f.foodId != null && open.has(f.foodId);
+            return (
+              <View key={f.name} style={{ gap: 4, marginTop: spacing.sm }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 }}>
+                    {sub && (
+                      <Pressable
+                        testID={`macro-expand-${f.name}`}
+                        onPress={() =>
+                          setOpen((prev) => {
+                            const next = new Set(prev);
+                            if (f.foodId != null) (next.has(f.foodId) ? next.delete(f.foodId) : next.add(f.foodId));
+                            return next;
+                          })
+                        }
+                        hitSlop={8}
+                      >
+                        <Text style={{ color: colors.textMuted, fontSize: 13 }}>{isOpen ? "▾" : "▸"}</Text>
+                      </Pressable>
+                    )}
+                    <Text style={{ color: colors.text, fontSize: 14, flexShrink: 1 }}>{f.name}</Text>
+                  </View>
+                  <Text style={{ color: colors.textMuted, fontSize: 13 }}>
+                    {f.amount} g · {f.pctOfTotal}%
+                  </Text>
+                </View>
+                <Bar value={f.amount} target={maxAmount} testID={`macro-rank-${f.name}-bar`} />
+                <Text style={{ color: colors.icon, fontSize: 11 }}>{f.grams} g comidos</Text>
+                {sub && isOpen && (
+                  <View style={{ marginLeft: spacing.lg, marginTop: 2, gap: 2 }}>
+                    {sub.map((s) => (
+                      <View key={s.name} style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                        <Text style={{ color: colors.textMuted, fontSize: 13, flex: 1 }}>{s.name}</Text>
+                        <Text style={{ color: colors.icon, fontSize: 12 }}>{s.amount} g · {s.pct}%</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
-              <Bar value={f.amount} target={maxAmount} testID={`macro-rank-${f.name}-bar`} />
-              <Text style={{ color: colors.icon, fontSize: 11 }}>{f.grams} g comidos</Text>
-            </View>
-          ))}
+            );
+          })}
         </Card>
       )}
 
