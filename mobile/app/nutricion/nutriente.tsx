@@ -86,6 +86,7 @@ function useSupplementRanks(days: number, offset: number, nutrient: RankNutrient
             grams: 0,
             pctOfTotal: 0, // se recalcula en el componente, sobre el total combinado
             source: "supplement",
+            foodId: null,
           });
         }
         if (!cancelled) setRows(next);

@@ -137,6 +137,10 @@ export interface FoodRank {
   // combina foodsHighestIn con el aporte de suplementos del rango). Vive acá y no solo en la
   // pantalla porque el chip "suplemento" del render depende de este campo, no de un cast local.
   source: "food" | "supplement";
+  // El id del Food cuando TODO el grupo (mismo nombre) viene de un único foodId no-nulo; null si es
+  // ambiguo (dos Foods distintos con el mismo nombre) o si los items no traen foodId. Sólo con un id
+  // inequívoco se puede mirar si la fila es una receta y ofrecer su expansión (NUT-16).
+  foodId: string | null;
 }
 
 // Núcleo del ranking, compartido por comida-por-micro (foodsHighestIn) y comida-por-macro
@@ -145,13 +149,16 @@ export interface FoodRank {
 // al ranking ni al total: un alimento que no aporta nada no enseña nada, y contarlo como 0 solo
 // ensucia la lista. `valueOf` decide qué aporte se rankea (el sodio→sal, un macro, un micro…).
 function rankFoods(meals: Meal[], valueOf: (item: MealItem) => number | null): FoodRank[] {
-  const by = new Map<string, { amount: number; grams: number }>();
+  const by = new Map<string, { amount: number; grams: number; ids: Set<string> }>();
   for (const m of meals) {
     for (const item of m.items) {
       const v = valueOf(item);
       if (v == null || v <= 0) continue;
-      const acc = by.get(item.foodName) ?? { amount: 0, grams: 0 };
-      by.set(item.foodName, { amount: acc.amount + v, grams: acc.grams + item.grams });
+      const acc = by.get(item.foodName) ?? { amount: 0, grams: 0, ids: new Set<string>() };
+      acc.amount += v;
+      acc.grams += item.grams;
+      if (item.foodId != null) acc.ids.add(item.foodId);
+      by.set(item.foodName, acc);
     }
   }
   const total = [...by.values()].reduce((a, v) => a + v.amount, 0);
@@ -163,6 +170,7 @@ function rankFoods(meals: Meal[], valueOf: (item: MealItem) => number | null): F
       grams: Math.round(v.grams),
       pctOfTotal: pct(v.amount, total),
       source: "food" as const,
+      foodId: v.ids.size === 1 ? [...v.ids][0] : null,
     }))
     // Desempate por nombre: sin esto el orden depende del de inserción y la lista baila.
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));

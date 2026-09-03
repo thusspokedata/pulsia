@@ -104,7 +104,7 @@ test("suma el mismo alimento comido varias veces (aporte y gramos)", () => {
     itemsMeal([it("Queso", 50, { cholesterol_mg: 45 })]),
   ];
   expect(foodsHighestIn(meals, "cholesterol_mg")).toEqual([
-    { name: "Queso", amount: 135, grams: 150, pctOfTotal: 100, source: "food" },
+    { name: "Queso", amount: 135, grams: 150, pctOfTotal: 100, source: "food", foodId: null },
   ]);
 });
 
@@ -141,8 +141,8 @@ test("el ranking de SAL sale del sodio del ítem, y en gramos de sal", () => {
   // 800 mg → 2 g de sal; 200 mg → 0,5 g.
   const meals = [itemsMeal([it("Jamón", 100, { sodium_mg: 800 }), it("Pan", 80, { sodium_mg: 200 })])];
   expect(foodsHighestIn(meals, "salt_g")).toEqual([
-    { name: "Jamón", amount: 2, grams: 100, pctOfTotal: 80, source: "food" },
-    { name: "Pan", amount: 0.5, grams: 80, pctOfTotal: 20, source: "food" },
+    { name: "Jamón", amount: 2, grams: 100, pctOfTotal: 80, source: "food", foodId: null },
+    { name: "Pan", amount: 0.5, grams: 80, pctOfTotal: 20, source: "food", foodId: null },
   ]);
 });
 
@@ -178,8 +178,8 @@ test("foodsByMacro suma el mismo alimento y calcula el % sobre el total del macr
     itemsMeal([it("Pollo", 50, { protein_g: 15 }), it("Arroz", 100, { protein_g: 5 })]),
   ];
   expect(foodsByMacro(meals, "protein_g")).toEqual([
-    { name: "Pollo", amount: 45, grams: 150, pctOfTotal: 90, source: "food" },
-    { name: "Arroz", amount: 5, grams: 100, pctOfTotal: 10, source: "food" },
+    { name: "Pollo", amount: 45, grams: 150, pctOfTotal: 90, source: "food", foodId: null },
+    { name: "Arroz", amount: 5, grams: 100, pctOfTotal: 10, source: "food", foodId: null },
   ]);
 });
 
@@ -212,4 +212,31 @@ test("nutrientValueOf convierte sodio a sal para salt_g", () => {
   expect(nutrientValueOf("salt_g")({ sodium_mg: 1000 } as any)).toBeCloseTo(2.5, 5);
   expect(nutrientValueOf("calcium_mg")({ calcium_mg: 40 } as any)).toBe(40);
   expect(nutrientValueOf("calcium_mg")({ calcium_mg: null } as any)).toBe(null);
+});
+
+const mealItems = (items: any[]): Meal =>
+  ({ id: "m", eatenAt: 1, mealType: "almuerzo", note: null, items }) as any;
+
+test("foodId se setea cuando el grupo mapea a un único foodId", () => {
+  const meals = [mealItems([
+    { foodId: "f1", foodName: "empanada", grams: 100, protein_g: 10 },
+    { foodId: "f1", foodName: "empanada", grams: 50, protein_g: 5 },
+  ])];
+  const [row] = foodsByMacro(meals, "protein_g");
+  expect(row.name).toBe("empanada");
+  expect(row.foodId).toBe("f1");
+});
+
+test("foodId es null si el mismo nombre viene de dos foodId distintos", () => {
+  const meals = [mealItems([
+    { foodId: "f1", foodName: "arroz", grams: 100, protein_g: 3 },
+    { foodId: "f2", foodName: "arroz", grams: 100, protein_g: 3 },
+  ])];
+  const [row] = foodsByMacro(meals, "protein_g");
+  expect(row.foodId).toBe(null);
+});
+
+test("foodId es null si el item no trae foodId", () => {
+  const meals = [mealItems([{ foodName: "queso", grams: 30, protein_g: 8 }])];
+  expect(foodsByMacro(meals, "protein_g")[0].foodId).toBe(null);
 });
