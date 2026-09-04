@@ -3,6 +3,9 @@ import { ScrollView, View, Text, Pressable, ActivityIndicator } from "react-nati
 import { router, useLocalSearchParams } from "expo-router";
 import {
   foodsHighestIn,
+  nutrientValueOfRaw,
+  expandRecipe,
+  recipeSubRows,
   saltGFromSodiumMg,
   NUTRIENTS,
   NUTRIENT_REFERENCES,
@@ -12,6 +15,7 @@ import {
   type RankNutrient,
 } from "@pulsia/shared";
 import { useMealsRange } from "../../src/nutrition/useMealsRange";
+import { useFoodCatalog } from "../../src/nutrition/useFoodCatalog";
 import { getRangeNutrients } from "../../src/api/supplements";
 import { useSupplementDaily } from "../../src/nutrition/useSupplementDaily";
 import { getBackendUrl } from "../../src/storage/config";
@@ -86,6 +90,7 @@ function useSupplementRanks(days: number, offset: number, nutrient: RankNutrient
             grams: 0,
             pctOfTotal: 0, // se recalcula en el componente, sobre el total combinado
             source: "supplement",
+            foodId: null,
           });
         }
         if (!cancelled) setRows(next);
@@ -127,6 +132,30 @@ export default function NutrienteScreen() {
   // El aporte se redondea a 1 decimal en foodsHighestIn, así que un alimento con trazas (0.04 g)
   // sale con amount 0. Sin el guard, la barra del "que más aporta" haría 0/0 → width "NaN%".
   const maxAmount = ranked[0]?.amount || 1;
+
+  const catalog = useFoodCatalog();
+  const [open, setOpen] = useState<Set<string>>(new Set());
+
+  // Sub-filas de una receta expandible, o null si la fila no es expandible (suplemento, sin foodId,
+  // no es receta, incompleta, o no aporta). SÓLO filas de comida: un suplemento no tiene receta.
+  const expansionFor = (f: FoodRank) => {
+    if (f.source !== "food" || f.foodId == null) return null;
+    const food = catalog.get(f.foodId);
+    if (!food?.recipe) return null;
+    const { contributions, complete } = expandRecipe(
+      food.recipe.items,
+      (id) => catalog.get(id) ?? null,
+      // Extractor CRUDO: para la sal reparte por el sodio sin redondear, así 20mg vs 40mg quedan en
+      // 1:2 (nutrientValueOf redondearía ambos al mismo decimal y los dejaría 1:1). El resto de los
+      // nutrientes ya vienen sin redondear, así que se comporta igual.
+      nutrientValueOfRaw(nutrient),
+    );
+    if (!complete || contributions.length === 0) return null;
+    // Reparte la porción de la fila entre los ingredientes por fracción, conservando el total
+    // (el residuo del redondeo va a la fila de mayor aporte). Devuelve [] si Σ<=0.
+    const rows = recipeSubRows(contributions, f.amount);
+    return rows.length > 0 ? rows : null;
+  };
 
   const series = dailyNutrientSeries(meals, nutrient, supplementDaily);
   // Solo llevan línea de referencia los nutrientes con un valor público FIJO. Quedan sin línea
@@ -191,10 +220,31 @@ export default function NutrienteScreen() {
           <SectionTitle>De mayor a menor aporte</SectionTitle>
           {/* La barra mide contra el que MÁS aporta, no contra un total: lo que se compara acá es
               un alimento contra otro ("el huevo pesa el doble que el queso"), no contra una meta. */}
-          {ranked.map((f) => (
+          {ranked.map((f) => {
+            const sub = expansionFor(f);
+            const isOpen = f.foodId != null && open.has(f.foodId);
+            return (
             <View key={`${f.source}-${f.name}`} style={{ gap: 4, marginTop: spacing.sm }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1, flexWrap: "wrap" }}>
+                  {sub && (
+                    <Pressable
+                      testID={`rank-expand-${f.name}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Ver ingredientes de ${f.name}`}
+                      accessibilityState={{ expanded: isOpen }}
+                      onPress={() =>
+                        setOpen((prev) => {
+                          const next = new Set(prev);
+                          if (f.foodId != null) (next.has(f.foodId) ? next.delete(f.foodId) : next.add(f.foodId));
+                          return next;
+                        })
+                      }
+                      hitSlop={8}
+                    >
+                      <Text style={{ color: colors.textMuted, fontSize: 13 }}>{isOpen ? "▾" : "▸"}</Text>
+                    </Pressable>
+                  )}
                   {f.source === "supplement" && (
                     <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.supplement }} />
                   )}
@@ -219,8 +269,19 @@ export default function NutrienteScreen() {
               <Bar value={f.amount} target={maxAmount} testID={`rank-${f.name}-bar`} />
               {/* Los suplementos no tienen "gramos comidos": no hay porción que bajar. */}
               {f.source === "food" && <Text style={{ color: colors.icon, fontSize: 11 }}>{f.grams} g</Text>}
+              {sub && isOpen && (
+                <View style={{ marginLeft: spacing.lg, marginTop: 2, gap: 2 }}>
+                  {sub.map((s, i) => (
+                    <View key={i} style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                      <Text style={{ color: colors.textMuted, fontSize: 13, flex: 1 }}>{s.name}</Text>
+                      <Text style={{ color: colors.icon, fontSize: 12 }}>{s.amount} {unit} · {s.pct}%</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
-          ))}
+            );
+          })}
         </Card>
       )}
 

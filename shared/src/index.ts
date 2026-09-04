@@ -47,6 +47,7 @@ export * from "./nutrition/exerciseBurn";
 export * from "./nutrition/references";
 export * from "./nutrition/references.efsa";
 export * from "./nutrition/breakdown";
+export * from "./nutrition/recipeBreakdown";
 export * from "./nutrition/fatBreakdown";
 export * from "./nutrition/freeSugars";
 export * from "./nutrition/nutrientLevel";
