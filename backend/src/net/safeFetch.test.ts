@@ -2,10 +2,25 @@ import { expect, test } from "bun:test";
 import {
   assertPublicHostname,
   isBlockedAddress,
+  makeValidatingLookup,
   PageFetchError,
   safeFetchPage,
   SsrfBlockedError,
 } from "./safeFetch";
+
+// Promisifica el lookup validador (callback-style de node) para poder assertear cómodo.
+function runLookup(
+  fn: ReturnType<typeof makeValidatingLookup>,
+  hostname: string,
+  options: unknown,
+): Promise<{ address?: string | { address: string; family: number }[]; family?: number }> {
+  return new Promise((resolve, reject) => {
+    fn(hostname, options, (err, address, family) => {
+      if (err) reject(err);
+      else resolve({ address, family });
+    });
+  });
+}
 
 // ---------------------------------------------------------------------------
 // isBlockedAddress — chequeo PURO de rangos
@@ -98,6 +113,43 @@ test("assertPublicHostname: IP literal pública directa → ok sin DNS", async (
   });
   expect(ips).toEqual(["8.8.8.8"]);
   expect(llamado).toBe(false); // una IP literal no dispara DNS
+});
+
+// ---------------------------------------------------------------------------
+// makeValidatingLookup — el lookup que PINEA la IP validada (cierra DNS-rebinding)
+// ---------------------------------------------------------------------------
+test("makeValidatingLookup: IP pública → devuelve la IP validada (single y all)", async () => {
+  const fn = makeValidatingLookup(async () => [{ address: "8.8.8.8", family: 4 }]);
+  expect(await runLookup(fn, "ejemplo.com", { all: false })).toEqual({ address: "8.8.8.8", family: 4 });
+  expect(await runLookup(fn, "ejemplo.com", { all: true })).toEqual({
+    address: [{ address: "8.8.8.8", family: 4 }],
+    family: undefined,
+  });
+});
+
+test("makeValidatingLookup: prefiere v4 cuando hay ambas", async () => {
+  const fn = makeValidatingLookup(async () => [
+    { address: "2606:4700::1", family: 6 },
+    { address: "1.1.1.1", family: 4 },
+  ]);
+  expect(await runLookup(fn, "ejemplo.com", { all: false })).toEqual({ address: "1.1.1.1", family: 4 });
+});
+
+test("makeValidatingLookup: cualquier IP privada → SsrfBlockedError (no conecta)", async () => {
+  const fn = makeValidatingLookup(async () => [
+    { address: "8.8.8.8", family: 4 },
+    { address: "127.0.0.1", family: 4 }, // rebinding: una privada entre las resueltas
+  ]);
+  await expect(runLookup(fn, "malo.com", { all: false })).rejects.toBeInstanceOf(SsrfBlockedError);
+});
+
+test("makeValidatingLookup: sin IPs o resolver que falla → SsrfBlockedError", async () => {
+  const vacio = makeValidatingLookup(async () => []);
+  await expect(runLookup(vacio, "x.com", {})).rejects.toBeInstanceOf(SsrfBlockedError);
+  const roto = makeValidatingLookup(async () => {
+    throw new Error("dns down");
+  });
+  await expect(runLookup(roto, "x.com", {})).rejects.toBeInstanceOf(SsrfBlockedError);
 });
 
 // ---------------------------------------------------------------------------

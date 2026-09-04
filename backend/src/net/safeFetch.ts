@@ -8,13 +8,18 @@
 // repetimos la verificación en CADA hop de redirect (un 302 puede saltar de un host público a uno
 // interno).
 //
-// CAVEAT (DNS rebinding): validamos las IPs que `dns.lookup` resuelve, pero `fetch` vuelve a
-// resolver por su cuenta al conectar, así que en teoría un DNS que responde distinto entre las dos
-// resoluciones (TOCTOU) podría evadir el chequeo. Cerrarlo del todo exige conectar por IP con el
-// Host header a mano (o un agente custom). Para esta app SELF-HOSTED, de un solo usuario y sin
-// multi-tenancy, el riesgo es aceptable y lo dejamos documentado en vez de sobre-ingenierizar.
+// DNS rebinding (TOCTOU): el peligro es que el DNS resuelva a una IP pública cuando la validamos y a
+// una privada cuando el cliente HTTP conecta. Lo cerramos con ADDRESS PINNING: el fetch de prod no
+// usa el `fetch` global (que re-resuelve por su cuenta) sino `node:http`/`node:https` con un `lookup`
+// custom que resuelve, VALIDA cada IP y devuelve exactamente la IP validada a la que node conecta —
+// la resolución que valida es la misma que conecta, así que no hay ventana entre las dos. node sigue
+// mandando el `Host` header y el SNI de TLS por el hostname original, así que el pinning no rompe
+// HTTPS. Los redirects se siguen a mano y se re-valida cada hop.
 
 import { lookup as dnsLookup } from "node:dns/promises";
+import http from "node:http";
+import https from "node:https";
+import { Readable } from "node:stream";
 
 /** Alguna IP resuelta cae en un rango bloqueado → no fetcheamos. */
 export class SsrfBlockedError extends Error {}
@@ -167,6 +172,87 @@ export interface SafeFetchOpts {
   lookupImpl?: LookupAll;
 }
 
+// ---------------------------------------------------------------------------
+// Address pinning — el transporte de prod (cierra el DNS-rebinding)
+// ---------------------------------------------------------------------------
+
+// Resuelve un hostname a TODAS sus IPs CON su familia (4/6). Distinto de `defaultLookup`, que tira la
+// familia: el pinning la necesita para elegir a cuál conectar. Inyectable para tests.
+type ResolveAll = (hostname: string) => Promise<{ address: string; family: number }[]>;
+const dnsResolveAll: ResolveAll = async (hostname) => {
+  const res = await dnsLookup(hostname, { all: true });
+  return res.map((r) => ({ address: r.address, family: r.family }));
+};
+
+/**
+ * Fabrica un `lookup` (con la firma que espera `node:http`/`https`) que RESUELVE y VALIDA: si el
+ * hostname no resuelve, o CUALQUIER IP suya cae en un rango bloqueado, llama al callback con
+ * `SsrfBlockedError` y node aborta la conexión. Si todas son públicas, devuelve UNA IP validada
+ * (v4 preferida por confiabilidad de conexión). Como esta resolución es la MISMA que node usa para
+ * conectar, no hay ventana TOCTOU: no se puede rebindear entre validar y conectar.
+ *
+ * Exportada para poder testear el núcleo de seguridad sin abrir un socket real.
+ */
+export function makeValidatingLookup(resolveAll: ResolveAll = dnsResolveAll) {
+  return (hostname: string, options: unknown, cb: (err: Error | null, address?: string | { address: string; family: number }[], family?: number) => void): void => {
+    const wantAll = typeof options === "object" && options !== null && (options as { all?: boolean }).all === true;
+    void (async () => {
+      let ips: { address: string; family: number }[];
+      try {
+        ips = await resolveAll(hostname);
+      } catch {
+        return cb(new SsrfBlockedError(`no se pudo resolver ${hostname}`));
+      }
+      if (!ips || ips.length === 0) return cb(new SsrfBlockedError(`${hostname} no resolvió a ninguna IP`));
+      for (const { address } of ips) {
+        if (isBlockedAddress(address)) return cb(new SsrfBlockedError(`${hostname} resuelve a una IP bloqueada: ${address}`));
+      }
+      // Todas validadas. Pineá una sola (v4 preferida): es la IP exacta a la que node conectará.
+      const pick = ips.find((r) => r.family === 4) ?? ips[0];
+      if (wantAll) cb(null, [{ address: pick.address, family: pick.family }]);
+      else cb(null, pick.address, pick.family);
+    })();
+  };
+}
+
+// Transporte de prod: hace la request con `node:http`/`https` pineando la IP validada. Devuelve una
+// `Response` web para que el bucle de `safeFetchPage` la consuma igual que a la del `fetch` global.
+// Sólo el 2xx trae body (los 3xx se leen por el header Location; los >=400 se descartan): así no se
+// construye una `Response` con body en un status que no lo admite, y no se baja el cuerpo de más.
+function makePinnedFetch(lookupFn: ReturnType<typeof makeValidatingLookup>): typeof fetch {
+  return ((urlStr: string, init?: { signal?: AbortSignal }) =>
+    new Promise<Response>((resolve, reject) => {
+      let url: URL;
+      try {
+        url = new URL(urlStr);
+      } catch {
+        return reject(new PageFetchError(`URL inválida: ${urlStr}`));
+      }
+      const mod = url.protocol === "https:" ? https : http;
+      const req = mod.request(
+        urlStr,
+        { method: "GET", lookup: lookupFn as never, signal: init?.signal },
+        (res) => {
+          const status = res.statusCode ?? 502;
+          const headers = new Headers();
+          for (const [k, v] of Object.entries(res.headers)) {
+            if (Array.isArray(v)) for (const vv of v) headers.append(k, vv);
+            else if (v != null) headers.set(k, String(v));
+          }
+          if (status >= 200 && status < 300) {
+            const body = Readable.toWeb(res) as unknown as ReadableStream<Uint8Array>;
+            resolve(new Response(body, { status, headers }));
+          } else {
+            res.resume(); // drená y descartá el cuerpo que no vamos a usar
+            resolve(new Response(null, { status, headers }));
+          }
+        },
+      );
+      req.on("error", (e) => reject(e));
+      req.end();
+    })) as unknown as typeof fetch;
+}
+
 // Lee el body de una Response con un tope DURO de `maxBytes` bytes: preferimos el reader del stream
 // para NO bajar gigas si el servidor miente en Content-Length. Si no hay stream, caemos a text().
 async function readCapped(res: Response, maxBytes: number): Promise<string> {
@@ -212,7 +298,9 @@ export async function safeFetchPage(rawUrl: string, opts: SafeFetchOpts = {}): P
   const maxBytes = opts.maxBytes ?? 2_000_000;
   const timeoutMs = opts.timeoutMs ?? 8000;
   const maxRedirects = opts.maxRedirects ?? 4;
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  // Por default, el transporte PINEA la IP validada (node:http/https + lookup validador): cierra el
+  // DNS-rebinding. Los tests inyectan `fetchImpl` para ejercitar la orquestación sin red.
+  const fetchImpl = opts.fetchImpl ?? makePinnedFetch(makeValidatingLookup());
   const lookupImpl = opts.lookupImpl ?? defaultLookup;
 
   let current: URL;
