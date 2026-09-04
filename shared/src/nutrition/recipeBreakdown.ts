@@ -54,3 +54,38 @@ export function expandRecipe(
   contributions.sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
   return { contributions, complete };
 }
+
+// Una sub-fila del acordeón: cuánto de la porción de la fila (`amount`, ya redondeado) aportó cada
+// ingrediente y su % de la receta.
+export interface RecipeSubRow {
+  foodId: string;
+  name: string;
+  amount: number;
+  pct: number;
+}
+
+// Reparte `rowAmount` (la cantidad de la fila padre: gramos del macro, mg/µg del micro, g de sal…)
+// entre los ingredientes por su fracción del total (`c.value / Σ`). Centraliza el cálculo que antes
+// duplicaban macro.tsx y nutriente.tsx. Cada `amount` se redondea a 1 decimal, pero eso puede hacer
+// que la suma no cierre (tres tercios de 1.0 → 0.3+0.3+0.3 = 0.9); para que la suma sea EXACTAMENTE
+// `round1(rowAmount)`, el residuo se asigna a la fila de mayor aporte (la primera: `contributions`
+// viene ordenado desc). Si Σ<=0 no hay nada que repartir → []. `pct` se redondea por separado (puede
+// sumar 99 o 101, igual que las tortas de breakdown.ts).
+export function recipeSubRows(contributions: RecipeContribution[], rowAmount: number): RecipeSubRow[] {
+  const sum = contributions.reduce((a, c) => a + c.value, 0);
+  if (sum <= 0) return [];
+  const round1 = (x: number) => Math.round(x * 10) / 10;
+  const rows = contributions.map((c) => ({
+    foodId: c.foodId,
+    name: c.name,
+    amount: round1((c.value / sum) * rowAmount),
+    pct: Math.round((c.value / sum) * 100),
+  }));
+  // Conservación del total: el redondeo por fila puede dejar un residuo (± algunas décimas).
+  // Lo cargamos a la primera fila (la de mayor aporte) para que la suma cierre en round1(rowAmount).
+  const target = round1(rowAmount);
+  const got = rows.reduce((a, r) => a + r.amount, 0);
+  const residual = round1(target - got);
+  if (residual !== 0) rows[0].amount = round1(rows[0].amount + residual);
+  return rows;
+}

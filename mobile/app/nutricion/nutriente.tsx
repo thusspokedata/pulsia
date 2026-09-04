@@ -3,8 +3,9 @@ import { ScrollView, View, Text, Pressable, ActivityIndicator } from "react-nati
 import { router, useLocalSearchParams } from "expo-router";
 import {
   foodsHighestIn,
-  nutrientValueOf,
+  nutrientValueOfRaw,
   expandRecipe,
+  recipeSubRows,
   saltGFromSodiumMg,
   NUTRIENTS,
   NUTRIENT_REFERENCES,
@@ -143,21 +144,17 @@ export default function NutrienteScreen() {
     if (!food?.recipe) return null;
     const { contributions, complete } = expandRecipe(
       food.recipe.items,
-      (id) => {
-        const g = catalog.get(id);
-        return g ? { ...g, name: g.name } : null;
-      },
-      nutrientValueOf(nutrient),
+      (id) => catalog.get(id) ?? null,
+      // Extractor CRUDO: para la sal reparte por el sodio sin redondear, así 20mg vs 40mg quedan en
+      // 1:2 (nutrientValueOf redondearía ambos al mismo decimal y los dejaría 1:1). El resto de los
+      // nutrientes ya vienen sin redondear, así que se comporta igual.
+      nutrientValueOfRaw(nutrient),
     );
     if (!complete || contributions.length === 0) return null;
-    const sum = contributions.reduce((a, c) => a + c.value, 0);
-    if (sum <= 0) return null;
-    return contributions.map((c) => ({
-      foodId: c.foodId,
-      name: c.name,
-      amount: Math.round((c.value / sum) * f.amount * 10) / 10,
-      pct: Math.round((c.value / sum) * 100),
-    }));
+    // Reparte la porción de la fila entre los ingredientes por fracción, conservando el total
+    // (el residuo del redondeo va a la fila de mayor aporte). Devuelve [] si Σ<=0.
+    const rows = recipeSubRows(contributions, f.amount);
+    return rows.length > 0 ? rows : null;
   };
 
   const series = dailyNutrientSeries(meals, nutrient, supplementDaily);
@@ -235,6 +232,7 @@ export default function NutrienteScreen() {
                       testID={`rank-expand-${f.name}`}
                       accessibilityRole="button"
                       accessibilityLabel={`Ver ingredientes de ${f.name}`}
+                      accessibilityState={{ expanded: isOpen }}
                       onPress={() =>
                         setOpen((prev) => {
                           const next = new Set(prev);
@@ -273,8 +271,8 @@ export default function NutrienteScreen() {
               {f.source === "food" && <Text style={{ color: colors.icon, fontSize: 11 }}>{f.grams} g</Text>}
               {sub && isOpen && (
                 <View style={{ marginLeft: spacing.lg, marginTop: 2, gap: 2 }}>
-                  {sub.map((s) => (
-                    <View key={s.foodId} style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                  {sub.map((s, i) => (
+                    <View key={i} style={{ flexDirection: "row", justifyContent: "space-between" }}>
                       <Text style={{ color: colors.textMuted, fontSize: 13, flex: 1 }}>{s.name}</Text>
                       <Text style={{ color: colors.icon, fontSize: 12 }}>{s.amount} {unit} · {s.pct}%</Text>
                     </View>

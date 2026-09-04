@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
-import { expandRecipe } from "./recipeBreakdown";
-import { macroValueOf, nutrientValueOf } from "./breakdown";
+import { expandRecipe, recipeSubRows, type RecipeContribution } from "./recipeBreakdown";
+import { macroValueOf, nutrientValueOf, nutrientValueOfRaw } from "./breakdown";
 import type { MacroSource } from "./macros";
 import type { RecipeItemInput } from "../schemas/nutrition";
 
@@ -99,6 +99,60 @@ test("descarta un ingrediente cuyo nutriente elegido es null (ausente), distinto
   const r = expandRecipe(items, (id) => catalog[id] ?? null, nutrientValueOf("calcium_mg"));
   expect(r.complete).toBe(true); // ambos resolvieron; el aceite simplemente no aporta el micro
   expect(r.contributions.map((c) => c.name)).toEqual(["Queso"]);
+});
+
+test("nutrientValueOfRaw('salt_g') reparte por sodio CRUDO (no redondeado): 20mg vs 40mg → 1:2", () => {
+  // La fracción de sal es escala-invariante, así que el sodio en mg sirve directo. Con el sodio
+  // crudo, 20mg y 40mg quedan en proporción 1:2. Con nutrientValueOf('salt_g') (redondea a 1
+  // decimal → ambos dan 0.0 g de sal), la proporción se perdería: saldría 0:0 (o 1:1 con valores
+  // que redondean al mismo decimal). Este test fija que la expansión use el extractor CRUDO.
+  const catalog: Record<string, MacroSource & { name: string }> = {
+    a: food("A", { sodium_mg: 20 }),
+    b: food("B", { sodium_mg: 40 }),
+  };
+  const items = [item("a", 100), item("b", 100)];
+  const r = expandRecipe(items, (id) => catalog[id] ?? null, nutrientValueOfRaw("salt_g"));
+  expect(r.contributions.map((c) => c.name)).toEqual(["B", "A"]);
+  // Proporción exacta 1:2 (40:20), no 1:1.
+  expect(r.contributions[0].value / r.contributions[1].value).toBeCloseTo(2, 5);
+
+  // Contraste: con el extractor REDONDEADO, saltGFromSodiumMg(20)=0.1 y (40)=0.1 (ambos redondean
+  // al mismo decimal) → proporción 1:1, no 1:2. Documenta por qué la expansión usa el sodio crudo.
+  const rounded = expandRecipe(items, (id) => catalog[id] ?? null, nutrientValueOf("salt_g"));
+  expect(rounded.contributions).toHaveLength(2);
+  expect(rounded.contributions[0].value / rounded.contributions[1].value).toBeCloseTo(1, 5);
+});
+
+test("recipeSubRows conserva el total: tres iguales con rowAmount 1.0 suman exactamente 1.0", () => {
+  const contributions: RecipeContribution[] = [
+    { foodId: "a", name: "A", value: 10 },
+    { foodId: "b", name: "B", value: 10 },
+    { foodId: "c", name: "C", value: 10 },
+  ];
+  const rows = recipeSubRows(contributions, 1.0);
+  // Reparto ingenuo: 0.3/0.3/0.3 = 0.9. El residuo (0.1) va a la primera fila → 0.4/0.3/0.3.
+  const total = rows.reduce((a, r) => a + r.amount, 0);
+  expect(Math.round(total * 10) / 10).toBe(1.0);
+  expect(rows.map((r) => r.amount)).toEqual([0.4, 0.3, 0.3]);
+  expect(rows.map((r) => r.pct)).toEqual([33, 33, 33]);
+});
+
+test("recipeSubRows: caso normal (carne 26 / cebolla 0.5) reparte bien", () => {
+  const contributions: RecipeContribution[] = [
+    { foodId: "carne", name: "Carne", value: 26 },
+    { foodId: "cebolla", name: "Cebolla", value: 0.5 },
+  ];
+  const rows = recipeSubRows(contributions, 150);
+  expect(rows.map((r) => r.name)).toEqual(["Carne", "Cebolla"]);
+  const total = rows.reduce((a, r) => a + r.amount, 0);
+  expect(Math.round(total * 10) / 10).toBe(150);
+  // 26/26.5 ≈ 98%, 0.5/26.5 ≈ 2%
+  expect(rows.map((r) => r.pct)).toEqual([98, 2]);
+});
+
+test("recipeSubRows: Σ<=0 devuelve []", () => {
+  expect(recipeSubRows([], 100)).toEqual([]);
+  expect(recipeSubRows([{ foodId: "a", name: "A", value: 0 }], 100)).toEqual([]);
 });
 
 test("un ingrediente con cookingYield se computa SIN dividir por el yield (coherente con weighedCooked:false, igual que deriveRecipe)", () => {

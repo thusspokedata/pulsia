@@ -240,3 +240,15 @@ test("foodId es null si el item no trae foodId", () => {
   const meals = [mealItems([{ foodName: "queso", grams: 30, protein_g: 8 }])];
   expect(foodsByMacro(meals, "protein_g")[0].foodId).toBe(null);
 });
+
+test("foodId es null si un hermano del mismo nombre aporta sin foodId (id único pero ambiguo)", () => {
+  // Mismo nombre, un item con foodId "f1" (positivo) y otro SIN foodId (positivo): ids.size===1
+  // pero es ambiguo — no se sabe si la fila representa a "f1" o a algo sin catalogar. Debe ser null.
+  const meals = [mealItems([
+    { foodId: "f1", foodName: "empanada", grams: 100, protein_g: 10 },
+    { foodName: "empanada", grams: 50, protein_g: 5 },
+  ])];
+  const [row] = foodsByMacro(meals, "protein_g");
+  expect(row.name).toBe("empanada");
+  expect(row.foodId).toBe(null);
+});

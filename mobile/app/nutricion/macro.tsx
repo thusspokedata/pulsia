@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ScrollView, View, Text, Pressable, ActivityIndicator } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { foodsByMacro, macroValueOf, expandRecipe, type MacroRankKey } from "@pulsia/shared";
+import { foodsByMacro, macroValueOf, expandRecipe, recipeSubRows, type MacroRankKey } from "@pulsia/shared";
 import { useMealsRange } from "../../src/nutrition/useMealsRange";
 import { useFoodCatalog } from "../../src/nutrition/useFoodCatalog";
 import { Card, SectionTitle, EmptyState, Bar } from "../../src/nutrition/tabs/ui";
@@ -38,21 +38,14 @@ export default function MacroScreen() {
     if (!food?.recipe) return null;
     const { contributions, complete } = expandRecipe(
       food.recipe.items,
-      (id) => {
-        const f = catalog.get(id);
-        return f ? { ...f, name: f.name } : null;
-      },
+      (id) => catalog.get(id) ?? null,
       macroValueOf(field),
     );
     if (!complete || contributions.length === 0) return null;
-    const sum = contributions.reduce((a, c) => a + c.value, 0);
-    if (sum <= 0) return null;
-    return contributions.map((c) => ({
-      foodId: c.foodId,
-      name: c.name,
-      amount: Math.round((c.value / sum) * rowAmount * 10) / 10,
-      pct: Math.round((c.value / sum) * 100),
-    }));
+    // Reparte la porción de la fila entre los ingredientes por fracción, conservando el total
+    // (el residuo del redondeo va a la fila de mayor aporte). Devuelve [] si Σ<=0.
+    const rows = recipeSubRows(contributions, rowAmount);
+    return rows.length > 0 ? rows : null;
   };
 
   return (
@@ -85,6 +78,7 @@ export default function MacroScreen() {
                         testID={`macro-expand-${f.name}`}
                         accessibilityRole="button"
                         accessibilityLabel={`Ver ingredientes de ${f.name}`}
+                        accessibilityState={{ expanded: isOpen }}
                         onPress={() =>
                           setOpen((prev) => {
                             const next = new Set(prev);
@@ -107,8 +101,8 @@ export default function MacroScreen() {
                 <Text style={{ color: colors.icon, fontSize: 11 }}>{f.grams} g comidos</Text>
                 {sub && isOpen && (
                   <View style={{ marginLeft: spacing.lg, marginTop: 2, gap: 2 }}>
-                    {sub.map((s) => (
-                      <View key={s.foodId} style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                    {sub.map((s, i) => (
+                      <View key={i} style={{ flexDirection: "row", justifyContent: "space-between" }}>
                         <Text style={{ color: colors.textMuted, fontSize: 13, flex: 1 }}>{s.name}</Text>
                         <Text style={{ color: colors.icon, fontSize: 12 }}>{s.amount} g · {s.pct}%</Text>
                       </View>

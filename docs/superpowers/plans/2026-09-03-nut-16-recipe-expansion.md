@@ -757,7 +757,7 @@ git commit -S -m "test(nut-16): acordeón de expansión de receta en el ranking"
 
 - [ ] **Step 1: Suites completas**
 
-Run: `cd /Users/kilo/desarrollo26/pulsia && bun test shared backend`
+Run: `bun test shared backend`
 Run: `cd mobile && npm test -- --runInBand`
 Expected: todo verde.
 

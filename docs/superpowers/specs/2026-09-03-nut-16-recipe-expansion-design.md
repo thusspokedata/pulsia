@@ -86,11 +86,17 @@ La fila rankeada ya tiene su `amount` (aporte del día, del snapshot del `MealIt
 Σ = sum(contributions.value)
 subAmount_i = round1( (value_i / Σ) × row.amount )
 subPct_i    = round( (value_i / Σ) × 100 )
+// residuo del redondeo → a la fila de mayor aporte, para que Σ(subAmount) == round1(row.amount)
 ```
 
-Los sub-ítems **suman exactamente** la fila (repartimos el `amount` ya mostrado, no re-derivamos la
-porción). Para `salt_g` la fracción sale del **sodio** (el `valueOf` de esa pantalla ya convierte
-sodio→sal; como es lineal, la fracción es idéntica a la del sodio).
+Los sub-ítems **suman exactamente** la fila: el reparto está centralizado en `recipeSubRows`
+(shared/src/nutrition/recipeBreakdown.ts), que reparte el `amount` ya mostrado por fracción, redondea
+cada sub-ítem a 1 decimal y **asigna el residuo** a la fila de mayor aporte (la primera, ya ordenada
+desc) para que la suma cierre en `round1(row.amount)` exacto. Para `salt_g` la fracción sale del
+**sodio CRUDO** (sin redondear): la pantalla pasa `nutrientValueOfRaw`, no `nutrientValueOf` —
+`saltGFromSodiumMg` redondea a 1 decimal y aplastaría fracciones chicas (20 mg vs 40 mg caerían al
+mismo decimal → 1:1 en vez de 1:2). Como la conversión sodio→sal es lineal, la fracción del sodio en
+mg es idéntica a la de la sal, así que el mg crudo sirve directo.
 
 Si `Σ <= 0` (ningún ingrediente aporta ese nutriente pese a que la fila > 0, caso de borde por
 snapshot desalineado): no se ofrece expansión, se degrada a fila opaca.

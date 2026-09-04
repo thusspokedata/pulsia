@@ -128,6 +128,17 @@ export function nutrientValueOf(nutrient: RankNutrient): (m: NutrientRecord) => 
   return (m) => m[nutrient] ?? null;
 }
 
+// Igual que `nutrientValueOf`, pero SIN redondear la sal. `nutrientValueOf("salt_g")` pasa por
+// `saltGFromSodiumMg`, que redondea a 1 decimal: dos ingredientes de 20mg y 40mg de sodio caen
+// ambos a ~0.0 g de sal y se pierde la proporción (1:2 se vuelve 1:1 o 0:0). Para REPARTIR una
+// receta por fracción hace falta el aporte crudo — y como la fracción es invariante a la escala,
+// el sodio en mg sirve directo (no hace falta convertir a gramos de sal). El resto de los
+// nutrientes ya vienen sin redondear, así que se comporta igual que `nutrientValueOf`.
+export function nutrientValueOfRaw(nutrient: RankNutrient): (m: NutrientRecord) => number | null {
+  if (nutrient === "salt_g") return (m) => m.sodium_mg ?? null;
+  return (m) => m[nutrient] ?? null;
+}
+
 export interface FoodRank {
   name: string;
   amount: number; // del nutriente, sumado en el rango
@@ -149,15 +160,19 @@ export interface FoodRank {
 // al ranking ni al total: un alimento que no aporta nada no enseña nada, y contarlo como 0 solo
 // ensucia la lista. `valueOf` decide qué aporte se rankea (el sodio→sal, un macro, un micro…).
 function rankFoods(meals: Meal[], valueOf: (item: MealItem) => number | null): FoodRank[] {
-  const by = new Map<string, { amount: number; grams: number; ids: Set<string> }>();
+  const by = new Map<string, { amount: number; grams: number; ids: Set<string>; hasMissingId: boolean }>();
   for (const m of meals) {
     for (const item of m.items) {
       const v = valueOf(item);
       if (v == null || v <= 0) continue;
-      const acc = by.get(item.foodName) ?? { amount: 0, grams: 0, ids: new Set<string>() };
+      const acc = by.get(item.foodName) ?? { amount: 0, grams: 0, ids: new Set<string>(), hasMissingId: false };
       acc.amount += v;
       acc.grams += item.grams;
+      // Trackeamos si ALGÚN item positivo del grupo llegó sin foodId: en ese caso el id es ambiguo
+      // aunque los que sí lo traen apunten todos al mismo Food (no se sabe si el item sin id es ese
+      // mismo Food o algo sin catalogar). Solo con id inequívoco se ofrece la expansión de receta.
       if (item.foodId != null) acc.ids.add(item.foodId);
+      else acc.hasMissingId = true;
       by.set(item.foodName, acc);
     }
   }
@@ -170,7 +185,7 @@ function rankFoods(meals: Meal[], valueOf: (item: MealItem) => number | null): F
       grams: Math.round(v.grams),
       pctOfTotal: pct(v.amount, total),
       source: "food" as const,
-      foodId: v.ids.size === 1 ? [...v.ids][0] : null,
+      foodId: !v.hasMissingId && v.ids.size === 1 ? [...v.ids][0] : null,
     }))
     // Desempate por nombre: sin esto el orden depende del de inserción y la lista baila.
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
