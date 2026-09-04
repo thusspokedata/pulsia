@@ -856,6 +856,103 @@ test("describe devuelve la identificación FORZADA a sourceMacros 'ai', no la qu
   expect(body.identification.sourceMacros).toBe("ai");
 });
 
+// ---- Alta desde URL (NUT-17) ----
+// El backend baja la página (fetchPage inyectable), le extrae el texto y la IA lo identifica. La
+// página decide label/ai; USDA rellena solo los micros que falten.
+
+// Necesita SsrfBlockedError / PageFetchError REALES para los tests de degradación (el handler los
+// distingue con instanceof, no por el mensaje).
+import { SsrfBlockedError, PageFetchError } from "../net/safeFetch";
+
+// Identificación con etiqueta (sourceMacros "label"): representa una página que trae la tabla
+// nutricional. El HTML de fetchPage tiene que extraer a >= 40 chars con extractPageText.
+const MUESLI_URL_ID = {
+  name: "Bio Knusper Müsli Beeren", basis: "per_100g" as const, kcal: 442, protein_g: 9.9, carbs_g: 63, fat_g: 14.8,
+  saturated_fat_g: 4.2, sugars_g: 14, fiber_g: 8.4, sodium_mg: 80, cholesterol_mg: 0, water_ml: 5,
+  unitWeightG: null, sourceMacros: "label" as const, searchQuery: "muesli cereal", cookingYield: null,
+};
+const HTML_CON_TABLA =
+  "<html><body><h1>Bio Knusper Müsli Beeren</h1><table><tr><td>Energía</td><td>442 kcal</td></tr>" +
+  "<tr><td>Grasas</td><td>14.8 g</td></tr><tr><td>Azúcares</td><td>14 g</td></tr></table></body></html>";
+
+// deps con fetchPage inyectado: el objeto que arma `deps(...)` + el fetchPage de este caso.
+const depsUrl = (db: any, ai: any, fetchPage: (url: string) => Promise<string>): any => ({ ...deps(db, ai), fetchPage });
+
+const fromUrlPost = (app: any, url: unknown) =>
+  app.request("/nutrition/foods/from-url", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+
+const aiUrl = (over: any = {}) => ({ ...aiClient, identifyFoodFromPage: async () => ({ ...MUESLI_URL_ID }), ...over });
+
+test("POST /nutrition/foods/from-url → 200 con la extracción; respeta sourceMacros 'label' de la página", async () => {
+  const app = createApp(depsUrl(fakeDb(), aiUrl(), async () => HTML_CON_TABLA));
+  const res = await fromUrlPost(app, "https://tienda.example.com/muesli");
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body).toMatchObject({ name: "Bio Knusper Müsli Beeren", sourceMacros: "label" });
+});
+
+test("POST /nutrition/foods/from-url: con la página como label, USDA solo rellena los micros que faltan", async () => {
+  // sourceMacros "label" → la página GANA los macros; USDA aporta vitaminas/minerales (el hierro
+  // sale de la fila de USDA, los macros siguen siendo los de la página).
+  const db = fakeDb({ usdaCandidates: usdaCandidateRows, usdaRow: usdaEggRow });
+  const ai = aiUrl({ pickUsdaCandidate: async () => HUEVO_FDC });
+  const res = await fromUrlPost(createApp(depsUrl(db, ai, async () => HTML_CON_TABLA)), "https://x.example.com/p");
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.sourceMacros).toBe("label"); // la página gana los macros
+  expect(body.kcal).toBe(442); // el kcal de la página, no el de la fila de USDA
+  expect(body.iron_mg).toBeGreaterThan(0); // USDA rellenó los micros
+});
+
+test("POST /nutrition/foods/from-url: SsrfBlockedError → 400", async () => {
+  const app = createApp(depsUrl(fakeDb(), aiUrl(), async () => { throw new SsrfBlockedError("ip privada"); }));
+  const res = await fromUrlPost(app, "http://169.254.169.254/latest/meta-data");
+  expect(res.status).toBe(400);
+});
+
+test("POST /nutrition/foods/from-url: PageFetchError → 400", async () => {
+  const app = createApp(depsUrl(fakeDb(), aiUrl(), async () => { throw new PageFetchError("timeout"); }));
+  const res = await fromUrlPost(app, "https://caida.example.com/p");
+  expect(res.status).toBe(400);
+});
+
+test("POST /nutrition/foods/from-url: página sin texto legible (< 40 chars) → 422", async () => {
+  // Una SPA JS-only extrae a casi nada: no hay con qué identificar el alimento.
+  const app = createApp(depsUrl(fakeDb(), aiUrl(), async () => "<html><body><div id=root></div></body></html>"));
+  const res = await fromUrlPost(app, "https://spa.example.com/p");
+  expect(res.status).toBe(422);
+});
+
+test("POST /nutrition/foods/from-url: body sin url → 400 por validación (no por un fallo posterior)", async () => {
+  // Se ancla al mensaje "Body inválido": si se quitara la validación de zod, el body {} igual daría
+  // 400 por un TypeError aguas abajo, y el test pasaría sin cuidar de verdad la validación.
+  const app = createApp(depsUrl(fakeDb(), aiUrl(), async () => HTML_CON_TABLA));
+  const res = await app.request("/nutrition/foods/from-url", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
+  });
+  expect(res.status).toBe(400);
+  expect((await res.json()).error).toBe("Body inválido");
+});
+
+test("POST /nutrition/foods/from-url: url inválida (no es una URL) → 400 por validación", async () => {
+  // El fetchPage inyectado devuelve HTML igual: sin la validación de zod, "no-es-una-url" pasaría a
+  // fetchPage, extraería texto e identificaría → 200. El 400 tiene que venir de la validación.
+  const app = createApp(depsUrl(fakeDb(), aiUrl(), async () => HTML_CON_TABLA));
+  const res = await fromUrlPost(app, "no-es-una-url");
+  expect(res.status).toBe(400);
+  expect((await res.json()).error).toBe("Body inválido");
+});
+
+test("POST /nutrition/foods/from-url: si la IA falla al analizar la página → 502", async () => {
+  const ai = aiUrl({ identifyFoodFromPage: async () => { throw new Error("boom"); } });
+  const app = createApp(depsUrl(fakeDb(), ai, async () => HTML_CON_TABLA));
+  const res = await fromUrlPost(app, "https://x.example.com/p");
+  expect(res.status).toBe(502);
+});
+
 const assemblePost = (app: any, body: unknown) =>
   app.request("/nutrition/usda/assemble", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),

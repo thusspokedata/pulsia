@@ -56,6 +56,7 @@ export * from "./nutrition/parseDose";
 export * from "./nutrition/supplementBreakdown";
 export * from "./nutrition/coverage";
 export * from "./nutrition/mealsByLocalDay";
+export * from "./nutrition/foodUrl";
 export * from "./schemas/report";
 export * from "./supplements/checklist";
 export * from "./supplements/overlap";
