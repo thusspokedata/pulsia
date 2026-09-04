@@ -58,7 +58,27 @@ function isBlockedV4(o: number[]): boolean {
   if (a === 192 && b === 168) return true; // 192.168.0.0/16 privada RFC1918
   if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local (incl. 169.254.169.254 metadata)
   if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT (RFC6598)
+  if (a >= 224 && a <= 239) return true; // 224.0.0.0/4 multicast
+  if (a >= 240) return true; // 240.0.0.0/4 reservado + 255.255.255.255 broadcast
   return false;
+}
+
+// Convierte el "tail" de una IPv4-mapped IPv6 (lo que sigue a `::ffff:`) en sus 4 octetos v4, o null
+// si no parsea. El tail puede venir en DOS formas:
+//   - dotted: "127.0.0.1"           → parseV4 directo.
+//   - hex:    "7f00:1" / "7f00:0001" → uno o dos grupos de 16 bits; cada grupo aporta 2 octetos.
+//     Un solo grupo ("1") son los 16 bits BAJOS → [0, 0, hi, lo].
+function mappedV4Octets(tail: string): number[] | null {
+  if (tail.includes(".")) return parseV4(tail);
+  const groups = tail.split(":");
+  if (groups.length > 2) return null;
+  const words: number[] = [];
+  for (const g of groups) {
+    if (!/^[0-9a-f]{1,4}$/.test(g)) return null; // sólo hex, 1-4 dígitos por grupo
+    words.push(parseInt(g, 16));
+  }
+  const [g0, g1] = words.length === 2 ? words : [0, words[0]];
+  return [(g0 >> 8) & 0xff, g0 & 0xff, (g1 >> 8) & 0xff, g1 & 0xff];
 }
 
 // ¿La IPv6 cae en un rango bloqueado? Trabajamos por prefijos de string (en minúsculas), que para
@@ -84,10 +104,12 @@ function isBlockedV6(ip: string): boolean {
 export function isBlockedAddress(ip: string): boolean {
   const raw = ip.trim().toLowerCase();
 
-  // IPv4-mapped IPv6 (::ffff:a.b.c.d): la dirección REAL es la v4 embebida; evaluá esa.
-  const mapped = raw.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  // IPv4-mapped IPv6 (::ffff:<tail>): la dirección REAL es la v4 embebida; evaluá esa. Hay que cubrir
+  // AMBAS formas del tail — no sólo la dotted `::ffff:127.0.0.1`: `new URL` canonicaliza ese host a la
+  // forma HEX `::ffff:7f00:1`, así que esa es la que realmente llega. Si el tail no parsea → bloquear.
+  const mapped = raw.match(/^::ffff:(.+)$/);
   if (mapped) {
-    const o = parseV4(mapped[1]);
+    const o = mappedV4Octets(mapped[1]);
     return o ? isBlockedV4(o) : true; // no parsea la embebida → bloquear
   }
 

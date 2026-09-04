@@ -2,6 +2,9 @@ import { test, expect } from "bun:test";
 import { createApp } from "../app";
 import { food, meal, mealItem, waterLog, bodyMetric, supplementPlanItem, supplementAdjustment, usdaFood } from "../db/schema";
 import { SINGLE_USER_ID } from "../constants";
+// SsrfBlockedError / PageFetchError REALES para los tests de degradación del alta desde URL (el
+// handler los distingue con instanceof, no por el mensaje).
+import { SsrfBlockedError, PageFetchError } from "../net/safeFetch";
 
 const KEY = "a".repeat(64);
 const FOOD_ID = "11111111-1111-4111-8111-111111111111";
@@ -859,10 +862,6 @@ test("describe devuelve la identificación FORZADA a sourceMacros 'ai', no la qu
 // ---- Alta desde URL (NUT-17) ----
 // El backend baja la página (fetchPage inyectable), le extrae el texto y la IA lo identifica. La
 // página decide label/ai; USDA rellena solo los micros que falten.
-
-// Necesita SsrfBlockedError / PageFetchError REALES para los tests de degradación (el handler los
-// distingue con instanceof, no por el mensaje).
-import { SsrfBlockedError, PageFetchError } from "../net/safeFetch";
 
 // Identificación con etiqueta (sourceMacros "label"): representa una página que trae la tabla
 // nutricional. El HTML de fetchPage tiene que extraer a >= 40 chars con extractPageText.

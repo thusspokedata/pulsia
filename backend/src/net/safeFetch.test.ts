@@ -39,9 +39,33 @@ test("isBlockedAddress: deja pasar IPs públicas", () => {
     "172.32.0.1", // justo fuera de 172.16/12 por arriba
     "11.0.0.1", // fuera de 10/8
     "2606:4700::1", // v6 pública (Cloudflare)
+    "::ffff:808:808", // IPv4-mapped hex de 8.8.8.8 → pública
   ];
   for (const ip of ok) {
     expect(isBlockedAddress(ip)).toBe(false);
+  }
+});
+
+// IPv4-mapped IPv6 en forma HEX: `new URL("http://[::ffff:127.0.0.1]/")` canonicaliza el host a
+// `::ffff:7f00:1`, así que esa es la forma que realmente llega — y sin el fix se colaba a loopback.
+test("isBlockedAddress: bloquea IPv4-mapped IPv6 en forma hex (embebida privada)", () => {
+  const blocked = [
+    "::ffff:7f00:1", // 127.0.0.1
+    "::ffff:127.0.0.1", // misma, forma dotted
+    "::ffff:a00:1", // 10.0.0.1
+    "::ffff:c0a8:1", // 192.168.0.1
+    "::ffff:a9fe:a9fe", // 169.254.169.254 metadata
+    "::ffff:1", // 0.0.0.1 (0/8)
+    "::ffff:zz", // tail no-hex → conservador, bloquear
+  ];
+  for (const ip of blocked) {
+    expect(isBlockedAddress(ip)).toBe(true);
+  }
+});
+
+test("isBlockedAddress: bloquea multicast (224/4) y reservado (240/4)", () => {
+  for (const ip of ["224.0.0.1", "239.255.255.250", "240.0.0.1", "255.255.255.255"]) {
+    expect(isBlockedAddress(ip)).toBe(true);
   }
 });
 
@@ -109,9 +133,22 @@ test("safeFetchPage: host que resuelve a IP privada → SsrfBlockedError y NO fe
   expect(llamado).toBe(false);
 });
 
+test("safeFetchPage: host IPv4-mapped IPv6 a loopback → SsrfBlockedError y NO fetchea", async () => {
+  let llamado = false;
+  await expect(
+    safeFetchPage("http://[::ffff:127.0.0.1]/f", {
+      fetchImpl: (async () => {
+        llamado = true;
+        return new Response("x");
+      }) as unknown as typeof fetch,
+    }),
+  ).rejects.toBeInstanceOf(SsrfBlockedError);
+  expect(llamado).toBe(false);
+});
+
 test("safeFetchPage: redirect hacia un host privado → SsrfBlockedError en ese hop", async () => {
   const fetchImpl = (async (url: string) => {
-    if (url.startsWith("http://publico.com")) {
+    if (new URL(url).hostname === "publico.com") {
       return new Response(null, { status: 302, headers: { location: "http://interno.local/x" } });
     }
     return new Response("no debería llegar acá");

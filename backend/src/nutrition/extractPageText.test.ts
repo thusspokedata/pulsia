@@ -19,6 +19,18 @@ test("quita <noscript> y comentarios HTML", () => {
   expect(out).toBe("Hola");
 });
 
+test("quita <script>/<style> aunque el tag de cierre traiga basura o mayúsculas", () => {
+  // El cierre con atributos/espacios raros igual termina el bloque en un navegador; el regex tiene
+  // que tolerarlo o el código del script se colaría como "texto" hacia la IA.
+  const html = `<script>mala()</script foo>texto1<STYLE>.y{}</STYLE\n>texto2`;
+  const out = extractPageText(html);
+  expect(out).not.toContain("mala");
+  expect(out).not.toContain("foo");
+  expect(out).not.toContain(".y{}");
+  expect(out).toContain("texto1");
+  expect(out).toContain("texto2");
+});
+
 test("conserva el texto de una tabla nutricional simulada", () => {
   const html = `
     <table>

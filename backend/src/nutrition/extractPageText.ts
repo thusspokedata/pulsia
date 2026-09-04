@@ -36,9 +36,12 @@ export function extractPageText(html: string, maxChars = 12000): string {
 
   // 1) Bloques que NUNCA son texto útil: los borramos ENTEROS (tag de apertura + contenido + cierre).
   //    [\s\S] para cruzar newlines; *? no-greedy para no comerse de más si hay varios.
-  s = s.replace(/<script\b[\s\S]*?<\/script\s*>/gi, " ");
-  s = s.replace(/<style\b[\s\S]*?<\/style\s*>/gi, " ");
-  s = s.replace(/<noscript\b[\s\S]*?<\/noscript\s*>/gi, " ");
+  //    El tag de cierre usa `[^>]*>` (no `\s*>`) para tolerar basura antes del `>` — `</script foo>`,
+  //    `</script\n bar>` —: un cierre con atributos igual termina el bloque en los navegadores, y si el
+  //    regex no lo matcheara, el `*?` seguiría de largo y dejaría el código del script como "texto".
+  s = s.replace(/<script\b[\s\S]*?<\/script\b[^>]*>/gi, " ");
+  s = s.replace(/<style\b[\s\S]*?<\/style\b[^>]*>/gi, " ");
+  s = s.replace(/<noscript\b[\s\S]*?<\/noscript\b[^>]*>/gi, " ");
 
   // 2) Comentarios HTML <!-- ... -->
   s = s.replace(/<!--[\s\S]*?-->/g, " ");
