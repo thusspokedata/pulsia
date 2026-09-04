@@ -39,6 +39,9 @@ export interface AppDeps {
   db: Db;
   config: AppConfig;
   aiClient: AiClient;
+  // Baja el HTML de una URL de forma SSRF-safe (NUT-17, alta desde URL). Inyectable para poder
+  // testear el endpoint sin salir a la red; en prod cae al default (`safeFetchPage`).
+  fetchPage?: (url: string) => Promise<string>;
 }
 
 export function createApp(deps: AppDeps) {

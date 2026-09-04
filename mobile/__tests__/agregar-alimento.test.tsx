@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react-nativ
 import * as ImagePicker from "expo-image-picker";
 import AgregarAlimentoScreen from "../app/nutricion/agregar-alimento";
 import {
-  assembleUsdaFood, createFood, describeFood, extractFood, getFood, getUsdaEntry, searchUsdaFoods,
+  assembleUsdaFood, createFood, describeFood, extractFood, foodFromUrl, getFood, getUsdaEntry, searchUsdaFoods,
   aiMicrosForFood, updateFood,
 } from "../src/api/nutrition";
 import { useLocalSearchParams } from "expo-router";
@@ -21,6 +21,7 @@ jest.mock("../src/storage/config", () => ({ getBackendUrl: jest.fn(async () => "
 jest.mock("../src/api/nutrition", () => ({
   extractFood: jest.fn(),
   describeFood: jest.fn(),
+  foodFromUrl: jest.fn(),
   createFood: jest.fn(),
   getFood: jest.fn(),
   updateFood: jest.fn(),
@@ -68,6 +69,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   (useLocalSearchParams as jest.Mock).mockReturnValue({});
   (describeFood as jest.Mock).mockResolvedValue(ALMENDRA);
+  (foodFromUrl as jest.Mock).mockResolvedValue(ALMENDRA);
   (assembleUsdaFood as jest.Mock).mockResolvedValue(MANTECA_ALMENDRA);
   (searchUsdaFoods as jest.Mock).mockResolvedValue([]);
   (getUsdaEntry as jest.Mock).mockResolvedValue(CANDIDATOS[0]);
@@ -91,6 +93,29 @@ test("escribir el alimento precarga el formulario, sin foto", async () => {
   await waitFor(() => expect(screen.getByDisplayValue("Almendra")).toBeTruthy());
   expect(screen.getByDisplayValue("579")).toBeTruthy(); // kcal
   expect(describeFood).toHaveBeenCalledWith("http://x", "almendra");
+  expect(foodFromUrl).not.toHaveBeenCalled(); // un nombre NO se trata como link
+});
+
+test("pegar una URL LEE la página (foodFromUrl), no busca el nombre en USDA", async () => {
+  // Auto-detección: el mismo campo. Si el texto es una URL http(s), el alta llama a
+  // `foodFromUrl` con la URL y prefillea con su respuesta — NO a `describeFood`.
+  (foodFromUrl as jest.Mock).mockResolvedValue({ ...ALMENDRA, name: "Producto Web", kcal: 123 });
+  await render(<AgregarAlimentoScreen />);
+  await fireEvent.changeText(screen.getByTestId("food-text-input"), "https://ejemplo.com/producto");
+  await fireEvent.press(screen.getByTestId("food-text-submit"));
+
+  await waitFor(() => expect(screen.getByDisplayValue("Producto Web")).toBeTruthy());
+  expect(screen.getByDisplayValue("123")).toBeTruthy(); // kcal de la respuesta de from-url
+  expect(foodFromUrl).toHaveBeenCalledWith("http://x", "https://ejemplo.com/producto");
+  expect(describeFood).not.toHaveBeenCalled();
+});
+
+test("el botón dice 'Leer link' cuando el campo tiene una URL, y 'Buscar' con un nombre", async () => {
+  await render(<AgregarAlimentoScreen />);
+  await fireEvent.changeText(screen.getByTestId("food-text-input"), "almendra");
+  expect(screen.getByTestId("food-text-submit")).toHaveTextContent("Buscar");
+  await fireEvent.changeText(screen.getByTestId("food-text-input"), "https://ejemplo.com/producto");
+  expect(screen.getByTestId("food-text-submit")).toHaveTextContent("Leer link");
 });
 
 // Lo que devuelve "que la IA complete": micros estimados. El nombre/macros vienen en 0/basura a
