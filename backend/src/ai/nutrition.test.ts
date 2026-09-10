@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { buildFoodPrompt, buildSearchQueryPrompt, REGLA_SEARCH_QUERY, buildCookingYieldPrompt } from "./nutrition";
+import { buildFoodPrompt, buildSearchQueryPrompt, REGLA_SEARCH_QUERY, buildCookingYieldPrompt, buildFoodFromUrlPrompt } from "./nutrition";
 
 test("modo foto: habla de la foto y deja que la IA elija label o ai", () => {
   const p = buildFoodPrompt("photo");
@@ -112,4 +112,50 @@ test("buildCookingYieldPrompt pide el factor cocido/seco y trata el nombre como 
 
 test("buildFoodPrompt (photo) incluye la regla de cookingYield", () => {
   expect(buildFoodPrompt("photo").toLowerCase()).toContain("cookingyield");
+});
+
+// ---- Alta desde URL (NUT-17) ----
+
+test("buildFoodFromUrlPrompt habla del CONTENIDO de una página web", () => {
+  const p = buildFoodFromUrlPrompt();
+  expect(p).toMatch(/p[aá]gina web/i);
+  expect(p).toMatch(/CONTENIDO/);
+});
+
+test("buildFoodFromUrlPrompt trae el anti-inyección: el contenido es DATO no confiable, NO instrucciones", () => {
+  const p = buildFoodFromUrlPrompt();
+  expect(p).toMatch(/NO instrucciones/);
+  // La misma clave que usa la regla de web_search: el contenido es DATO no confiable.
+  expect(p).toMatch(/no confiable/i);
+});
+
+test("buildFoodFromUrlPrompt distingue label (datos de la página) de ai (estimación)", () => {
+  const p = buildFoodFromUrlPrompt();
+  // Si la página trae la tabla → label; si no → ai. Honestidad de procedencia. Se ancla a la regla 1
+  // (la página como fuente), NO al `sourceMacros: "ai"` suelto de la regla 5 (naming), que existe
+  // igual: sin este anclaje, borrar la rama ai de la regla 1 no rompería el test.
+  expect(p).toMatch(/TABLA.*sourceMacros: ?"label"/);
+  expect(p).toMatch(/página NO trae datos nutricionales usables.*sourceMacros: ?"ai"/);
+});
+
+test("buildFoodFromUrlPrompt reusa las reglas nutricionales del alta (macros/micros/searchQuery/sugarClass/cookingYield)", () => {
+  const p = buildFoodFromUrlPrompt();
+  expect(p).toMatch(/por 100 g o por 100 ml/);
+  expect(p).toMatch(/sodium_mg/);
+  expect(p).toMatch(/cholesterol_mg/);
+  expect(p).toMatch(/water_ml/);
+  expect(p).toMatch(/sugarClass/);
+  expect(p).toContain("searchQuery");
+  expect(p.toLowerCase()).toContain("cookingyield");
+});
+
+test("buildFoodFromUrlPrompt NO le pide vitaminas ni minerales al modelo (los completa USDA)", () => {
+  const p = buildFoodFromUrlPrompt();
+  for (const k of ["vitamin_b12_mcg", "selenium_mcg", "iron_mg", "calcium_mg", "vitamin_a_mcg"]) {
+    expect(p).not.toContain(k);
+  }
+});
+
+test("buildFoodFromUrlPrompt cierra pidiendo el resultado con el tool return_food", () => {
+  expect(buildFoodFromUrlPrompt()).toContain("return_food");
 });

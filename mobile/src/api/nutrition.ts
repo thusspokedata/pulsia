@@ -45,6 +45,15 @@ export async function describeFood(baseUrl: string, text: string): Promise<FoodE
   return (await res.json()) as FoodExtractionResponse;
 }
 
+export async function foodFromUrl(baseUrl: string, url: string): Promise<FoodExtractionResponse> {
+  // Timeout largo: el server fetchea la página + una llamada a Opus.
+  const res = await apiFetch(baseUrl, "/nutrition/foods/from-url", {
+    method: "POST", body: JSON.stringify({ url }), timeoutMs: 60000,
+  });
+  if (!res.ok) throw new Error(await errorMessage(res, "No se pudo leer la página."));
+  return (await res.json()) as FoodExtractionResponse;
+}
+
 export async function createFood(baseUrl: string, input: FoodInput): Promise<Food> {
   const res = await apiFetch(baseUrl, "/nutrition/foods", { method: "POST", body: JSON.stringify(input) });
   if (!res.ok) throw new Error(await errorMessage(res, "No se pudo guardar el alimento."));

@@ -13,6 +13,8 @@ import {
 } from "../nutrition/repository";
 import { applyRecipeDerivation, RecipeValidationError } from "../nutrition/deriveRecipeInput";
 import { identificationFromFood } from "../nutrition/refreshUsda";
+import { safeFetchPage, SsrfBlockedError, PageFetchError } from "../net/safeFetch";
+import { extractPageText } from "../nutrition/extractPageText";
 import { resolveAiKey } from "../ai/resolveKey";
 import { food, settings } from "../db/schema";
 import { eq, inArray } from "drizzle-orm";
@@ -30,6 +32,10 @@ const ExtractSchema = z.object({
 });
 
 const DescribeSchema = z.object({ text: z.string().trim().min(2).max(100) });
+
+// Alta desde URL (NUT-17): el usuario pega el link de una ficha de producto. Tope de 2048 chars:
+// una URL legítima nunca es tan larga; más allá es basura o un intento de abuso.
+const FromUrlSchema = z.object({ url: z.string().trim().url().max(2048) });
 
 // Mismo tope que DescribeSchema.text: el nombre del alimento no paga por tokenizar una novela.
 const CookingYieldBodySchema = z.object({ name: z.string().trim().min(1).max(100) });
@@ -181,6 +187,54 @@ export function nutritionRoutes(deps: AppDeps) {
     // etiqueta de una marca, el catálogo mentiría sobre la procedencia del dato.
     const idForced: FoodIdentification = { ...id, sourceMacros: "ai" };
     return c.json(await attachUsdaMicros(deps, idForced, apiKey));
+  });
+
+  // ---- Alta desde una URL (sincrónica, no persiste) ----
+  // El usuario pega el link de una ficha de producto: el backend baja la página (SSRF-safe), le
+  // extrae el texto legible y la IA lo identifica. La página decide label/ai; attachUsdaMicros
+  // rellena solo los micros que falten (con "label" la página gana los macros, como en /extract).
+  // Todo fallo de red/parseo degrada limpio a un 4xx con mensaje accionable, nunca a un 500.
+  r.post("/foods/from-url", async (c) => {
+    const userId = c.get("userId");
+    const parsed = FromUrlSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Body inválido", detail: parsed.error.issues }, 400);
+    if (!deps.aiClient.identifyFoodFromPage) return c.json({ error: "El servidor no soporta alta desde URL." }, 500);
+    const settingsRow = await deps.db.query.settings.findFirst({ where: eq(settings.userId, userId) });
+    const apiKey = resolveAiKey(settingsRow, deps.config);
+    if (!apiKey) return c.json({ error: "No hay API key de IA disponible." }, 400);
+
+    // fetchPage inyectable (tests sin red); en prod cae al safeFetchPage endurecido contra SSRF.
+    const fetchPage = deps.fetchPage ?? safeFetchPage;
+    let html: string;
+    try {
+      html = await fetchPage(parsed.data.url);
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (e instanceof SsrfBlockedError) {
+        console.warn("from-url bloqueada por SSRF:", msg);
+        return c.json({ error: "Esa dirección no se puede leer por seguridad." }, 400);
+      }
+      // PageFetchError o cualquier otra: degradar a un 400 accionable, no a un 500.
+      console.warn("from-url no se pudo leer la página:", msg);
+      return c.json({ error: "No se pudo leer la página. Probá con otra o cargá el alimento a mano." }, 400);
+    }
+
+    const pageText = extractPageText(html);
+    // SPA/JS-only o página sin texto útil: no hay con qué identificar (limitación conocida del ticket).
+    if (pageText.trim().length < 40) {
+      return c.json({ error: "La página no tenía datos legibles. Cargá el alimento a mano." }, 422);
+    }
+
+    let id: FoodIdentification;
+    try {
+      id = await deps.aiClient.identifyFoodFromPage({ pageText, apiKey });
+    } catch (e) {
+      console.warn("identifyFoodFromPage falló:", (e as Error).message);
+      return c.json({ error: "No se pudo analizar la página. Reintentá o cargalo a mano." }, 502);
+    }
+    // No se fuerza sourceMacros: la IA ya decidió label/ai según lo que traía la página. Con "label"
+    // attachUsdaMicros deja ganar a la página y USDA solo aporta los micros faltantes (como /extract).
+    return c.json(await attachUsdaMicros(deps, id, apiKey));
   });
 
   // ---- Completar con IA (alta, no persiste) ----

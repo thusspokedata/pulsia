@@ -18,7 +18,7 @@ import { buildOneOffPrompt, type OneOffArgs } from "./oneoff";
 import { buildMemoryUpdatePrompt } from "./memory";
 import { buildWorkObjectiveDraftPrompt } from "./objective";
 import { buildEcgPrompt } from "./ecg";
-import { buildFoodPrompt, buildPickCandidatePrompt, buildSearchQueryPrompt, buildFoodMicrosPrompt, buildCookingYieldPrompt } from "./nutrition";
+import { buildFoodPrompt, buildPickCandidatePrompt, buildSearchQueryPrompt, buildFoodMicrosPrompt, buildCookingYieldPrompt, buildFoodFromUrlPrompt } from "./nutrition";
 import { buildReportPrompt } from "./report";
 import {
   buildSupplementExtractPrompt,
@@ -65,6 +65,10 @@ export interface AiClient {
     apiKey: string;
   }): Promise<import("@pulsia/shared").FoodIdentification>;
   describeFood?(input: { text: string; apiKey: string }): Promise<import("@pulsia/shared").FoodIdentification>;
+  // Alta desde URL (NUT-17): el backend baja la página, le extrae el texto y la IA lo identifica.
+  // Mismo contrato de salida que describeFood/extractFood; la diferencia es la fuente (texto de una
+  // página web, tratado como DATO no confiable). La página decide label/ai; USDA rellena los micros.
+  identifyFoodFromPage?(input: { pageText: string; apiKey: string }): Promise<import("@pulsia/shared").FoodIdentification>;
   // 2ª llamada del alta: elige el fdcId del candidato de USDA que mejor representa al alimento, o
   // null si ninguno sirve (forzar un match malo es peor que no matchear).
   pickUsdaCandidate?(input: {
@@ -308,6 +312,24 @@ export class AnthropicAiClient implements AiClient {
       description: "Identifica el alimento nombrado: macros estimados, micros de etiqueta y frase de búsqueda.",
       content: [{ type: "text", text: `${buildFoodPrompt("text")}\n\nAlimento: ${text}` }],
       truncatedMsg: "La respuesta se truncó.",
+      missingMsg: "La IA no devolvió los datos del alimento.",
+    });
+  }
+
+  // Camino de URL (NUT-17): el backend ya bajó la página y extrajo su texto; acá se identifica el
+  // alimento. Sin bloque de imagen (como describeFood): la fuente es el texto de la página. El texto
+  // va DESPUÉS del prompt para que las reglas anti-inyección enmarquen el contenido no confiable.
+  async identifyFoodFromPage({ pageText, apiKey }: { pageText: string; apiKey: string }) {
+    const client = new Anthropic({ apiKey });
+    return callStructuredTool({
+      client,
+      model: "claude-opus-4-8",
+      maxTokens: 1024,
+      schema: FoodIdentificationSchema,
+      toolName: "return_food",
+      description: "Identifica el alimento de la página web: macros, micros de etiqueta y frase de búsqueda.",
+      content: [{ type: "text", text: `${buildFoodFromUrlPrompt()}\n\nContenido de la página:\n${pageText}` }],
+      truncatedMsg: "La respuesta se truncó (página demasiado larga).",
       missingMsg: "La IA no devolvió los datos del alimento.",
     });
   }

@@ -4,10 +4,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { getBackendUrl } from "../../src/storage/config";
 import {
-  extractFood, describeFood, createFood, getFood, updateFood,
+  extractFood, describeFood, foodFromUrl, createFood, getFood, updateFood,
   getUsdaEntry, assembleUsdaFood, aiMicrosForFood, estimateCookingYield, type UsdaEntry,
 } from "../../src/api/nutrition";
-import { NUTRIENT_KEYS } from "@pulsia/shared";
+import { NUTRIENT_KEYS, looksLikeUrl } from "@pulsia/shared";
 import type { FoodBasis, FoodExtraction, FoodIdentification, NutrientValues, SourceMacros, SourceMicros, SugarClass } from "@pulsia/shared";
 import { colors, radius, spacing } from "../../src/theme/tokens";
 import { useScreenPadding } from "../../src/theme/screen";
@@ -90,6 +90,9 @@ export default function AgregarAlimentoScreen() {
   const [sugarClassCargado, setSugarClassCargado] = useState<SugarClass | null>(null);
   const [foodText, setFoodText] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
+  // Cuando el texto del campo es una URL, el alta LEE la página (en vez de buscar el nombre en
+  // USDA): el estado de carga tiene que decir "Leyendo la página…" y no "Analizando…".
+  const [leyendoUrl, setLeyendoUrl] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { foodId } = useLocalSearchParams<{ foodId?: string }>();
@@ -239,17 +242,24 @@ export default function AgregarAlimentoScreen() {
   async function describeAndPrefill() {
     setError(null);
     const text = foodText.trim();
-    // El `disabled` del botón es lo que hoy bloquea esto de verdad; el guard queda como red por si
-    // alguien llama al handler desde otro lado o saca el disabled.
-    if (text.length < 2) return;
+    // Si el campo es una URL, se LEE la página; si no, es el nombre de un alimento y se busca en
+    // USDA. `looksLikeUrl` ya garantiza que la URL tiene largo, así que el min-2 aplica solo al
+    // nombre. El `disabled` del botón es lo que hoy bloquea el nombre corto de verdad; el guard
+    // queda como red por si alguien llama al handler desde otro lado o saca el disabled.
+    const esUrl = looksLikeUrl(text);
+    if (!esUrl && text.length < 2) return;
     if (!baseUrl.current) { setError("No se pudo conectar con el servidor."); return; }
     setAnalyzing(true);
+    setLeyendoUrl(esUrl);
     try {
-      prefillFromExtraction(await describeFood(baseUrl.current, text));
+      prefillFromExtraction(esUrl
+        ? await foodFromUrl(baseUrl.current, text)
+        : await describeFood(baseUrl.current, text));
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setAnalyzing(false);
+      setLeyendoUrl(false);
     }
   }
 
@@ -442,7 +452,7 @@ export default function AgregarAlimentoScreen() {
           testID="food-text-input"
           value={foodText}
           onChangeText={setFoodText}
-          placeholder="Escribí un alimento (p.ej. almendra)"
+          placeholder="Nombre del alimento o pegá un link"
           placeholderTextColor={colors.icon}
           style={{ flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, padding: spacing.md, color: colors.text }}
         />
@@ -452,7 +462,7 @@ export default function AgregarAlimentoScreen() {
           disabled={analyzing || foodText.trim().length < 2}
           style={{ backgroundColor: colors.accent, borderRadius: radius.md, paddingHorizontal: spacing.md, justifyContent: "center", opacity: analyzing || foodText.trim().length < 2 ? 0.5 : 1 }}
         >
-          <Text style={{ color: "#fff", fontWeight: "600" }}>Buscar</Text>
+          <Text style={{ color: "#fff", fontWeight: "600" }}>{looksLikeUrl(foodText) ? "Leer link" : "Buscar"}</Text>
         </Pressable>
       </View>
       <View style={{ flexDirection: "row", gap: spacing.sm }}>
@@ -465,7 +475,7 @@ export default function AgregarAlimentoScreen() {
       </View>
       {analyzing && (
         <View style={{ flexDirection: "row", gap: spacing.sm, alignItems: "center" }}>
-          <ActivityIndicator color={colors.accent} /><Text style={{ color: colors.textMuted }}>Analizando…</Text>
+          <ActivityIndicator color={colors.accent} /><Text style={{ color: colors.textMuted }}>{leyendoUrl ? "Leyendo la página…" : "Analizando…"}</Text>
         </View>
       )}
       {error && <Text style={{ color: colors.danger }}>{error}</Text>}
