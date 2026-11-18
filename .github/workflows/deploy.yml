@@ -45,12 +45,12 @@ jobs:
           IMAGE: ghcr.io/thusspokedata/pulsia-backend:${{ github.sha }}
         run: |
           set -euo pipefail
-          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker build \
             -f backend/Dockerfile \
             --label org.opencontainers.image.source="https://github.com/$GITHUB_REPOSITORY" \
             --label org.opencontainers.image.revision="$GITHUB_SHA" \
             -t "$IMAGE" .
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker push "$IMAGE"
           docker logout ghcr.io
 
@@ -60,6 +60,7 @@ jobs:
     runs-on: [self-hosted, pulsia-deploy]
     timeout-minutes: 15
     permissions:
+      contents: read   # deploy-pulsia verifica con este token que el sha sea main o ancestro de main
       packages: read
     steps:
       - name: Deploy en la Pi (script fijo de root)
