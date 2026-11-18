@@ -1,0 +1,25 @@
+name: Runner probe
+
+# Verifica que el runner self-hosted de la Pi NO tenga privilegios (Kan as935814afkj).
+# Falla si el job puede usar docker, sudo general o leer /home/kilo.
+
+on:
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  probe:
+    runs-on: [self-hosted, pulsia-deploy]
+    timeout-minutes: 5
+    steps:
+      - name: Sin docker, sin sudo, sin /home/kilo
+        run: |
+          set -u
+          fail=0
+          echo "== id"; id
+          if docker ps >/dev/null 2>&1; then echo "FALLA: docker ps anda"; fail=1; else echo "ok: docker ps falla"; fi
+          if sudo -n true 2>/dev/null; then echo "FALLA: sudo -n true anda"; fail=1; else echo "ok: sudo -n true falla"; fi
+          if ls /home/kilo >/dev/null 2>&1; then echo "FALLA: lee /home/kilo"; fail=1; else echo "ok: no lee /home/kilo"; fi
+          echo "== sudo -n -l"; sudo -n -l 2>&1 | sed -n '/may run/,$p' || true
+          exit "$fail"
