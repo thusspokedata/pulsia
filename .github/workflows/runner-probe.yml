@@ -40,8 +40,14 @@ jobs:
             # las variables de proxy de Debian (+ locale/TZ en env_check).
             defaults=$(printf '%s\n' "$list" | sed -n '1,/may run the following commands/p')
             if printf '%s' "$defaults" | grep -qE '!env_reset|setenv|SETENV'; then echo "FALLA: sudo Defaults permite pasar entorno"; fail=1; fi
-            keep=$(printf '%s' "$defaults" | grep -oE 'env_(keep|check)\+?="?[^",]*' | sed -E 's/^env_(keep|check)\+?="?//' | tr ' ' '\n' | grep -v '^$' | sort -u)
-            extra_keep=$(printf '%s\n' "$keep" | grep -vxE 'NO_AT_BRIDGE|DPKG_DEB_THREADS_MAX|(http|https|ftp|no)_proxy|(HTTP|HTTPS|FTP|NO)_PROXY|RSYNC_PROXY|LANG|LANGUAGE|LC_[A-Z_]+|TZ' || true)
+            # Cada entrada env_keep/env_check completa (valores entre comillas pueden tener comas),
+            # validada contra su propia allowlist: proxy de Debian para ambas, locale/TZ solo en env_check.
+            proxy='NO_AT_BRIDGE|DPKG_DEB_THREADS_MAX|(http|https|ftp|no)_proxy|(HTTP|HTTPS|FTP|NO)_PROXY|RSYNC_PROXY'
+            extra_keep=$(printf '%s' "$defaults" | grep -oE 'env_(keep|check)[+-]?=("[^"]*"|[^ ,]+)' | while IFS= read -r e; do
+              name=${e%%=*}; name=${name%[+-]}; val=${e#*=}; val=${val#\"}; val=${val%\"}
+              if [ "$name" = env_check ]; then allow="$proxy|LANG|LANGUAGE|LC_[A-Z_]+|TZ"; else allow="$proxy"; fi
+              printf '%s\n' "$val" | tr ', ' '\n\n' | grep -v '^$' | grep -vxE "$allow" | sed "s/^/$name:/"
+            done || true)
             if [ -n "$extra_keep" ]; then echo "FALLA: env_keep/env_check inesperado: $extra_keep"; fail=1; else echo "ok: sudo Defaults sin entorno extra"; fi
             if [ "$rules" != "$expected" ]; then echo "FALLA: sudo permite algo distinto del deploy"; fail=1; else echo "ok: sudo solo permite deploy-pulsia <sha>"; fi
           elif printf '%s' "$list" | grep -q 'may not run sudo'; then
