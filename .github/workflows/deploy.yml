@@ -17,9 +17,10 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
-# Nunca correr dos deploys en paralelo.
+# Nunca correr dos deploys en paralelo. La clave incluye el ref: un dispatch desde otra rama
+# (que igual no deploya, ver los `if`) no puede desplazar a un run pendiente de main.
 concurrency:
-  group: deploy-pi
+  group: deploy-pi-${{ github.ref }}
   cancel-in-progress: false
 
 permissions: {}

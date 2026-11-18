@@ -20,6 +20,14 @@ jobs:
           echo "== id"; id
           if docker ps >/dev/null 2>&1; then echo "FALLA: docker ps anda"; fail=1; else echo "ok: docker ps falla"; fi
           if sudo -n true 2>/dev/null; then echo "FALLA: sudo -n true anda"; fail=1; else echo "ok: sudo -n true falla"; fi
-          if ls /home/kilo >/dev/null 2>&1; then echo "FALLA: lee /home/kilo"; fail=1; else echo "ok: no lee /home/kilo"; fi
-          echo "== sudo -n -l"; sudo -n -l 2>&1 | sed -n '/may run/,$p' || true
+          if ls /home/kilo >/dev/null 2>&1 || [ -x /home/kilo ]; then echo "FALLA: lista o atraviesa /home/kilo"; fail=1; else echo "ok: no lista ni atraviesa /home/kilo"; fi
+          # sudo -l: la única regla permitida es el script de deploy con el sha validado (o ninguna).
+          expected='(root) NOPASSWD: /usr/local/sbin/deploy-pulsia ^[0-9a-f]{40}$'
+          if list=$(sudo -n -l 2>&1); then
+            rules=$(printf '%s\n' "$list" | sed -n '/may run the following commands/,$p' | tail -n +2 | sed 's/^[[:space:]]*//' | grep -v '^$' || true)
+            echo "== reglas sudo:"; printf '%s\n' "$rules"
+            if [ "$rules" != "$expected" ]; then echo "FALLA: sudo permite algo distinto del deploy"; fail=1; else echo "ok: sudo solo permite deploy-pulsia <sha>"; fi
+          else
+            echo "ok: sudo -n -l no lista nada ($list)"
+          fi
           exit "$fail"
