@@ -20,7 +20,7 @@ jobs:
           echo "== id"; id
           # Solo vale como "sin docker" un permission denied (no un daemon caído o docker ausente).
           if out=$(LC_ALL=C docker ps 2>&1); then echo "FALLA: docker ps anda"; fail=1
-          elif printf '%s' "$out" | grep -qi 'permission denied'; then echo "ok: docker ps -> permission denied"
+          elif printf '%s' "$out" | grep -qiE 'permission denied while trying to connect to the docker (API|daemon socket)'; then echo "ok: docker ps -> socket denegado"
           else echo "FALLA: docker ps inconcluso ($out)"; fail=1; fi
           if sudo -n true 2>/dev/null; then echo "FALLA: sudo -n true anda"; fail=1; else echo "ok: sudo -n true falla"; fi
           if ls /home/kilo >/dev/null 2>&1 || [ -x /home/kilo ]; then echo "FALLA: lista o atraviesa /home/kilo"; fail=1; else echo "ok: no lista ni atraviesa /home/kilo"; fi
