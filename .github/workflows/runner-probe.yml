@@ -1,0 +1,66 @@
+name: Runner probe
+
+# Verifica que el runner self-hosted de la Pi NO tenga privilegios (Kan as935814afkj).
+# Falla si el job puede usar docker, sudo general o leer /home/kilo.
+
+on:
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  probe:
+    runs-on: [self-hosted, pulsia-deploy]
+    timeout-minutes: 5
+    steps:
+      - name: Sin docker, sin sudo, sin /home/kilo
+        run: |
+          set -u
+          fail=0
+          echo "== id"; id
+          # Solo vale como "sin docker" un permission denied (no un daemon caído o docker ausente).
+          if out=$(LC_ALL=C docker ps 2>&1); then echo "FALLA: docker ps anda"; fail=1
+          elif printf '%s' "$out" | grep -qiE 'permission denied while trying to connect to the docker (API|daemon socket)'; then echo "ok: docker ps -> socket denegado"
+          else echo "FALLA: docker ps inconcluso ($out)"; fail=1; fi
+          if sudo -n true 2>/dev/null; then echo "FALLA: sudo -n true anda"; fail=1; else echo "ok: sudo -n true falla"; fi
+          if ls /home/kilo >/dev/null 2>&1 || [ -x /home/kilo ]; then echo "FALLA: lista o atraviesa /home/kilo"; fail=1; else echo "ok: no lista ni atraviesa /home/kilo"; fi
+          # Grupos que equivalen a root.
+          if id -nG | tr ' ' '\n' | grep -qxE 'docker|lxd|disk|sudo|wheel|adm'; then echo "FALLA: grupo privilegiado ($(id -nG))"; fail=1; else echo "ok: sin grupos privilegiados"; fi
+          # Nada de lo que ejecuta root debe ser escribible por el runner.
+          # /srv/pulsia es root 750: el runner no debe poder ni atravesarlo (por eso no se mira compose.yml adentro).
+          if [ -x /srv/pulsia ]; then echo "FALLA: el runner atraviesa /srv/pulsia"; fail=1; fi
+          for p in /usr/local/sbin/deploy-pulsia /srv/pulsia /etc/sudoers /etc/sudoers.d /var/run/docker.sock; do
+            [ -e "$p" ] || { echo "FALLA: no existe $p (el probe no puede verificarlo)"; fail=1; }
+          done
+          for p in / /usr /usr/local /srv /etc /var/run/docker.sock /etc/sudoers; do
+            if [ -w "$p" ]; then echo "FALLA: escribible $p"; fail=1; fi
+          done
+          w=$(find /srv/pulsia /usr/local/sbin /usr/local/bin /usr/bin /usr/sbin /bin /sbin /etc/sudoers.d -xdev -writable 2>/dev/null | head -5 || true)
+          if [ -n "$w" ]; then echo "FALLA: escribibles por el runner: $w"; fail=1; else echo "ok: nada escribible en lo que ejecuta/lee root"; fi
+          # sudo -l: la única regla permitida es el script de deploy con el sha validado (o ninguna).
+          expected='(root) NOPASSWD: /usr/local/sbin/deploy-pulsia ^[0-9a-f]{40}$'
+          if list=$(LC_ALL=C sudo -n -l 2>&1); then
+            rules=$(printf '%s\n' "$list" | sed -n '/may run the following commands/,$p' | tail -n +2 | sed 's/^[[:space:]]*//' | grep -v '^$' || true)
+            echo "== reglas sudo:"; printf '%s\n' "$rules"
+            # Defaults (todas las secciones antes de la lista de comandos: Matching Defaults y
+            # Runas and Command-specific defaults): env_reset activo y env_keep/env_check solo con
+            # las variables de proxy de Debian (+ locale/TZ en env_check).
+            # Una sola línea: si sudo partiera la lista, un valor entre comillas no quedaría cortado.
+            defaults=$(printf '%s\n' "$list" | sed -n '1,/may run the following commands/p' | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g')
+            if printf '%s' "$defaults" | grep -qE '!env_reset|setenv|SETENV'; then echo "FALLA: sudo Defaults permite pasar entorno"; fail=1; fi
+            # Cada entrada env_keep/env_check completa (valores entre comillas pueden tener comas),
+            # validada contra su propia allowlist: proxy de Debian para ambas, locale/TZ solo en env_check.
+            proxy='NO_AT_BRIDGE|DPKG_DEB_THREADS_MAX|(http|https|ftp|no)_proxy|(HTTP|HTTPS|FTP|NO)_PROXY|RSYNC_PROXY'
+            extra_keep=$(printf '%s' "$defaults" | grep -oE 'env_(keep|check)[+-]?=("[^"]*"|[^ ,]+)' | while IFS= read -r e; do
+              name=${e%%=*}; name=${name%[+-]}; val=${e#*=}; val=${val#\"}; val=${val%\"}
+              if [ "$name" = env_check ]; then allow="$proxy|LANG|LANGUAGE|LC_[A-Z_]+|TZ"; else allow="$proxy"; fi
+              printf '%s\n' "$val" | tr ', ' '\n\n' | grep -v '^$' | grep -vxE "$allow" | sed "s/^/$name:/"
+            done || true)
+            if [ -n "$extra_keep" ]; then echo "FALLA: env_keep/env_check inesperado: $extra_keep"; fail=1; else echo "ok: sudo Defaults sin entorno extra"; fi
+            if [ "$rules" != "$expected" ]; then echo "FALLA: sudo permite algo distinto del deploy"; fail=1; else echo "ok: sudo solo permite deploy-pulsia <sha>"; fi
+          elif printf '%s' "$list" | grep -q 'may not run sudo'; then
+            echo "ok: sin ninguna regla de sudo"
+          else
+            echo "FALLA: no se pudieron verificar las reglas de sudo ($list)"; fail=1
+          fi
+          exit "$fail"
