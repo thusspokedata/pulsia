@@ -151,7 +151,7 @@ docker compose up -d              # Postgres local (pgvector) en :5432
 
 # Backend
 cd backend
-cp ../deploy/app.env.example .env   # ajustá DATABASE_URL a localhost
+cp .env.example .env               # ya apunta a la DB local (password dev-only-change-me)
 bun run db:migrate                  # aplica migraciones
 bun run db:seed                     # usuario por defecto + catálogo
 bun run dev                         # backend con --watch en :8787

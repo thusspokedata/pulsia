@@ -13,7 +13,10 @@ El workflow `.github/workflows/deploy.yml` despliega el backend a la Raspberry P
    `up -d` con `/srv/pulsia/compose.yml` y chequea `GET :3011/health` → 200. Migraciones + seed corren en
    el `CMD` de la imagen.
 
-Rollback: `sudo deploy-pulsia <sha anterior>` en la Pi. Cambios al compose de producción se piden a infra.
+Rollback, en la Pi: `sudo deploy-pulsia <sha anterior> </dev/null`. El script lee el token de stdin: corrido a
+mano no hace falta (la verificación contra `main` es anónima porque el repo es público, y la imagen anterior
+queda en la Pi, el script conserva las dos últimas), pero sin el `</dev/null` se queda esperando stdin.
+Cambios al compose de producción se piden a infra.
 
 ## Password de la DB de producción
 
@@ -36,7 +39,9 @@ Lo hace infra, con un script que corre en la Pi:
 3. `ALTER USER pulsia PASSWORD ...` dentro de `deploy-db-1`, pasando el SQL por stdin (nunca en argv).
 4. Reescribir `POSTGRES_PASSWORD` en `db.env` y la password de `DATABASE_URL` en `app.env`.
 5. `docker compose -f /srv/pulsia/compose.yml up -d` (con `PULSIA_TAG` = sha actual) y chequear `/health`.
-   Si falla: `ALTER USER` con la password vieja y restaurar los dos `.env` del backup.
+   Si falla: restaurar los dos `.env` del backup, `ALTER USER` con la password vieja y **volver a correr**
+   `up -d --force-recreate` con el mismo `PULSIA_TAG` (el backend recreado en el paso 5 tiene la URL nueva
+   hasta que se lo recrea), y chequear `/health` de nuevo.
 
 Para comparar valores usá solo hashes (`sha256sum | cut -c1-12`); nunca `cat` de los `.env` ni
 `docker inspect` sin filtrar.
