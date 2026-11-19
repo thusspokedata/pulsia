@@ -82,9 +82,12 @@ cd pulsia
 cp deploy/app.env.example deploy/app.env
 ```
 
-Editá `deploy/app.env`. Las claves las generás vos, en tu servidor:
+Editá `deploy/app.env` y creá `deploy/.env` (copiá `deploy/.env.example`). Las claves las generás vos, en tu servidor:
 
 ```bash
+# Password de Postgres → POSTGRES_PASSWORD en deploy/.env Y dentro de DATABASE_URL en deploy/app.env
+openssl rand -base64 32 | tr -d '/+='
+
 # Clave para cifrar secretos en la DB (AES-256-GCM, 32 bytes hex)
 openssl rand -hex 32   # → ENCRYPTION_KEY
 

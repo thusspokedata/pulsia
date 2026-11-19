@@ -55,7 +55,7 @@ test("snapshotForTake congela nombre/dosis/franja del ítem", () => {
 });
 
 test("persiste y devuelve unitLabel y los componentes con mapeo canónico", async () => {
-  const { db, sql } = createDb(process.env.DATABASE_URL ?? "postgres://pulsia:pulsia@localhost:5432/pulsia");
+  const { db, sql } = createDb(process.env.DATABASE_URL ?? "postgres://pulsia:dev-only-change-me@localhost:5432/pulsia");
   try {
     const s = await insertSupplement(db, DEV_USER_ID, {
       name: "Mg", servingLabel: "2 cápsulas", unitLabel: "cápsula", source: "label", info: "x",
@@ -75,7 +75,7 @@ test("persiste y devuelve unitLabel y los componentes con mapeo canónico", asyn
 });
 
 test("takesWithComponents sigue resolviendo tomas de un plan ya archivado (regenerar el plan no las pierde)", async () => {
-  const { db, sql } = createDb(process.env.DATABASE_URL ?? "postgres://pulsia:pulsia@localhost:5432/pulsia");
+  const { db, sql } = createDb(process.env.DATABASE_URL ?? "postgres://pulsia:dev-only-change-me@localhost:5432/pulsia");
   let supId: string | undefined;
   let planIdA: string | undefined;
   let planIdB: string | undefined;
@@ -127,7 +127,7 @@ test("takesWithComponents sigue resolviendo tomas de un plan ya archivado (regen
 });
 
 test("takesWithComponents resuelve micros de una toma ad-hoc por supplementId directo (plan_item_id null)", async () => {
-  const { db, sql } = createDb(process.env.DATABASE_URL ?? "postgres://pulsia:pulsia@localhost:5432/pulsia");
+  const { db, sql } = createDb(process.env.DATABASE_URL ?? "postgres://pulsia:dev-only-change-me@localhost:5432/pulsia");
   let supId: string | undefined;
   try {
     const sup = await insertSupplement(db, DEV_USER_ID, {
@@ -148,7 +148,7 @@ test("takesWithComponents resuelve micros de una toma ad-hoc por supplementId di
 });
 
 test("listAdHocTakesForDate y deleteAdHocTake no tratan como ad-hoc una toma del plan cuyo ítem se borró", async () => {
-  const { db, sql } = createDb(process.env.DATABASE_URL ?? "postgres://pulsia:pulsia@localhost:5432/pulsia");
+  const { db, sql } = createDb(process.env.DATABASE_URL ?? "postgres://pulsia:dev-only-change-me@localhost:5432/pulsia");
   let supId: string | undefined;
   let planId: string | undefined;
   let takeId: string | undefined;
