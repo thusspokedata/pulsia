@@ -82,9 +82,12 @@ cd pulsia
 cp deploy/app.env.example deploy/app.env
 ```
 
-Editá `deploy/app.env`. Las claves las generás vos, en tu servidor:
+Editá `deploy/app.env` y creá `deploy/.env` (copiá `deploy/.env.example`). Las claves las generás vos, en tu servidor:
 
 ```bash
+# Password de Postgres → POSTGRES_PASSWORD en deploy/.env Y dentro de DATABASE_URL en deploy/app.env
+openssl rand -base64 32 | tr -d '/+='
+
 # Clave para cifrar secretos en la DB (AES-256-GCM, 32 bytes hex)
 openssl rand -hex 32   # → ENCRYPTION_KEY
 
@@ -148,7 +151,8 @@ docker compose up -d              # Postgres local (pgvector) en :5432
 
 # Backend
 cd backend
-cp ../deploy/app.env.example .env   # ajustá DATABASE_URL a localhost
+cp .env.example .env               # ya apunta a la DB local (password dev-only-change-me)
+#   ¿volumen de dev de antes? conserva la password vieja: ver docs/deploy-ci-setup.md, "Desarrollo local"
 bun run db:migrate                  # aplica migraciones
 bun run db:seed                     # usuario por defecto + catálogo
 bun run dev                         # backend con --watch en :8787

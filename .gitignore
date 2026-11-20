@@ -5,6 +5,8 @@ dist/
 .env
 .env.local
 backend/.env
+deploy/.env
+deploy/app.env
 .DS_Store
 .superpowers/
 

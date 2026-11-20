@@ -4,10 +4,11 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: pulsia
-      POSTGRES_PASSWORD: pulsia
+      # Solo desarrollo local. Producción NO usa este archivo.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev-only-change-me}
       POSTGRES_DB: pulsia
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432" # solo localhost, no en todas las interfaces
     volumes:
       - pulsia_pgdata:/var/lib/postgresql/data
 volumes:
